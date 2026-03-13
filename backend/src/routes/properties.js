@@ -1,0 +1,357 @@
+import express from 'express';
+import path from 'node:path';
+import multer from 'multer';
+import { body, param, query, validationResult } from 'express-validator';
+
+import { Property } from '../models/Property.js';
+import { requireAuth } from '../middleware/auth.js';
+import { translateText } from '../services/translate.js';
+
+const router = express.Router();
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, path.resolve(process.cwd(), 'uploads')),
+  filename: (_req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${Date.now()}_${safe}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { files: 12, fileSize: 8 * 1024 * 1024 }
+});
+
+function pickLanguage(req) {
+  const raw = (req.query.lang || req.headers['accept-language'] || 'ka').toString();
+  const lang = raw.split(',')[0].trim().toLowerCase();
+  const supported = ['ka', 'en', 'ru', 'tr', 'az'];
+  return supported.includes(lang) ? lang : 'ka';
+}
+
+function applyTranslation(property, lang) {
+  if (lang === 'ka') return property;
+  const t = property.translations?.get(lang);
+  if (!t) return property;
+  return { ...property, title: t.title ?? property.title, desc: t.desc ?? property.desc };
+}
+
+// CREATE (protected) - multipart with photos
+router.post(
+  '/',
+  requireAuth,
+  upload.array('photos', 12),
+  [
+    body('title').isString().trim().isLength({ min: 2, max: 120 }).withMessage('სათაური უნდა იყოს 2-120 სიმბოლო'),
+    body('desc').isString().trim().isLength({ min: 3, max: 5000 }).withMessage('აღწერა უნდა იყოს მინიმუმ 3 სიმბოლო'),
+    body('price').isNumeric().withMessage('ფასი უნდა იყოს რიცხვი'),
+    body('lat').isNumeric().withMessage('გთხოვთ აირჩიოთ ლოკაცია რუკაზე'),
+    body('lng').isNumeric().withMessage('გთხოვთ აირჩიოთ ლოკაცია რუკაზე'),
+    body('type').isIn(['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking']).withMessage('აირჩიეთ ტიპი'),
+    body('dealType').isIn(['sale', 'rent', 'mortgage', 'daily', 'under_construction']).withMessage('აირჩიეთ გარიგების ტიპი'),
+    body('city').optional().isString().trim().isLength({ max: 80 }),
+    body('region').optional().isString().trim().isLength({ max: 80 }),
+    body('sqm').optional().isNumeric().withMessage('ფართობი უნდა იყოს რიცხვი'),
+    body('rooms').optional().isNumeric().withMessage('ოთახების რაოდენობა უნდა იყოს რიცხვი'),
+    body('priceCurrency').optional().isIn(['USD', 'GEL']).withMessage('ვალუტა უნდა იყოს USD ან GEL'),
+    body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
+    body('exteriorLink').optional().isString().trim().isLength({ max: 1000 }),
+    body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
+    body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
+    body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail()
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const photos = (req.files || []).map((f) => `/uploads/${f.filename}`);
+
+    const property = await Property.create({
+      title: req.body.title,
+      desc: req.body.desc,
+      price: Number(req.body.price),
+      priceCurrency: req.body.priceCurrency || 'USD',
+      city: req.body.city || '',
+      region: req.body.region || '',
+      tbilisiDistrict: req.body.tbilisiDistrict || '',
+      tbilisiSubdistricts: req.body.tbilisiSubdistricts ? JSON.parse(req.body.tbilisiSubdistricts) : [],
+      sqm: Number(req.body.sqm) || 0,
+      rooms: Number(req.body.rooms) || 0,
+      roomCount: Number(req.body.roomCount) || 0,
+      floor: Number(req.body.floor) || 0,
+      totalFloors: Number(req.body.totalFloors) || 0,
+      balcony: Number(req.body.balcony) || 0,
+      loggia: Number(req.body.loggia) || 0,
+      bathroom: Number(req.body.bathroom) || 0,
+      cadastralCode: req.body.cadastralCode || '',
+      amenities: req.body.amenities ? JSON.parse(req.body.amenities) : {},
+      location: { lat: Number(req.body.lat), lng: Number(req.body.lng) },
+      type: req.body.type,
+      dealType: req.body.dealType,
+      photos,
+      threeDLink: req.body.threeDLink || '',
+      exteriorLink: req.body.exteriorLink || '',
+      interiorLink: req.body.interiorLink || '',
+      mediaLinks: req.body.mediaLinks ? JSON.parse(req.body.mediaLinks) : [],
+      contact: {
+        phone: req.body.contactPhone || '',
+        email: req.body.contactEmail || ''
+      },
+      userId: req.user.id
+    });
+
+    res.status(201).json({ property });
+  }
+);
+
+// GET user's own properties (for profile page)
+router.get(
+  '/user/my',
+  requireAuth,
+  async (req, res) => {
+    const properties = await Property.find({ userId: req.user.id }).sort({ createdAt: -1 }).lean();
+    res.json({ properties });
+  }
+);
+
+// LIST with filters/query params
+router.get(
+  '/',
+  [
+    query('q').optional({ values: 'falsy' }).isString().trim().isLength({ max: 100 }),
+    query('minPrice').optional({ values: 'falsy' }).isNumeric(),
+    query('maxPrice').optional({ values: 'falsy' }).isNumeric(),
+    query('type').optional({ values: 'falsy' }).isString(), // მასივი JSON ფორმატში
+    query('dealType').optional({ values: 'falsy' }).isIn(['sale', 'rent', 'mortgage', 'daily', 'under_construction']),
+    query('city').optional({ values: 'falsy' }).isString().trim().isLength({ max: 80 }),
+    query('region').optional({ values: 'falsy' }).isString().trim().isLength({ max: 80 }),
+    query('tbilisiDistrict').optional({ values: 'falsy' }).isString().trim(),
+    query('tbilisiSubdistricts').optional({ values: 'falsy' }).isString(),
+    query('has3d').optional({ values: 'falsy' }).isIn(['true', 'false']),
+    query('hasPhotos').optional({ values: 'falsy' }).isIn(['true', 'false']),
+    query('minSqm').optional({ values: 'falsy' }).isNumeric(),
+    query('maxSqm').optional({ values: 'falsy' }).isNumeric(),
+    query('minRooms').optional({ values: 'falsy' }).isNumeric(),
+    query('maxRooms').optional({ values: 'falsy' }).isNumeric(),
+    query('amenities').optional({ values: 'falsy' }).isString() // მასივი JSON ფორმატში
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const lang = pickLanguage(req);
+
+    const filter = {};
+
+    if (req.query.q) filter.$text = { $search: req.query.q };
+    // type შეიძლება იყოს მასივი (მრავალი კატეგორიის არჩევა)
+    if (req.query.type) {
+      try {
+        const types = JSON.parse(req.query.type);
+        if (Array.isArray(types) && types.length > 0) {
+          filter.type = { $in: types };
+        }
+      } catch (e) {
+        // თუ JSON არ არის, მარტივი string-ია
+        filter.type = req.query.type;
+      }
+    }
+    if (req.query.dealType) filter.dealType = req.query.dealType;
+    if (req.query.city) filter.city = req.query.city;
+    if (req.query.region) filter.region = req.query.region;
+
+    // თბილისის უბნებით ფილტრაცია
+    if (req.query.tbilisiDistrict) {
+      filter.tbilisiDistrict = req.query.tbilisiDistrict;
+    }
+    if (req.query.tbilisiSubdistricts) {
+      try {
+        const subdistricts = JSON.parse(req.query.tbilisiSubdistricts);
+        if (Array.isArray(subdistricts) && subdistricts.length > 0) {
+          filter.tbilisiSubdistricts = { $in: subdistricts };
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+
+    if (req.query.minPrice || req.query.maxPrice) {
+      filter.price = {};
+      if (req.query.minPrice) filter.price.$gte = Number(req.query.minPrice);
+      if (req.query.maxPrice) filter.price.$lte = Number(req.query.maxPrice);
+    }
+
+    if (req.query.minSqm || req.query.maxSqm) {
+      filter.sqm = {};
+      if (req.query.minSqm) filter.sqm.$gte = Number(req.query.minSqm);
+      if (req.query.maxSqm) filter.sqm.$lte = Number(req.query.maxSqm);
+    }
+
+    if (req.query.minRooms || req.query.maxRooms) {
+      filter.rooms = {};
+      if (req.query.minRooms) filter.rooms.$gte = Number(req.query.minRooms);
+      if (req.query.maxRooms) filter.rooms.$lte = Number(req.query.maxRooms);
+    }
+
+    if (req.query.has3d === 'true') {
+      // 3D აქვს თუ ერთი მაინც ლინკიდანაა შევსებული
+      filter.$or = filter.$or || [];
+      filter.$or.push(
+        { threeDLink: { $ne: '' } },
+        { exteriorLink: { $ne: '' } },
+        { interiorLink: { $ne: '' } }
+      );
+    }
+    if (req.query.has3d === 'false') {
+      // 3D არ აქვს თუ არცერთი ლინკი არ არის
+      filter.threeDLink = '';
+      filter.exteriorLink = '';
+      filter.interiorLink = '';
+    }
+
+    if (req.query.hasPhotos === 'true') filter.photos = { $exists: true, $ne: [] };
+    if (req.query.hasPhotos === 'false') filter.$or = [{ photos: { $exists: false } }, { photos: { $size: 0 } }];
+
+    // კომფორტი და კომუნიკაციების ფილტრაცია
+    if (req.query.amenities) {
+      try {
+        const amenities = JSON.parse(req.query.amenities);
+        if (Array.isArray(amenities) && amenities.length > 0) {
+          amenities.forEach(amenity => {
+            filter[`amenities.${amenity}`] = true;
+          });
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+
+    const properties = await Property.find(filter).sort({ createdAt: -1 }).limit(200).lean();
+
+    const translated = properties.map((p) => applyTranslation(p, lang));
+    res.json({ properties: translated });
+  }
+);
+
+// GET properties by user id
+router.get(
+  '/user/:userId',
+  [param('userId').isString().trim().isLength({ min: 5 })],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const lang = pickLanguage(req);
+    const properties = await Property.find({ userId: req.params.userId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const translated = properties.map((p) => applyTranslation(p, lang));
+    res.json({ properties: translated });
+  }
+);
+
+// GET by id (and optionally translate)
+router.get(
+  '/:id',
+  [param('id').isString().trim().isLength({ min: 5 })],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const lang = pickLanguage(req);
+
+    const property = await Property.findById(req.params.id)
+      .populate('userId', 'email name phone avatar')
+      .lean();
+    if (!property) return res.status(404).json({ message: 'Not found' });
+
+    res.json({ property: applyTranslation(property, lang) });
+  }
+);
+
+// UPDATE (protected; only owner)
+router.put(
+  '/:id',
+  requireAuth,
+  [
+    param('id').isString().trim().isLength({ min: 5 }),
+    body('title').optional().isString().trim().isLength({ min: 2, max: 120 }),
+    body('desc').optional().isString().trim().isLength({ min: 3, max: 5000 }),
+    body('price').optional().isNumeric(),
+    body('type').optional().isIn(['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking']),
+    body('dealType').optional().isIn(['sale', 'rent', 'mortgage', 'daily', 'under_construction']),
+    body('city').optional().isString().trim().isLength({ max: 80 }),
+    body('region').optional().isString().trim().isLength({ max: 80 }),
+    body('sqm').optional().isNumeric(),
+    body('rooms').optional().isNumeric(),
+    body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
+    body('exteriorLink').optional().isString().trim().isLength({ max: 1000 }),
+    body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
+    body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
+    body('contactEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
+    body('photos').optional().isArray(),
+    body('mainPhoto').optional().isInt({ min: 0 })
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const existing = await Property.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Not found' });
+    if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
+
+    const patch = {};
+    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink']) {
+      if (req.body[k] !== undefined) patch[k] = req.body[k];
+    }
+    if (req.body.tbilisiSubdistricts !== undefined) patch.tbilisiSubdistricts = req.body.tbilisiSubdistricts;
+    if (req.body.price !== undefined) patch.price = Number(req.body.price);
+    if (req.body.priceCurrency !== undefined) patch.priceCurrency = req.body.priceCurrency;
+    if (req.body.sqm !== undefined) patch.sqm = Number(req.body.sqm);
+    if (req.body.rooms !== undefined) patch.rooms = Number(req.body.rooms);
+    if (req.body.photos !== undefined) patch.photos = req.body.photos;
+    if (req.body.mainPhoto !== undefined) patch.mainPhoto = Number(req.body.mainPhoto);
+    if (req.body.contactPhone !== undefined || req.body.contactEmail !== undefined) {
+      patch.contact = {
+        phone: req.body.contactPhone ?? existing.contact?.phone ?? '',
+        email: req.body.contactEmail ?? existing.contact?.email ?? ''
+      };
+    }
+
+    const updated = await Property.findByIdAndUpdate(req.params.id, patch, { new: true }).lean();
+    res.json({ property: updated });
+  }
+);
+
+// DELETE (protected; only owner)
+router.delete('/:id', requireAuth, async (req, res) => {
+  const existing = await Property.findById(req.params.id);
+  if (!existing) return res.status(404).json({ message: 'Not found' });
+  if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
+
+  await Property.deleteOne({ _id: existing._id });
+  res.json({ ok: true });
+});
+
+// Translate + cache for a property (used by UI language switching for user content)
+router.post('/:id/translate', requireAuth, async (req, res) => {
+  const { lang } = req.body || {};
+  const supported = ['en', 'ru', 'tr', 'az'];
+  if (!supported.includes(lang)) return res.status(400).json({ message: 'Unsupported lang' });
+
+  const property = await Property.findById(req.params.id);
+  if (!property) return res.status(404).json({ message: 'Not found' });
+  if (property.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
+
+  const title = await translateText(property.title, lang);
+  const desc = await translateText(property.desc, lang);
+
+  property.translations = property.translations || new Map();
+  property.translations.set(lang, { title, desc });
+  await property.save();
+
+  res.json({ ok: true });
+});
+
+export default router;

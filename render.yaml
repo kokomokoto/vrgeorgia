@@ -1,0 +1,45 @@
+# VR Georgia — Render.com Deployment
+# https://render.com/docs/yaml-spec
+
+services:
+  # ──── Backend API ────
+  - type: web
+    name: vrgeorgia-api
+    runtime: node
+    region: frankfurt  # ყველაზე ახლოს საქართველოსთან
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: JWT_SECRET
+        generateValue: true  # Render ავტომატურად დაგენერირებს
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: MONGODB_URI
+        sync: false  # ხელით შეიყვანე MongoDB Atlas URI
+      - key: ALLOWED_ORIGINS
+        value: https://vrgeorgia.ge,https://www.vrgeorgia.ge
+    disk:
+      name: vrgeorgia-uploads
+      mountPath: /opt/render/project/src/uploads
+      sizeGB: 1  # 1 GB უფასო
+
+  # ──── Frontend ────
+  - type: web
+    name: vrgeorgia-web
+    runtime: node
+    region: frankfurt
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: node .next/standalone/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_BASE
+        value: https://vrgeorgia-api.onrender.com
+      - key: NEXT_PUBLIC_API_URL
+        value: https://vrgeorgia-api.onrender.com/api

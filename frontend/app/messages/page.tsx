@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { getConversations, getMessages, sendMessage, Conversation, Message } from '@/lib/api';
+import { getConversations, getMessages, sendMessage, Conversation, Message, resolveImageUrl } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 
 export default function MessagesPage() {
@@ -158,7 +158,7 @@ function MessagesContent() {
                         <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
                           {conv.user.avatar ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={`${process.env.NEXT_PUBLIC_API_BASE}${conv.user.avatar}`} alt="" className="w-full h-full rounded-full object-cover" />
+                            <img src={resolveImageUrl(conv.user.avatar)} alt="" className="w-full h-full rounded-full object-cover" />
                           ) : (
                             <span className="text-slate-500 text-sm">{conv.user.email[0].toUpperCase()}</span>
                           )}
@@ -198,7 +198,7 @@ function MessagesContent() {
                     <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
                       {selectedConversation.user.avatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`${process.env.NEXT_PUBLIC_API_BASE}${selectedConversation.user.avatar}`} alt="" className="w-full h-full rounded-full object-cover" />
+                        <img src={resolveImageUrl(selectedConversation.user.avatar)} alt="" className="w-full h-full rounded-full object-cover" />
                       ) : (
                         <span className="text-slate-500">{selectedConversation.user.email[0].toUpperCase()}</span>
                       )}
@@ -233,7 +233,7 @@ function MessagesContent() {
                                   {msg.property.photos?.[0] && (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img 
-                                      src={`${process.env.NEXT_PUBLIC_API_BASE}${msg.property.photos[0]}`} 
+                                      src={resolveImageUrl(msg.property.photos[0])} 
                                       alt="" 
                                       className="w-10 h-10 rounded object-cover"
                                     />

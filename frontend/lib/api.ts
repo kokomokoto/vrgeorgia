@@ -4,6 +4,20 @@ export type { Property, User };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
+/**
+ * Resolve an image URL:
+ * - Cloudinary URLs (https://res.cloudinary.com/...) → return as-is
+ * - Old local paths (/uploads/...) → prepend API_BASE
+ * - Empty/null → return empty string
+ */
+export function resolveImageUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  // Already a full URL (Cloudinary or other CDN)
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  // Old-style local path like /uploads/xxx.jpg
+  return `${API_BASE}${path}`;
+}
+
 export type RegisterBody = { 
   email: string; 
   password: string; 

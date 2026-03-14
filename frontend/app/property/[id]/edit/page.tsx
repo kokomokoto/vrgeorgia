@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
-import { getProperty, updateProperty } from '@/lib/api';
+import { getProperty, updateProperty, resolveImageUrl } from '@/lib/api';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
@@ -346,7 +346,7 @@ export default function EditPropertyPage() {
                 {existingPhotos.map((photo, idx) => (
                   <div key={photo} className="relative group">
                     <img
-                      src={`${API_BASE}${photo}`}
+                      src={resolveImageUrl(photo)}
                       alt={`Photo ${idx + 1}`}
                       className={`aspect-square w-full object-cover rounded-md ${idx === mainPhotoIndex ? 'ring-2 ring-blue-500' : ''}`}
                     />

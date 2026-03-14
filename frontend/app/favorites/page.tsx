@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import FavoriteButton from '@/components/FavoriteButton';
-import { getProperty } from '@/lib/api';
+import { getProperty, resolveImageUrl } from '@/lib/api';
 import type { Property } from '@/lib/types';
 
 // localStorage-ში ფავორიტების წაკითხვა
@@ -24,8 +24,6 @@ export default function FavoritesPage() {
   const [favorites, setFavorites] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [hydrated, setHydrated] = useState(false);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
   useEffect(() => setHydrated(true), []);
 
@@ -101,7 +99,7 @@ export default function FavoritesPage() {
                   <div className="aspect-[4/3] relative">
                     {photo ? (
                       <img
-                        src={`${API_BASE}${photo}`}
+                        src={resolveImageUrl(photo)}
                         alt={property.title}
                         className="w-full h-full object-cover"
                       />

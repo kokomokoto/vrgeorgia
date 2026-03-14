@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
-import { getAgents, Agent } from '@/lib/api';
+import { getAgents, Agent, resolveImageUrl } from '@/lib/api';
 
 export default function AgentsPage() {
   const { t, i18n } = useTranslation();
@@ -87,7 +87,7 @@ export default function AgentsPage() {
                     {agent.photo ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img 
-                        src={`${process.env.NEXT_PUBLIC_API_BASE}${agent.photo}`} 
+                        src={resolveImageUrl(agent.photo)} 
                         alt={agent.name} 
                         className="w-full h-full object-cover"
                       />

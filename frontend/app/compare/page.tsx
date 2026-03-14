@@ -4,12 +4,12 @@ import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { useCompare } from '@/components/CompareProvider';
+import { resolveImageUrl } from '@/lib/api';
 import type { Property } from '@/lib/types';
 
 export default function ComparePage() {
   const { t } = useTranslation();
   const { compareProperties, removeFromCompare, clearCompare } = useCompare();
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
   const specs = [
     { key: 'price', label: t('price'), format: (p: Property) => `$${p.price.toLocaleString()}` },
@@ -79,7 +79,7 @@ export default function ComparePage() {
                           <div className="aspect-[4/3] rounded-lg overflow-hidden mb-2">
                             {photo ? (
                               <img
-                                src={`${API_BASE}${photo}`}
+                                src={resolveImageUrl(photo)}
                                 alt={property.title}
                                 className="w-full h-full object-cover"
                               />

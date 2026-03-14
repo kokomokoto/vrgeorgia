@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
-import { getProperty, listProperties } from '@/lib/api';
+import { getProperty, listProperties, resolveImageUrl } from '@/lib/api';
 import { useCurrencyRate } from '@/lib/currency';
 import { useAutoTranslate } from '@/lib/translate';
 import { MapView } from '@/components/MapView';
@@ -330,7 +330,7 @@ export default function PropertyDetailPage() {
                 onClick={() => setLightboxIndex(idx)}
               >
                 <img 
-                  src={`${API_BASE}${p}`} 
+                  src={resolveImageUrl(p)} 
                   alt={`Photo ${idx + 1}`} 
                   className="aspect-[4/3] w-full object-cover" 
                 />
@@ -572,7 +572,7 @@ export default function PropertyDetailPage() {
         <div className="flex items-center gap-4">
           {owner?.avatar ? (
             <img 
-              src={`${API_BASE}${owner.avatar}`} 
+              src={resolveImageUrl(owner.avatar)} 
               alt="Avatar" 
               className="w-14 h-14 rounded-full object-cover"
             />
@@ -638,7 +638,7 @@ export default function PropertyDetailPage() {
           )}
           
           <img
-            src={`${API_BASE}${photos[lightboxIndex]}`}
+            src={resolveImageUrl(photos[lightboxIndex])}
             alt={`Photo ${lightboxIndex + 1}`}
             className="max-h-[90vh] max-w-[90vw] object-contain"
             onClick={(e) => e.stopPropagation()}

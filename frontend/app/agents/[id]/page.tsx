@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getAgent, getAgentProperties, getAgentReviews, addAgentReview, Agent, AgentReview, Property } from '@/lib/api';
+import { getAgent, getAgentProperties, getAgentReviews, addAgentReview, Agent, AgentReview, Property, resolveImageUrl } from '@/lib/api';
 import { PropertyCard } from '@/components/PropertyCard';
 
 export default function AgentProfilePage() {
@@ -128,7 +128,7 @@ export default function AgentProfilePage() {
               {agent.photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img 
-                  src={`${process.env.NEXT_PUBLIC_API_BASE}${agent.photo}`} 
+                  src={resolveImageUrl(agent.photo)} 
                   alt={agent.name} 
                   className="w-full h-full object-cover"
                 />

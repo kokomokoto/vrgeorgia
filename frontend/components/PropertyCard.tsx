@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { Property } from '@/lib/types';
+import { resolveImageUrl } from '@/lib/api';
 import FavoriteButton from './FavoriteButton';
 import CompareButton from './CompareButton';
 
@@ -27,7 +28,7 @@ export function PropertyCard({ p }: { p: Property }) {
         <div className="aspect-[16/10] bg-slate-50">
           {img ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={`${process.env.NEXT_PUBLIC_API_BASE}${img}`} alt={p.title} className="h-full w-full object-cover" />
+            <img src={resolveImageUrl(img)} alt={p.title} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">No photo</div>
           )}

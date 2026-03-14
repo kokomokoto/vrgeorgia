@@ -1,26 +1,14 @@
 import express from 'express';
-import path from 'node:path';
-import multer from 'multer';
 import { body, param, query, validationResult } from 'express-validator';
 
 import { Property } from '../models/Property.js';
 import { requireAuth } from '../middleware/auth.js';
 import { translateText } from '../services/translate.js';
+import { uploadPropertyPhotos, deleteCloudinaryImage } from '../services/cloudinary.js';
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, path.resolve(process.cwd(), 'uploads')),
-  filename: (_req, file, cb) => {
-    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    cb(null, `${Date.now()}_${safe}`);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: { files: 12, fileSize: 8 * 1024 * 1024 }
-});
+const upload = uploadPropertyPhotos;
 
 function pickLanguage(req) {
   const raw = (req.query.lang || req.headers['accept-language'] || 'ka').toString();
@@ -64,7 +52,7 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const photos = (req.files || []).map((f) => `/uploads/${f.filename}`);
+    const photos = (req.files || []).map((f) => f.path);
 
     const property = await Property.create({
       title: req.body.title,

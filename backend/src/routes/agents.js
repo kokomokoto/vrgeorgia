@@ -2,27 +2,11 @@ import express from 'express';
 import Agent from '../models/Agent.js';
 import { Property } from '../models/Property.js';
 import { requireAuth } from '../middleware/auth.js';
-import multer from 'multer';
-import path from 'node:path';
-import fs from 'node:fs';
+import { uploadAgentPhoto } from '../services/cloudinary.js';
 
 const router = express.Router();
 
-// Multer config for agent photos
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(process.cwd(), 'uploads/agents');
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `agent-${Date.now()}${ext}`);
-  }
-});
-const upload = multer({ storage });
+const upload = uploadAgentPhoto;
 
 // Get all agents (public)
 router.get('/', async (req, res) => {
@@ -141,7 +125,7 @@ router.post('/profile', requireAuth, upload.single('photo'), async (req, res) =>
     };
     
     if (req.file) {
-      updateData.photo = `/uploads/agents/${req.file.filename}`;
+      updateData.photo = req.file.path;
     }
     
     if (agent) {

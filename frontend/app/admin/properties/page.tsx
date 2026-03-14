@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { resolveImageUrl } from '@/lib/api';
 
 interface Property {
   _id: string;
@@ -273,7 +274,7 @@ function AdminProperties() {
                         <div className="w-16 h-12 bg-gray-200 rounded-lg overflow-hidden relative flex-shrink-0">
                           {property.images?.[0] ? (
                             <Image
-                              src={property.images[0].startsWith('http') ? property.images[0] : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '')}${property.images[0]}`}
+                              src={resolveImageUrl(property.images[0])}
                               alt={property.title}
                               fill
                               className="object-cover"

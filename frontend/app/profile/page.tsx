@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
-import { getMyProperties, deleteProperty, updateProfile, uploadAvatar } from '@/lib/api';
+import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl } from '@/lib/api';
 import type { Property } from '@/lib/types';
 
 export default function ProfilePage() {
@@ -115,7 +115,7 @@ export default function ProfilePage() {
             >
               {(user as any).avatar ? (
                 <img
-                  src={`http://localhost:5000${(user as any).avatar}`}
+                  src={resolveImageUrl((user as any).avatar)}
                   alt="Avatar"
                   className="h-full w-full object-cover"
                 />
@@ -261,7 +261,7 @@ export default function ProfilePage() {
                 <div className="h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-slate-100">
                   {mainImg ? (
                     <img
-                      src={`http://localhost:5000${mainImg}`}
+                      src={resolveImageUrl(mainImg)}
                       alt={property.title}
                       className="h-full w-full object-cover"
                     />

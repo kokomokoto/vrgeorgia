@@ -1,22 +1,14 @@
 import express from 'express';
-import path from 'node:path';
-import multer from 'multer';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
+import { uploadAvatar } from '../services/cloudinary.js';
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, path.resolve(process.cwd(), 'uploads')),
-  filename: (_req, file, cb) => {
-    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    cb(null, `avatar_${Date.now()}_${safe}`);
-  }
-});
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = uploadAvatar;
 
 import Agent from '../models/Agent.js';
 
@@ -140,7 +132,7 @@ router.put(
 router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
-  const avatarPath = `/uploads/${req.file.filename}`;
+  const avatarPath = req.file.path;
   const user = await User.findByIdAndUpdate(req.user.id, { avatar: avatarPath }, { new: true });
   if (!user) return res.status(404).json({ message: 'User not found' });
 

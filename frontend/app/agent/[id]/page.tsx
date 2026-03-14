@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
-import { getUserProperties } from '@/lib/api';
+import { getUserProperties, resolveImageUrl } from '@/lib/api';
 import { PropertyCard } from '@/components/PropertyCard';
 import type { Property } from '@/lib/types';
 
@@ -16,8 +16,6 @@ export default function AgentPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
   useEffect(() => {
     let alive = true;
@@ -62,7 +60,7 @@ export default function AgentPage() {
         <div className="flex items-center gap-4">
           {owner?.avatar ? (
             <img 
-              src={`${API_BASE}${owner.avatar}`} 
+              src={resolveImageUrl(owner.avatar)} 
               alt="Avatar" 
               className="w-20 h-20 rounded-full object-cover"
             />

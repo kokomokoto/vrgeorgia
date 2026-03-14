@@ -22,6 +22,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'vrgeorgia-api.onrender.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
     ],
   },
   // Security headers

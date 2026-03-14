@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -8,6 +8,14 @@ import { getConversations, getMessages, sendMessage, Conversation, Message } fro
 import { useAuth } from '@/components/AuthProvider';
 
 export default function MessagesPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>}>
+      <MessagesContent />
+    </Suspense>
+  );
+}
+
+function MessagesContent() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const searchParams = useSearchParams();

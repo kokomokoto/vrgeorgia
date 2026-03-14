@@ -18,6 +18,10 @@ const nextConfig = {
         protocol: 'http',
         hostname: '192.168.1.206',
       },
+      {
+        protocol: 'https',
+        hostname: 'vrgeorgia-api.onrender.com',
+      },
     ],
   },
   // Security headers

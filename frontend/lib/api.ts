@@ -102,6 +102,8 @@ export type PropertyQuery = {
   minRooms?: string;
   maxRooms?: string;
   amenities?: string[]; // კომფორტი და კომუნიკაციები
+  sort?: string;
+  propertyId?: string;
   lang?: string;
 };
 

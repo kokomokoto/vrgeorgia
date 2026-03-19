@@ -28,6 +28,43 @@ const GEORGIAN_REGIONS = [
   { value: 'abkhazia', label: 'აფხაზეთი' }
 ];
 
+// ქალაქი → რეგიონის ავტომატური მაპინგი
+const CITY_TO_REGION: Record<string, string> = {
+  'თბილისი': 'tbilisi',
+  'ბათუმი': 'adjara', 'ქობულეთი': 'adjara', 'ხელვაჩაური': 'adjara',
+  'ქუთაისი': 'imereti', 'ზესტაფონი': 'imereti', 'სამტრედია': 'imereti', 'წყალტუბო': 'imereti', 'ჭიათურა': 'imereti', 'საჩხერე': 'imereti', 'ტყიბული': 'imereti',
+  'რუსთავი': 'kvemo_kartli', 'მარნეული': 'kvemo_kartli', 'გარდაბანი': 'kvemo_kartli', 'ბოლნისი': 'kvemo_kartli', 'თეთრიწყარო': 'kvemo_kartli', 'დმანისი': 'kvemo_kartli', 'წალკა': 'kvemo_kartli',
+  'გორი': 'shida_kartli', 'ხაშური': 'shida_kartli', 'კასპი': 'shida_kartli',
+  'თელავი': 'kakheti', 'გურჯაანი': 'kakheti', 'საგარეჯო': 'kakheti', 'სიღნაღი': 'kakheti', 'დედოფლისწყარო': 'kakheti', 'ლაგოდეხი': 'kakheti',
+  'ზუგდიდი': 'samegrelo', 'ფოთი': 'samegrelo', 'სენაკი': 'samegrelo',
+  'ოზურგეთი': 'guria', 'ლანჩხუთი': 'guria',
+  'მცხეთა': 'mtskheta', 'დუშეთი': 'mtskheta',
+  'ახალციხე': 'samtskhe', 'ბორჯომი': 'samtskhe',
+  'ამბროლაური': 'racha',
+};
+
+// ქონების ტიპები
+const PROPERTY_TYPES = [
+  { value: 'apartment', label: 'ბინა', icon: '🏢' },
+  { value: 'house', label: 'კერძო სახლი', icon: '🏠' },
+  { value: 'commercial', label: 'კომერციული', icon: '🏪' },
+  { value: 'land', label: 'მიწა', icon: '🌍' },
+  { value: 'cottage', label: 'აგარაკი', icon: '🏡' },
+  { value: 'hotel', label: 'სასტუმრო', icon: '🏨' },
+  { value: 'building', label: 'შენობა', icon: '🏗️' },
+  { value: 'warehouse', label: 'საწყობი', icon: '📦' },
+  { value: 'parking', label: 'ავტოფარეხი', icon: '🚗' },
+];
+
+// გარიგების ტიპები
+const DEAL_TYPES = [
+  { value: 'sale', label: 'იყიდება', icon: '💰' },
+  { value: 'rent', label: 'ქირავდება', icon: '🔑' },
+  { value: 'mortgage', label: 'გირავდება', icon: '🏦' },
+  { value: 'daily', label: 'დღიურად', icon: '📅' },
+  { value: 'under_construction', label: 'მშენებარე', icon: '🔨' },
+];
+
 export default function EditPropertyPage() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -173,63 +210,121 @@ export default function EditPropertyPage() {
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="text-lg font-semibold">{t('edit') || 'რედაქტირება'}</div>
 
-        <div className="mt-4 grid gap-2">
-          <input
-            className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-            placeholder={t('title')}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <textarea
-            className="min-h-[140px] rounded-md border border-slate-200 px-3 py-2 text-sm"
-            placeholder={t('description')}
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-          />
-          {/* ფასი და ვალუტა */}
-          <div className="flex gap-2">
-            <input
-              className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm"
-              placeholder={t('price')}
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
-            <div className="flex rounded-md border border-slate-200 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setPriceCurrency('USD')}
-                className={`px-3 py-2 text-sm font-medium transition-colors ${
-                  priceCurrency === 'USD' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                $
-              </button>
-              <button
-                type="button"
-                onClick={() => setPriceCurrency('GEL')}
-                className={`px-3 py-2 text-sm font-medium transition-colors ${
-                  priceCurrency === 'GEL' 
-                    ? 'bg-blue-600 text-white' 
-                    : 'bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                ₾
-              </button>
+        <div className="mt-4 grid gap-4">
+          {/* === გარიგების ტიპი === */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-2">გარიგების ტიპი</div>
+            <div className="flex flex-wrap gap-2">
+              {DEAL_TYPES.map((dt) => (
+                <button
+                  key={dt.value}
+                  type="button"
+                  onClick={() => setDealType(dt.value)}
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                    dealType === dt.value
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{dt.icon}</span>
+                  <span>{dt.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          {/* === ქონების ტიპი === */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-2">ქონების ტიპი</div>
+            <div className="flex flex-wrap gap-2">
+              {PROPERTY_TYPES.map((pt) => (
+                <button
+                  key={pt.value}
+                  type="button"
+                  onClick={() => setType(pt.value)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                    type === pt.value
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{pt.icon}</span>
+                  <span>{pt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* === სათაური და აღწერა === */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-2">სათაური და აღწერა</div>
+            <div className="grid gap-2">
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={t('title')}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              <textarea
+                className="min-h-[120px] rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={t('description')}
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+              />
+            </div>
+          </div>
+          {/* === ფასი === */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-2">ფასი</div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={t('price')}
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
+              <div className="flex rounded-md border border-slate-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setPriceCurrency('USD')}
+                  className={`px-3 py-2 text-sm font-medium transition-colors ${
+                    priceCurrency === 'USD' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  $
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPriceCurrency('GEL')}
+                  className={`px-3 py-2 text-sm font-medium transition-colors ${
+                    priceCurrency === 'GEL' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  ₾
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* === მდებარეობა === */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-2">მდებარეობა</div>
+            <div className="grid grid-cols-2 gap-2">
             <CityCombobox 
               value={city} 
               onChange={(newCity) => {
                 setCity(newCity);
+                // ავტომატურად დავაყენოთ რეგიონი ქალაქის მიხედვით
+                if (CITY_TO_REGION[newCity]) {
+                  setRegion(CITY_TO_REGION[newCity]);
+                }
                 if (newCity.toLowerCase() !== 'თბილისი') {
                   setTbilisiDistrict('');
                   setTbilisiSubdistricts([]);
-                } else {
-                  setRegion('tbilisi');
                 }
               }} 
               placeholder={t('city')} 
@@ -261,79 +356,65 @@ export default function EditPropertyPage() {
               onSubdistrictsChange={setTbilisiSubdistricts}
             />
           )}
-
-          <div className="grid grid-cols-2 gap-2">
-            <input 
-              type="number" 
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm" 
-              placeholder={t('sqm') || 'ფართობი (კვ.მ)'} 
-              value={sqm} 
-              onChange={(e) => setSqm(e.target.value)} 
-            />
-            <input 
-              type="number" 
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm" 
-              placeholder={t('rooms') || 'ოთახების რაოდენობა'} 
-              value={rooms} 
-              onChange={(e) => setRooms(e.target.value)} 
-            />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            >
-              <option value="apartment">ბინა</option>
-              <option value="house">კერძო სახლი</option>
-              <option value="commercial">კომერციული</option>
-              <option value="land">მიწა</option>
-              <option value="cottage">აგარაკი</option>
-              <option value="hotel">სასტუმრო</option>
-              <option value="building">შენობა</option>
-              <option value="warehouse">საწყობი</option>
-              <option value="parking">ავტოფარეხი</option>
-            </select>
-            <select
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={dealType}
-              onChange={(e) => setDealType(e.target.value)}
-            >
-              <option value="sale">იყიდება</option>
-              <option value="rent">ქირავდება</option>
-              <option value="mortgage">გირავდება</option>
-              <option value="daily">ქირავდება დღიურად</option>
-              <option value="under_construction">მშენებარე</option>
-            </select>
+          {/* === ფართობი და ოთახები === */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-2">პარამეტრები</div>
+            <div className="grid grid-cols-2 gap-2">
+              <input 
+                type="number" 
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm" 
+                placeholder={t('sqm') || 'ფართობი (კვ.მ)'} 
+                value={sqm} 
+                onChange={(e) => setSqm(e.target.value)} 
+              />
+              <input 
+                type="number" 
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm" 
+                placeholder={t('rooms') || 'ოთახების რაოდენობა'} 
+                value={rooms} 
+                onChange={(e) => setRooms(e.target.value)} 
+              />
+            </div>
           </div>
 
-          <input
-            className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-            placeholder={`${t('exterior3d')} (iframe URL)`}
-            value={exteriorLink}
-            onChange={(e) => setExteriorLink(e.target.value)}
-          />
-          <input
-            className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-            placeholder={`${t('interior3d')} (iframe URL)`}
-            value={interiorLink}
-            onChange={(e) => setInteriorLink(e.target.value)}
-          />
+          {/* === 3D ბმულები === */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-2">3D ტურები</div>
+            <div className="grid gap-2">
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={`${t('exterior3d')} (iframe URL)`}
+                value={exteriorLink}
+                onChange={(e) => setExteriorLink(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={`${t('interior3d')} (iframe URL)`}
+                value={interiorLink}
+                onChange={(e) => setInteriorLink(e.target.value)}
+              />
+            </div>
+          </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-              placeholder={t('phone')}
-              value={contactPhone}
-              onChange={(e) => setContactPhone(e.target.value)}
-            />
-            <input
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-              placeholder={t('email')}
-              value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
-            />
+          {/* === საკონტაქტო === */}
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-2">საკონტაქტო</div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={t('phone')}
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={t('email')}
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+              />
+            </div>
           </div>
 
           {/* არსებული ფოტოები */}

@@ -30,7 +30,7 @@ const initial: FiltersState = {
   region: '',
   tbilisiDistrict: '',
   tbilisiSubdistricts: [],
-  type: [], // მრავალი კატეგორიის არჩევა
+  type: [],
   dealType: '',
   has3d: '',
   hasPhotos: '',
@@ -38,7 +38,8 @@ const initial: FiltersState = {
   maxSqm: '',
   minRooms: '',
   maxRooms: '',
-  amenities: []
+  amenities: [],
+  propertyId: ''
 };
 
 export default function HomePage() {
@@ -48,6 +49,7 @@ export default function HomePage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
+  const [sortBy, setSortBy] = React.useState('date_desc');
   const ITEMS_PER_PAGE = 30;
 
   // URL-დან amenities-ის წაკითხვა (property detail გვერდიდან გადამისამართებისას)
@@ -74,12 +76,13 @@ export default function HomePage() {
 
     listProperties({
       ...filters,
+      sort: sortBy,
       lang: i18n.language
     })
       .then((r) => {
         if (!alive) return;
         setProperties(r.properties);
-        setCurrentPage(1); // ფილტრის ცვლილებაზე პირველ გვერდზე დაბრუნება
+        setCurrentPage(1);
       })
       .catch((e) => {
         if (!alive) return;
@@ -93,7 +96,7 @@ export default function HomePage() {
     return () => {
       alive = false;
     };
-  }, [filters, i18n.language]);
+  }, [filters, sortBy, i18n.language]);
 
   // ყველა პროპერტის ჩატვირთვა კატეგორიების რაოდენობისთვის
   const [allProperties, setAllProperties] = React.useState<Property[]>([]);
@@ -129,11 +132,8 @@ export default function HomePage() {
     <div className="grid gap-4">
       {/* ფილტრები ჰორიზონტალურად */}
       <Filters value={filters} onChange={setFilters} />
-      
-      {/* რუკა ფილტრების ქვემოთ */}
-      <MapView properties={properties} />
 
-      {/* კატეგორიები - რეალტორის სტილით, მრავალი არჩევა */}
+      {/* კატეგორიები - რუკის ზემოთ */}
       <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
         {PROPERTY_CATEGORIES.map((cat) => {
           const isSelected = filters.type.includes(cat.value);
@@ -146,19 +146,19 @@ export default function HomePage() {
                   ? prev.type.filter(t => t !== cat.value) 
                   : [...prev.type, cat.value]
               }))}
-              className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all hover:shadow-md hover:scale-105 ${
+              className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all hover:shadow-md hover:scale-105 ${
                 isSelected 
                   ? 'border-blue-500 bg-blue-50 shadow-md' 
                   : 'border-slate-200 bg-white hover:border-blue-300'
               }`}
             >
-              <span className="text-3xl mb-1">{cat.icon}</span>
+              <span className="text-2xl mb-1">{cat.icon}</span>
               <span className={`text-xs font-medium text-center ${
                 isSelected ? 'text-blue-700' : 'text-slate-700'
               }`}>
                 {cat.label}
               </span>
-              <span className={`text-xs mt-1 ${
+              <span className={`text-xs mt-0.5 ${
                 isSelected ? 'text-blue-600' : 'text-slate-400'
               }`}>
                 {categoryCounts[cat.value] || 0}
@@ -167,19 +167,40 @@ export default function HomePage() {
           );
         })}
       </div>
+      
+      {/* რუკა */}
+      <MapView properties={properties} />
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
       {loading && <div className="text-sm text-slate-500">Loading…</div>}
 
-      {/* ობიექტების რაოდენობა */}
+      {/* სორტირება და რაოდენობა */}
       {!loading && properties.length > 0 && (
-        <div className="text-sm text-slate-600">
-          ნაპოვნია: <span className="font-semibold">{properties.length}</span> ობიექტი
-          {totalPages > 1 && (
-            <span className="ml-2">
-              (გვერდი {currentPage} / {totalPages})
-            </span>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-slate-600">
+            ნაპოვნია: <span className="font-semibold">{properties.length}</span> ობიექტი
+            {totalPages > 1 && (
+              <span className="ml-2">
+                (გვერდი {currentPage} / {totalPages})
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">სორტირება:</span>
+            <select
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+            >
+              <option value="date_desc">📅 ახალი → ძველი</option>
+              <option value="date_asc">📅 ძველი → ახალი</option>
+              <option value="price_asc">💰 ფასი ↑</option>
+              <option value="price_desc">💰 ფასი ↓</option>
+              <option value="area_asc">📐 ფართობი ↑</option>
+              <option value="area_desc">📐 ფართობი ↓</option>
+              <option value="views_desc">👁️ ნახვები ↓</option>
+            </select>
+          </div>
         </div>
       )}
 

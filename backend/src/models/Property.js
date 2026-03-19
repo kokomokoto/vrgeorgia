@@ -71,6 +71,8 @@ const propertySchema = new mongoose.Schema(
       email: { type: String, default: '' }
     },
 
+    views: { type: Number, default: 0 },
+
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
 

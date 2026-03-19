@@ -121,7 +121,9 @@ router.get(
     query('maxSqm').optional({ values: 'falsy' }).isNumeric(),
     query('minRooms').optional({ values: 'falsy' }).isNumeric(),
     query('maxRooms').optional({ values: 'falsy' }).isNumeric(),
-    query('amenities').optional({ values: 'falsy' }).isString() // მასივი JSON ფორმატში
+    query('amenities').optional({ values: 'falsy' }).isString(), // მასივი JSON ფორმატში
+    query('sort').optional({ values: 'falsy' }).isString(),
+    query('propertyId').optional({ values: 'falsy' }).isString().trim()
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -214,7 +216,32 @@ router.get(
       }
     }
 
-    const properties = await Property.find(filter).sort({ createdAt: -1 }).limit(200).lean();
+    // ID-ით ძებნა
+    if (req.query.propertyId) {
+      try {
+        const mongoose = (await import('mongoose')).default;
+        if (mongoose.Types.ObjectId.isValid(req.query.propertyId)) {
+          filter._id = req.query.propertyId;
+        }
+      } catch (e) {}
+    }
+
+    // სორტირება
+    let sortOption = { createdAt: -1 }; // default: ახლიდან ძველისკენ
+    if (req.query.sort) {
+      switch (req.query.sort) {
+        case 'date_asc': sortOption = { createdAt: 1 }; break;
+        case 'date_desc': sortOption = { createdAt: -1 }; break;
+        case 'price_asc': sortOption = { price: 1 }; break;
+        case 'price_desc': sortOption = { price: -1 }; break;
+        case 'area_asc': sortOption = { sqm: 1 }; break;
+        case 'area_desc': sortOption = { sqm: -1 }; break;
+        case 'views_desc': sortOption = { views: -1 }; break;
+        default: sortOption = { createdAt: -1 };
+      }
+    }
+
+    const properties = await Property.find(filter).sort(sortOption).limit(200).lean();
 
     const translated = properties.map((p) => applyTranslation(p, lang));
     res.json({ properties: translated });
@@ -249,7 +276,11 @@ router.get(
 
     const lang = pickLanguage(req);
 
-    const property = await Property.findById(req.params.id)
+    const property = await Property.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { views: 1 } },
+      { new: true }
+    )
       .populate('userId', 'email name phone avatar')
       .lean();
     if (!property) return res.status(404).json({ message: 'Not found' });

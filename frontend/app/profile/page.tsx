@@ -21,6 +21,11 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   
+  // ძებნა / ფილტრაცია
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterDealType, setFilterDealType] = useState('');
+  
   // Profile editing
   const [editMode, setEditMode] = useState(false);
   const [editPhone, setEditPhone] = useState('');
@@ -101,6 +106,20 @@ export default function ProfilePage() {
       setUploadingAvatar(false);
     }
   };
+
+  // ფილტრაცია
+  const filteredProperties = properties.filter((p) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = p.title?.toLowerCase().includes(q);
+      const matchCity = p.city?.toLowerCase().includes(q);
+      const matchId = p._id?.toLowerCase().includes(q);
+      if (!matchTitle && !matchCity && !matchId) return false;
+    }
+    if (filterType && p.type !== filterType) return false;
+    if (filterDealType && p.dealType !== filterDealType) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -231,6 +250,67 @@ export default function ProfilePage() {
           {t('myProperties') || 'ჩემი განცხადებები'} ({properties.length})
         </h2>
 
+        {/* ძებნა და ფილტრაცია */}
+        {properties.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="ძებნა სათაურით, ქალაქით ან ID-ით..."
+                className="w-full rounded-md border border-slate-200 pl-9 pr-3 py-2 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
+              />
+            </div>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="">ყველა ტიპი</option>
+              <option value="apartment">🏢 ბინა</option>
+              <option value="house">🏠 კერძო სახლი</option>
+              <option value="commercial">🏪 კომერციული</option>
+              <option value="land">🌍 მიწა</option>
+              <option value="cottage">🏡 აგარაკი</option>
+              <option value="hotel">🏨 სასტუმრო</option>
+              <option value="building">🏗️ შენობა</option>
+              <option value="warehouse">📦 საწყობი</option>
+              <option value="parking">🚗 ავტოფარეხი</option>
+            </select>
+            <select
+              value={filterDealType}
+              onChange={(e) => setFilterDealType(e.target.value)}
+              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="">ყველა გარიგება</option>
+              <option value="sale">💰 იყიდება</option>
+              <option value="rent">🔑 ქირავდება</option>
+              <option value="mortgage">🏦 გირავდება</option>
+              <option value="daily">📅 დღიურად</option>
+              <option value="under_construction">🔨 მშენებარე</option>
+            </select>
+            {(searchQuery || filterType || filterDealType) && (
+              <button
+                onClick={() => { setSearchQuery(''); setFilterType(''); setFilterDealType(''); }}
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
+              >
+                ✕ გასუფთავება
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ფილტრის შედეგი */}
+        {properties.length > 0 && (searchQuery || filterType || filterDealType) && (
+          <p className="text-xs text-slate-500 mb-3">
+            ნაპოვნია: {filteredProperties.length} / {properties.length}
+          </p>
+        )}
+
         {loading ? (
           <p className="text-sm text-slate-500">იტვირთება...</p>
         ) : error ? (
@@ -247,7 +327,9 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {properties.map((property) => {
+            {filteredProperties.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4">ძებნის შედეგი ცარიელია</p>
+            ) : filteredProperties.map((property) => {
               // მთავარი ფოტო
               const mainPhotoIndex = property.mainPhoto || 0;
               const mainImg = property.photos?.[mainPhotoIndex] || property.photos?.[0];
@@ -283,9 +365,15 @@ export default function ProfilePage() {
                   <p className="text-sm text-slate-500 mt-1">
                     {property.city}{property.region ? `, ${property.region}` : ''}
                   </p>
-                  <p className="text-sm font-semibold text-blue-600 mt-1">
-                    ${property.price.toLocaleString()}
-                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <p className="text-sm font-semibold text-blue-600">
+                      {property.priceCurrency === 'GEL' ? '₾' : '$'}{property.price.toLocaleString()}
+                    </p>
+                    {property.views !== undefined && (
+                      <span className="text-xs text-slate-400">👁 {property.views}</span>
+                    )}
+                    <span className="text-xs text-slate-400 font-mono">ID: {property._id.slice(-6)}</span>
+                  </div>
                 </div>
 
                 {/* მოქმედებები */}

@@ -60,6 +60,7 @@ export type Property = {
   }>;
   contact?: { phone?: string; email?: string };
   userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string };
+  views?: number;
   createdAt?: string;
 };
 

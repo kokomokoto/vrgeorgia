@@ -15,6 +15,82 @@ import CompareButton from '@/components/CompareButton';
 import { PropertyCard } from '@/components/PropertyCard';
 import type { Property } from '@/lib/types';
 
+// Lightbox კომპონენტი - keyboard ნავიგაცია + დიდი ღილაკები
+function LightboxModal({ photos, index, onClose, onChangeIndex }: {
+  photos: string[];
+  index: number;
+  onClose: () => void;
+  onChangeIndex: (i: number) => void;
+}) {
+  React.useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft' && index > 0) onChangeIndex(index - 1);
+      if (e.key === 'ArrowRight' && index < photos.length - 1) onChangeIndex(index + 1);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [index, photos.length, onClose, onChangeIndex]);
+
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+      onClick={onClose}
+    >
+      <button 
+        className="absolute top-4 right-4 text-white text-4xl hover:text-slate-300 z-50 w-12 h-12 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 transition-colors"
+        onClick={onClose}
+      >
+        ×
+      </button>
+      
+      {index > 0 && (
+        <button
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-5xl hover:text-slate-300 w-16 h-16 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 transition-colors z-50"
+          onClick={(e) => { e.stopPropagation(); onChangeIndex(index - 1); }}
+        >
+          ‹
+        </button>
+      )}
+      
+      <img
+        src={resolveImageUrl(photos[index])}
+        alt={`Photo ${index + 1}`}
+        className="max-h-[90vh] max-w-[90vw] object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
+      
+      {index < photos.length - 1 && (
+        <button
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-white text-5xl hover:text-slate-300 w-16 h-16 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 transition-colors z-50"
+          onClick={(e) => { e.stopPropagation(); onChangeIndex(index + 1); }}
+        >
+          ›
+        </button>
+      )}
+      
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-4 py-2 rounded-full">
+        {index + 1} / {photos.length}
+      </div>
+      
+      {/* ქვედა thumbnails */}
+      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-1.5 max-w-[80vw] overflow-x-auto p-2" onClick={(e) => e.stopPropagation()}>
+        {photos.map((p, i) => (
+          <button
+            key={i}
+            onClick={() => onChangeIndex(i)}
+            className={`flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border-2 transition-all ${
+              i === index ? 'border-white scale-110' : 'border-transparent opacity-60 hover:opacity-100'
+            }`}
+          >
+            <img src={resolveImageUrl(p)} alt="" className="w-full h-full object-cover" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PropertyDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -162,6 +238,16 @@ export default function PropertyDetailPage() {
               {property.city || ''}{property.city && property.region ? ' • ' : ''}
               {property.region ? t(`region_${property.region}`) : ''}
             </div>
+            {/* მეტა-ინფორმაცია: ID, თარიღი, ნახვები */}
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+              <span className="font-mono bg-slate-100 px-2 py-0.5 rounded">ID: {property._id}</span>
+              {property.createdAt && (
+                <span>📅 {new Date(property.createdAt).toLocaleDateString('ka-GE')}</span>
+              )}
+              {typeof property.views === 'number' && (
+                <span>👁️ {property.views} ნახვა</span>
+              )}
+            </div>
             {/* Share Buttons */}
             <div className="mt-3 flex items-center gap-2">
               <ShareButtons 
@@ -207,6 +293,115 @@ export default function PropertyDetailPage() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* მაკლერი / მფლობელი - ზემოთ */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="text-sm font-semibold mb-3">{t('seller')}</div>
+        <div className="flex items-center gap-4">
+          {owner?.avatar ? (
+            <img 
+              src={resolveImageUrl(owner.avatar)} 
+              alt="Avatar" 
+              className="w-14 h-14 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-full bg-slate-200 flex items-center justify-center text-xl text-slate-400">
+              {owner?.email?.[0]?.toUpperCase() || '?'}
+            </div>
+          )}
+          <div className="flex-1">
+            <div className="font-medium text-slate-800">
+              {owner?.name || owner?.email || t('unknown')}
+            </div>
+            {property.contact?.phone && (
+              <div className="text-sm text-slate-600">{t('phone')}: {property.contact.phone}</div>
+            )}
+            {property.contact?.email && (
+              <div className="text-sm text-slate-600">{t('email')}: {property.contact.email}</div>
+            )}
+          </div>
+          {owner?._id && (
+            <Link
+              href={`/agent/${owner._id}`}
+              className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              {t('otherListings')}
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* დეტალური ინფორმაცია - ზემოთ */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="text-sm font-semibold mb-4">დეტალური ინფორმაცია</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {property.sqm && property.sqm > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <span className="text-2xl">📐</span>
+              <div>
+                <div className="text-xs text-slate-500">ფართი</div>
+                <div className="font-medium text-slate-800">{property.sqm} მ²</div>
+              </div>
+            </div>
+          )}
+          {(property.rooms || property.roomCount) && (property.rooms || property.roomCount || 0) > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <span className="text-2xl">🚪</span>
+              <div>
+                <div className="text-xs text-slate-500">ოთახები</div>
+                <div className="font-medium text-slate-800">{property.rooms || property.roomCount}</div>
+              </div>
+            </div>
+          )}
+          {property.floor && property.floor > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <span className="text-2xl">🏢</span>
+              <div>
+                <div className="text-xs text-slate-500">სართული</div>
+                <div className="font-medium text-slate-800">
+                  {property.floor}{property.totalFloors ? ` / ${property.totalFloors}` : ''}
+                </div>
+              </div>
+            </div>
+          )}
+          {property.balcony && property.balcony > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <span className="text-2xl">🌅</span>
+              <div>
+                <div className="text-xs text-slate-500">აივანი</div>
+                <div className="font-medium text-slate-800">{property.balcony}</div>
+              </div>
+            </div>
+          )}
+          {property.loggia && property.loggia > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <span className="text-2xl">🪟</span>
+              <div>
+                <div className="text-xs text-slate-500">ლოჯია</div>
+                <div className="font-medium text-slate-800">{property.loggia}</div>
+              </div>
+            </div>
+          )}
+          {property.bathroom && property.bathroom > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+              <span className="text-2xl">🚿</span>
+              <div>
+                <div className="text-xs text-slate-500">სველი წერტილი</div>
+                <div className="font-medium text-slate-800">{property.bathroom}</div>
+              </div>
+            </div>
+          )}
+          {property.cadastralCode && (
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg col-span-2">
+              <span className="text-2xl">📋</span>
+              <div>
+                <div className="text-xs text-slate-500">საკადასტრო კოდი</div>
+                <div className="font-medium text-slate-800 font-mono text-sm">{property.cadastralCode}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -352,91 +547,6 @@ export default function PropertyDetailPage() {
         </div>
       </div>
 
-      {/* დეტალური ინფორმაცია - იკონებით */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="text-sm font-semibold mb-4">დეტალური ინფორმაცია</div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {/* ფართი */}
-          {property.sqm && property.sqm > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">📐</span>
-              <div>
-                <div className="text-xs text-slate-500">ფართი</div>
-                <div className="font-medium text-slate-800">{property.sqm} მ²</div>
-              </div>
-            </div>
-          )}
-          
-          {/* ოთახები */}
-          {(property.rooms || property.roomCount) && (property.rooms || property.roomCount || 0) > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🚪</span>
-              <div>
-                <div className="text-xs text-slate-500">ოთახები</div>
-                <div className="font-medium text-slate-800">{property.rooms || property.roomCount}</div>
-              </div>
-            </div>
-          )}
-          
-          {/* სართული */}
-          {property.floor && property.floor > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🏢</span>
-              <div>
-                <div className="text-xs text-slate-500">სართული</div>
-                <div className="font-medium text-slate-800">
-                  {property.floor}{property.totalFloors ? ` / ${property.totalFloors}` : ''}
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* აივანი */}
-          {property.balcony && property.balcony > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🌅</span>
-              <div>
-                <div className="text-xs text-slate-500">აივანი</div>
-                <div className="font-medium text-slate-800">{property.balcony}</div>
-              </div>
-            </div>
-          )}
-          
-          {/* ლოჯია */}
-          {property.loggia && property.loggia > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🪟</span>
-              <div>
-                <div className="text-xs text-slate-500">ლოჯია</div>
-                <div className="font-medium text-slate-800">{property.loggia}</div>
-              </div>
-            </div>
-          )}
-          
-          {/* სველი წერტილი */}
-          {property.bathroom && property.bathroom > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🚿</span>
-              <div>
-                <div className="text-xs text-slate-500">სველი წერტილი</div>
-                <div className="font-medium text-slate-800">{property.bathroom}</div>
-              </div>
-            </div>
-          )}
-          
-          {/* საკადასტრო კოდი */}
-          {property.cadastralCode && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg col-span-2">
-              <span className="text-2xl">📋</span>
-              <div>
-                <div className="text-xs text-slate-500">საკადასტრო კოდი</div>
-                <div className="font-medium text-slate-800 font-mono text-sm">{property.cadastralCode}</div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* კომფორტი და კომუნიკაციები */}
       {property.amenities && Object.values(property.amenities).some(v => v) && (
         <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -566,43 +676,6 @@ export default function PropertyDetailPage() {
         </div>
       </div>
 
-      {/* მაკლერი / მფლობელი */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="text-sm font-semibold mb-3">{t('seller')}</div>
-        <div className="flex items-center gap-4">
-          {owner?.avatar ? (
-            <img 
-              src={resolveImageUrl(owner.avatar)} 
-              alt="Avatar" 
-              className="w-14 h-14 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-14 h-14 rounded-full bg-slate-200 flex items-center justify-center text-xl text-slate-400">
-              {owner?.email?.[0]?.toUpperCase() || '?'}
-            </div>
-          )}
-          <div className="flex-1">
-            <div className="font-medium text-slate-800">
-              {owner?.name || owner?.email || t('unknown')}
-            </div>
-            {property.contact?.phone && (
-              <div className="text-sm text-slate-600">{t('phone')}: {property.contact.phone}</div>
-            )}
-            {property.contact?.email && (
-              <div className="text-sm text-slate-600">{t('email')}: {property.contact.email}</div>
-            )}
-          </div>
-          {owner?._id && (
-            <Link
-              href={`/agent/${owner._id}`}
-              className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              {t('otherListings')}
-            </Link>
-          )}
-        </div>
-      </div>
-
       {/* მსგავსი ობიექტები */}
       {similarProperties.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -617,46 +690,12 @@ export default function PropertyDetailPage() {
 
       {/* Lightbox მოდალი */}
       {lightboxIndex !== null && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
-          onClick={() => setLightboxIndex(null)}
-        >
-          <button 
-            className="absolute top-4 right-4 text-white text-3xl hover:text-slate-300 z-50"
-            onClick={() => setLightboxIndex(null)}
-          >
-            ×
-          </button>
-          
-          {lightboxIndex > 0 && (
-            <button
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-4xl hover:text-slate-300 p-2"
-              onClick={(e) => { e.stopPropagation(); setLightboxIndex(lightboxIndex - 1); }}
-            >
-              ‹
-            </button>
-          )}
-          
-          <img
-            src={resolveImageUrl(photos[lightboxIndex])}
-            alt={`Photo ${lightboxIndex + 1}`}
-            className="max-h-[90vh] max-w-[90vw] object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-          
-          {lightboxIndex < photos.length - 1 && (
-            <button
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-white text-4xl hover:text-slate-300 p-2"
-              onClick={(e) => { e.stopPropagation(); setLightboxIndex(lightboxIndex + 1); }}
-            >
-              ›
-            </button>
-          )}
-          
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm">
-            {lightboxIndex + 1} / {photos.length}
-          </div>
-        </div>
+        <LightboxModal
+          photos={photos}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onChangeIndex={setLightboxIndex}
+        />
       )}
     </div>
   );

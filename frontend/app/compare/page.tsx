@@ -20,6 +20,19 @@ export default function ComparePage() {
     { key: 'dealType', label: t('dealType'), format: (p: Property) => t(p.dealType === 'rent' ? 'rentType' : p.dealType) },
     { key: 'city', label: t('city'), format: (p: Property) => p.city || '-' },
     { key: 'region', label: t('region'), format: (p: Property) => p.region ? t(`region_${p.region}`) : '-' },
+    { key: 'floor', label: 'სართული', format: (p: Property) => p.floor ? `${p.floor}${p.totalFloors ? ` / ${p.totalFloors}` : ''}` : '-' },
+    { key: 'balcony', label: 'აივანი', format: (p: Property) => p.balcony ? p.balcony.toString() : '-' },
+    { key: 'bathroom', label: 'სველი წერტილი', format: (p: Property) => p.bathroom ? p.bathroom.toString() : '-' },
+    { key: 'elevator', label: '🛗 ლიფტი', format: (p: Property) => p.amenities?.elevator ? '✓' : '✗' },
+    { key: 'furniture', label: '🛋️ ავეჯი', format: (p: Property) => p.amenities?.furniture ? '✓' : '✗' },
+    { key: 'internet', label: '📶 ინტერნეტი', format: (p: Property) => p.amenities?.internet ? '✓' : '✗' },
+    { key: 'airConditioner', label: '❄️ კონდიციონერი', format: (p: Property) => p.amenities?.airConditioner ? '✓' : '✗' },
+    { key: 'centralHeating', label: '🔥 გათბობა', format: (p: Property) => p.amenities?.centralHeating ? '✓' : '✗' },
+    { key: 'naturalGas', label: '🔵 აირი', format: (p: Property) => p.amenities?.naturalGas ? '✓' : '✗' },
+    { key: 'garage', label: '🚗 ავტოფარეხი', format: (p: Property) => p.amenities?.garage ? '✓' : '✗' },
+    { key: 'security', label: '🔒 დაცვა', format: (p: Property) => p.amenities?.security ? '✓' : '✗' },
+    { key: 'pool', label: '🏊 აუზი', format: (p: Property) => p.amenities?.pool ? '✓' : '✗' },
+    { key: 'garden', label: '🌳 ბაღი', format: (p: Property) => p.amenities?.garden ? '✓' : '✗' },
     { key: 'has3d', label: t('has3d'), format: (p: Property) => (p.exteriorLink || p.interiorLink || p.threeDLink) ? '✓' : '✗' },
   ];
 
@@ -46,7 +59,7 @@ export default function ComparePage() {
       <div className="rounded-lg border border-slate-200 bg-white p-4 mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
           <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v18m-7-4l3-8 3 8m-5.5-2h5M16 7l3 8m-5.5 0h5L16 7z" />
           </svg>
           {t('compareProperties')} ({compareProperties.length})
         </h1>
@@ -67,7 +80,7 @@ export default function ComparePage() {
                 {compareProperties.map((property) => {
                   const photo = property.photos?.[property.mainPhoto || 0] || property.photos?.[0];
                   return (
-                    <th key={property._id} className="p-4 text-center min-w-[200px]">
+                    <th key={property._id} className="p-4 text-center min-w-[220px]">
                       <div className="relative">
                         <button
                           onClick={() => removeFromCompare(property._id)}
@@ -76,7 +89,7 @@ export default function ComparePage() {
                           ✕
                         </button>
                         <Link href={`/property/${property._id}`}>
-                          <div className="aspect-[4/3] rounded-lg overflow-hidden mb-2">
+                          <div className="w-full h-40 rounded-lg overflow-hidden mb-2">
                             {photo ? (
                               <img
                                 src={resolveImageUrl(photo)}

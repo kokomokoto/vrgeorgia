@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const propertySchema = new mongoose.Schema(
   {
+    numericId: { type: Number, unique: true, sparse: true },
     title: { type: String, required: true, trim: true },
     desc: { type: String, required: true },
     price: { type: Number, required: true, min: 0 },
@@ -94,5 +95,36 @@ const propertySchema = new mongoose.Schema(
 );
 
 propertySchema.index({ title: 'text', desc: 'text', city: 'text', region: 'text' });
+
+// გარიგების ტიპის მიხედვით ID-ის დიაპაზონები
+const DEAL_TYPE_RANGES = {
+  sale:               { min: 100000, max: 299999 },
+  rent:               { min: 300000, max: 499999 },
+  mortgage:           { min: 500000, max: 699999 },
+  daily:              { min: 700000, max: 899999 },
+  under_construction: { min: 900000, max: 1099999 },
+};
+
+propertySchema.pre('save', async function (next) {
+  if (this.numericId) return next();
+  
+  const range = DEAL_TYPE_RANGES[this.dealType];
+  if (!range) return next(new Error('Unknown dealType: ' + this.dealType));
+
+  // ვეძებთ ამ დიაპაზონში ბოლო (ყველაზე დიდი) numericId
+  const last = await mongoose.model('Property')
+    .findOne({ numericId: { $gte: range.min, $lte: range.max } })
+    .sort({ numericId: -1 })
+    .select('numericId')
+    .lean();
+
+  this.numericId = last ? last.numericId + 1 : range.min;
+  
+  if (this.numericId > range.max) {
+    return next(new Error(`ID ლიმიტი ამოიწურა ${this.dealType} ტიპისთვის`));
+  }
+  
+  next();
+});
 
 export const Property = mongoose.model('Property', propertySchema);

@@ -22,6 +22,7 @@ export type Amenities = {
 
 export type Property = {
   _id: string;
+  numericId?: number;
   title: string;
   desc: string;
   price: number;

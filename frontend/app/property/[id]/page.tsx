@@ -240,7 +240,7 @@ export default function PropertyDetailPage() {
             </div>
             {/* მეტა-ინფორმაცია: ID, თარიღი, ნახვები */}
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-400">
-              <span className="font-mono bg-slate-100 px-2 py-0.5 rounded">ID: {property._id}</span>
+              <span className="font-mono bg-slate-100 px-2 py-0.5 rounded">ID: {property.numericId || property._id}</span>
               {property.createdAt && (
                 <span>📅 {new Date(property.createdAt).toLocaleDateString('ka-GE')}</span>
               )}

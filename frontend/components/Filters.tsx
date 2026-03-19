@@ -23,7 +23,6 @@ const GEORGIAN_REGIONS = [
 
 // გარიგების ტიპები
 const DEAL_TYPES = [
-  { value: '', label: 'ყველა', icon: '📋' },
   { value: 'sale', label: 'იყიდება', icon: '💰' },
   { value: 'rent', label: 'ქირავდება', icon: '🔑' },
   { value: 'mortgage', label: 'გირავდება', icon: '🏦' },
@@ -40,7 +39,7 @@ export type FiltersState = {
   tbilisiDistrict: string;
   tbilisiSubdistricts: string[];
   type: string[];
-  dealType: string;
+  dealType: string[];
   has3d: string;
   hasPhotos: string;
   minSqm: string;
@@ -147,23 +146,31 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4" suppressHydrationWarning>
-      {/* გარიგების ტიპი - თვალსაჩინოდ */}
+      {/* გარიგების ტიპი - მრავალჯერადი არჩევა */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {DEAL_TYPES.map((dt) => (
-          <button
-            key={dt.value}
-            type="button"
-            onClick={() => set('dealType', dt.value)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              value.dealType === dt.value
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            <span>{dt.icon}</span>
-            <span>{dt.label}</span>
-          </button>
-        ))}
+        {DEAL_TYPES.map((dt) => {
+          const isSelected = value.dealType.includes(dt.value);
+          return (
+            <button
+              key={dt.value}
+              type="button"
+              onClick={() => {
+                const newDealType = isSelected
+                  ? value.dealType.filter(d => d !== dt.value)
+                  : [...value.dealType, dt.value];
+                onChange({ ...value, dealType: newDealType });
+              }}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                isSelected
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <span>{dt.icon}</span>
+              <span>{dt.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ძიება და ID */}
@@ -183,7 +190,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">ID</span>
           <input
             className="w-full rounded-lg border border-slate-200 pl-10 pr-3 py-2.5 text-sm font-mono"
-            placeholder="ობიექტის ID..."
+            placeholder="მაგ: 100001"
             value={value.propertyId || ''}
             onChange={(e) => onChange({ ...value, propertyId: e.target.value })}
           />
@@ -327,21 +334,40 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
           </div>
         </FilterDropdown>
 
-        {/* ქალაქი */}
-        <CityCombobox
-          value={value.city}
-          onChange={(v) => {
-            const newValue = { ...value, city: v };
-            if (v.toLowerCase() !== 'თბილისი') {
-              newValue.tbilisiDistrict = '';
-              newValue.tbilisiSubdistricts = [];
-            } else {
-              newValue.region = 'tbilisi';
-            }
-            onChange(newValue);
-          }}
-          placeholder={labels.city}
-        />
+        {/* ქალაქი dropdown */}
+        <FilterDropdown
+          label="ქალაქი"
+          summary={value.city || labels.any}
+          isActive={!!value.city}
+        >
+          <div className="space-y-2">
+            {value.city && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange({ ...value, city: '', region: '', tbilisiDistrict: '', tbilisiSubdistricts: [] });
+                }}
+                className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-md"
+              >
+                ✕ გასუფთავება
+              </button>
+            )}
+            <CityCombobox
+              value={value.city}
+              onChange={(v) => {
+                const newValue = { ...value, city: v };
+                if (v.toLowerCase() !== 'თბილისი') {
+                  newValue.tbilisiDistrict = '';
+                  newValue.tbilisiSubdistricts = [];
+                } else {
+                  newValue.region = 'tbilisi';
+                }
+                onChange(newValue);
+              }}
+              placeholder="ჩაწერეთ ქალაქი..."
+            />
+          </div>
+        </FilterDropdown>
 
         {/* რეგიონი */}
         {value.city.toLowerCase() !== 'თბილისი' ? (

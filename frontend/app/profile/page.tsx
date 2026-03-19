@@ -372,7 +372,7 @@ export default function ProfilePage() {
                     {property.views !== undefined && (
                       <span className="text-xs text-slate-400">👁 {property.views}</span>
                     )}
-                    <span className="text-xs text-slate-400 font-mono">ID: {property._id.slice(-6)}</span>
+                    <span className="text-xs text-slate-400 font-mono">ID: {property.numericId || property._id.slice(-6)}</span>
                   </div>
                 </div>
 

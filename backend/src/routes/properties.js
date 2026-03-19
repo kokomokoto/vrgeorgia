@@ -110,7 +110,7 @@ router.get(
     query('minPrice').optional({ values: 'falsy' }).isNumeric(),
     query('maxPrice').optional({ values: 'falsy' }).isNumeric(),
     query('type').optional({ values: 'falsy' }).isString(), // მასივი JSON ფორმატში
-    query('dealType').optional({ values: 'falsy' }).isIn(['sale', 'rent', 'mortgage', 'daily', 'under_construction']),
+    query('dealType').optional({ values: 'falsy' }).isString(),
     query('city').optional({ values: 'falsy' }).isString().trim().isLength({ max: 80 }),
     query('region').optional({ values: 'falsy' }).isString().trim().isLength({ max: 80 }),
     query('tbilisiDistrict').optional({ values: 'falsy' }).isString().trim(),
@@ -146,7 +146,18 @@ router.get(
         filter.type = req.query.type;
       }
     }
-    if (req.query.dealType) filter.dealType = req.query.dealType;
+    // dealType შეიძლება იყოს მასივი (მრავალი ტიპის არჩევა)
+    if (req.query.dealType) {
+      try {
+        const dealTypes = JSON.parse(req.query.dealType);
+        if (Array.isArray(dealTypes) && dealTypes.length > 0) {
+          filter.dealType = { $in: dealTypes };
+        }
+      } catch (e) {
+        // თუ JSON არ არის, მარტივი string-ია
+        filter.dealType = req.query.dealType;
+      }
+    }
     if (req.query.city) filter.city = req.query.city;
     if (req.query.region) filter.region = req.query.region;
 
@@ -216,14 +227,12 @@ router.get(
       }
     }
 
-    // ID-ით ძებნა
+    // ID-ით ძებნა (ციფრული numericId)
     if (req.query.propertyId) {
-      try {
-        const mongoose = (await import('mongoose')).default;
-        if (mongoose.Types.ObjectId.isValid(req.query.propertyId)) {
-          filter._id = req.query.propertyId;
-        }
-      } catch (e) {}
+      const numId = Number(req.query.propertyId);
+      if (!isNaN(numId) && numId > 0) {
+        filter.numericId = numId;
+      }
     }
 
     // სორტირება

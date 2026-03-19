@@ -31,7 +31,7 @@ const initial: FiltersState = {
   tbilisiDistrict: '',
   tbilisiSubdistricts: [],
   type: [],
-  dealType: '',
+  dealType: [],
   has3d: '',
   hasPhotos: '',
   minSqm: '',

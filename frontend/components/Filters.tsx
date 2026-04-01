@@ -140,10 +140,34 @@ function FilterDropdown({ label, summary, children, isActive }: {
 export function Filters({ value, onChange }: { value: FiltersState; onChange: (v: FiltersState) => void }) {
   const { t } = useTranslation();
   const [mounted, setMounted] = React.useState(false);
+  const [mobileOpen, setMobileOpen] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  // აქტიური ფილტრების რაოდენობა (badge-სთვის)
+  const activeFilterCount = [
+    value.q,
+    value.propertyId,
+    value.minPrice,
+    value.maxPrice,
+    value.priceCurrency,
+    value.priceType,
+    value.city,
+    value.region,
+    value.tbilisiDistrict,
+    value.has3d === 'true' ? '1' : '',
+    value.hasPhotos === 'true' ? '1' : '',
+    value.minSqm,
+    value.maxSqm,
+    value.minRooms,
+    value.maxRooms,
+  ].filter(Boolean).length
+    + value.dealType.length
+    + value.type.length
+    + (value.tbilisiSubdistricts?.length || 0)
+    + (value.amenities?.length || 0);
 
   const labels = {
     filters: mounted ? t('filters') : 'ფილტრები',
@@ -186,7 +210,29 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
   const areaActive = !!(value.minSqm || value.maxSqm);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4" suppressHydrationWarning>
+    <div className="rounded-lg border border-slate-200 bg-white p-3 md:p-4" suppressHydrationWarning>
+      {/* მობაილზე - ჩამოსაშლელი ღილაკი */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen(!mobileOpen)}
+        className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700"
+      >
+        <div className="flex items-center gap-2">
+          <span>🔍</span>
+          <span>ფილტრები</span>
+          {activeFilterCount > 0 && (
+            <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
+        </div>
+        <svg className={`w-5 h-5 text-slate-400 transition-transform ${mobileOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* ფილტრების კონტენტი - მობაილზე ჩამოსაშლელი, დესკტოპზე ყოველთვის ჩანს */}
+      <div className={`${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`}>
       {/* გარიგების ტიპი - მრავალჯერადი არჩევა */}
       <div className="flex flex-wrap gap-2 mb-4">
         {DEAL_TYPES.map((dt) => {
@@ -566,6 +612,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );

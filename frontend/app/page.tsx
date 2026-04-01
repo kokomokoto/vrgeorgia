@@ -52,6 +52,7 @@ export default function HomePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [sortBy, setSortBy] = React.useState('date_desc');
+  const [categoriesOpen, setCategoriesOpen] = React.useState(false);
   const ITEMS_PER_PAGE = 30;
 
   // URL-დან amenities-ის წაკითხვა (property detail გვერდიდან გადამისამართებისას)
@@ -135,8 +136,65 @@ export default function HomePage() {
       {/* ფილტრები ჰორიზონტალურად */}
       <Filters value={filters} onChange={setFilters} />
 
-      {/* კატეგორიები - რუკის ზემოთ */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-3">
+      {/* კატეგორიები - მობაილზე ჩამოსაშლელი, დესკტოპზე ყოველთვის ჩანს */}
+      <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3">
+        <button
+          type="button"
+          onClick={() => setCategoriesOpen(!categoriesOpen)}
+          className="w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700"
+        >
+          <div className="flex items-center gap-2">
+            <span>🏠</span>
+            <span>კატეგორიები</span>
+            {filters.type.length > 0 && (
+              <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {filters.type.length}
+              </span>
+            )}
+          </div>
+          <svg className={`w-5 h-5 text-slate-400 transition-transform ${categoriesOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {categoriesOpen && (
+          <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
+            {PROPERTY_CATEGORIES.map((cat) => {
+              const isSelected = filters.type.includes(cat.value);
+              return (
+                <button
+                  key={cat.value}
+                  onClick={() => setFilters(prev => ({ 
+                    ...prev, 
+                    type: isSelected 
+                      ? prev.type.filter(t => t !== cat.value) 
+                      : [...prev.type, cat.value]
+                  }))}
+                  className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${
+                    isSelected 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-slate-200 bg-white'
+                  }`}
+                >
+                  <span className="text-xl mb-0.5">{cat.icon}</span>
+                  <span className={`text-[10px] font-medium text-center leading-tight ${
+                    isSelected ? 'text-blue-700' : 'text-slate-700'
+                  }`}>
+                    {cat.label}
+                  </span>
+                  <span className={`text-[10px] ${
+                    isSelected ? 'text-blue-600' : 'text-slate-400'
+                  }`}>
+                    {categoryCounts[cat.value] || 0}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* კატეგორიები - დესკტოპზე ყოველთვის ჩანს */}
+      <div className="hidden md:grid grid-cols-5 lg:grid-cols-9 gap-3">
         {PROPERTY_CATEGORIES.map((cat) => {
           const isSelected = filters.type.includes(cat.value);
           return (

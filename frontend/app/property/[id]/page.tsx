@@ -229,10 +229,10 @@ export default function PropertyDetailPage() {
   const displayDesc = needsTranslation && translatedDesc ? translatedDesc : property.desc;
 
   return (
-    <div className="grid gap-4 max-w-4xl mx-auto">
+    <div className="grid gap-3 sm:gap-4 max-w-4xl mx-auto w-full min-w-0 overflow-hidden">
       {/* 3D - ექსტერიერი და ინტერიერი (სულ ზემოთ) */}
       {(property.exteriorLink || property.interiorLink || property.threeDLink) && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm font-semibold">{t('view3d')}</div>
             {property.exteriorLink && property.interiorLink && (
@@ -301,7 +301,7 @@ export default function PropertyDetailPage() {
             return (
               <div className="relative">
                 <iframe 
-                  className="h-[450px] w-full rounded-md border border-slate-200" 
+                  className="h-[250px] sm:h-[350px] md:h-[450px] w-full rounded-md border border-slate-200" 
                   src={embedUrl}
                   title="3D Tour"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; xr-spatial-tracking; web-share"
@@ -325,10 +325,10 @@ export default function PropertyDetailPage() {
       )}
 
       {/* სათაური და ფასი */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-xl font-semibold text-slate-900">
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <div className="text-base sm:text-xl font-semibold text-slate-900 break-words">
               {displayTitle}
               {translatingTitle && (
                 <span className="ml-2 text-sm text-slate-400 font-normal">{t('translating')}...</span>
@@ -339,8 +339,8 @@ export default function PropertyDetailPage() {
               {property.region ? t(`region_${property.region}`) : ''}
             </div>
             {/* მეტა-ინფორმაცია: ID, თარიღი, ნახვები */}
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-400">
-              <span className="font-mono bg-slate-100 px-2 py-0.5 rounded">ID: {property.numericId || property._id}</span>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span className="font-mono bg-slate-100 px-2 py-0.5 rounded truncate max-w-[200px]">ID: {property.numericId || property._id}</span>
               {property.createdAt && (
                 <span>📅 {new Date(property.createdAt).toLocaleDateString('ka-GE')}</span>
               )}
@@ -349,24 +349,24 @@ export default function PropertyDetailPage() {
               )}
             </div>
             {/* Share Buttons */}
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <ShareButtons 
                 url={typeof window !== 'undefined' ? window.location.href : `https://vrgeorgia.ge/property/${property._id}`}
                 title={displayTitle}
                 description={displayDesc}
               />
-              <div className="flex gap-1 ml-2">
+              <div className="flex gap-1">
                 <FavoriteButton propertyId={property._id} />
                 <CompareButton propertyId={property._id} />
               </div>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-blue-700">
+          <div className="sm:text-right flex-shrink-0">
+            <div className="text-xl sm:text-2xl font-bold text-blue-700">
               {currencySymbol}{displayPrice.toLocaleString()}{property.priceType === 'per_sqm' ? <span className="text-base font-normal text-slate-500">/{t('sqmUnit')}</span> : ''}
             </div>
             {/* ვალუტის გადართვა */}
-            <div className="mt-1 flex gap-1 justify-end">
+            <div className="mt-1 flex gap-1 sm:justify-end">
               <button
                 onClick={() => setCurrency('USD')}
                 className={`px-2 py-1 text-xs rounded ${currency === 'USD' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
@@ -402,9 +402,9 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* მაკლერი / მფლობელი - ზემოთ */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
         <div className="text-sm font-semibold mb-3">{t('seller')}</div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
           {owner?.avatar ? (
             <img 
               src={resolveImageUrl(owner.avatar)} 
@@ -430,7 +430,7 @@ export default function PropertyDetailPage() {
           {owner?._id && (
             <Link
               href={`/agent/${owner._id}`}
-              className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="w-full sm:w-auto text-center px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
               {t('otherListings')}
             </Link>
@@ -439,71 +439,71 @@ export default function PropertyDetailPage() {
       </div>
 
       {/* დეტალური ინფორმაცია - ზემოთ */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="text-sm font-semibold mb-4">დეტალური ინფორმაცია</div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {property.sqm && property.sqm > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">📐</span>
-              <div>
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+        <div className="text-sm font-semibold mb-3 sm:mb-4">დეტალური ინფორმაცია</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
+          {(property.sqm ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">📐</span>
+              <div className="min-w-0">
                 <div className="text-xs text-slate-500">ფართი</div>
-                <div className="font-medium text-slate-800">{property.sqm} მ²</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.sqm} მ²</div>
               </div>
             </div>
           )}
-          {(property.rooms || property.roomCount) && (property.rooms || property.roomCount || 0) > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🚪</span>
-              <div>
+          {((property.rooms || property.roomCount || 0) > 0) && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🚪</span>
+              <div className="min-w-0">
                 <div className="text-xs text-slate-500">ოთახები</div>
-                <div className="font-medium text-slate-800">{property.rooms || property.roomCount}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.rooms || property.roomCount}</div>
               </div>
             </div>
           )}
-          {property.floor && property.floor > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🏢</span>
-              <div>
+          {(property.floor ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏢</span>
+              <div className="min-w-0">
                 <div className="text-xs text-slate-500">სართული</div>
-                <div className="font-medium text-slate-800">
+                <div className="text-sm sm:text-base font-medium text-slate-800">
                   {property.floor}{property.totalFloors ? ` / ${property.totalFloors}` : ''}
                 </div>
               </div>
             </div>
           )}
-          {property.balcony && property.balcony > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🌅</span>
-              <div>
+          {(property.balcony ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🌅</span>
+              <div className="min-w-0">
                 <div className="text-xs text-slate-500">აივანი</div>
-                <div className="font-medium text-slate-800">{property.balcony}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.balcony}</div>
               </div>
             </div>
           )}
-          {property.loggia && property.loggia > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🪟</span>
-              <div>
+          {(property.loggia ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🪟</span>
+              <div className="min-w-0">
                 <div className="text-xs text-slate-500">ლოჯია</div>
-                <div className="font-medium text-slate-800">{property.loggia}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.loggia}</div>
               </div>
             </div>
           )}
-          {property.bathroom && property.bathroom > 0 && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <span className="text-2xl">🚿</span>
-              <div>
+          {(property.bathroom ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🚿</span>
+              <div className="min-w-0">
                 <div className="text-xs text-slate-500">სველი წერტილი</div>
-                <div className="font-medium text-slate-800">{property.bathroom}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.bathroom}</div>
               </div>
             </div>
           )}
           {property.cadastralCode && (
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg col-span-2">
-              <span className="text-2xl">📋</span>
-              <div>
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg col-span-2">
+              <span className="text-xl sm:text-2xl">📋</span>
+              <div className="min-w-0">
                 <div className="text-xs text-slate-500">საკადასტრო კოდი</div>
-                <div className="font-medium text-slate-800 font-mono text-sm">{property.cadastralCode}</div>
+                <div className="text-sm font-medium text-slate-800 font-mono truncate">{property.cadastralCode}</div>
               </div>
             </div>
           )}
@@ -512,9 +512,9 @@ export default function PropertyDetailPage() {
 
       {/* ფოტოები - მეორე */}
       {photos.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="mb-3 text-sm font-semibold">{t('photos')} ({photos.length})</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {photos.map((p, idx) => (
               <div 
                 key={p} 
@@ -533,9 +533,9 @@ export default function PropertyDetailPage() {
       )}
 
       {/* ავტომატური აღწერა მონაცემებიდან */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
         <div className="text-sm font-semibold mb-3">{t('characteristics')}</div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
           {autoDescription.map((item, idx) => (
             <div key={idx} className="text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-md">
               {item}
@@ -546,10 +546,10 @@ export default function PropertyDetailPage() {
 
       {/* კომფორტი და კომუნიკაციები */}
       {property.amenities && Object.values(property.amenities).some(v => v) && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="text-sm font-semibold mb-2">კომფორტი და კომუნიკაციები</div>
-          <div className="text-xs text-slate-500 mb-4">დააჭირეთ რომ იპოვოთ სხვა ობიექტები ამ მახასიათებლით</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="text-xs text-slate-500 mb-3 sm:mb-4">დააჭირეთ რომ იპოვოთ სხვა ობიექტები ამ მახასიათებლით</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {property.amenities.elevator && (
               <button onClick={() => handleAmenityClick('elevator')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
                 <span className="text-xl">🛗</span>
@@ -646,21 +646,21 @@ export default function PropertyDetailPage() {
 
       {/* ავტორის აღწერა */}
       {property.desc && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="text-sm font-semibold mb-3">
             {t('description')}
             {translatingDesc && (
               <span className="ml-2 text-xs text-slate-400 font-normal">{t('translating')}...</span>
             )}
           </div>
-          <div className="text-sm text-slate-700 whitespace-pre-wrap">{displayDesc}</div>
+          <div className="text-sm text-slate-700 whitespace-pre-wrap break-words overflow-hidden">{displayDesc}</div>
         </div>
       )}
 
       {/* რუკა - ადგილმდებარეობა */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
         <div className="text-sm font-semibold mb-3">{t('mapLocation')}</div>
-        <div className="h-[300px] rounded-lg overflow-hidden">
+        <div className="h-[200px] sm:h-[300px] rounded-lg overflow-hidden">
           <MapView 
             properties={[property]} 
             selectedLocation={property.location}
@@ -675,9 +675,9 @@ export default function PropertyDetailPage() {
 
       {/* მსგავსი ობიექტები */}
       {similarProperties.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="text-sm font-semibold mb-4">მსგავსი ობიექტები</div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {similarProperties.map((p) => (
               <PropertyCard key={p._id} p={p} />
             ))}

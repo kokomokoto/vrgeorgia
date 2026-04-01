@@ -450,7 +450,6 @@ export default function UploadPage() {
                           setRegion('tbilisi');
                         }
                       }} 
-                      placeholder="აირჩიეთ ქალაქი" 
                     />
                   </div>
                   {city.toLowerCase() !== 'თბილისი' ? (

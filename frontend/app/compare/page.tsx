@@ -10,6 +10,41 @@ import type { Property } from '@/lib/types';
 export default function ComparePage() {
   const { t } = useTranslation();
   const { compareProperties, removeFromCompare, clearCompare } = useCompare();
+  const [mounted, setMounted] = React.useState(false);
+  const [sortKey, setSortKey] = React.useState<string | null>(null);
+  const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc');
+  React.useEffect(() => { setMounted(true); }, []);
+
+  const sortOptions: { key: string; label: string; getValue: (p: Property) => number }[] = [
+    { key: 'price', label: t('price'), getValue: (p) => p.price || 0 },
+    { key: 'sqm', label: t('sqm'), getValue: (p) => p.sqm || 0 },
+    { key: 'rooms', label: t('rooms'), getValue: (p) => p.rooms || 0 },
+    { key: 'pricePerSqm', label: t('pricePerSqm'), getValue: (p) => p.sqm ? Math.round(p.price / p.sqm) : 0 },
+    { key: 'floor', label: 'სართული', getValue: (p) => p.floor || 0 },
+  ];
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      if (sortDir === 'asc') setSortDir('desc');
+      else { setSortKey(null); setSortDir('asc'); }
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const sorted = React.useMemo(() => {
+    if (!sortKey) return compareProperties;
+    const opt = sortOptions.find(o => o.key === sortKey);
+    if (!opt) return compareProperties;
+    return [...compareProperties].sort((a, b) => {
+      const va = opt.getValue(a);
+      const vb = opt.getValue(b);
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+  }, [compareProperties, sortKey, sortDir]);
+
+  if (!mounted) return null;
 
   const specs = [
     { key: 'price', label: t('price'), format: (p: Property) => `$${p.price.toLocaleString()}` },
@@ -71,16 +106,48 @@ export default function ComparePage() {
         </button>
       </div>
 
+      {/* დალაგების ღილაკები */}
+      <div className="rounded-lg border border-slate-200 bg-white p-3 mb-4 flex flex-wrap items-center gap-2">
+        <span className="text-sm text-slate-500 font-medium mr-1">დალაგება:</span>
+        {sortOptions.map((opt) => {
+          const isActive = sortKey === opt.key;
+          return (
+            <button
+              key={opt.key}
+              onClick={() => handleSort(opt.key)}
+              className={`px-3 py-1.5 text-xs rounded-md border transition-colors flex items-center gap-1 ${
+                isActive
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+              }`}
+            >
+              {opt.label}
+              {isActive && (
+                <span className="text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
+              )}
+            </button>
+          );
+        })}
+        {sortKey && (
+          <button
+            onClick={() => { setSortKey(null); setSortDir('asc'); }}
+            className="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600"
+          >
+            ✕ გასუფთავება
+          </button>
+        )}
+      </div>
+
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-200">
-                <th className="text-left p-4 bg-slate-50 font-medium text-slate-600 w-40"></th>
-                {compareProperties.map((property) => {
+        <div className="overflow-auto max-h-[80vh]">
+          <table className="w-max min-w-full">
+            <thead className="sticky top-0 z-30">
+              <tr className="border-b border-slate-200 bg-white">
+                <th className="text-left p-4 bg-slate-50 font-medium text-slate-600 w-44 min-w-[176px] sticky left-0 z-40 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"></th>
+                {sorted.map((property) => {
                   const photo = property.photos?.[property.mainPhoto || 0] || property.photos?.[0];
                   return (
-                    <th key={property._id} className="p-4 text-center min-w-[220px]">
+                    <th key={property._id} className="p-4 text-center w-[200px] min-w-[200px] max-w-[200px] bg-white">
                       <div className="relative">
                         <button
                           onClick={() => removeFromCompare(property._id)}
@@ -89,7 +156,7 @@ export default function ComparePage() {
                           ✕
                         </button>
                         <Link href={`/property/${property._id}`}>
-                          <div className="w-full h-40 rounded-lg overflow-hidden mb-2">
+                          <div className="w-[168px] h-[126px] mx-auto rounded-lg overflow-hidden mb-2">
                             {photo ? (
                               <img
                                 src={resolveImageUrl(photo)}
@@ -115,16 +182,18 @@ export default function ComparePage() {
             <tbody>
               {specs.map((spec, idx) => (
                 <tr key={spec.key} className={idx % 2 === 0 ? 'bg-slate-50' : ''}>
-                  <td className="p-4 font-medium text-slate-600 text-sm">{spec.label}</td>
-                  {compareProperties.map((property) => {
+                  <td className={`p-4 font-medium text-slate-600 text-sm whitespace-nowrap sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}>{spec.label}</td>
+                  {sorted.map((property) => {
                     const value = spec.format(property);
                     const isHighlight = spec.key === 'price' || spec.key === 'pricePerSqm';
+                    const isYes = value === '✓';
+                    const isNo = value === '✗';
                     return (
                       <td 
                         key={property._id} 
-                        className={`p-4 text-center text-sm ${isHighlight ? 'font-bold text-blue-700' : 'text-slate-700'}`}
+                        className={`p-4 text-center text-sm ${isHighlight ? 'font-bold text-blue-700' : isYes ? 'text-green-600 font-semibold' : isNo ? 'text-red-400' : 'text-slate-700'}`}
                       >
-                        {value}
+                        {isYes ? <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-600 text-lg">✓</span> : isNo ? <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-50 text-red-400 text-lg">✗</span> : value}
                       </td>
                     );
                   })}

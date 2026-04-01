@@ -26,6 +26,8 @@ const initial: FiltersState = {
   q: '',
   minPrice: '',
   maxPrice: '',
+  priceCurrency: '',
+  priceType: '',
   city: '',
   region: '',
   tbilisiDistrict: '',
@@ -199,6 +201,7 @@ export default function HomePage() {
               <option value="area_asc">📐 ფართობი ↑</option>
               <option value="area_desc">📐 ფართობი ↓</option>
               <option value="views_desc">👁️ ნახვები ↓</option>
+              <option value="views_asc">👁️ ნახვები ↑</option>
             </select>
           </div>
         </div>

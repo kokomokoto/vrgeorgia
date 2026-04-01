@@ -16,7 +16,7 @@ interface CompareContextType {
 
 const CompareContext = createContext<CompareContextType | null>(null);
 
-const MAX_COMPARE_ITEMS = 4;
+const MAX_COMPARE_ITEMS = 20;
 
 export function CompareProvider({ children }: { children: ReactNode }) {
   const [compareList, setCompareList] = useState<string[]>([]);

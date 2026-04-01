@@ -15,6 +15,7 @@ export function PropertyCard({ p }: { p: Property }) {
   
   // ვალუტის სიმბოლი
   const currencySymbol = p.priceCurrency === 'GEL' ? '₾' : '$';
+  const priceLabel = p.priceType === 'per_sqm' ? '/კვ.მ' : '';
 
   return (
     <div className="group relative overflow-hidden rounded-lg border border-slate-200 bg-white hover:border-slate-300">
@@ -36,7 +37,7 @@ export function PropertyCard({ p }: { p: Property }) {
         <div className="p-3">
           <div className="line-clamp-1 text-sm font-semibold text-slate-900">{p.title}</div>
           <div className="mt-1 text-sm text-slate-600">{p.city || ''}{p.city && p.region ? ' • ' : ''}{p.region || ''}</div>
-          <div className="mt-2 text-sm font-semibold text-blue-700">{currencySymbol}{p.price.toLocaleString()}</div>
+          <div className="mt-2 text-sm font-semibold text-blue-700">{currencySymbol}{p.price.toLocaleString()}{priceLabel}</div>
           <div className="mt-1 text-xs text-slate-500">{p.type} • {p.dealType}{p.threeDLink ? ' • 3D' : ''}</div>
         </div>
       </Link>

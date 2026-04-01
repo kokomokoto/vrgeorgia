@@ -7,6 +7,7 @@ const propertySchema = new mongoose.Schema(
     desc: { type: String, required: true },
     price: { type: Number, required: true, min: 0 },
     priceCurrency: { type: String, enum: ['USD', 'GEL'], default: 'USD' },
+    priceType: { type: String, enum: ['total', 'per_sqm'], default: 'total' },
 
     city: { type: String, default: '' },
     region: { type: String, default: '' },
@@ -25,7 +26,7 @@ const propertySchema = new mongoose.Schema(
     balcony: { type: Number, default: 0 },
     loggia: { type: Number, default: 0 },
     bathroom: { type: Number, default: 0 },
-    cadastralCode: { type: String, default: '' },
+    cadastralCode: { type: String, required: true, unique: true, trim: true },
     
     // კომფორტი და კომუნიკაციები
     amenities: {

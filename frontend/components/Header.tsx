@@ -39,7 +39,7 @@ export function Header() {
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-3">
-          <a href="/" onClick={handleLogoClick} className="text-base font-semibold text-slate-900 cursor-pointer">
+          <a href="/" onClick={handleLogoClick} className="text-base font-semibold text-yellow-500 cursor-pointer">
             {appName}
           </a>
         </div>

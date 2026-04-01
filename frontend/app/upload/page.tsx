@@ -81,6 +81,7 @@ export default function UploadPage() {
   const [desc, setDesc] = React.useState('');
   const [price, setPrice] = React.useState('');
   const [priceCurrency, setPriceCurrency] = React.useState<'USD' | 'GEL'>('USD');
+  const [priceType, setPriceType] = React.useState<'total' | 'per_sqm'>('total');
   const [city, setCity] = React.useState('');
   const [region, setRegion] = React.useState('');
   const [tbilisiDistrict, setTbilisiDistrict] = React.useState('');
@@ -129,7 +130,7 @@ export default function UploadPage() {
   const isStep1Complete = type !== '';
   const isStep2Complete = dealType !== '';
   const isStep3Complete = city !== '' && (city.toLowerCase() !== 'თბილისი' ? region !== '' : true);
-  const isStep4Complete = lat !== null && lng !== null;
+  const isStep4Complete = lat !== null && lng !== null && cadastralCode.trim() !== '';
   const isStep5Complete = title !== '' && price !== '' && sqm !== '';
   // Step 6 მწვანდება თუ რამე შეავსო, მაგრამ არასავალდებულოა
   const isStep6Filled = roomCount !== null || floor !== '' || balcony > 0 || loggia > 0 || bathroom > 0 || 
@@ -243,12 +244,14 @@ export default function UploadPage() {
       if (lat === null || lng === null) throw new Error('აირჩიეთ მდებარეობა რუკაზე');
       if (!type) throw new Error('აირჩიეთ ქონების ტიპი');
       if (!dealType) throw new Error('აირჩიეთ გარიგების ტიპი');
+      if (!cadastralCode.trim()) throw new Error('საკადასტრო კოდი სავალდებულოა');
       
       const form = new FormData();
       form.set('title', title);
       form.set('desc', desc);
       form.set('price', price);
       form.set('priceCurrency', priceCurrency);
+      form.set('priceType', priceType);
       form.set('city', city);
       form.set('region', region);
       form.set('tbilisiDistrict', tbilisiDistrict);
@@ -516,7 +519,7 @@ export default function UploadPage() {
               <div className="space-y-4 mt-4">
                 {/* საკადასტრო კოდი */}
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">📋 საკადასტრო კოდი (არასავალდებულო)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">📋 საკადასტრო კოდი <span className="text-red-500">*</span></label>
                   <input 
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                     placeholder="მაგ: 01.19.14.007.001"
@@ -597,7 +600,7 @@ export default function UploadPage() {
                   <h3 className="text-lg font-semibold text-slate-800">📝 დეტალები</h3>
                   <p className="text-sm text-slate-500">ქონების აღწერა და პარამეტრები</p>
                 </div>
-                {isStep5Complete && <span className="ml-auto text-green-600 font-medium">{price} {priceCurrency === 'USD' ? '$' : '₾'} • {sqm} კვ.მ</span>}
+                {isStep5Complete && <span className="ml-auto text-green-600 font-medium">{price} {priceCurrency === 'USD' ? '$' : '₾'}{priceType === 'per_sqm' ? '/კვ.მ' : ''} • {sqm} კვ.მ</span>}
               </div>
             </button>
             
@@ -658,6 +661,30 @@ export default function UploadPage() {
                           ₾
                         </button>
                       </div>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setPriceType('total')}
+                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
+                          priceType === 'total'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        სრული ფასი
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPriceType('per_sqm')}
+                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
+                          priceType === 'per_sqm'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        ფასი კვ.მ-ზე
+                      </button>
                     </div>
                   </div>
                   <div>

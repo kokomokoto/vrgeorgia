@@ -89,6 +89,8 @@ export type PropertyQuery = {
   q?: string;
   minPrice?: string;
   maxPrice?: string;
+  priceCurrency?: string;
+  priceType?: string;
   city?: string;
   region?: string;
   tbilisiDistrict?: string;

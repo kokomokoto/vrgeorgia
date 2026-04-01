@@ -46,10 +46,12 @@ function LightboxModal({ photos, index, onClose, onChangeIndex }: {
       
       {index > 0 && (
         <button
-          className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-5xl hover:text-slate-300 w-16 h-16 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 transition-colors z-50"
+          className="absolute left-0 top-0 h-full w-20 md:w-32 flex items-center justify-center z-50 cursor-pointer hover:bg-white/10 transition-colors"
           onClick={(e) => { e.stopPropagation(); onChangeIndex(index - 1); }}
         >
-          ‹
+          <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
+            ‹
+          </span>
         </button>
       )}
       
@@ -62,10 +64,12 @@ function LightboxModal({ photos, index, onClose, onChangeIndex }: {
       
       {index < photos.length - 1 && (
         <button
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-white text-5xl hover:text-slate-300 w-16 h-16 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 transition-colors z-50"
+          className="absolute right-0 top-0 h-full w-20 md:w-32 flex items-center justify-center z-50 cursor-pointer hover:bg-white/10 transition-colors"
           onClick={(e) => { e.stopPropagation(); onChangeIndex(index + 1); }}
         >
-          ›
+          <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
+            ›
+          </span>
         </button>
       )}
       
@@ -181,10 +185,12 @@ export default function PropertyDetailPage() {
   const displayPrice = currency === 'USD' ? priceUSD : priceGEL;
   const currencySymbol = currency === 'USD' ? '$' : '₾';
 
-  // ფასი კვადრატზე
+  // ფასი კვადრატზე / სრული ფასი
   const sqm = property.sqm || 0;
   const rooms = property.rooms || 0;
-  const pricePerSqm = sqm > 0 ? Math.round(displayPrice / sqm) : null;
+  const isPerSqm = property.priceType === 'per_sqm';
+  const pricePerSqm = isPerSqm ? displayPrice : (sqm > 0 ? Math.round(displayPrice / sqm) : null);
+  const totalPrice = isPerSqm && sqm > 0 ? Math.round(displayPrice * sqm) : null;
 
   // მომხმარებლის ინფორმაცია
   const owner = typeof property.userId === 'object' ? property.userId : null;
@@ -224,6 +230,100 @@ export default function PropertyDetailPage() {
 
   return (
     <div className="grid gap-4 max-w-4xl mx-auto">
+      {/* 3D - ექსტერიერი და ინტერიერი (სულ ზემოთ) */}
+      {(property.exteriorLink || property.interiorLink || property.threeDLink) && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-sm font-semibold">{t('view3d')}</div>
+            {property.exteriorLink && property.interiorLink && (
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setView3dMode('exterior')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    view3dMode === 'exterior'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {t('exterior')}
+                </button>
+                <button
+                  onClick={() => setView3dMode('interior')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    view3dMode === 'interior'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {t('interior')}
+                </button>
+              </div>
+            )}
+          </div>
+          {(() => {
+            const convertToEmbedUrl = (input: string) => {
+              if (!input) return '';
+              let url = input.trim();
+              if (url.includes('<iframe') && url.includes('src=')) {
+                const srcMatch = url.match(/src=["']([^"']+)["']/);
+                if (srcMatch && srcMatch[1]) url = srcMatch[1];
+              }
+              if (url.includes('superspl.at/view?id=')) {
+                url = url.replace('superspl.at/view?id=', 'superspl.at/s?id=');
+              }
+              if (url.includes('youtube.com/watch')) {
+                try {
+                  const videoId = new URL(url).searchParams.get('v');
+                  if (videoId) return `https://www.youtube.com/embed/${videoId}`;
+                } catch {}
+              }
+              if (url.includes('youtu.be/')) {
+                const videoId = url.split('youtu.be/')[1]?.split('?')[0];
+                if (videoId) return `https://www.youtube.com/embed/${videoId}`;
+              }
+              return url;
+            };
+            
+            const rawUrl = property.exteriorLink && property.interiorLink
+              ? (view3dMode === 'exterior' ? property.exteriorLink : property.interiorLink)
+              : (property.exteriorLink || property.interiorLink || property.threeDLink);
+            
+            const embedUrl = convertToEmbedUrl(rawUrl || '');
+            
+            if (!embedUrl || !embedUrl.startsWith('http')) {
+              return (
+                <div className="h-[200px] flex items-center justify-center bg-slate-100 rounded-md">
+                  <p className="text-slate-500">3D ლინკი არ არის მითითებული ან არასწორია</p>
+                </div>
+              );
+            }
+            
+            return (
+              <div className="relative">
+                <iframe 
+                  className="h-[450px] w-full rounded-md border border-slate-200" 
+                  src={embedUrl}
+                  title="3D Tour"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; xr-spatial-tracking; web-share"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                  loading="lazy"
+                  style={{ border: 'none' }}
+                />
+                <a 
+                  href={embedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute top-2 right-2 bg-white/90 hover:bg-white px-3 py-1.5 rounded-lg shadow text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
+                >
+                  🔗 ახალ ტაბში
+                </a>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* სათაური და ფასი */}
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -263,7 +363,7 @@ export default function PropertyDetailPage() {
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-blue-700">
-              {currencySymbol}{displayPrice.toLocaleString()}
+              {currencySymbol}{displayPrice.toLocaleString()}{property.priceType === 'per_sqm' ? <span className="text-base font-normal text-slate-500">/{t('sqmUnit')}</span> : ''}
             </div>
             {/* ვალუტის გადართვა */}
             <div className="mt-1 flex gap-1 justify-end">
@@ -280,8 +380,13 @@ export default function PropertyDetailPage() {
                 GEL
               </button>
             </div>
-            {/* ფასი კვადრატზე */}
-            {pricePerSqm && (
+            {/* ფასი კვადრატზე / სრული ფასი */}
+            {isPerSqm && totalPrice && (
+              <div className="mt-1 text-sm text-slate-500">
+                სრული: {currencySymbol}{totalPrice.toLocaleString()}
+              </div>
+            )}
+            {!isPerSqm && pricePerSqm && (
               <div className="mt-1 text-sm text-slate-500">
                 {currencySymbol}{pricePerSqm.toLocaleString()}/{t('sqmUnit')}
               </div>
@@ -404,114 +509,6 @@ export default function PropertyDetailPage() {
           )}
         </div>
       </div>
-
-      {/* 3D - ექსტერიერი და ინტერიერი */}
-      {(property.exteriorLink || property.interiorLink || property.threeDLink) && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-semibold">{t('view3d')}</div>
-            {property.exteriorLink && property.interiorLink && (
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setView3dMode('exterior')}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    view3dMode === 'exterior'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {t('exterior')}
-                </button>
-                <button
-                  onClick={() => setView3dMode('interior')}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    view3dMode === 'interior'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {t('interior')}
-                </button>
-              </div>
-            )}
-          </div>
-          {(() => {
-            // ლინკის კონვერტაცია embed ფორმატში
-            const convertToEmbedUrl = (input: string) => {
-              if (!input) return '';
-              
-              let url = input.trim();
-              
-              // თუ iframe კოდია, ამოვიღოთ src
-              if (url.includes('<iframe') && url.includes('src=')) {
-                const srcMatch = url.match(/src=["']([^"']+)["']/);
-                if (srcMatch && srcMatch[1]) {
-                  url = srcMatch[1];
-                }
-              }
-              
-              // Supersplat view -> s (embed format)
-              if (url.includes('superspl.at/view?id=')) {
-                url = url.replace('superspl.at/view?id=', 'superspl.at/s?id=');
-              }
-              
-              // YouTube watch -> embed
-              if (url.includes('youtube.com/watch')) {
-                try {
-                  const videoId = new URL(url).searchParams.get('v');
-                  if (videoId) return `https://www.youtube.com/embed/${videoId}`;
-                } catch {}
-              }
-              // YouTube short links
-              if (url.includes('youtu.be/')) {
-                const videoId = url.split('youtu.be/')[1]?.split('?')[0];
-                if (videoId) return `https://www.youtube.com/embed/${videoId}`;
-              }
-              
-              return url;
-            };
-            
-            const rawUrl = property.exteriorLink && property.interiorLink
-              ? (view3dMode === 'exterior' ? property.exteriorLink : property.interiorLink)
-              : (property.exteriorLink || property.interiorLink || property.threeDLink);
-            
-            const embedUrl = convertToEmbedUrl(rawUrl || '');
-            
-            // თუ URL ცარიელია ან არავალიდურია, არაფერს არ ვაჩვენებთ
-            if (!embedUrl || !embedUrl.startsWith('http')) {
-              return (
-                <div className="h-[200px] flex items-center justify-center bg-slate-100 rounded-md">
-                  <p className="text-slate-500">3D ლინკი არ არის მითითებული ან არასწორია</p>
-                </div>
-              );
-            }
-            
-            return (
-              <div className="relative">
-                <iframe 
-                  className="h-[450px] w-full rounded-md border border-slate-200" 
-                  src={embedUrl}
-                  title="3D Tour"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; xr-spatial-tracking; web-share"
-                  allowFullScreen
-                  referrerPolicy="no-referrer-when-downgrade"
-                  loading="lazy"
-                  style={{ border: 'none' }}
-                />
-                {/* ახალ ტაბში გახსნის ღილაკი */}
-                <a 
-                  href={embedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute top-2 right-2 bg-white/90 hover:bg-white px-3 py-1.5 rounded-lg shadow text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
-                >
-                  🔗 ახალ ტაბში
-                </a>
-              </div>
-            );
-          })()}
-        </div>
-      )}
 
       {/* ფოტოები - მეორე */}
       {photos.length > 0 && (

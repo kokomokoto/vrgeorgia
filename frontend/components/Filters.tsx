@@ -21,6 +21,43 @@ const GEORGIAN_REGIONS = [
   { value: 'abkhazia', label: 'აფხაზეთი' }
 ];
 
+// ქალაქი → რეგიონი mapping
+const CITY_REGION_MAP: Record<string, string> = {
+  'თბილისი': 'tbilisi',
+  'ბათუმი': 'adjara',
+  'ქობულეთი': 'adjara',
+  'ქუთაისი': 'imereti',
+  'ზესტაფონი': 'imereti',
+  'სამტრედია': 'imereti',
+  'წყალტუბო': 'imereti',
+  'საჩხერე': 'imereti',
+  'ჭიათურა': 'imereti',
+  'ტყიბული': 'imereti',
+  'რუსთავი': 'kvemo_kartli',
+  'მარნეული': 'kvemo_kartli',
+  'ბოლნისი': 'kvemo_kartli',
+  'გარდაბანი': 'kvemo_kartli',
+  'თეთრიწყარო': 'kvemo_kartli',
+  'დმანისი': 'kvemo_kartli',
+  'წალკა': 'kvemo_kartli',
+  'გორი': 'shida_kartli',
+  'კასპი': 'shida_kartli',
+  'ხაშური': 'shida_kartli',
+  'ზუგდიდი': 'samegrelo',
+  'ფოთი': 'samegrelo',
+  'სენაკი': 'samegrelo',
+  'თელავი': 'kakheti',
+  'გურჯაანი': 'kakheti',
+  'საგარეჯო': 'kakheti',
+  'სიღნაღი': 'kakheti',
+  'დედოფლისწყარო': 'kakheti',
+  'ლაგოდეხი': 'kakheti',
+  'ახალციხე': 'samtskhe',
+  'ბორჯომი': 'samtskhe',
+  'მცხეთა': 'mtskheta',
+  'ოზურგეთი': 'guria',
+};
+
 // გარიგების ტიპები
 const DEAL_TYPES = [
   { value: 'sale', label: 'იყიდება', icon: '💰' },
@@ -34,6 +71,8 @@ export type FiltersState = {
   q: string;
   minPrice: string;
   maxPrice: string;
+  priceCurrency: string;
+  priceType: string;
   city: string;
   region: string;
   tbilisiDistrict: string;
@@ -117,9 +156,11 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
   const set = (k: keyof FiltersState, v: string) => onChange({ ...value, [k]: v });
 
   const priceSummary = () => {
-    if (value.minPrice && value.maxPrice) return `${Number(value.minPrice).toLocaleString()} – ${Number(value.maxPrice).toLocaleString()}`;
-    if (value.minPrice) return `${Number(value.minPrice).toLocaleString()}+`;
-    if (value.maxPrice) return `${Number(value.maxPrice).toLocaleString()}-მდე`;
+    const sym = value.priceCurrency === 'GEL' ? '₾' : '$';
+    const suffix = value.priceType === 'per_sqm' ? '/კვ.მ' : '';
+    if (value.minPrice && value.maxPrice) return `${sym}${Number(value.minPrice).toLocaleString()} – ${sym}${Number(value.maxPrice).toLocaleString()}${suffix}`;
+    if (value.minPrice) return `${sym}${Number(value.minPrice).toLocaleString()}+${suffix}`;
+    if (value.maxPrice) return `${sym}${Number(value.maxPrice).toLocaleString()}-მდე${suffix}`;
     return labels.any;
   };
 
@@ -140,7 +181,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
     return labels.any;
   };
 
-  const priceActive = !!(value.minPrice || value.maxPrice);
+  const priceActive = !!(value.minPrice || value.maxPrice || value.priceCurrency || value.priceType);
   const roomsActive = !!(value.minRooms || value.maxRooms);
   const areaActive = !!(value.minSqm || value.maxSqm);
 
@@ -173,28 +214,25 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
         })}
       </div>
 
-      {/* ძიება და ID */}
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 mb-3">
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            className="w-full rounded-lg border border-slate-200 pl-10 pr-3 py-2.5 text-sm"
-            placeholder={`${labels.search}...`}
-            value={value.q}
-            onChange={(e) => set('q', e.target.value)}
-          />
-        </div>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-mono">ID</span>
-          <input
-            className="w-full rounded-lg border border-slate-200 pl-10 pr-3 py-2.5 text-sm font-mono"
-            placeholder="მაგ: 100001"
-            value={value.propertyId || ''}
-            onChange={(e) => onChange({ ...value, propertyId: e.target.value })}
-          />
-        </div>
+      {/* ძიება (ტექსტი ან ID) */}
+      <div className="relative mb-3">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          className="w-full rounded-lg border border-slate-200 pl-10 pr-3 py-2.5 text-sm"
+          placeholder={`${labels.search} / ID...`}
+          value={value.q || value.propertyId || ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            const isNumericId = /^\d+$/.test(v.trim()) && Number(v.trim()) > 0;
+            if (isNumericId) {
+              onChange({ ...value, q: '', propertyId: v.trim() });
+            } else {
+              onChange({ ...value, q: v, propertyId: '' });
+            }
+          }}
+        />
       </div>
 
       {/* ფილტრები კომპაქტურად */}
@@ -202,6 +240,84 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
         {/* ფასი dropdown */}
         <FilterDropdown label="ფასი" summary={priceSummary()} isActive={priceActive}>
           <div className="space-y-3">
+            {/* ვალუტა */}
+            <div>
+              <div className="text-[10px] text-slate-500 mb-1.5">ვალუტა:</div>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...value, priceCurrency: '' })}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                    !value.priceCurrency
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  ყველა
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...value, priceCurrency: 'USD' })}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                    value.priceCurrency === 'USD'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  $ USD
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...value, priceCurrency: 'GEL' })}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                    value.priceCurrency === 'GEL'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  ₾ GEL
+                </button>
+              </div>
+            </div>
+            {/* ფასის ტიპი */}
+            <div>
+              <div className="text-[10px] text-slate-500 mb-1.5">ფასის ტიპი:</div>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...value, priceType: '' })}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                    !value.priceType
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  ყველა
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...value, priceType: 'total' })}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                    value.priceType === 'total'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  სრული
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...value, priceType: 'per_sqm' })}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                    value.priceType === 'per_sqm'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  კვ.მ-ზე
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-slate-500 mb-1 block">მინიმუმ</label>
@@ -334,40 +450,29 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
           </div>
         </FilterDropdown>
 
-        {/* ქალაქი dropdown */}
-        <FilterDropdown
-          label="ქალაქი"
-          summary={value.city || labels.any}
-          isActive={!!value.city}
-        >
-          <div className="space-y-2">
-            {value.city && (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange({ ...value, city: '', region: '', tbilisiDistrict: '', tbilisiSubdistricts: [] });
-                }}
-                className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-md"
-              >
-                ✕ გასუფთავება
-              </button>
-            )}
-            <CityCombobox
-              value={value.city}
-              onChange={(v) => {
-                const newValue = { ...value, city: v };
-                if (v.toLowerCase() !== 'თბილისი') {
-                  newValue.tbilisiDistrict = '';
-                  newValue.tbilisiSubdistricts = [];
-                } else {
-                  newValue.region = 'tbilisi';
-                }
-                onChange(newValue);
-              }}
-              placeholder="ჩაწერეთ ქალაქი..."
-            />
-          </div>
-        </FilterDropdown>
+        {/* ქალაქი — თავისი dropdown-ით */}
+        <CityCombobox
+          value={value.city}
+          label={labels.city}
+          anyLabel={labels.any}
+          onChange={(v) => {
+            const newValue = { ...value, city: v };
+            if (!v) {
+              // გასუფთავება — ყველაფერი რესეტი
+              newValue.region = '';
+              newValue.tbilisiDistrict = '';
+              newValue.tbilisiSubdistricts = [];
+            } else if (v === 'თბილისი') {
+              newValue.region = 'tbilisi';
+            } else {
+              // ავტომატურად მოინიშნოს რეგიონი ქალაქის მიხედვით
+              newValue.region = CITY_REGION_MAP[v] || '';
+              newValue.tbilisiDistrict = '';
+              newValue.tbilisiSubdistricts = [];
+            }
+            onChange(newValue);
+          }}
+        />
 
         {/* რეგიონი */}
         {value.city.toLowerCase() !== 'თბილისი' ? (

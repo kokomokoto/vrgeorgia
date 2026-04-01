@@ -42,15 +42,23 @@ router.post(
     body('sqm').optional().isNumeric().withMessage('ფართობი უნდა იყოს რიცხვი'),
     body('rooms').optional().isNumeric().withMessage('ოთახების რაოდენობა უნდა იყოს რიცხვი'),
     body('priceCurrency').optional().isIn(['USD', 'GEL']).withMessage('ვალუტა უნდა იყოს USD ან GEL'),
+    body('priceType').optional().isIn(['total', 'per_sqm']).withMessage('ფასის ტიპი უნდა იყოს total ან per_sqm'),
     body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
     body('exteriorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
-    body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail()
+    body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail(),
+    body('cadastralCode').isString().trim().notEmpty().withMessage('საკადასტრო კოდი სავალდებულოა')
   ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    // შევამოწმოთ საკადასტრო კოდის უნიკალურობა
+    const existingByCadastral = await Property.findOne({ cadastralCode: req.body.cadastralCode.trim() });
+    if (existingByCadastral) {
+      return res.status(400).json({ errors: [{ msg: 'ამ საკადასტრო კოდით ობიექტი უკვე არსებობს', path: 'cadastralCode' }] });
+    }
 
     const photos = (req.files || []).map((f) => f.path);
 
@@ -59,6 +67,7 @@ router.post(
       desc: req.body.desc,
       price: Number(req.body.price),
       priceCurrency: req.body.priceCurrency || 'USD',
+      priceType: req.body.priceType || 'total',
       city: req.body.city || '',
       region: req.body.region || '',
       tbilisiDistrict: req.body.tbilisiDistrict || '',
@@ -71,7 +80,7 @@ router.post(
       balcony: Number(req.body.balcony) || 0,
       loggia: Number(req.body.loggia) || 0,
       bathroom: Number(req.body.bathroom) || 0,
-      cadastralCode: req.body.cadastralCode || '',
+      cadastralCode: req.body.cadastralCode.trim(),
       amenities: req.body.amenities ? JSON.parse(req.body.amenities) : {},
       location: { lat: Number(req.body.lat), lng: Number(req.body.lng) },
       type: req.body.type,
@@ -122,6 +131,8 @@ router.get(
     query('minRooms').optional({ values: 'falsy' }).isNumeric(),
     query('maxRooms').optional({ values: 'falsy' }).isNumeric(),
     query('amenities').optional({ values: 'falsy' }).isString(), // მასივი JSON ფორმატში
+    query('priceCurrency').optional({ values: 'falsy' }).isIn(['USD', 'GEL']),
+    query('priceType').optional({ values: 'falsy' }).isIn(['total', 'per_sqm']),
     query('sort').optional({ values: 'falsy' }).isString(),
     query('propertyId').optional({ values: 'falsy' }).isString().trim()
   ],
@@ -176,10 +187,81 @@ router.get(
       }
     }
 
-    if (req.query.minPrice || req.query.maxPrice) {
-      filter.price = {};
-      if (req.query.minPrice) filter.price.$gte = Number(req.query.minPrice);
-      if (req.query.maxPrice) filter.price.$lte = Number(req.query.maxPrice);
+    // ვალუტა: USD არის default, ამიტომ ველის არარსებობაც USD-ად ითვლება
+    if (req.query.priceCurrency) {
+      if (req.query.priceCurrency === 'USD') {
+        filter.$and = filter.$and || [];
+        filter.$and.push({ $or: [{ priceCurrency: 'USD' }, { priceCurrency: { $exists: false } }] });
+      } else {
+        filter.priceCurrency = req.query.priceCurrency;
+      }
+    }
+
+    // ფასის ფილტრაცია priceType-ის გათვალისწინებით
+    // თუ მომხმარებელი ირჩევს "კვ.მ-ზე", სისტემა ითვლის price/sqm და ადარებს
+    // თუ "სრული" ან არაფერი - პირდაპირ price-ს ადარებს
+    const filterPriceType = req.query.priceType || '';
+    
+    if (filterPriceType === 'per_sqm' && (req.query.minPrice || req.query.maxPrice)) {
+      // კვ.მ-ზე ფილტრაცია: გამოვთვალოთ ეფექტური ფასი კვადრატულზე
+      // - სრული ფასის ობიექტები: price / sqm
+      // - კვ.მ-ზე ფასის ობიექტები: price პირდაპირ
+      filter.$and = filter.$and || [];
+      filter.$and.push({ sqm: { $gt: 0 } }); // sqm > 0 რომ გაყოფა შესაძლებელი იყოს
+      
+      const effectivePricePerSqm = {
+        $cond: [
+          { $eq: ['$priceType', 'per_sqm'] },
+          '$price',
+          { $divide: ['$price', '$sqm'] }
+        ]
+      };
+      
+      const priceConditions = [];
+      if (req.query.minPrice) {
+        priceConditions.push({ $gte: [effectivePricePerSqm, Number(req.query.minPrice)] });
+      }
+      if (req.query.maxPrice) {
+        priceConditions.push({ $lte: [effectivePricePerSqm, Number(req.query.maxPrice)] });
+      }
+      
+      if (priceConditions.length === 1) {
+        filter.$expr = priceConditions[0];
+      } else {
+        filter.$expr = { $and: priceConditions };
+      }
+    } else if (req.query.minPrice || req.query.maxPrice) {
+      // სრული ფასის ფილტრაცია (default): 
+      // - კვ.მ-ზე ფასის ობიექტები: price * sqm
+      // - სრული ფასის ობიექტები: price პირდაპირ
+      if (filterPriceType === 'total') {
+        const effectiveTotalPrice = {
+          $cond: [
+            { $eq: ['$priceType', 'per_sqm'] },
+            { $multiply: ['$price', { $ifNull: ['$sqm', 1] }] },
+            '$price'
+          ]
+        };
+        
+        const priceConditions = [];
+        if (req.query.minPrice) {
+          priceConditions.push({ $gte: [effectiveTotalPrice, Number(req.query.minPrice)] });
+        }
+        if (req.query.maxPrice) {
+          priceConditions.push({ $lte: [effectiveTotalPrice, Number(req.query.maxPrice)] });
+        }
+        
+        if (priceConditions.length === 1) {
+          filter.$expr = priceConditions[0];
+        } else {
+          filter.$expr = { $and: priceConditions };
+        }
+      } else {
+        // priceType არ არის მითითებული — პირდაპირი შედარება
+        filter.price = {};
+        if (req.query.minPrice) filter.price.$gte = Number(req.query.minPrice);
+        if (req.query.maxPrice) filter.price.$lte = Number(req.query.maxPrice);
+      }
     }
 
     if (req.query.minSqm || req.query.maxSqm) {
@@ -235,19 +317,28 @@ router.get(
       }
     }
 
-    // სორტირება
-    let sortOption = { createdAt: -1 }; // default: ახლიდან ძველისკენ
+    // სორტირება (მრავალი კრიტერიუმი, მძიმით გამოყოფილი: "price_asc,date_desc")
+    let sortOption = {};
+    const SORT_MAP = {
+      date_asc: { createdAt: 1 },
+      date_desc: { createdAt: -1 },
+      price_asc: { price: 1 },
+      price_desc: { price: -1 },
+      area_asc: { sqm: 1 },
+      area_desc: { sqm: -1 },
+      views_asc: { views: 1 },
+      views_desc: { views: -1 },
+    };
     if (req.query.sort) {
-      switch (req.query.sort) {
-        case 'date_asc': sortOption = { createdAt: 1 }; break;
-        case 'date_desc': sortOption = { createdAt: -1 }; break;
-        case 'price_asc': sortOption = { price: 1 }; break;
-        case 'price_desc': sortOption = { price: -1 }; break;
-        case 'area_asc': sortOption = { sqm: 1 }; break;
-        case 'area_desc': sortOption = { sqm: -1 }; break;
-        case 'views_desc': sortOption = { views: -1 }; break;
-        default: sortOption = { createdAt: -1 };
+      const parts = req.query.sort.split(',').map(s => s.trim());
+      for (const part of parts) {
+        if (SORT_MAP[part]) {
+          Object.assign(sortOption, SORT_MAP[part]);
+        }
       }
+    }
+    if (Object.keys(sortOption).length === 0) {
+      sortOption = { createdAt: -1 }; // default
     }
 
     const properties = await Property.find(filter).sort(sortOption).limit(200).lean();
@@ -330,16 +421,31 @@ router.put(
     if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
 
     const patch = {};
-    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink']) {
+    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
+    }
+    // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას
+    if (req.body.cadastralCode !== undefined) {
+      const dup = await Property.findOne({ cadastralCode: req.body.cadastralCode.trim(), _id: { $ne: existing._id } });
+      if (dup) {
+        return res.status(400).json({ errors: [{ msg: 'ამ საკადასტრო კოდით ობიექტი უკვე არსებობს', path: 'cadastralCode' }] });
+      }
     }
     if (req.body.tbilisiSubdistricts !== undefined) patch.tbilisiSubdistricts = req.body.tbilisiSubdistricts;
     if (req.body.price !== undefined) patch.price = Number(req.body.price);
     if (req.body.priceCurrency !== undefined) patch.priceCurrency = req.body.priceCurrency;
+    if (req.body.priceType !== undefined) patch.priceType = req.body.priceType;
     if (req.body.sqm !== undefined) patch.sqm = Number(req.body.sqm);
     if (req.body.rooms !== undefined) patch.rooms = Number(req.body.rooms);
     if (req.body.photos !== undefined) patch.photos = req.body.photos;
     if (req.body.mainPhoto !== undefined) patch.mainPhoto = Number(req.body.mainPhoto);
+    if (req.body.location !== undefined) patch.location = req.body.location;
+    if (req.body.floor !== undefined) patch.floor = Number(req.body.floor);
+    if (req.body.totalFloors !== undefined) patch.totalFloors = Number(req.body.totalFloors);
+    if (req.body.balcony !== undefined) patch.balcony = Number(req.body.balcony);
+    if (req.body.loggia !== undefined) patch.loggia = Number(req.body.loggia);
+    if (req.body.bathroom !== undefined) patch.bathroom = Number(req.body.bathroom);
+    if (req.body.amenities !== undefined) patch.amenities = req.body.amenities;
     if (req.body.contactPhone !== undefined || req.body.contactEmail !== undefined) {
       patch.contact = {
         phone: req.body.contactPhone ?? existing.contact?.phone ?? '',

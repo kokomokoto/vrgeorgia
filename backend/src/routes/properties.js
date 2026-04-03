@@ -48,16 +48,18 @@ router.post(
     body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail(),
-    body('cadastralCode').isString().trim().notEmpty().withMessage('საკადასტრო კოდი სავალდებულოა')
+    body('cadastralCode').optional().isString().trim()
   ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    // შევამოწმოთ საკადასტრო კოდის უნიკალურობა
-    const existingByCadastral = await Property.findOne({ cadastralCode: req.body.cadastralCode.trim() });
-    if (existingByCadastral) {
-      return res.status(400).json({ errors: [{ msg: 'ამ საკადასტრო კოდით ობიექტი უკვე არსებობს', path: 'cadastralCode' }] });
+    // საკადასტრო კოდის უნიკალურობის შემოწმება (თუ მითითებულია)
+    if (req.body.cadastralCode && req.body.cadastralCode.trim()) {
+      const existingByCadastral = await Property.findOne({ cadastralCode: req.body.cadastralCode.trim() });
+      if (existingByCadastral) {
+        return res.status(400).json({ errors: [{ msg: 'ამ საკადასტრო კოდით ობიექტი უკვე არსებობს', path: 'cadastralCode' }] });
+      }
     }
 
     const photos = (req.files || []).map((f) => f.path);
@@ -80,7 +82,7 @@ router.post(
       balcony: Number(req.body.balcony) || 0,
       loggia: Number(req.body.loggia) || 0,
       bathroom: Number(req.body.bathroom) || 0,
-      cadastralCode: req.body.cadastralCode.trim(),
+      cadastralCode: (req.body.cadastralCode || '').trim(),
       amenities: req.body.amenities ? JSON.parse(req.body.amenities) : {},
       location: { lat: Number(req.body.lat), lng: Number(req.body.lng) },
       type: req.body.type,
@@ -424,8 +426,8 @@ router.put(
     for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
     }
-    // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას
-    if (req.body.cadastralCode !== undefined) {
+    // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას (თუ მითითებულია)
+    if (req.body.cadastralCode && req.body.cadastralCode.trim()) {
       const dup = await Property.findOne({ cadastralCode: req.body.cadastralCode.trim(), _id: { $ne: existing._id } });
       if (dup) {
         return res.status(400).json({ errors: [{ msg: 'ამ საკადასტრო კოდით ობიექტი უკვე არსებობს', path: 'cadastralCode' }] });

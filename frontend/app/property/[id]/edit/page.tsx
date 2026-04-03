@@ -190,7 +190,7 @@ export default function EditPropertyPage() {
   const isStep1Complete = type !== '';
   const isStep2Complete = dealType !== '';
   const isStep3Complete = city !== '' && (city.toLowerCase() !== 'თბილისი' ? region !== '' : true);
-  const isStep4Complete = lat !== null && lng !== null && cadastralCode.trim() !== '';
+  const isStep4Complete = lat !== null && lng !== null;
   const isStep5Complete = title !== '' && price !== '' && sqm !== '';
   const isStep6Filled = roomCount !== null || floor !== '' || balcony > 0 || loggia > 0 || bathroom > 0 || 
     basement || elevator || furniture || garage || centralHeating || naturalGas || internet || electricity || water;
@@ -272,7 +272,7 @@ export default function EditPropertyPage() {
       if (lat === null || lng === null) throw new Error('აირჩიეთ მდებარეობა რუკაზე');
       if (!type) throw new Error('აირჩიეთ ქონების ტიპი');
       if (!dealType) throw new Error('აირჩიეთ გარიგების ტიპი');
-      if (!cadastralCode.trim()) throw new Error('საკადასტრო კოდი სავალდებულოა');
+      // cadastralCode არასავალდებულოა
 
       const amenities = {
         basement, elevator, furniture, garage, centralHeating,
@@ -477,7 +477,7 @@ export default function EditPropertyPage() {
             {currentStep === 4 && (
               <div className="space-y-4 mt-4">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">📋 საკადასტრო კოდი <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">📋 საკადასტრო კოდი <span className="text-slate-400 text-xs">(არასავალდებულო)</span></label>
                   <input
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                     placeholder="მაგ: 01.19.14.007.001"

@@ -26,7 +26,7 @@ const propertySchema = new mongoose.Schema(
     balcony: { type: Number, default: 0 },
     loggia: { type: Number, default: 0 },
     bathroom: { type: Number, default: 0 },
-    cadastralCode: { type: String, required: true, unique: true, trim: true },
+    cadastralCode: { type: String, default: '', trim: true },
     
     // კომფორტი და კომუნიკაციები
     amenities: {

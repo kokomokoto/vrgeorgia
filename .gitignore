@@ -9,6 +9,7 @@ backend/.env
 !frontend/.env.production
 
 # Next.js
+.next/
 frontend/.next/
 frontend/out/
 

@@ -494,6 +494,10 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
                 newValue.tbilisiSubdistricts = [];
               }
             }
+            // თბილისის რეგიონის არჩევისას ავტომატურად აირჩეს თბილისი ქალაქიც
+            if (newRegion === 'tbilisi' && !newValue.city) {
+              newValue.city = 'თბილისი';
+            }
             if (!newRegion) {
               // რეგიონის გასუფთავებისას ქალაქს არ ვეხებით
             }
@@ -535,7 +539,11 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
 
       {/* უბნები — თბილისი, ბათუმი, ქუთაისი, რუსთავი */}
       {CITIES_WITH_DISTRICTS.includes(value.city) && (
-        <div className="mb-3">
+        <FilterDropdown
+          label="უბნები"
+          summary={value.tbilisiDistrict ? `${value.tbilisiDistrict}${value.tbilisiSubdistricts.length ? ` (${value.tbilisiSubdistricts.length})` : ''}` : 'აირჩიეთ'}
+          isActive={!!value.tbilisiDistrict || value.tbilisiSubdistricts.length > 0}
+        >
           <TbilisiDistrictSelector
             city={value.city}
             selectedDistrict={value.tbilisiDistrict}
@@ -543,7 +551,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
             onDistrictChange={(d) => onChange({ ...value, tbilisiDistrict: d })}
             onSubdistrictsChange={(s) => onChange({ ...value, tbilisiSubdistricts: s })}
           />
-        </div>
+        </FilterDropdown>
       )}
 
       {/* კომფორტი + 3D/ფოტო ფილტრები */}

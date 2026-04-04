@@ -53,6 +53,7 @@ export default function HomePage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [sortBy, setSortBy] = React.useState('date_desc');
   const [categoriesOpen, setCategoriesOpen] = React.useState(false);
+  const [mapOpen, setMapOpen] = React.useState(false);
   const ITEMS_PER_PAGE = 30;
 
   // URL-დან amenities-ის წაკითხვა (property detail გვერდიდან გადამისამართებისას)
@@ -228,8 +229,32 @@ export default function HomePage() {
         })}
       </div>
       
-      {/* რუკა */}
-      <MapView properties={properties} />
+      {/* რუკა - მობაილზე ჩამოსაშლელი */}
+      <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3">
+        <button
+          type="button"
+          onClick={() => setMapOpen(!mapOpen)}
+          className="w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700"
+        >
+          <div className="flex items-center gap-2">
+            <span>🗺️</span>
+            <span>რუკა</span>
+          </div>
+          <svg className={`w-5 h-5 text-slate-400 transition-transform ${mapOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {mapOpen && (
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <MapView properties={properties} />
+          </div>
+        )}
+      </div>
+
+      {/* რუკა - დესკტოპზე ყოველთვის ჩანს */}
+      <div className="hidden md:block">
+        <MapView properties={properties} />
+      </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
       {loading && <div className="text-sm text-slate-500">Loading…</div>}

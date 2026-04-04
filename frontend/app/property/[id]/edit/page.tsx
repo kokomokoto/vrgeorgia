@@ -9,7 +9,7 @@ import { getProperty, updateProperty, resolveImageUrl } from '@/lib/api';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
-import TbilisiDistrictSelector from '@/components/TbilisiDistrictSelector';
+import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import type { Property } from '@/lib/types';
 
 // საქართველოს რეგიონები
@@ -325,7 +325,7 @@ export default function EditPropertyPage() {
         <div className="space-y-4">
           {/* ეტაპი 1: ქონების ტიპი */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 1 ? 'border-blue-500 shadow-lg' : isStep1Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(1)} className="w-full text-left">
+            <button onClick={() => setCurrentStep(prev => prev === 1 ? 0 : 1)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep1Complete ? 'bg-green-500 text-white' : currentStep === 1 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep1Complete ? '✓' : '1'}
@@ -357,7 +357,7 @@ export default function EditPropertyPage() {
 
           {/* ეტაპი 2: გარიგების ტიპი */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 2 ? 'border-blue-500 shadow-lg' : isStep2Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(2)} className="w-full text-left">
+            <button onClick={() => setCurrentStep(prev => prev === 2 ? 0 : 2)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep2Complete ? 'bg-green-500 text-white' : currentStep === 2 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep2Complete ? '✓' : '2'}
@@ -389,7 +389,7 @@ export default function EditPropertyPage() {
 
           {/* ეტაპი 3: მდებარეობა */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 3 ? 'border-blue-500 shadow-lg' : isStep3Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(3)} className="w-full text-left">
+            <button onClick={() => setCurrentStep(prev => prev === 3 ? 0 : 3)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep3Complete ? 'bg-green-500 text-white' : currentStep === 3 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep3Complete ? '✓' : '3'}
@@ -443,8 +443,9 @@ export default function EditPropertyPage() {
                     </div>
                   )}
                 </div>
-                {city.toLowerCase() === 'თბილისი' && (
+                {CITIES_WITH_DISTRICTS.includes(city) && (
                   <TbilisiDistrictSelector
+                    city={city}
                     selectedDistrict={tbilisiDistrict}
                     selectedSubdistricts={tbilisiSubdistricts}
                     onDistrictChange={setTbilisiDistrict}
@@ -462,7 +463,7 @@ export default function EditPropertyPage() {
 
           {/* ეტაპი 4: რუკა */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 4 ? 'border-blue-500 shadow-lg' : isStep4Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(4)} className="w-full text-left">
+            <button onClick={() => setCurrentStep(prev => prev === 4 ? 0 : 4)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep4Complete ? 'bg-green-500 text-white' : currentStep === 4 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep4Complete ? '✓' : '4'}
@@ -528,7 +529,7 @@ export default function EditPropertyPage() {
 
           {/* ეტაპი 5: დეტალები */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(5)} className="w-full text-left">
+            <button onClick={() => setCurrentStep(prev => prev === 5 ? 0 : 5)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep5Complete ? 'bg-green-500 text-white' : currentStep === 5 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep5Complete ? '✓' : '5'}
@@ -644,7 +645,7 @@ export default function EditPropertyPage() {
 
           {/* ეტაპი 6: დეტალური ინფორმაცია */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(6)} className="w-full text-left">
+            <button onClick={() => setCurrentStep(prev => prev === 6 ? 0 : 6)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep6Complete ? 'bg-green-500 text-white' : currentStep === 6 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep6Complete ? '✓' : '6'}
@@ -787,7 +788,7 @@ export default function EditPropertyPage() {
 
           {/* ეტაპი 7: ფოტოები */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(7)} className="w-full text-left">
+            <button onClick={() => setCurrentStep(prev => prev === 7 ? 0 : 7)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep7Complete ? 'bg-green-500 text-white' : currentStep === 7 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep7Complete ? '✓' : '7'}

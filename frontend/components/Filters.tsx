@@ -3,7 +3,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { CityCombobox } from './CityCombobox';
-import TbilisiDistrictSelector from './TbilisiDistrictSelector';
+import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from './TbilisiDistrictSelector';
 
 // საქართველოს რეგიონები
 const GEORGIAN_REGIONS = [
@@ -292,18 +292,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
               <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => onChange({ ...value, priceCurrency: '' })}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                    !value.priceCurrency
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  ყველა
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, priceCurrency: 'USD' })}
+                  onClick={() => onChange({ ...value, priceCurrency: value.priceCurrency === 'USD' ? '' : 'USD' })}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
                     value.priceCurrency === 'USD'
                       ? 'bg-blue-600 text-white border-blue-600'
@@ -314,7 +303,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
                 </button>
                 <button
                   type="button"
-                  onClick={() => onChange({ ...value, priceCurrency: 'GEL' })}
+                  onClick={() => onChange({ ...value, priceCurrency: value.priceCurrency === 'GEL' ? '' : 'GEL' })}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
                     value.priceCurrency === 'GEL'
                       ? 'bg-blue-600 text-white border-blue-600'
@@ -331,18 +320,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
               <div className="flex gap-1">
                 <button
                   type="button"
-                  onClick={() => onChange({ ...value, priceType: '' })}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                    !value.priceType
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  ყველა
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, priceType: 'total' })}
+                  onClick={() => onChange({ ...value, priceType: value.priceType === 'total' ? '' : 'total' })}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
                     value.priceType === 'total'
                       ? 'bg-blue-600 text-white border-blue-600'
@@ -353,7 +331,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
                 </button>
                 <button
                   type="button"
-                  onClick={() => onChange({ ...value, priceType: 'per_sqm' })}
+                  onClick={() => onChange({ ...value, priceType: value.priceType === 'per_sqm' ? '' : 'per_sqm' })}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
                     value.priceType === 'per_sqm'
                       ? 'bg-blue-600 text-white border-blue-600'
@@ -395,6 +373,46 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
                   className="px-2 py-1 text-xs rounded-md bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600"
                 >
                   {(p / 1000)}K-მდე
+                </button>
+              ))}
+            </div>
+          </div>
+        </FilterDropdown>
+
+        {/* ფართობი dropdown */}
+        <FilterDropdown label="ფართობი" summary={areaSummary()} isActive={areaActive}>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-500 mb-1 block">მინიმუმ მ²</label>
+                <input
+                  type="number"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="0"
+                  value={value.minSqm}
+                  onChange={(e) => set('minSqm', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 mb-1 block">მაქსიმუმ მ²</label>
+                <input
+                  type="number"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="∞"
+                  value={value.maxSqm}
+                  onChange={(e) => set('maxSqm', e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {[50, 100, 150, 200, 300].map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onChange({ ...value, maxSqm: String(s) })}
+                  className="px-2 py-1 text-xs rounded-md bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600"
+                >
+                  {s} მ²-მდე
                 </button>
               ))}
             </div>
@@ -456,93 +474,70 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
           </div>
         </FilterDropdown>
 
-        {/* ფართობი dropdown */}
-        <FilterDropdown label="ფართობი" summary={areaSummary()} isActive={areaActive}>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] text-slate-500 mb-1 block">მინიმუმ მ²</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="0"
-                  value={value.minSqm}
-                  onChange={(e) => set('minSqm', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-500 mb-1 block">მაქსიმუმ მ²</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="∞"
-                  value={value.maxSqm}
-                  onChange={(e) => set('maxSqm', e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {[50, 100, 150, 200, 300].map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => onChange({ ...value, maxSqm: String(s) })}
-                  className="px-2 py-1 text-xs rounded-md bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600"
-                >
-                  {s} მ²-მდე
-                </button>
-              ))}
-            </div>
-          </div>
-        </FilterDropdown>
+        {/* რეგიონი — ყოველთვის ჩანს, ქალაქამდე */}
+        <select
+          className={`w-full rounded-lg border px-3 py-2.5 text-sm transition-all ${
+            value.region
+              ? 'border-blue-400 bg-blue-50 text-blue-700'
+              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+          }`}
+          value={value.region}
+          onChange={(e) => {
+            const newRegion = e.target.value;
+            const newValue = { ...value, region: newRegion };
+            // თუ ქალაქი არ ეკუთვნის ახალ რეგიონს, გავასუფთავოთ
+            if (newValue.city && newRegion) {
+              const cityRegion = CITY_REGION_MAP[newValue.city];
+              if (cityRegion && cityRegion !== newRegion) {
+                newValue.city = '';
+                newValue.tbilisiDistrict = '';
+                newValue.tbilisiSubdistricts = [];
+              }
+            }
+            if (!newRegion) {
+              // რეგიონის გასუფთავებისას ქალაქს არ ვეხებით
+            }
+            onChange(newValue);
+          }}
+        >
+          <option value="">{labels.region}: {labels.any}</option>
+          {GEORGIAN_REGIONS.map((r) => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
+        </select>
 
-        {/* ქალაქი — თავისი dropdown-ით */}
+        {/* ქალაქი — რეგიონით გაფილტრული */}
         <CityCombobox
           value={value.city}
           label={labels.city}
           anyLabel={labels.any}
+          allowedCities={value.region ? Object.entries(CITY_REGION_MAP).filter(([, r]) => r === value.region).map(([c]) => c) : undefined}
           onChange={(v) => {
             const newValue = { ...value, city: v };
             if (!v) {
-              // გასუფთავება — ყველაფერი რესეტი
-              newValue.region = '';
+              // გასუფთავება — ქალაქის წაშლა
               newValue.tbilisiDistrict = '';
               newValue.tbilisiSubdistricts = [];
-            } else if (v === 'თბილისი') {
-              newValue.region = 'tbilisi';
             } else {
               // ავტომატურად მოინიშნოს რეგიონი ქალაქის მიხედვით
-              newValue.region = CITY_REGION_MAP[v] || '';
-              newValue.tbilisiDistrict = '';
-              newValue.tbilisiSubdistricts = [];
+              const autoRegion = CITY_REGION_MAP[v] || '';
+              if (autoRegion) newValue.region = autoRegion;
+              // თუ ქალაქი არ არის უბნებიანი, გავასუფთავოთ უბნები
+              if (!CITIES_WITH_DISTRICTS.includes(v)) {
+                newValue.tbilisiDistrict = '';
+                newValue.tbilisiSubdistricts = [];
+              }
             }
             onChange(newValue);
           }}
         />
-
-        {/* რეგიონი */}
-        {value.city.toLowerCase() !== 'თბილისი' ? (
-          <select
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm"
-            value={value.region}
-            onChange={(e) => set('region', e.target.value)}
-          >
-            <option value="">{labels.region}: {labels.any}</option>
-            {GEORGIAN_REGIONS.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-        ) : (
-          <div className="text-sm text-blue-600 flex items-center px-3 bg-blue-50 rounded-lg border border-blue-200">
-            ✓ თბილისი
-          </div>
-        )}
       </div>
 
-      {/* თბილისის უბნები */}
-      {value.city.toLowerCase() === 'თბილისი' && (
+      {/* უბნები — თბილისი, ბათუმი, ქუთაისი, რუსთავი */}
+      {CITIES_WITH_DISTRICTS.includes(value.city) && (
         <div className="mb-3">
           <TbilisiDistrictSelector
+            city={value.city}
             selectedDistrict={value.tbilisiDistrict}
             selectedSubdistricts={value.tbilisiSubdistricts}
             onDistrictChange={(d) => onChange({ ...value, tbilisiDistrict: d })}

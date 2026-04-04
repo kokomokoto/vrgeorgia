@@ -9,7 +9,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
-import TbilisiDistrictSelector from '@/components/TbilisiDistrictSelector';
+import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import type { Property } from '@/lib/types';
 
 // საქართველოს რეგიონები
@@ -332,7 +332,7 @@ export default function UploadPage() {
           {/* ეტაპი 1: ქონების ტიპი */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 1 ? 'border-blue-500 shadow-lg' : isStep1Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(1)}
+              onClick={() => setCurrentStep(prev => prev === 1 ? 0 : 1)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -373,7 +373,7 @@ export default function UploadPage() {
           {/* ეტაპი 2: გარიგების ტიპი */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 2 ? 'border-blue-500 shadow-lg' : isStep2Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(2)}
+              onClick={() => setCurrentStep(prev => prev === 2 ? 0 : 2)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -414,7 +414,7 @@ export default function UploadPage() {
           {/* ეტაპი 3: მდებარეობა */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 3 ? 'border-blue-500 shadow-lg' : isStep3Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(3)}
+              onClick={() => setCurrentStep(prev => prev === 3 ? 0 : 3)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -475,8 +475,9 @@ export default function UploadPage() {
                   )}
                 </div>
 
-                {city.toLowerCase() === 'თბილისი' && (
+                {CITIES_WITH_DISTRICTS.includes(city) && (
                   <TbilisiDistrictSelector
+                    city={city}
                     selectedDistrict={tbilisiDistrict}
                     selectedSubdistricts={tbilisiSubdistricts}
                     onDistrictChange={setTbilisiDistrict}
@@ -499,7 +500,7 @@ export default function UploadPage() {
           {/* ეტაპი 4: რუკა */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 4 ? 'border-blue-500 shadow-lg' : isStep4Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(4)}
+              onClick={() => setCurrentStep(prev => prev === 4 ? 0 : 4)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -588,7 +589,7 @@ export default function UploadPage() {
           {/* ეტაპი 5: დეტალები */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(5)}
+              onClick={() => setCurrentStep(prev => prev === 5 ? 0 : 5)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -755,7 +756,7 @@ export default function UploadPage() {
           {/* ეტაპი 6: დეტალური ინფორმაცია */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(6)}
+              onClick={() => setCurrentStep(prev => prev === 6 ? 0 : 6)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -973,7 +974,7 @@ export default function UploadPage() {
           {/* ეტაპი 7: ფოტოები */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(7)}
+              onClick={() => setCurrentStep(prev => prev === 7 ? 0 : 7)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">

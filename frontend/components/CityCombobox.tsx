@@ -44,18 +44,20 @@ interface CityComboboxProps {
   onChange: (value: string) => void;
   label?: string;
   anyLabel?: string;
+  allowedCities?: string[];
 }
 
-export function CityCombobox({ value, onChange, label = 'ქალაქი', anyLabel = 'ყველა' }: CityComboboxProps) {
+export function CityCombobox({ value, onChange, label = 'ქალაქი', anyLabel = 'ყველა', allowedCities }: CityComboboxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ფილტრირებული სია — ცარიელი search = ყველა ქალაქი
+  // ფილტრირებული სია — რეგიონით ან ყველა ქალაქი
+  const baseCities = allowedCities || POPULAR_CITIES;
   const filteredCities = search
-    ? POPULAR_CITIES.filter(city => city.toLowerCase().includes(search.toLowerCase()))
-    : POPULAR_CITIES;
+    ? baseCities.filter(city => city.toLowerCase().includes(search.toLowerCase()))
+    : baseCities;
 
   // click outside → დახურვა
   useEffect(() => {

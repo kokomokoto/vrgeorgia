@@ -6,9 +6,7 @@ import { useTranslation } from 'react-i18next';
 const langs = [
   { code: 'ka', label: 'KA' },
   { code: 'en', label: 'EN' },
-  { code: 'ru', label: 'RU' },
-  { code: 'tr', label: 'TR' },
-  { code: 'az', label: 'AZ' }
+  { code: 'ru', label: 'RU' }
 ];
 
 export function LanguageSwitcher() {

@@ -48,7 +48,8 @@ router.post(
     body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail(),
-    body('cadastralCode').optional().isString().trim()
+    body('cadastralCode').optional().isString().trim(),
+    body('privateNotes').optional().isString().trim().isLength({ max: 5000 })
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -96,7 +97,8 @@ router.post(
         phone: req.body.contactPhone || '',
         email: req.body.contactEmail || ''
       },
-      userId: req.user.id
+      userId: req.user.id,
+      privateNotes: req.body.privateNotes || ''
     });
 
     res.status(201).json({ property });
@@ -345,7 +347,10 @@ router.get(
 
     const properties = await Property.find(filter).sort(sortOption).limit(200).lean();
 
-    const translated = properties.map((p) => applyTranslation(p, lang));
+    const translated = properties.map((p) => {
+      const { privateNotes, ...safe } = applyTranslation(p, lang);
+      return safe;
+    });
     res.json({ properties: translated });
   }
 );
@@ -363,7 +368,10 @@ router.get(
       .sort({ createdAt: -1 })
       .lean();
 
-    const translated = properties.map((p) => applyTranslation(p, lang));
+    const translated = properties.map((p) => {
+      const { privateNotes, ...safe } = applyTranslation(p, lang);
+      return safe;
+    });
     res.json({ properties: translated });
   }
 );
@@ -386,6 +394,21 @@ router.get(
       .populate('userId', 'email name phone avatar')
       .lean();
     if (!property) return res.status(404).json({ message: 'Not found' });
+
+    // privateNotes მხოლოდ მფლობელისთვის ხილული
+    const token = req.headers.authorization?.split(' ')[1];
+    let requestUserId = null;
+    if (token) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const decoded = jwt.default.verify(token, process.env.JWT_SECRET);
+        requestUserId = decoded.sub;
+      } catch (_) {}
+    }
+    const ownerIdStr = property.userId?._id?.toString() || property.userId?.toString();
+    if (!requestUserId || requestUserId !== ownerIdStr) {
+      delete property.privateNotes;
+    }
 
     res.json({ property: applyTranslation(property, lang) });
   }
@@ -423,7 +446,7 @@ router.put(
     if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
 
     const patch = {};
-    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode']) {
+    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode', 'privateNotes']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
     }
     // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას (თუ მითითებულია)

@@ -62,6 +62,7 @@ export type Property = {
     title?: string;
   }>;
   contact?: { phone?: string; email?: string };
+  privateNotes?: string;
   userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string };
   views?: number;
   createdAt?: string;

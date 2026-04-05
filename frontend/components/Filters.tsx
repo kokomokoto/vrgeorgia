@@ -555,31 +555,36 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
       )}
 
       {/* კომფორტი + 3D/ფოტო ფილტრები */}
-      <div>
-        <div className="text-xs text-slate-500 mb-2">კომფორტი და ფილტრები:</div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => set('has3d', value.has3d === 'true' ? '' : 'true')}
-            className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-              value.has3d === 'true'
-                ? 'bg-blue-100 border-blue-500 text-blue-700'
-                : 'bg-white border-slate-200 text-slate-600 hover:border-blue-400'
-            }`}
-          >
-            🎯 3D აქვს
-          </button>
-          <button
-            type="button"
-            onClick={() => set('hasPhotos', value.hasPhotos === 'true' ? '' : 'true')}
-            className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-              value.hasPhotos === 'true'
-                ? 'bg-blue-100 border-blue-500 text-blue-700'
-                : 'bg-white border-slate-200 text-slate-600 hover:border-blue-400'
-            }`}
-          >
-            📷 ფოტოებით
-          </button>
+      <FilterDropdown
+        label="კომფორტი და ფილტრები"
+        summary={(() => {
+          const count = (value.amenities?.length || 0)
+            + (value.has3d === 'true' ? 1 : 0)
+            + (value.hasPhotos === 'true' ? 1 : 0);
+          return count > 0 ? `${count} არჩეული` : 'აირჩიეთ';
+        })()}
+        isActive={(value.amenities?.length || 0) > 0 || value.has3d === 'true' || value.hasPhotos === 'true'}
+      >
+        <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+          <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={value.has3d === 'true'}
+              onChange={() => set('has3d', value.has3d === 'true' ? '' : 'true')}
+              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm">🎯 3D აქვს</span>
+          </label>
+          <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={value.hasPhotos === 'true'}
+              onChange={() => set('hasPhotos', value.hasPhotos === 'true' ? '' : 'true')}
+              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm">📷 ფოტოებით</span>
+          </label>
+          <hr className="border-slate-100 my-1" />
           {[
             { key: 'elevator', label: '🛗 ლიფტი' },
             { key: 'furniture', label: '🛋️ ავეჯი' },
@@ -595,27 +600,24 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
             const amenities = value.amenities || [];
             const isSelected = amenities.includes(key);
             return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => {
-                  const newAmenities = isSelected
-                    ? amenities.filter(a => a !== key)
-                    : [...amenities, key];
-                  onChange({ ...value, amenities: newAmenities });
-                }}
-                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                  isSelected
-                    ? 'bg-green-100 border-green-500 text-green-700'
-                    : 'bg-white border-slate-200 text-slate-600 hover:border-green-400'
-                }`}
-              >
-                {label}
-              </button>
+              <label key={key} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => {
+                    const newAmenities = isSelected
+                      ? amenities.filter(a => a !== key)
+                      : [...amenities, key];
+                    onChange({ ...value, amenities: newAmenities });
+                  }}
+                  className="rounded border-slate-300 text-green-600 focus:ring-green-500"
+                />
+                <span className="text-sm">{label}</span>
+              </label>
             );
           })}
         </div>
-      </div>
+      </FilterDropdown>
       </div>
     </div>
   );

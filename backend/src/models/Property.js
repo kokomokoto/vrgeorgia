@@ -75,6 +75,9 @@ const propertySchema = new mongoose.Schema(
 
     views: { type: Number, default: 0 },
 
+    // პირადი ჩანაწერი - მხოლოდ მფლობელისთვის ხილული
+    privateNotes: { type: String, default: '' },
+
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
 
@@ -97,20 +100,24 @@ const propertySchema = new mongoose.Schema(
 
 propertySchema.index({ title: 'text', desc: 'text', city: 'text', region: 'text' });
 
-// გარიგების ტიპის მიხედვით ID-ის დიაპაზონები
-const DEAL_TYPE_RANGES = {
-  sale:               { min: 100000, max: 299999 },
-  rent:               { min: 300000, max: 499999 },
-  mortgage:           { min: 500000, max: 699999 },
-  daily:              { min: 700000, max: 899999 },
-  under_construction: { min: 900000, max: 1099999 },
+// კატეგორიის მიხედვით ID-ის დიაპაზონები (100 000 თითოეულისთვის)
+const TYPE_RANGES = {
+  apartment:  { min: 100000, max: 199999 },
+  house:      { min: 200000, max: 299999 },
+  commercial: { min: 300000, max: 399999 },
+  land:       { min: 400000, max: 499999 },
+  cottage:    { min: 500000, max: 599999 },
+  hotel:      { min: 600000, max: 699999 },
+  building:   { min: 700000, max: 799999 },
+  warehouse:  { min: 800000, max: 899999 },
+  parking:    { min: 900000, max: 999999 },
 };
 
 propertySchema.pre('save', async function (next) {
   if (this.numericId) return next();
   
-  const range = DEAL_TYPE_RANGES[this.dealType];
-  if (!range) return next(new Error('Unknown dealType: ' + this.dealType));
+  const range = TYPE_RANGES[this.type];
+  if (!range) return next(new Error('Unknown type: ' + this.type));
 
   // ვეძებთ ამ დიაპაზონში ბოლო (ყველაზე დიდი) numericId
   const last = await mongoose.model('Property')
@@ -122,7 +129,7 @@ propertySchema.pre('save', async function (next) {
   this.numericId = last ? last.numericId + 1 : range.min;
   
   if (this.numericId > range.max) {
-    return next(new Error(`ID ლიმიტი ამოიწურა ${this.dealType} ტიპისთვის`));
+    return next(new Error(`ID ლიმიტი ამოიწურა ${this.type} ტიპისთვის`));
   }
   
   next();

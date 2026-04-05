@@ -128,6 +128,9 @@ export default function EditPropertyPage() {
   const [pool, setPool] = useState(false);
   const [garden, setGarden] = useState(false);
 
+  // პირადი ჩანაწერი
+  const [privateNotes, setPrivateNotes] = useState('');
+
   useEffect(() => setHydrated(true), []);
 
   // მონაცემების ჩატვირთვა
@@ -181,6 +184,8 @@ export default function EditPropertyPage() {
         setFireplace(!!am.fireplace);
         setPool(!!am.pool);
         setGarden(!!am.garden);
+        // პირადი ჩანაწერი
+        setPrivateNotes((p as any).privateNotes || '');
       })
       .catch((err) => setError(err.message))
       .finally(() => setDataLoading(false));
@@ -196,8 +201,9 @@ export default function EditPropertyPage() {
     basement || elevator || furniture || garage || centralHeating || naturalGas || internet || electricity || water;
   const isStep6Complete = isStep6Filled;
   const isStep7Complete = existingPhotos.length > 0;
+  const isStep8Complete = privateNotes.trim() !== '';
 
-  const completedSteps = [isStep1Complete, isStep2Complete, isStep3Complete, isStep4Complete, isStep5Complete, isStep6Complete, isStep7Complete].filter(Boolean).length;
+  const completedSteps = [isStep1Complete, isStep2Complete, isStep3Complete, isStep4Complete, isStep5Complete, isStep6Complete, isStep7Complete, isStep8Complete].filter(Boolean).length;
 
   if (!hydrated) {
     return <div className="flex items-center justify-center min-h-[400px] text-slate-500">
@@ -252,6 +258,7 @@ export default function EditPropertyPage() {
     { num: 5, title: 'დეტალები', icon: '📝', complete: isStep5Complete },
     { num: 6, title: 'დეტალური ინფო', icon: '🔧', complete: isStep6Complete },
     { num: 7, title: 'ფოტოები', icon: '📷', complete: isStep7Complete },
+    { num: 8, title: 'პირადი ჩანაწერი', icon: '🔒', complete: isStep8Complete },
   ];
 
   // ფოტოს წაშლა
@@ -299,6 +306,7 @@ export default function EditPropertyPage() {
         totalFloors: Number(totalFloors) || 0,
         balcony, loggia, bathroom,
         amenities, cadastralCode,
+        privateNotes,
       } as any);
 
       router.push(`/property/${id}`);
@@ -842,6 +850,40 @@ export default function EditPropertyPage() {
                     <p className="text-slate-500">ფოტოები არ არის</p>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* ეტაპი 8: პირადი ჩანაწერი */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 8 ? 'border-blue-500 shadow-lg' : isStep8Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+            <button 
+              onClick={() => setCurrentStep(prev => prev === 8 ? 0 : 8)}
+              className="w-full text-left"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep8Complete ? 'bg-green-500 text-white' : currentStep === 8 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep8Complete ? '✓' : '8'}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">🔒 პირადი ჩანაწერი</h3>
+                  <p className="text-sm text-slate-500">მხოლოდ თქვენთვის ხილული ინფორმაცია</p>
+                </div>
+              </div>
+            </button>
+
+            {currentStep === 8 && (
+              <div className="space-y-4">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                  ⚠️ ეს ინფორმაცია არ გამოჩნდება საჯაროდ. მხოლოდ თქვენ დაინახავთ თქვენს განცხადებაზე.
+                </div>
+                <textarea
+                  value={privateNotes}
+                  onChange={e => setPrivateNotes(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ჩაწერეთ ნებისმიერი პირადი ინფორმაცია..."
+                  maxLength={5000}
+                />
+                <div className="text-xs text-slate-400 text-right">{privateNotes.length}/5000</div>
               </div>
             )}
           </div>

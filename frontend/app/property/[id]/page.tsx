@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
-import { getProperty, listProperties, resolveImageUrl } from '@/lib/api';
+import { getProperty, listProperties, resolveImageUrl, contactPropertyOwner } from '@/lib/api';
 import { useCurrencyRate } from '@/lib/currency';
 import { useAutoTranslate } from '@/lib/translate';
 import { MapView } from '@/components/MapView';
@@ -13,6 +13,7 @@ import { ShareButtons } from '@/components/ShareButtons';
 import FavoriteButton from '@/components/FavoriteButton';
 import CompareButton from '@/components/CompareButton';
 import { PropertyCard } from '@/components/PropertyCard';
+import { useAuth } from '@/components/AuthProvider';
 import type { Property } from '@/lib/types';
 
 // Lightbox კომპონენტი - keyboard ნავიგაცია + დიდი ღილაკები
@@ -95,11 +96,66 @@ function LightboxModal({ photos, index, onClose, onChangeIndex }: {
   );
 }
 
+// შეტყობინების ფორმა ბროკერის პანელში
+function PropertyMessageForm({ propertyId, propertyTitle }: { propertyId: string; propertyTitle: string }) {
+  const { user } = useAuth();
+  const router = useRouter();
+  const { t } = useTranslation();
+  const [message, setMessage] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState(false);
+
+  const handleSend = async () => {
+    if (!user) { router.push('/login'); return; }
+    if (!message.trim() || sending) return;
+    setSending(true);
+    try {
+      await contactPropertyOwner(propertyId, message.trim());
+      setSent(true);
+      setMessage('');
+      setTimeout(() => setSent(false), 3000);
+    } catch (err: any) {
+      alert(err.message || 'შეცდომა');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="w-full border-t border-slate-200 pt-3 mt-1">
+      <div className="text-xs font-medium text-slate-600 mb-2">✉️ შეტყობინების გაგზავნა</div>
+      {sent ? (
+        <div className="text-center py-3 text-sm text-green-600 font-medium">
+          ✓ შეტყობინება გაიგზავნა!
+        </div>
+      ) : (
+        <>
+          <textarea
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            placeholder={`შეტყობინება "${propertyTitle.slice(0, 30)}${propertyTitle.length > 30 ? '...' : ''}"-ს შესახებ...`}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[70px] focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+            maxLength={2000}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!message.trim() || sending}
+            className="w-full mt-2 px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {sending ? 'იგზავნება...' : 'გაგზავნა'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function PropertyDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { i18n, t } = useTranslation();
   const { rate: USD_TO_GEL } = useCurrencyRate();
+  const { user: currentUser } = useAuth();
 
   const [property, setProperty] = useState<Property | null>(null);
   const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
@@ -156,11 +212,6 @@ export default function PropertyDetailPage() {
     };
   }, [params.id, i18n.language]);
 
-  // amenity-ზე კლიკი - მთავარ გვერდზე გადასვლა ფილტრით
-  const handleAmenityClick = (amenityKey: string) => {
-    router.push(`/?amenities=${encodeURIComponent(JSON.stringify([amenityKey]))}`);
-  };
-
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!property) return <div className="text-sm text-slate-500">Loading…</div>;
 
@@ -194,6 +245,8 @@ export default function PropertyDetailPage() {
 
   // მომხმარებლის ინფორმაცია
   const owner = typeof property.userId === 'object' ? property.userId : null;
+
+  const isOwner = currentUser && owner?._id && (currentUser.id === owner._id || currentUser._id === owner._id);
 
   // ავტომატური აღწერის გენერაცია თარგმანებით
   const generateAutoDescription = () => {
@@ -229,8 +282,66 @@ export default function PropertyDetailPage() {
   const displayDesc = needsTranslation && translatedDesc ? translatedDesc : property.desc;
 
   return (
-    <div className="grid gap-3 sm:gap-4 max-w-4xl mx-auto w-full min-w-0 overflow-hidden">
-      {/* 3D - ექსტერიერი და ინტერიერი (სულ ზემოთ) */}
+    <div className="grid gap-3 sm:gap-4 max-w-6xl mx-auto w-full min-w-0 overflow-hidden">
+      {/* სათაური და ფასი - ყველაზე ზემოთ */}
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <div className="text-base sm:text-xl font-semibold text-slate-900 break-words">
+              {displayTitle}
+              {translatingTitle && (
+                <span className="ml-2 text-sm text-slate-400 font-normal">{t('translating')}...</span>
+              )}
+            </div>
+            <div className="mt-1 text-sm text-slate-600">
+              {property.city || ''}{property.city && property.region ? ' • ' : ''}
+              {property.region ? t(`region_${property.region}`) : ''}
+            </div>
+          </div>
+          <div className="sm:text-right flex-shrink-0">
+            <div className="text-xl sm:text-2xl font-bold text-blue-700">
+              {currencySymbol}{displayPrice.toLocaleString()}{property.priceType === 'per_sqm' ? <span className="text-base font-normal text-slate-500">/{t('sqmUnit')}</span> : ''}
+            </div>
+            {/* ვალუტის გადართვა */}
+            <div className="mt-1 flex gap-1 sm:justify-end">
+              <button
+                onClick={() => setCurrency('USD')}
+                className={`px-2 py-1 text-xs rounded ${currency === 'USD' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                USD
+              </button>
+              <button
+                onClick={() => setCurrency('GEL')}
+                className={`px-2 py-1 text-xs rounded ${currency === 'GEL' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                GEL
+              </button>
+            </div>
+            {/* ფასი კვადრატზე / სრული ფასი */}
+            {isPerSqm && totalPrice && (
+              <div className="mt-1 text-sm text-slate-500">
+                სრული: {currencySymbol}{totalPrice.toLocaleString()}
+              </div>
+            )}
+            {!isPerSqm && pricePerSqm && (
+              <div className="mt-1 text-sm text-slate-500">
+                {currencySymbol}{pricePerSqm.toLocaleString()}/{t('sqmUnit')}
+              </div>
+            )}
+            {/* მიმდინარე კურსი */}
+            {currency === 'GEL' && (
+              <div className="mt-1 text-xs text-slate-400">
+                {t('exchangeRate')}: 1$ = {USD_TO_GEL.toFixed(2)}₾
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 3D + ფოტოები (მარცხნივ) და ბროკერი (მარჯვნივ) */}
+      <div className="grid lg:grid-cols-[1fr_280px] gap-3 sm:gap-4">
+      <div className="grid gap-3 sm:gap-4">
+      {/* 3D - ექსტერიერი და ინტერიერი */}
       {(property.exteriorLink || property.interiorLink || property.threeDLink) && (
         <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -314,7 +425,7 @@ export default function PropertyDetailPage() {
                   href={embedUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="absolute top-2 right-2 bg-white/90 hover:bg-white px-3 py-1.5 rounded-lg shadow text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
+                  className="absolute top-2 left-2 bg-white/90 hover:bg-white px-3 py-1.5 rounded-lg shadow text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
                 >
                   🔗 ახალ ტაბში
                 </a>
@@ -324,119 +435,82 @@ export default function PropertyDetailPage() {
         </div>
       )}
 
-      {/* სათაური და ფასი */}
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-          <div className="min-w-0">
-            <div className="text-base sm:text-xl font-semibold text-slate-900 break-words">
-              {displayTitle}
-              {translatingTitle && (
-                <span className="ml-2 text-sm text-slate-400 font-normal">{t('translating')}...</span>
-              )}
-            </div>
-            <div className="mt-1 text-sm text-slate-600">
-              {property.city || ''}{property.city && property.region ? ' • ' : ''}
-              {property.region ? t(`region_${property.region}`) : ''}
-            </div>
-            {/* მეტა-ინფორმაცია: ID, თარიღი, ნახვები */}
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-              <span className="font-mono bg-slate-100 px-2 py-0.5 rounded truncate max-w-[200px]">ID: {property.numericId || property._id}</span>
-              {property.createdAt && (
-                <span>📅 {new Date(property.createdAt).toLocaleDateString('ka-GE')}</span>
-              )}
-              {typeof property.views === 'number' && (
-                <span>👁️ {property.views} ნახვა</span>
-              )}
-            </div>
-            {/* Share Buttons */}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <ShareButtons 
-                url={typeof window !== 'undefined' ? window.location.href : `https://vrgeorgia.ge/property/${property._id}`}
-                title={displayTitle}
-                description={displayDesc}
-              />
-              <div className="flex gap-1">
-                <FavoriteButton propertyId={property._id} />
-                <CompareButton propertyId={property._id} />
-              </div>
-            </div>
-          </div>
-          <div className="sm:text-right flex-shrink-0">
-            <div className="text-xl sm:text-2xl font-bold text-blue-700">
-              {currencySymbol}{displayPrice.toLocaleString()}{property.priceType === 'per_sqm' ? <span className="text-base font-normal text-slate-500">/{t('sqmUnit')}</span> : ''}
-            </div>
-            {/* ვალუტის გადართვა */}
-            <div className="mt-1 flex gap-1 sm:justify-end">
-              <button
-                onClick={() => setCurrency('USD')}
-                className={`px-2 py-1 text-xs rounded ${currency === 'USD' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      {/* ფოტოები - ჰორიზონტალური სქროლით, 3D-ის ქვემოთ */}
+      {photos.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+          <div className="mb-3 text-sm font-semibold">{t('photos')} ({photos.length})</div>
+          <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-thin">
+            {photos.map((p, idx) => (
+              <div 
+                key={p} 
+                className="flex-shrink-0 cursor-pointer overflow-hidden rounded-lg hover:opacity-90 transition-opacity"
+                onClick={() => setLightboxIndex(idx)}
               >
-                USD
-              </button>
-              <button
-                onClick={() => setCurrency('GEL')}
-                className={`px-2 py-1 text-xs rounded ${currency === 'GEL' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-              >
-                GEL
-              </button>
-            </div>
-            {/* ფასი კვადრატზე / სრული ფასი */}
-            {isPerSqm && totalPrice && (
-              <div className="mt-1 text-sm text-slate-500">
-                სრული: {currencySymbol}{totalPrice.toLocaleString()}
+                <img 
+                  src={resolveImageUrl(p)} 
+                  alt={`Photo ${idx + 1}`} 
+                  className="h-[140px] sm:h-[180px] w-auto object-cover rounded-lg" 
+                />
               </div>
-            )}
-            {!isPerSqm && pricePerSqm && (
-              <div className="mt-1 text-sm text-slate-500">
-                {currencySymbol}{pricePerSqm.toLocaleString()}/{t('sqmUnit')}
-              </div>
-            )}
-            {/* მიმდინარე კურსი */}
-            {currency === 'GEL' && (
-              <div className="mt-1 text-xs text-slate-400">
-                {t('exchangeRate')}: 1$ = {USD_TO_GEL.toFixed(2)}₾
-              </div>
-            )}
+            ))}
           </div>
         </div>
+      )}
       </div>
 
-      {/* მაკლერი / მფლობელი - ზემოთ */}
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-        <div className="text-sm font-semibold mb-3">{t('seller')}</div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-          {owner?.avatar ? (
-            <img 
-              src={resolveImageUrl(owner.avatar)} 
-              alt="Avatar" 
-              className="w-14 h-14 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-14 h-14 rounded-full bg-slate-200 flex items-center justify-center text-xl text-slate-400">
-              {owner?.email?.[0]?.toUpperCase() || '?'}
-            </div>
-          )}
-          <div className="flex-1">
-            <div className="font-medium text-slate-800">
-              {owner?.name || owner?.email || t('unknown')}
-            </div>
-            {property.contact?.phone && (
-              <div className="text-sm text-slate-600">{t('phone')}: {property.contact.phone}</div>
+      {/* ბროკერის პანელი - მარჯვნივ */}
+      <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:sticky lg:top-4">
+          <div className="text-sm font-semibold mb-3">ბროკერი</div>
+          <div className="flex flex-col items-center text-center gap-3">
+            {owner?.avatar ? (
+              <img 
+                src={resolveImageUrl(owner.avatar)} 
+                alt="Avatar" 
+                className="w-20 h-20 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center text-2xl text-slate-400">
+                {owner?.email?.[0]?.toUpperCase() || '?'}
+              </div>
             )}
-            {property.contact?.email && (
-              <div className="text-sm text-slate-600">{t('email')}: {property.contact.email}</div>
+            <div>
+              <div className="font-medium text-slate-800">
+                {owner?.name || owner?.email || t('unknown')}
+              </div>
+              {property.contact?.phone && (
+                <div className="mt-1 text-sm text-slate-600">{t('phone')}: {property.contact.phone}</div>
+              )}
+              {property.contact?.email && (
+                <div className="text-sm text-slate-600">{t('email')}: {property.contact.email}</div>
+              )}
+            </div>
+            {owner?._id && (
+              <Link
+                href={`/agent/${owner._id}`}
+                className="w-full text-center px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                {t('otherListings')}
+              </Link>
             )}
+
+            {/* შეტყობინების გაგზავნა */}
+            {owner?._id && !isOwner && <PropertyMessageForm propertyId={property._id} propertyTitle={property.title} />}
           </div>
-          {owner?._id && (
-            <Link
-              href={`/agent/${owner._id}`}
-              className="w-full sm:w-auto text-center px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              {t('otherListings')}
-            </Link>
-          )}
         </div>
       </div>
+      </div>
+
+      {/* პირადი ჩანაწერი - მხოლოდ მფლობელისთვის */}
+      {isOwner && property.privateNotes && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-3 sm:p-4">
+          <div className="text-sm font-semibold mb-2 flex items-center gap-2 text-amber-800">
+            🔒 პირადი ჩანაწერი
+            <span className="text-xs font-normal text-amber-600">(მხოლოდ თქვენ ხედავთ)</span>
+          </div>
+          <div className="text-sm text-slate-700 whitespace-pre-wrap">{property.privateNotes}</div>
+        </div>
+      )}
 
       {/* დეტალური ინფორმაცია - ზემოთ */}
       <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
@@ -510,28 +584,6 @@ export default function PropertyDetailPage() {
         </div>
       </div>
 
-      {/* ფოტოები - მეორე */}
-      {photos.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <div className="mb-3 text-sm font-semibold">{t('photos')} ({photos.length})</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-            {photos.map((p, idx) => (
-              <div 
-                key={p} 
-                className="cursor-pointer overflow-hidden rounded-lg hover:opacity-90 transition-opacity"
-                onClick={() => setLightboxIndex(idx)}
-              >
-                <img 
-                  src={resolveImageUrl(p)} 
-                  alt={`Photo ${idx + 1}`} 
-                  className="aspect-[4/3] w-full object-cover" 
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ავტომატური აღწერა მონაცემებიდან */}
       <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
         <div className="text-sm font-semibold mb-3">{t('characteristics')}</div>
@@ -547,98 +599,97 @@ export default function PropertyDetailPage() {
       {/* კომფორტი და კომუნიკაციები */}
       {property.amenities && Object.values(property.amenities).some(v => v) && (
         <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <div className="text-sm font-semibold mb-2">კომფორტი და კომუნიკაციები</div>
-          <div className="text-xs text-slate-500 mb-3 sm:mb-4">დააჭირეთ რომ იპოვოთ სხვა ობიექტები ამ მახასიათებლით</div>
+          <div className="text-sm font-semibold mb-3 sm:mb-4">კომფორტი და კომუნიკაციები</div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {property.amenities.elevator && (
-              <button onClick={() => handleAmenityClick('elevator')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🛗</span>
                 <span className="text-sm font-medium">ლიფტი</span>
-              </button>
+              </div>
             )}
             {property.amenities.furniture && (
-              <button onClick={() => handleAmenityClick('furniture')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🛋️</span>
                 <span className="text-sm font-medium">ავეჯი</span>
-              </button>
+              </div>
             )}
             {property.amenities.garage && (
-              <button onClick={() => handleAmenityClick('garage')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🚗</span>
                 <span className="text-sm font-medium">ავტოფარეხი</span>
-              </button>
+              </div>
             )}
             {property.amenities.basement && (
-              <button onClick={() => handleAmenityClick('basement')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🏚️</span>
                 <span className="text-sm font-medium">სარდაფი</span>
-              </button>
+              </div>
             )}
             {property.amenities.centralHeating && (
-              <button onClick={() => handleAmenityClick('centralHeating')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🔥</span>
                 <span className="text-sm font-medium">ცენტრ. გათბობა</span>
-              </button>
+              </div>
             )}
             {property.amenities.naturalGas && (
-              <button onClick={() => handleAmenityClick('naturalGas')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🔵</span>
                 <span className="text-sm font-medium">ბუნებრივი აირი</span>
-              </button>
+              </div>
             )}
             {property.amenities.storage && (
-              <button onClick={() => handleAmenityClick('storage')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">📦</span>
                 <span className="text-sm font-medium">საკუჭნაო</span>
-              </button>
+              </div>
             )}
             {property.amenities.internet && (
-              <button onClick={() => handleAmenityClick('internet')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">📶</span>
                 <span className="text-sm font-medium">ინტერნეტი</span>
-              </button>
+              </div>
             )}
             {property.amenities.electricity && (
-              <button onClick={() => handleAmenityClick('electricity')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">⚡</span>
                 <span className="text-sm font-medium">ელექტროობა</span>
-              </button>
+              </div>
             )}
             {property.amenities.water && (
-              <button onClick={() => handleAmenityClick('water')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">💧</span>
                 <span className="text-sm font-medium">წყალი</span>
-              </button>
+              </div>
             )}
             {property.amenities.security && (
-              <button onClick={() => handleAmenityClick('security')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🔒</span>
                 <span className="text-sm font-medium">დაცვა</span>
-              </button>
+              </div>
             )}
             {property.amenities.airConditioner && (
-              <button onClick={() => handleAmenityClick('airConditioner')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">❄️</span>
                 <span className="text-sm font-medium">კონდიციონერი</span>
-              </button>
+              </div>
             )}
             {property.amenities.fireplace && (
-              <button onClick={() => handleAmenityClick('fireplace')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🪵</span>
                 <span className="text-sm font-medium">ბუხარი</span>
-              </button>
+              </div>
             )}
             {property.amenities.pool && (
-              <button onClick={() => handleAmenityClick('pool')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🏊</span>
                 <span className="text-sm font-medium">აუზი</span>
-              </button>
+              </div>
             )}
             {property.amenities.garden && (
-              <button onClick={() => handleAmenityClick('garden')} className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors cursor-pointer">
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🌳</span>
                 <span className="text-sm font-medium">ბაღი</span>
-              </button>
+              </div>
             )}
           </div>
         </div>
@@ -656,6 +707,30 @@ export default function PropertyDetailPage() {
           <div className="text-sm text-slate-700 whitespace-pre-wrap break-words overflow-hidden">{displayDesc}</div>
         </div>
       )}
+
+      {/* ID, თარიღი, ნახვები, გაზიარება - რუკის ზემოთ */}
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          <span className="font-mono bg-slate-100 px-2 py-0.5 rounded truncate max-w-[200px]">ID: {property.numericId || property._id}</span>
+          {property.createdAt && (
+            <span>📅 {new Date(property.createdAt).toLocaleDateString('ka-GE')}</span>
+          )}
+          {typeof property.views === 'number' && (
+            <span>👁️ {property.views} ნახვა</span>
+          )}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <ShareButtons 
+            url={typeof window !== 'undefined' ? window.location.href : `https://vrgeorgia.ge/property/${property._id}`}
+            title={displayTitle}
+            description={displayDesc}
+          />
+          <div className="flex gap-1">
+            <FavoriteButton propertyId={property._id} />
+            <CompareButton propertyId={property._id} />
+          </div>
+        </div>
+      </div>
 
       {/* რუკა - ადგილმდებარეობა */}
       <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">

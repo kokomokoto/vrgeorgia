@@ -176,6 +176,12 @@ function MessagesContent() {
                             {conv.lastMessage.isFromMe && <span className="text-slate-400">{t('you')}: </span>}
                             {conv.lastMessage.content}
                           </p>
+                          {conv.lastMessage.property && (
+                            <div className="flex items-center gap-1.5 mt-1 text-xs text-blue-600">
+                              <span>🏠</span>
+                              <span className="truncate">{conv.lastMessage.property.title}</span>
+                            </div>
+                          )}
                           {conv.unreadCount > 0 && (
                             <span className="inline-flex items-center justify-center w-5 h-5 text-xs bg-blue-600 text-white rounded-full mt-1">
                               {conv.unreadCount}

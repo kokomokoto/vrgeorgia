@@ -37,8 +37,6 @@ const LANG_CODES: Record<string, string> = {
   ka: 'ka', // ქართული
   en: 'en', // ინგლისური
   ru: 'ru', // რუსული
-  tr: 'tr', // თურქული
-  az: 'az', // აზერბაიჯანული
 };
 
 /**

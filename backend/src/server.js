@@ -1,5 +1,11 @@
-import 'dotenv/config';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -63,7 +69,7 @@ app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '2mb' }));
 
 // Serve uploaded images with cache headers
-const uploadsDir = path.resolve(process.cwd(), 'uploads');
+const uploadsDir = path.resolve(__dirname, '..', 'uploads');
 app.use('/uploads', express.static(uploadsDir, {
   maxAge: NODE_ENV === 'production' ? '7d' : 0,
   etag: true

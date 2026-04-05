@@ -67,14 +67,9 @@ export function Header() {
             {compareText}
           </Link>
           {!user ? (
-            <>
-              <Link href="/login" className="text-sm">
-                {loginText}
-              </Link>
-              <Link href="/register" className="text-sm">
-                {registerText}
-              </Link>
-            </>
+            <Link href="/login" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+              ავტორიზაცია
+            </Link>
           ) : (
             <>
               <Link href="/messages" className="text-sm flex items-center gap-1 text-slate-700 hover:text-green-600">
@@ -128,14 +123,9 @@ export function Header() {
               {compareText}
             </Link>
             {!user ? (
-              <>
-                <Link href="/login" onClick={() => setOpen(false)} className="text-sm">
-                  {loginText}
-                </Link>
-                <Link href="/register" onClick={() => setOpen(false)} className="text-sm">
-                  {registerText}
-                </Link>
-              </>
+              <Link href="/login" onClick={() => setOpen(false)} className="text-sm font-medium text-blue-600">
+                ავტორიზაცია
+              </Link>
             ) : (
               <>
                 <Link href="/messages" onClick={() => setOpen(false)} className="text-sm flex items-center gap-2">

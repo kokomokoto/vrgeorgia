@@ -244,14 +244,12 @@ export default function TbilisiDistrictSelector({
 
   // რაიონის არჩევა (მთლიანი)
   const handleDistrictSelect = (districtKey: string) => {
-    if (selectedDistrict === districtKey) {
-      // თუ უკვე არჩეულია, გავხსნათ/დავხუროთ
-      setExpandedDistrict(expandedDistrict === districtKey ? null : districtKey);
-    } else {
-      // ახალი რაიონის არჩევა
+    // ყოველთვის გავხსნათ/დავხუროთ
+    setExpandedDistrict(expandedDistrict === districtKey ? null : districtKey);
+    // თუ ახალი რაიონია, ავირჩიოთ
+    if (selectedDistrict !== districtKey) {
       onDistrictChange(districtKey);
       onSubdistrictsChange([]); // გავასუფთავოთ უბნები
-      setExpandedDistrict(districtKey);
     }
   };
 

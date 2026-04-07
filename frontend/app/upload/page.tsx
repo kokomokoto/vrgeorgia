@@ -249,7 +249,6 @@ export default function UploadPage() {
       if (lat === null || lng === null) throw new Error('აირჩიეთ მდებარეობა რუკაზე');
       if (!type) throw new Error('აირჩიეთ ქონების ტიპი');
       if (!dealType) throw new Error('აირჩიეთ გარიგების ტიპი');
-      if (!cadastralCode.trim()) throw new Error('საკადასტრო კოდი სავალდებულოა');
       
       const form = new FormData();
       form.set('title', title);

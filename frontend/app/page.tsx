@@ -54,7 +54,7 @@ export default function HomePage() {
   const [sortBy, setSortBy] = React.useState('date_desc');
   const [categoriesOpen, setCategoriesOpen] = React.useState(false);
   const [mapOpen, setMapOpen] = React.useState(false);
-  const ITEMS_PER_PAGE = 30;
+  const ITEMS_PER_PAGE = 40;
 
   // URL-დან amenities-ის წაკითხვა (property detail გვერდიდან გადამისამართებისას)
   React.useEffect(() => {
@@ -290,7 +290,7 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {paginatedProperties.map((p) => (
           <PropertyCard key={p._id} p={p} />
         ))}

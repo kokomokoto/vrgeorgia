@@ -425,7 +425,7 @@ export default function PropertyDetailPage() {
                   href={embedUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="absolute top-2 left-2 bg-white/90 hover:bg-white px-3 py-1.5 rounded-lg shadow text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
+                  className="absolute top-2 left-2 bg-white hover:bg-white px-3 py-1.5 rounded-lg shadow text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
                 >
                   🔗 ახალ ტაბში
                 </a>

@@ -39,6 +39,7 @@ const PROPERTY_TYPES = [
   { value: 'building', label: 'შენობა', icon: '🏗️' },
   { value: 'warehouse', label: 'საწყობი', icon: '📦' },
   { value: 'parking', label: 'ავტოფარეხი', icon: '🚗' },
+  { value: 'business', label: 'ბიზნესი', icon: '💼' },
 ];
 
 // გარიგების ტიპები იკონებით
@@ -46,8 +47,6 @@ const DEAL_TYPES = [
   { value: 'sale', label: 'იყიდება', icon: '💰' },
   { value: 'rent', label: 'ქირავდება', icon: '🔑' },
   { value: 'mortgage', label: 'გირავდება', icon: '🏦' },
-  { value: 'daily', label: 'დღიურად', icon: '📅' },
-  { value: 'under_construction', label: 'მშენებარე', icon: '🔨' },
 ];
 
 // ქალაქი → რეგიონის ავტომატური მაპინგი
@@ -107,8 +106,10 @@ export default function EditPropertyPage() {
 
   // დეტალური ინფორმაცია
   const [roomCount, setRoomCount] = useState<number | null>(null);
+  const [bedroomCount, setBedroomCount] = useState<number | null>(null);
   const [floor, setFloor] = useState('');
   const [totalFloors, setTotalFloors] = useState('');
+  const [buildingProject, setBuildingProject] = useState('');
   const [balcony, setBalcony] = useState<number>(0);
   const [loggia, setLoggia] = useState<number>(0);
   const [bathroom, setBathroom] = useState<number>(0);
@@ -127,6 +128,8 @@ export default function EditPropertyPage() {
   const [fireplace, setFireplace] = useState(false);
   const [pool, setPool] = useState(false);
   const [garden, setGarden] = useState(false);
+  const [isolatedKitchen, setIsolatedKitchen] = useState(false);
+  const [heatingCooling, setHeatingCooling] = useState(false);
 
   // პირადი ჩანაწერი
   const [privateNotes, setPrivateNotes] = useState('');
@@ -162,8 +165,10 @@ export default function EditPropertyPage() {
         setCadastralCode((p as any).cadastralCode || '');
         // დეტალური ინფორმაცია
         setRoomCount(p.rooms || (p as any).roomCount || null);
+        setBedroomCount((p as any).bedrooms || null);
         setFloor(String((p as any).floor || ''));
         setTotalFloors(String((p as any).totalFloors || ''));
+        setBuildingProject((p as any).buildingProject || '');
         setBalcony((p as any).balcony || 0);
         setLoggia((p as any).loggia || 0);
         setBathroom((p as any).bathroom || 0);
@@ -184,6 +189,8 @@ export default function EditPropertyPage() {
         setFireplace(!!am.fireplace);
         setPool(!!am.pool);
         setGarden(!!am.garden);
+        setIsolatedKitchen(!!am.isolatedKitchen);
+        setHeatingCooling(!!am.heatingCooling);
         // პირადი ჩანაწერი
         setPrivateNotes((p as any).privateNotes || '');
       })
@@ -197,7 +204,7 @@ export default function EditPropertyPage() {
   const isStep3Complete = city !== '' && (city.toLowerCase() !== 'თბილისი' ? region !== '' : true);
   const isStep4Complete = lat !== null && lng !== null;
   const isStep5Complete = title !== '' && price !== '' && sqm !== '';
-  const isStep6Filled = roomCount !== null || floor !== '' || balcony > 0 || loggia > 0 || bathroom > 0 || 
+  const isStep6Filled = roomCount !== null || bedroomCount !== null || floor !== '' || balcony > 0 || loggia > 0 || bathroom > 0 || 
     basement || elevator || furniture || garage || centralHeating || naturalGas || internet || electricity || water;
   const isStep6Complete = isStep6Filled;
   const isStep7Complete = existingPhotos.length > 0;
@@ -284,7 +291,8 @@ export default function EditPropertyPage() {
       const amenities = {
         basement, elevator, furniture, garage, centralHeating,
         naturalGas, storage, internet, electricity, water,
-        security, airConditioner, fireplace, pool, garden
+        security, airConditioner, fireplace, pool, garden,
+        isolatedKitchen, heatingCooling
       };
 
       await updateProperty(id, {
@@ -295,6 +303,7 @@ export default function EditPropertyPage() {
         tbilisiDistrict, tbilisiSubdistricts,
         sqm: Number(sqm) || 0,
         rooms: roomCount || 0,
+        bedrooms: bedroomCount || 0,
         type: type as any,
         dealType: dealType as any,
         exteriorLink, interiorLink,
@@ -304,6 +313,7 @@ export default function EditPropertyPage() {
         mainPhoto: mainPhotoIndex,
         floor: Number(floor) || 0,
         totalFloors: Number(totalFloors) || 0,
+        buildingProject,
         balcony, loggia, bathroom,
         amenities, cadastralCode,
         privateNotes,
@@ -662,7 +672,7 @@ export default function EditPropertyPage() {
                   <h3 className="text-lg font-semibold text-slate-800">🔧 დეტალური ინფორმაცია</h3>
                   <p className="text-sm text-slate-500">ოთახები, კომუნიკაციები და სხვა (არასავალდებულო)</p>
                 </div>
-                {roomCount !== null && <span className="ml-auto text-green-600 font-medium">{roomCount} ოთახი</span>}
+                {roomCount !== null && <span className="ml-auto text-green-600 font-medium">{roomCount} ოთახი{bedroomCount !== null ? `, ${bedroomCount} საძინებელი` : ''}</span>}
               </div>
             </button>
             {currentStep === 6 && (
@@ -682,10 +692,55 @@ export default function EditPropertyPage() {
                       9+
                     </button>
                   </div>
+
+                  <label className="block text-sm font-medium text-slate-700 mb-3 mt-5">🛏️ საძინებლების რაოდენობა</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                      <button key={num} type="button" onClick={() => setBedroomCount(num)}
+                        className={`w-12 h-12 rounded-xl border-2 font-bold text-lg transition-all hover:scale-105 ${bedroomCount === num ? 'border-blue-500 bg-blue-500 text-white shadow-md' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'}`}>
+                        {num}
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => setBedroomCount(10)}
+                      className={`px-4 h-12 rounded-xl border-2 font-bold transition-all hover:scale-105 ${bedroomCount === 10 ? 'border-blue-500 bg-blue-500 text-white shadow-md' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'}`}>
+                      9+
+                    </button>
+                  </div>
                 </div>
 
                 {/* სართული */}
                 {type === 'apartment' && (
+                  <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">🏠 პროექტის ტიპი</label>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {[
+                        { value: 'new_build', label: 'ახალაშენებული' },
+                        { value: 'czech', label: 'ჩეხური' },
+                        { value: 'khrushchev', label: 'ხრუშჩოვი' },
+                        { value: 'urban', label: 'ქალაქური' },
+                        { value: 'lvov', label: 'ლვოვური' },
+                        { value: 'budapest', label: 'ბუდაპეშტური' },
+                        { value: 'kiev', label: 'კიევური' },
+                        { value: 'moscow', label: 'მოსკოვური' },
+                        { value: 'tbilisi', label: 'თბილისური' },
+                        { value: 'other', label: 'სხვა' },
+                      ].map((proj) => (
+                        <button
+                          key={proj.value}
+                          type="button"
+                          onClick={() => setBuildingProject(buildingProject === proj.value ? '' : proj.value)}
+                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                            buildingProject === proj.value
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                          }`}
+                        >
+                          {proj.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">🏢 სართული</label>
                     <div className="grid grid-cols-2 gap-4">
@@ -701,6 +756,7 @@ export default function EditPropertyPage() {
                       </div>
                     </div>
                   </div>
+                  </>
                 )}
 
                 {/* აივანი და ლოჯია */}
@@ -757,6 +813,8 @@ export default function EditPropertyPage() {
                       { key: 'pool', label: 'აუზი', icon: '🏊', state: pool, setter: setPool },
                       { key: 'garden', label: 'ბაღი/ეზო', icon: '🌳', state: garden, setter: setGarden },
                       { key: 'security', label: 'დაცვა', icon: '🔒', state: security, setter: setSecurity },
+                      { key: 'isolatedKitchen', label: 'იზოლ. სამზარეულო', icon: '🍳', state: isolatedKitchen, setter: setIsolatedKitchen },
+                      { key: 'heatingCooling', label: 'გათბობა/გაგრილება', icon: '🌡️', state: heatingCooling, setter: setHeatingCooling },
                     ].map((item) => (
                       <button key={item.key} type="button" onClick={() => item.setter(!item.state)}
                         className={`p-3 rounded-xl border-2 transition-all ${item.state ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>

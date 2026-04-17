@@ -280,6 +280,7 @@ export default function ProfilePage() {
               <option value="building">🏗️ შენობა</option>
               <option value="warehouse">📦 საწყობი</option>
               <option value="parking">🚗 ავტოფარეხი</option>
+              <option value="business">💼 ბიზნესი</option>
             </select>
             <select
               value={filterDealType}
@@ -290,8 +291,6 @@ export default function ProfilePage() {
               <option value="sale">💰 იყიდება</option>
               <option value="rent">🔑 ქირავდება</option>
               <option value="mortgage">🏦 გირავდება</option>
-              <option value="daily">📅 დღიურად</option>
-              <option value="under_construction">🔨 მშენებარე</option>
             </select>
             {(searchQuery || filterType || filterDealType) && (
               <button

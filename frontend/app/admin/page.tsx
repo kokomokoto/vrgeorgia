@@ -63,13 +63,19 @@ export default function AdminDashboard() {
     apartment: 'ბინა',
     house: 'სახლი',
     commercial: 'კომერციული',
-    land: 'მიწა'
+    land: 'მიწა',
+    cottage: 'აგარაკი',
+    hotel: 'სასტუმრო',
+    building: 'შენობა',
+    warehouse: 'საწყობი',
+    parking: 'ავტოფარეხი',
+    business: 'ბიზნესი'
   };
 
   const dealTypeNames: Record<string, string> = {
     sale: 'იყიდება',
     rent: 'ქირავდება',
-    daily: 'დღიურად'
+    mortgage: 'გირავდება'
   };
 
   if (loading) {

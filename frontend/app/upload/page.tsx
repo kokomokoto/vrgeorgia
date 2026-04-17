@@ -39,6 +39,7 @@ const PROPERTY_TYPES = [
   { value: 'building', label: 'შენობა', icon: '🏗️' },
   { value: 'warehouse', label: 'საწყობი', icon: '📦' },
   { value: 'parking', label: 'ავტოფარეხი', icon: '🚗' },
+  { value: 'business', label: 'ბიზნესი', icon: '💼' },
 ];
 
 // გარიგების ტიპები იკონებით
@@ -46,8 +47,6 @@ const DEAL_TYPES = [
   { value: 'sale', label: 'იყიდება', icon: '💰' },
   { value: 'rent', label: 'ქირავდება', icon: '🔑' },
   { value: 'mortgage', label: 'გირავდება', icon: '🏦' },
-  { value: 'daily', label: 'დღიურად', icon: '📅' },
-  { value: 'under_construction', label: 'მშენებარე', icon: '🔨' },
 ];
 
 // ქალაქი → რეგიონის ავტომატური მაპინგი
@@ -102,8 +101,10 @@ export default function UploadPage() {
 
   // დეტალური ინფორმაცია
   const [roomCount, setRoomCount] = React.useState<number | null>(null);
+  const [bedroomCount, setBedroomCount] = React.useState<number | null>(null);
   const [floor, setFloor] = React.useState('');
   const [totalFloors, setTotalFloors] = React.useState('');
+  const [buildingProject, setBuildingProject] = React.useState('');
   const [balcony, setBalcony] = React.useState<number>(0);
   const [loggia, setLoggia] = React.useState<number>(0);
   const [bathroom, setBathroom] = React.useState<number>(0);
@@ -122,6 +123,8 @@ export default function UploadPage() {
   const [fireplace, setFireplace] = React.useState(false);
   const [pool, setPool] = React.useState(false);
   const [garden, setGarden] = React.useState(false);
+  const [isolatedKitchen, setIsolatedKitchen] = React.useState(false);
+  const [heatingCooling, setHeatingCooling] = React.useState(false);
 
   // პირადი ჩანაწერი
   const [privateNotes, setPrivateNotes] = React.useState('');
@@ -136,7 +139,7 @@ export default function UploadPage() {
   const isStep4Complete = lat !== null && lng !== null;
   const isStep5Complete = title !== '' && price !== '' && sqm !== '';
   // Step 6 მწვანდება თუ რამე შეავსო, მაგრამ არასავალდებულოა
-  const isStep6Filled = roomCount !== null || floor !== '' || balcony > 0 || loggia > 0 || bathroom > 0 || 
+  const isStep6Filled = roomCount !== null || bedroomCount !== null || floor !== '' || balcony > 0 || loggia > 0 || bathroom > 0 || 
     basement || elevator || furniture || garage || centralHeating || naturalGas || internet || electricity || water;
   const isStep6Complete = isStep6Filled; // ვიზუალურად მწვანე თუ რამე შეავსო
   const isStep7Complete = photos !== null && photos.length > 0;
@@ -262,6 +265,7 @@ export default function UploadPage() {
       form.set('tbilisiSubdistricts', JSON.stringify(tbilisiSubdistricts));
       form.set('sqm', sqm);
       form.set('rooms', String(roomCount || 0));
+      form.set('bedrooms', String(bedroomCount || 0));
       form.set('type', type);
       form.set('dealType', dealType);
       form.set('lat', String(lat));
@@ -275,6 +279,7 @@ export default function UploadPage() {
       // დეტალური ინფორმაცია
       form.set('floor', floor);
       form.set('totalFloors', totalFloors);
+      if (buildingProject) form.set('buildingProject', buildingProject);
       form.set('balcony', String(balcony));
       form.set('loggia', String(loggia));
       form.set('bathroom', String(bathroom));
@@ -295,7 +300,9 @@ export default function UploadPage() {
         airConditioner,
         fireplace,
         pool,
-        garden
+        garden,
+        isolatedKitchen,
+        heatingCooling
       };
       form.set('amenities', JSON.stringify(amenities));
       form.set('privateNotes', privateNotes);
@@ -772,7 +779,7 @@ export default function UploadPage() {
                   <h3 className="text-lg font-semibold text-slate-800">🔧 დეტალური ინფორმაცია</h3>
                   <p className="text-sm text-slate-500">ოთახები, კომუნიკაციები და სხვა (არასავალდებულო)</p>
                 </div>
-                {roomCount !== null && <span className="ml-auto text-green-600 font-medium">{roomCount} ოთახი</span>}
+                {roomCount !== null && <span className="ml-auto text-green-600 font-medium">{roomCount} ოთახი{bedroomCount !== null ? `, ${bedroomCount} საძინებელი` : ''}</span>}
               </div>
             </button>
             
@@ -808,10 +815,70 @@ export default function UploadPage() {
                       9+
                     </button>
                   </div>
+
+                  <label className="block text-sm font-medium text-slate-700 mb-3 mt-5">🛏️ საძინებლების რაოდენობა</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setBedroomCount(num)}
+                        className={`w-12 h-12 rounded-xl border-2 font-bold text-lg transition-all hover:scale-105 ${
+                          bedroomCount === num
+                            ? 'border-blue-500 bg-blue-500 text-white shadow-md'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setBedroomCount(10)}
+                      className={`px-4 h-12 rounded-xl border-2 font-bold transition-all hover:scale-105 ${
+                        bedroomCount === 10
+                          ? 'border-blue-500 bg-blue-500 text-white shadow-md'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                      }`}
+                    >
+                      9+
+                    </button>
+                  </div>
                 </div>
 
                 {/* სართული (ბინის შემთხვევაში) */}
                 {type === 'apartment' && (
+                  <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">🏠 პროექტის ტიპი</label>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {[
+                        { value: 'new_build', label: 'ახალაშენებული' },
+                        { value: 'czech', label: 'ჩეხური' },
+                        { value: 'khrushchev', label: 'ხრუშჩოვი' },
+                        { value: 'urban', label: 'ქალაქური' },
+                        { value: 'lvov', label: 'ლვოვური' },
+                        { value: 'budapest', label: 'ბუდაპეშტური' },
+                        { value: 'kiev', label: 'კიევური' },
+                        { value: 'moscow', label: 'მოსკოვური' },
+                        { value: 'tbilisi', label: 'თბილისური' },
+                        { value: 'other', label: 'სხვა' },
+                      ].map((proj) => (
+                        <button
+                          key={proj.value}
+                          type="button"
+                          onClick={() => setBuildingProject(buildingProject === proj.value ? '' : proj.value)}
+                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                            buildingProject === proj.value
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                          }`}
+                        >
+                          {proj.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">🏢 სართული</label>
                     <div className="grid grid-cols-2 gap-4">
@@ -839,6 +906,7 @@ export default function UploadPage() {
                       </div>
                     </div>
                   </div>
+                  </>
                 )}
 
                 {/* აივანი და ლოჯია */}
@@ -919,6 +987,8 @@ export default function UploadPage() {
                       { key: 'pool', label: 'აუზი', icon: '🏊', state: pool, setter: setPool },
                       { key: 'garden', label: 'ბაღი/ეზო', icon: '🌳', state: garden, setter: setGarden },
                       { key: 'security', label: 'დაცვა', icon: '🔒', state: security, setter: setSecurity },
+                      { key: 'isolatedKitchen', label: 'იზოლ. სამზარეულო', icon: '🍳', state: isolatedKitchen, setter: setIsolatedKitchen },
+                      { key: 'heatingCooling', label: 'გათბობა/გაგრილება', icon: '🌡️', state: heatingCooling, setter: setHeatingCooling },
                     ].map((item) => (
                       <button
                         key={item.key}

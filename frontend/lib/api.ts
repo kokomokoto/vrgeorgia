@@ -103,7 +103,10 @@ export type PropertyQuery = {
   maxSqm?: string;
   minRooms?: string;
   maxRooms?: string;
+  minBedrooms?: string;
+  maxBedrooms?: string;
   amenities?: string[]; // კომფორტი და კომუნიკაციები
+  buildingProject?: string[];
   sort?: string;
   propertyId?: string;
   lang?: string;
@@ -113,7 +116,7 @@ export async function listProperties(query: PropertyQuery) {
   const params: Record<string, string> = {};
   for (const [k, v] of Object.entries(query)) {
     if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
-    if ((k === 'tbilisiSubdistricts' || k === 'type' || k === 'dealType' || k === 'amenities') && Array.isArray(v)) {
+    if ((k === 'tbilisiSubdistricts' || k === 'type' || k === 'dealType' || k === 'amenities' || k === 'buildingProject') && Array.isArray(v)) {
       params[k] = JSON.stringify(v);
     } else {
       params[k] = String(v);

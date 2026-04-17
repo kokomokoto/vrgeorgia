@@ -20,6 +20,7 @@ const PROPERTY_CATEGORIES = [
   { value: 'building', label: 'შენობა', icon: '🏗️' },
   { value: 'warehouse', label: 'საწყობი', icon: '📦' },
   { value: 'parking', label: 'ავტოფარეხი', icon: '🚗' },
+  { value: 'business', label: 'ბიზნესი', icon: '💼' },
 ];
 
 const initial: FiltersState = {
@@ -40,7 +41,10 @@ const initial: FiltersState = {
   maxSqm: '',
   minRooms: '',
   maxRooms: '',
+  minBedrooms: '',
+  maxBedrooms: '',
   amenities: [],
+  buildingProject: [],
   propertyId: ''
 };
 
@@ -158,7 +162,7 @@ export default function HomePage() {
           </svg>
         </button>
         {categoriesOpen && (
-          <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100">
+          <div className="grid grid-cols-5 gap-2 mt-3 pt-3 border-t border-slate-100">
             {PROPERTY_CATEGORIES.map((cat) => {
               const isSelected = filters.type.includes(cat.value);
               return (
@@ -195,7 +199,7 @@ export default function HomePage() {
       </div>
 
       {/* კატეგორიები - დესკტოპზე ყოველთვის ჩანს */}
-      <div className="hidden md:grid grid-cols-5 lg:grid-cols-9 gap-3">
+      <div className="hidden md:grid grid-cols-5 lg:grid-cols-10 gap-3">
         {PROPERTY_CATEGORIES.map((cat) => {
           const isSelected = filters.type.includes(cat.value);
           return (

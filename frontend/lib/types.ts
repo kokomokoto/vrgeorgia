@@ -1,7 +1,8 @@
-export type DealType = 'sale' | 'rent' | 'mortgage' | 'daily' | 'under_construction';
-export type PropertyType = 'apartment' | 'house' | 'commercial' | 'land' | 'cottage' | 'hotel' | 'building' | 'warehouse' | 'parking';
+export type DealType = 'sale' | 'rent' | 'mortgage';
+export type PropertyType = 'apartment' | 'house' | 'commercial' | 'land' | 'cottage' | 'hotel' | 'building' | 'warehouse' | 'parking' | 'business';
 export type PriceCurrency = 'USD' | 'GEL';
 export type PriceType = 'total' | 'per_sqm';
+export type BuildingProject = '' | 'czech' | 'khrushchev' | 'urban' | 'lvov' | 'budapest' | 'kiev' | 'moscow' | 'new_build' | 'tbilisi' | 'other';
 
 export type Amenities = {
   basement?: boolean;
@@ -19,6 +20,8 @@ export type Amenities = {
   fireplace?: boolean;
   pool?: boolean;
   garden?: boolean;
+  isolatedKitchen?: boolean;
+  heatingCooling?: boolean;
 };
 
 export type Property = {
@@ -35,6 +38,7 @@ export type Property = {
   tbilisiSubdistricts?: string[];
   sqm?: number;
   rooms?: number;
+  bedrooms?: number;
   
   // დეტალური ინფორმაცია
   roomCount?: number;
@@ -44,6 +48,7 @@ export type Property = {
   loggia?: number;
   bathroom?: number;
   cadastralCode?: string;
+  buildingProject?: BuildingProject;
   
   // კომფორტი
   amenities?: Amenities;

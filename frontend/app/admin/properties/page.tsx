@@ -134,13 +134,19 @@ function AdminProperties() {
     apartment: 'ბინა',
     house: 'სახლი',
     commercial: 'კომერციული',
-    land: 'მიწა'
+    land: 'მიწა',
+    cottage: 'აგარაკი',
+    hotel: 'სასტუმრო',
+    building: 'შენობა',
+    warehouse: 'საწყობი',
+    parking: 'ავტოფარეხი',
+    business: 'ბიზნესი'
   };
 
   const dealTypeNames: Record<string, string> = {
     sale: 'იყიდება',
     rent: 'ქირავდება',
-    daily: 'დღიურად'
+    mortgage: 'გირავდება'
   };
 
   const statusNames: Record<string, string> = {
@@ -236,6 +242,12 @@ function AdminProperties() {
               <option value="house">სახლი</option>
               <option value="commercial">კომერციული</option>
               <option value="land">მიწა</option>
+              <option value="cottage">აგარაკი</option>
+              <option value="hotel">სასტუმრო</option>
+              <option value="building">შენობა</option>
+              <option value="warehouse">საწყობი</option>
+              <option value="parking">ავტოფარეხი</option>
+              <option value="business">ბიზნესი</option>
             </select>
           </div>
         </div>

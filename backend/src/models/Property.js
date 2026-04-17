@@ -18,6 +18,7 @@ const propertySchema = new mongoose.Schema(
 
     sqm: { type: Number, default: 0 },
     rooms: { type: Number, default: 0 },
+    bedrooms: { type: Number, default: 0 },
     
     // დეტალური ინფორმაცია
     roomCount: { type: Number, default: 0 },
@@ -27,6 +28,9 @@ const propertySchema = new mongoose.Schema(
     loggia: { type: Number, default: 0 },
     bathroom: { type: Number, default: 0 },
     cadastralCode: { type: String, default: '', trim: true },
+    
+    // ბინის პროექტის ტიპი (მხოლოდ apartment-ისთვის)
+    buildingProject: { type: String, enum: ['', 'czech', 'khrushchev', 'urban', 'lvov', 'budapest', 'kiev', 'moscow', 'new_build', 'tbilisi', 'other'], default: '' },
     
     // კომფორტი და კომუნიკაციები
     amenities: {
@@ -44,7 +48,9 @@ const propertySchema = new mongoose.Schema(
       airConditioner: { type: Boolean, default: false },
       fireplace: { type: Boolean, default: false },
       pool: { type: Boolean, default: false },
-      garden: { type: Boolean, default: false }
+      garden: { type: Boolean, default: false },
+      isolatedKitchen: { type: Boolean, default: false },
+      heatingCooling: { type: Boolean, default: false }
     },
 
     location: {
@@ -52,8 +58,8 @@ const propertySchema = new mongoose.Schema(
       lng: { type: Number, required: true }
     },
 
-    type: { type: String, enum: ['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking'], required: true },
-    dealType: { type: String, enum: ['sale', 'rent', 'mortgage', 'daily', 'under_construction'], required: true },
+    type: { type: String, enum: ['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking', 'business'], required: true },
+    dealType: { type: String, enum: ['sale', 'rent', 'mortgage'], required: true },
 
     photos: [{ type: String }],
     mainPhoto: { type: Number, default: 0 }, // photos მასივში მთავარი ფოტოს ინდექსი
@@ -111,6 +117,7 @@ const TYPE_RANGES = {
   building:   { min: 700000, max: 799999 },
   warehouse:  { min: 800000, max: 899999 },
   parking:    { min: 900000, max: 999999 },
+  business:   { min: 1000000, max: 1099999 },
 };
 
 propertySchema.pre('save', async function (next) {

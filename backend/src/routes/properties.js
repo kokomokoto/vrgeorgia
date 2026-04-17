@@ -35,12 +35,14 @@ router.post(
     body('price').isNumeric().withMessage('ფასი უნდა იყოს რიცხვი'),
     body('lat').isNumeric().withMessage('გთხოვთ აირჩიოთ ლოკაცია რუკაზე'),
     body('lng').isNumeric().withMessage('გთხოვთ აირჩიოთ ლოკაცია რუკაზე'),
-    body('type').isIn(['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking']).withMessage('აირჩიეთ ტიპი'),
-    body('dealType').isIn(['sale', 'rent', 'mortgage', 'daily', 'under_construction']).withMessage('აირჩიეთ გარიგების ტიპი'),
+    body('type').isIn(['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking', 'business']).withMessage('აირჩიეთ ტიპი'),
+    body('dealType').isIn(['sale', 'rent', 'mortgage']).withMessage('აირჩიეთ გარიგების ტიპი'),
     body('city').optional().isString().trim().isLength({ max: 80 }),
     body('region').optional().isString().trim().isLength({ max: 80 }),
     body('sqm').optional().isNumeric().withMessage('ფართობი უნდა იყოს რიცხვი'),
     body('rooms').optional().isNumeric().withMessage('ოთახების რაოდენობა უნდა იყოს რიცხვი'),
+    body('bedrooms').optional().isNumeric().withMessage('საძინებლების რაოდენობა უნდა იყოს რიცხვი'),
+    body('buildingProject').optional().isString().trim(),
     body('priceCurrency').optional().isIn(['USD', 'GEL']).withMessage('ვალუტა უნდა იყოს USD ან GEL'),
     body('priceType').optional().isIn(['total', 'per_sqm']).withMessage('ფასის ტიპი უნდა იყოს total ან per_sqm'),
     body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
@@ -77,6 +79,7 @@ router.post(
       tbilisiSubdistricts: req.body.tbilisiSubdistricts ? JSON.parse(req.body.tbilisiSubdistricts) : [],
       sqm: Number(req.body.sqm) || 0,
       rooms: Number(req.body.rooms) || 0,
+      bedrooms: Number(req.body.bedrooms) || 0,
       roomCount: Number(req.body.roomCount) || 0,
       floor: Number(req.body.floor) || 0,
       totalFloors: Number(req.body.totalFloors) || 0,
@@ -84,6 +87,7 @@ router.post(
       loggia: Number(req.body.loggia) || 0,
       bathroom: Number(req.body.bathroom) || 0,
       cadastralCode: (req.body.cadastralCode || '').trim(),
+      buildingProject: req.body.buildingProject || '',
       amenities: req.body.amenities ? JSON.parse(req.body.amenities) : {},
       location: { lat: Number(req.body.lat), lng: Number(req.body.lng) },
       type: req.body.type,
@@ -134,7 +138,10 @@ router.get(
     query('maxSqm').optional({ values: 'falsy' }).isNumeric(),
     query('minRooms').optional({ values: 'falsy' }).isNumeric(),
     query('maxRooms').optional({ values: 'falsy' }).isNumeric(),
+    query('minBedrooms').optional({ values: 'falsy' }).isNumeric(),
+    query('maxBedrooms').optional({ values: 'falsy' }).isNumeric(),
     query('amenities').optional({ values: 'falsy' }).isString(), // მასივი JSON ფორმატში
+    query('buildingProject').optional({ values: 'falsy' }).isString().trim(),
     query('priceCurrency').optional({ values: 'falsy' }).isIn(['USD', 'GEL']),
     query('priceType').optional({ values: 'falsy' }).isIn(['total', 'per_sqm']),
     query('sort').optional({ values: 'falsy' }).isString(),
@@ -148,7 +155,38 @@ router.get(
 
     const filter = {};
 
-    if (req.query.q) filter.$text = { $search: req.query.q };
+    // ტექსტური ძიება - ეძებს ყველა ველში
+    if (req.query.q) {
+      const q = req.query.q.trim();
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = { $regex: escaped, $options: 'i' };
+      filter.$or = [
+        { title: regex },
+        { desc: regex },
+        { city: regex },
+        { region: regex },
+        { tbilisiDistrict: regex },
+        { tbilisiSubdistricts: regex },
+        { cadastralCode: regex },
+        { type: regex },
+        { dealType: regex },
+        { buildingProject: regex },
+        { 'contact.phone': regex },
+        { 'contact.email': regex },
+        { privateNotes: regex },
+      ];
+      // რიცხვითი ძიება (ID, ფასი, ფართობი, ოთახები)
+      const num = Number(q);
+      if (!isNaN(num) && num > 0) {
+        filter.$or.push(
+          { numericId: num },
+          { price: num },
+          { sqm: num },
+          { rooms: num },
+          { bedrooms: num }
+        );
+      }
+    }
     // type შეიძლება იყოს მასივი (მრავალი კატეგორიის არჩევა)
     if (req.query.type) {
       try {
@@ -280,6 +318,12 @@ router.get(
       if (req.query.maxRooms) filter.rooms.$lte = Number(req.query.maxRooms);
     }
 
+    if (req.query.minBedrooms || req.query.maxBedrooms) {
+      filter.bedrooms = {};
+      if (req.query.minBedrooms) filter.bedrooms.$gte = Number(req.query.minBedrooms);
+      if (req.query.maxBedrooms) filter.bedrooms.$lte = Number(req.query.maxBedrooms);
+    }
+
     if (req.query.has3d === 'true') {
       // 3D აქვს თუ ერთი მაინც ლინკიდანაა შევსებული
       filter.$or = filter.$or || [];
@@ -310,6 +354,18 @@ router.get(
         }
       } catch (e) {
         // ignore parse error
+      }
+    }
+
+    // ბინის პროექტის ფილტრი
+    if (req.query.buildingProject) {
+      try {
+        const projects = JSON.parse(req.query.buildingProject);
+        if (Array.isArray(projects) && projects.length > 0) {
+          filter.buildingProject = { $in: projects };
+        }
+      } catch (e) {
+        filter.buildingProject = req.query.buildingProject;
       }
     }
 
@@ -423,12 +479,13 @@ router.put(
     body('title').optional().isString().trim().isLength({ min: 2, max: 120 }),
     body('desc').optional().isString().trim().isLength({ min: 3, max: 5000 }),
     body('price').optional().isNumeric(),
-    body('type').optional().isIn(['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking']),
-    body('dealType').optional().isIn(['sale', 'rent', 'mortgage', 'daily', 'under_construction']),
+    body('type').optional().isIn(['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking', 'business']),
+    body('dealType').optional().isIn(['sale', 'rent', 'mortgage']),
     body('city').optional().isString().trim().isLength({ max: 80 }),
     body('region').optional().isString().trim().isLength({ max: 80 }),
     body('sqm').optional().isNumeric(),
     body('rooms').optional().isNumeric(),
+    body('bedrooms').optional().isNumeric(),
     body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
     body('exteriorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
@@ -446,7 +503,7 @@ router.put(
     if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
 
     const patch = {};
-    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode', 'privateNotes']) {
+    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode', 'privateNotes', 'buildingProject']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
     }
     // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას (თუ მითითებულია)
@@ -462,6 +519,7 @@ router.put(
     if (req.body.priceType !== undefined) patch.priceType = req.body.priceType;
     if (req.body.sqm !== undefined) patch.sqm = Number(req.body.sqm);
     if (req.body.rooms !== undefined) patch.rooms = Number(req.body.rooms);
+    if (req.body.bedrooms !== undefined) patch.bedrooms = Number(req.body.bedrooms);
     if (req.body.photos !== undefined) patch.photos = req.body.photos;
     if (req.body.mainPhoto !== undefined) patch.mainPhoto = Number(req.body.mainPhoto);
     if (req.body.location !== undefined) patch.location = req.body.location;

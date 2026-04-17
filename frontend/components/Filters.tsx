@@ -63,8 +63,6 @@ const DEAL_TYPES = [
   { value: 'sale', label: 'იყიდება', icon: '💰' },
   { value: 'rent', label: 'ქირავდება', icon: '🔑' },
   { value: 'mortgage', label: 'გირავდება', icon: '🏦' },
-  { value: 'daily', label: 'დღიურად', icon: '📅' },
-  { value: 'under_construction', label: 'მშენებარე', icon: '🔨' },
 ];
 
 export type FiltersState = {
@@ -85,7 +83,10 @@ export type FiltersState = {
   maxSqm: string;
   minRooms: string;
   maxRooms: string;
+  minBedrooms: string;
+  maxBedrooms: string;
   amenities: string[];
+  buildingProject: string[];
   propertyId: string;
 };
 
@@ -163,6 +164,8 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
     value.maxSqm,
     value.minRooms,
     value.maxRooms,
+    value.minBedrooms,
+    value.maxBedrooms,
   ].filter(Boolean).length
     + value.dealType.length
     + value.type.length
@@ -189,12 +192,33 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
   };
 
   const roomsSummary = () => {
+    const parts: string[] = [];
     if (value.minRooms && value.maxRooms) {
-      if (value.minRooms === value.maxRooms) return `${value.minRooms} ოთახი`;
-      return `${value.minRooms}–${value.maxRooms} ოთახი`;
+      if (value.minRooms === value.maxRooms) parts.push(`${value.minRooms} ოთახი`);
+      else parts.push(`${value.minRooms}–${value.maxRooms} ოთახი`);
+    } else if (value.minRooms) {
+      parts.push(`${value.minRooms}+ ოთახი`);
+    } else if (value.maxRooms) {
+      parts.push(`${value.maxRooms}-მდე ოთახი`);
     }
-    if (value.minRooms) return `${value.minRooms}+ ოთახი`;
-    if (value.maxRooms) return `${value.maxRooms}-მდე`;
+    if (value.minBedrooms && value.maxBedrooms) {
+      if (value.minBedrooms === value.maxBedrooms) parts.push(`${value.minBedrooms} საძ.`);
+      else parts.push(`${value.minBedrooms}–${value.maxBedrooms} საძ.`);
+    } else if (value.minBedrooms) {
+      parts.push(`${value.minBedrooms}+ საძ.`);
+    } else if (value.maxBedrooms) {
+      parts.push(`${value.maxBedrooms}-მდე საძ.`);
+    }
+    return parts.length > 0 ? parts.join(', ') : labels.any;
+  };
+
+  const bedroomsSummary = () => {
+    if (value.minBedrooms && value.maxBedrooms) {
+      if (value.minBedrooms === value.maxBedrooms) return `${value.minBedrooms} საძინებელი`;
+      return `${value.minBedrooms}–${value.maxBedrooms} საძინებელი`;
+    }
+    if (value.minBedrooms) return `${value.minBedrooms}+ საძინებელი`;
+    if (value.maxBedrooms) return `${value.maxBedrooms}-მდე`;
     return labels.any;
   };
 
@@ -207,6 +231,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
 
   const priceActive = !!(value.minPrice || value.maxPrice || value.priceCurrency || value.priceType);
   const roomsActive = !!(value.minRooms || value.maxRooms);
+  const bedroomsActive = !!(value.minBedrooms || value.maxBedrooms);
   const areaActive = !!(value.minSqm || value.maxSqm);
 
   return (
@@ -420,7 +445,7 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
         </FilterDropdown>
 
         {/* ოთახები dropdown */}
-        <FilterDropdown label="ოთახები" summary={roomsSummary()} isActive={roomsActive}>
+        <FilterDropdown label="ოთახები" summary={roomsSummary()} isActive={roomsActive || bedroomsActive}>
           <div className="space-y-3">
             <div className="text-xs text-slate-500 mb-2">აირჩიეთ ოთახების რაოდენობა:</div>
             <div className="flex gap-1.5">
@@ -469,6 +494,58 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
                   value={value.maxRooms}
                   onChange={(e) => set('maxRooms', e.target.value)}
                 />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-3">
+              <div className="text-xs text-slate-500 mb-2">აირჩიეთ საძინებლების რაოდენობა:</div>
+              <div className="flex gap-1.5">
+                {['1', '2', '3', '4', '5', '6'].map((r) => {
+                  const isMin = value.minBedrooms === r && value.maxBedrooms === r;
+                  const isSelected = isMin || (r === '6' && value.minBedrooms === '6' && !value.maxBedrooms);
+                  const displayLabel = r === '6' ? '6+' : r;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          onChange({ ...value, minBedrooms: '', maxBedrooms: '' });
+                        } else if (r === '6') {
+                          onChange({ ...value, minBedrooms: '6', maxBedrooms: '' });
+                        } else {
+                          onChange({ ...value, minBedrooms: r, maxBedrooms: r });
+                        }
+                      }}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        isSelected
+                          ? 'bg-blue-600 text-white shadow'
+                          : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+                      }`}
+                    >
+                      {displayLabel}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2">
+                <div className="text-[10px] text-slate-400 mb-1.5">ან მიუთითეთ დიაპაზონი:</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm"
+                    placeholder="მინ."
+                    value={value.minBedrooms}
+                    onChange={(e) => set('minBedrooms', e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm"
+                    placeholder="მაქს."
+                    value={value.maxBedrooms}
+                    onChange={(e) => set('maxBedrooms', e.target.value)}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -596,6 +673,13 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
             { key: 'security', label: '🔒 დაცვა' },
             { key: 'pool', label: '🏊 აუზი' },
             { key: 'garden', label: '🌳 ბაღი' },
+            { key: 'isolatedKitchen', label: '🍳 იზოლ. სამზარეულო' },
+            { key: 'heatingCooling', label: '🌡️ გათბობა/გაგრილება' },
+            { key: 'basement', label: '🏚️ სარდაფი' },
+            { key: 'storage', label: '📦 სათავსო' },
+            { key: 'electricity', label: '💡 ელექტროობა' },
+            { key: 'water', label: '💧 წყალი' },
+            { key: 'fireplace', label: '🔥 ბუხარი' },
           ].map(({ key, label }) => {
             const amenities = value.amenities || [];
             const isSelected = amenities.includes(key);
@@ -618,6 +702,47 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
           })}
         </div>
       </FilterDropdown>
+
+      {/* პროექტის ტიპი (მხოლოდ ბინისთვის) */}
+      {value.type.includes('apartment') && (
+        <FilterDropdown
+          label="🏠 პროექტი"
+          summary={value.buildingProject.length > 0 ? value.buildingProject.map(p => ({
+            czech: 'ჩეხური', khrushchev: 'ხრუშჩოვი', urban: 'ქალაქური', lvov: 'ლვოვური',
+            budapest: 'ბუდაპეშტური', kiev: 'კიევური', moscow: 'მოსკოვური',
+            new_build: 'ახალაშენებული', tbilisi: 'თბილისური', other: 'სხვა'
+          }[p] || p)).join(', ') : ''}
+          isActive={value.buildingProject.length > 0}
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: 'new_build', label: 'ახალაშენებული' },
+              { value: 'czech', label: 'ჩეხური' },
+              { value: 'khrushchev', label: 'ხრუშჩოვი' },
+              { value: 'urban', label: 'ქალაქური' },
+              { value: 'lvov', label: 'ლვოვური' },
+              { value: 'budapest', label: 'ბუდაპეშტური' },
+              { value: 'kiev', label: 'კიევური' },
+              { value: 'moscow', label: 'მოსკოვური' },
+              { value: 'tbilisi', label: 'თბილისური' },
+              { value: 'other', label: 'სხვა' },
+            ].map((proj) => (
+              <button
+                key={proj.value}
+                type="button"
+                onClick={() => onChange({ ...value, buildingProject: value.buildingProject.includes(proj.value) ? value.buildingProject.filter(p => p !== proj.value) : [...value.buildingProject, proj.value] })}
+                className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all text-left ${
+                  value.buildingProject.includes(proj.value)
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
+                }`}
+              >
+                {proj.label}
+              </button>
+            ))}
+          </div>
+        </FilterDropdown>
+      )}
       </div>
     </div>
   );

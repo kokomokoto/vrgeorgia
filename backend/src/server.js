@@ -1,11 +1,6 @@
+import './env-bootstrap.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import dotenv from 'dotenv';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
-
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -19,6 +14,9 @@ import agentRoutes from './routes/agents.js';
 import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 

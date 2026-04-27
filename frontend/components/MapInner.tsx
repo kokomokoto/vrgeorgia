@@ -3,6 +3,10 @@
 import 'leaflet/dist/leaflet.css';
 import React, { useEffect, useRef, useState } from 'react';
 import type { Property } from '@/lib/types';
+import { useTheme } from '@/components/ThemeProvider';
+
+const TILE_LIGHT = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
 interface MapInnerProps {
   properties: Property[];
@@ -13,8 +17,10 @@ interface MapInnerProps {
 }
 
 export default function MapInner({ properties, onPick, selectedLocation, center, zoom }: MapInnerProps) {
+  const { isDark } = useTheme();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
   const onPickRef = useRef(onPick);
   const selectedMarkerRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
@@ -46,10 +52,14 @@ export default function MapInner({ properties, onPick, selectedLocation, center,
       L.Marker.prototype.options.icon = DefaultIcon;
 
       const map = L.map(mapRef.current!).setView([defaultCenter.lat, defaultCenter.lng], defaultZoom);
-      
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+
+      const initialTile = document.documentElement.classList.contains('dark') ? TILE_DARK : TILE_LIGHT;
+      const attribution =
+        initialTile === TILE_DARK
+          ? '&copy; OpenStreetMap &copy; CARTO'
+          : '&copy; OpenStreetMap contributors';
+      const tl = L.tileLayer(initialTile, { attribution }).addTo(map);
+      tileLayerRef.current = tl;
 
       // კლიკის handler - ყოველთვის ref-ზე მიმართვა
       map.on('click', (e: any) => {
@@ -69,6 +79,17 @@ export default function MapInner({ properties, onPick, selectedLocation, center,
       }
     };
   }, []);
+
+  useEffect(() => {
+    const tl = tileLayerRef.current;
+    if (!tl || typeof tl.setUrl !== 'function') return;
+    const url = isDark ? TILE_DARK : TILE_LIGHT;
+    tl.setUrl(url);
+    const attr =
+      url === TILE_DARK ? '&copy; OpenStreetMap &copy; CARTO' : '&copy; OpenStreetMap contributors';
+    if (typeof tl.options !== 'undefined') tl.options.attribution = attr;
+    tl.redraw?.();
+  }, [isDark]);
 
   // მარკერების განახლება
   useEffect(() => {
@@ -120,6 +141,7 @@ export default function MapInner({ properties, onPick, selectedLocation, center,
               $${p.price.toLocaleString()}
             </div>
             ${p.city ? `<div style="font-size: 12px; color: #64748b; margin-top: 2px;">${p.city}</div>` : ''}
+            ${(p.constructionYear || p.renovationYear) ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px;">${p.constructionYear ? `🏗️ ${p.constructionYear}` : ''}${p.constructionYear && p.renovationYear ? ' • ' : ''}${p.renovationYear ? `🛠️ ${p.renovationYear}` : ''}</div>` : ''}
           </div>
         `);
       });

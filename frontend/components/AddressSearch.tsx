@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 
+import { formatNominatimResult } from '@/lib/reverseGeocode';
+
 interface SearchResult {
   display_name: string;
   lat: string;
@@ -21,9 +23,11 @@ interface SearchResult {
 interface AddressSearchProps {
   onSelect: (lat: number, lng: number, address: string) => void;
   placeholder?: string;
+  /** რუკაზე წერტილის შემდეგ რევერს-გეოკოდირებით ველის შევსება — key იზრდება ყოველ დასმაზე */
+  mapFillFromPick?: { key: number; text: string };
 }
 
-export default function AddressSearch({ onSelect, placeholder }: AddressSearchProps) {
+export default function AddressSearch({ onSelect, placeholder, mapFillFromPick }: AddressSearchProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +45,11 @@ export default function AddressSearch({ onSelect, placeholder }: AddressSearchPr
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!mapFillFromPick?.text) return;
+    setQuery(mapFillFromPick.text);
+  }, [mapFillFromPick?.key]);
 
   // ძებნა Nominatim API-ით
   const searchAddress = async (searchQuery: string) => {
@@ -90,41 +99,19 @@ export default function AddressSearch({ onSelect, placeholder }: AddressSearchPr
   const handleSelect = (result: SearchResult) => {
     const lat = parseFloat(result.lat);
     const lng = parseFloat(result.lon);
-    
-    // მისამართის ფორმატირება
-    let address = result.display_name;
-    if (result.address) {
-      const parts = [];
-      if (result.address.road) parts.push(result.address.road);
-      if (result.address.house_number) parts.push(result.address.house_number);
-      if (result.address.city || result.address.town || result.address.village) {
-        parts.push(result.address.city || result.address.town || result.address.village);
-      }
-      if (parts.length > 0) address = parts.join(', ');
-    }
-    
+
+    const address = formatNominatimResult({
+      display_name: result.display_name,
+      address: result.address,
+    });
+
     setQuery(address);
     setShowResults(false);
     onSelect(lat, lng, address);
   };
 
-  // ფორმატირებული მისამართი გამოსაჩენად
-  const formatDisplayAddress = (result: SearchResult): string => {
-    if (result.address) {
-      const parts = [];
-      if (result.address.road) {
-        parts.push(result.address.road);
-        if (result.address.house_number) {
-          parts[0] += ` ${result.address.house_number}`;
-        }
-      }
-      const city = result.address.city || result.address.town || result.address.village;
-      if (city) parts.push(city);
-      if (result.address.state) parts.push(result.address.state);
-      if (parts.length > 0) return parts.join(', ');
-    }
-    return result.display_name;
-  };
+  const formatDisplayAddress = (result: SearchResult): string =>
+    formatNominatimResult({ display_name: result.display_name, address: result.address });
 
   return (
     <div ref={containerRef} className="relative w-full">

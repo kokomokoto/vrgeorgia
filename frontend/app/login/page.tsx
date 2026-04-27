@@ -32,13 +32,13 @@ export default function LoginPage() {
   React.useEffect(() => setMounted(true), []);
 
   const labels = {
-    login: mounted ? t('login') : 'შესვლა',
-    register: mounted ? t('register') : 'რეგისტრაცია',
-    email: mounted ? t('email') : 'ელ-ფოსტა',
-    phone: mounted ? t('phone') : 'ტელეფონი',
-    submit: mounted ? t('submit') : 'გაგზავნა',
-    alreadyHaveAccount: mounted ? t('alreadyHaveAccount') : 'უკვე გაქვთ ანგარიში?',
-    noAccount: mounted ? t('noAccount') : 'არ გაქვთ ანგარიში?'
+    login: mounted ? t('login') : 'Login',
+    register: mounted ? t('register') : 'Register',
+    email: mounted ? t('email') : 'Email',
+    phone: mounted ? t('phone') : 'Phone',
+    submit: mounted ? t('submit') : 'Submit',
+    alreadyHaveAccount: mounted ? t('alreadyHaveAccount') : 'Already have an account?',
+    noAccount: mounted ? t('noAccount') : 'No account?'
   };
 
   const handleLogin = async () => {
@@ -49,7 +49,7 @@ export default function LoginPage() {
       setAuth(res.token, res.user);
       router.push('/');
     } catch (e: any) {
-      setError(e.message || 'შესვლა ვერ მოხერხდა');
+      setError(e.message || t('error_login_failed'));
     } finally {
       setLoading(false);
     }
@@ -63,7 +63,7 @@ export default function LoginPage() {
       setAuth(res.token, res.user);
       router.push('/');
     } catch (e: any) {
-      setError(e.message || 'რეგისტრაცია ვერ მოხერხდა');
+      setError(e.message || t('error_register_failed'));
     } finally {
       setLoading(false);
     }
@@ -110,7 +110,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">პაროლი</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{t('password')}</label>
               <div className="relative">
                 <input
                   className="w-full rounded-md border border-slate-300 px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -141,7 +141,7 @@ export default function LoginPage() {
               disabled={loading}
               onClick={handleLogin}
             >
-              {loading ? 'იტვირთება...' : labels.login}
+              {loading ? t('loading') : labels.login}
             </button>
             
             <p className="text-center text-sm text-slate-600">
@@ -168,11 +168,11 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">პაროლი *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{t('password')} *</label>
               <div className="relative">
                 <input
                   className="w-full rounded-md border border-slate-300 px-3 py-2 pr-10 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  placeholder="მინ. 6 სიმბოლო"
+                  placeholder={t('password_placeholder')}
                   type={showRegPassword ? 'text' : 'password'}
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
@@ -209,7 +209,7 @@ export default function LoginPage() {
               disabled={loading}
               onClick={handleRegister}
             >
-              {loading ? 'იტვირთება...' : labels.register}
+              {loading ? t('loading') : labels.register}
             </button>
             
             <p className="text-center text-sm text-slate-600">

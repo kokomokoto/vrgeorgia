@@ -11,16 +11,16 @@ import { PropertyCard } from '@/components/PropertyCard';
 
 // კატეგორიები იკონებით
 const PROPERTY_CATEGORIES = [
-  { value: 'apartment', label: 'ბინა', icon: '🏢' },
-  { value: 'house', label: 'კერძო სახლი', icon: '🏠' },
-  { value: 'commercial', label: 'კომერციული', icon: '🏪' },
-  { value: 'land', label: 'მიწა', icon: '🌍' },
-  { value: 'cottage', label: 'აგარაკი', icon: '🏡' },
-  { value: 'hotel', label: 'სასტუმრო', icon: '🏨' },
-  { value: 'building', label: 'შენობა', icon: '🏗️' },
-  { value: 'warehouse', label: 'საწყობი', icon: '📦' },
-  { value: 'parking', label: 'ავტოფარეხი', icon: '🚗' },
-  { value: 'business', label: 'ბიზნესი', icon: '💼' },
+  { value: 'apartment', key: 'apartment', icon: '🏢' },
+  { value: 'house', key: 'house', icon: '🏠' },
+  { value: 'commercial', key: 'commercial', icon: '🏪' },
+  { value: 'land', key: 'land', icon: '🌍' },
+  { value: 'cottage', key: 'cottage', icon: '🏡' },
+  { value: 'hotel', key: 'hotel', icon: '🏨' },
+  { value: 'building', key: 'building', icon: '🏗️' },
+  { value: 'warehouse', key: 'warehouse', icon: '📦' },
+  { value: 'parking', key: 'parking', icon: '🚗' },
+  { value: 'business', key: 'business', icon: '💼' },
 ];
 
 const initial: FiltersState = {
@@ -39,17 +39,22 @@ const initial: FiltersState = {
   hasPhotos: '',
   minSqm: '',
   maxSqm: '',
-  minRooms: '',
-  maxRooms: '',
-  minBedrooms: '',
-  maxBedrooms: '',
+  minConstructionYear: '',
+  maxConstructionYear: '',
+  minRenovationYear: '',
+  maxRenovationYear: '',
+  rooms: [],
+  bedrooms: [],
   amenities: [],
   buildingProject: [],
+  renovationStatus: [],
+  balconies: [],
   propertyId: ''
 };
 
 export default function HomePage() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [mounted, setMounted] = React.useState(false);
   const [filters, setFilters] = React.useState<FiltersState>(initial);
   const [properties, setProperties] = React.useState<Property[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -59,6 +64,15 @@ export default function HomePage() {
   const [categoriesOpen, setCategoriesOpen] = React.useState(false);
   const [mapOpen, setMapOpen] = React.useState(false);
   const ITEMS_PER_PAGE = 40;
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const tr = React.useCallback(
+    (key: string, fallback: string) => (mounted ? t(key) : fallback),
+    [mounted, t]
+  );
 
   // URL-დან amenities-ის წაკითხვა (property detail გვერდიდან გადამისამართებისას)
   React.useEffect(() => {
@@ -137,22 +151,22 @@ export default function HomePage() {
   };
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-4 text-slate-900">
       {/* ფილტრები ჰორიზონტალურად */}
       <Filters value={filters} onChange={setFilters} />
 
       {/* კატეგორიები - მობაილზე ჩამოსაშლელი, დესკტოპზე ყოველთვის ჩანს */}
-      <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3">
+      <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
         <button
           type="button"
           onClick={() => setCategoriesOpen(!categoriesOpen)}
-          className="w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700"
+          className="w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
         >
           <div className="flex items-center gap-2">
             <span>🏠</span>
-            <span>კატეგორიები</span>
+            <span>{tr('categories', 'კატეგორიები')}</span>
             {filters.type.length > 0 && (
-              <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center dark:bg-amber-500 dark:text-black">
                 {filters.type.length}
               </span>
             )}
@@ -162,7 +176,7 @@ export default function HomePage() {
           </svg>
         </button>
         {categoriesOpen && (
-          <div className="grid grid-cols-5 gap-2 mt-3 pt-3 border-t border-slate-100">
+          <div className="grid grid-cols-5 gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700">
             {PROPERTY_CATEGORIES.map((cat) => {
               const isSelected = filters.type.includes(cat.value);
               return (
@@ -176,18 +190,18 @@ export default function HomePage() {
                   }))}
                   className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${
                     isSelected 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-slate-200 bg-white'
+                      ? 'border-blue-500 bg-blue-50 dark:border-amber-500 dark:bg-amber-950/40' 
+                      : 'border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
                   }`}
                 >
                   <span className="text-xl mb-0.5">{cat.icon}</span>
                   <span className={`text-[10px] font-medium text-center leading-tight ${
-                    isSelected ? 'text-blue-700' : 'text-slate-700'
+                    isSelected ? 'text-blue-700 dark:text-amber-400' : 'text-slate-700 dark:text-zinc-300'
                   }`}>
-                    {cat.label}
+                    {tr(cat.key, cat.value)}
                   </span>
                   <span className={`text-[10px] ${
-                    isSelected ? 'text-blue-600' : 'text-slate-400'
+                    isSelected ? 'text-blue-600 dark:text-amber-500/90' : 'text-slate-400 dark:text-zinc-500'
                   }`}>
                     {categoryCounts[cat.value] || 0}
                   </span>
@@ -208,23 +222,23 @@ export default function HomePage() {
               onClick={() => setFilters(prev => ({ 
                 ...prev, 
                 type: isSelected 
-                  ? prev.type.filter(t => t !== cat.value) 
+                  ? prev.type.filter(tp => tp !== cat.value) 
                   : [...prev.type, cat.value]
               }))}
               className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all hover:shadow-md hover:scale-105 ${
                 isSelected 
-                  ? 'border-blue-500 bg-blue-50 shadow-md' 
-                  : 'border-slate-200 bg-white hover:border-blue-300'
+                  ? 'border-blue-500 bg-blue-50 shadow-md dark:border-amber-500 dark:bg-amber-950/40 dark:shadow-amber-900/20' 
+                  : 'border-slate-200 bg-white hover:border-blue-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-600/50'
               }`}
             >
               <span className="text-2xl mb-1">{cat.icon}</span>
               <span className={`text-xs font-medium text-center ${
-                isSelected ? 'text-blue-700' : 'text-slate-700'
+                isSelected ? 'text-blue-700 dark:text-amber-400' : 'text-slate-700 dark:text-zinc-300'
               }`}>
-                {cat.label}
+                {tr(cat.key, cat.value)}
               </span>
               <span className={`text-xs mt-0.5 ${
-                isSelected ? 'text-blue-600' : 'text-slate-400'
+                isSelected ? 'text-blue-600 dark:text-amber-500/90' : 'text-slate-400 dark:text-zinc-500'
               }`}>
                 {categoryCounts[cat.value] || 0}
               </span>
@@ -234,22 +248,22 @@ export default function HomePage() {
       </div>
       
       {/* რუკა - მობაილზე ჩამოსაშლელი */}
-      <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3">
+      <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
         <button
           type="button"
           onClick={() => setMapOpen(!mapOpen)}
-          className="w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700"
+          className="w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
         >
           <div className="flex items-center gap-2">
             <span>🗺️</span>
-            <span>რუკა</span>
+            <span>{tr('map', 'რუკა')}</span>
           </div>
           <svg className={`w-5 h-5 text-slate-400 transition-transform ${mapOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
         {mapOpen && (
-          <div className="mt-3 pt-3 border-t border-slate-100">
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700">
             <MapView properties={properties} />
           </div>
         )}
@@ -260,35 +274,35 @@ export default function HomePage() {
         <MapView properties={properties} />
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
-      {loading && <div className="text-sm text-slate-500">Loading…</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200">{error}</div>}
+      {loading && <div className="text-sm text-slate-500 dark:text-zinc-400">Loading…</div>}
 
       {/* სორტირება და რაოდენობა */}
       {!loading && properties.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-slate-600">
-            ნაპოვნია: <span className="font-semibold">{properties.length}</span> ობიექტი
+          <div className="text-sm text-slate-600 dark:text-zinc-300">
+            {tr('found', 'ნაპოვნია')}: <span className="font-semibold text-slate-900 dark:text-amber-400">{properties.length}</span> {tr('objects', 'ობიექტი')}
             {totalPages > 1 && (
               <span className="ml-2">
-                (გვერდი {currentPage} / {totalPages})
+                ({tr('page_of', 'გვერდი')} {currentPage} / {totalPages})
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">სორტირება:</span>
+            <span className="text-xs text-slate-500 dark:text-zinc-500">{tr('sorting', 'სორტირება')}:</span>
             <select
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
             >
-              <option value="date_desc">📅 ახალი → ძველი</option>
-              <option value="date_asc">📅 ძველი → ახალი</option>
-              <option value="price_asc">💰 ფასი ↑</option>
-              <option value="price_desc">💰 ფასი ↓</option>
-              <option value="area_asc">📐 ფართობი ↑</option>
-              <option value="area_desc">📐 ფართობი ↓</option>
-              <option value="views_desc">👁️ ნახვები ↓</option>
-              <option value="views_asc">👁️ ნახვები ↑</option>
+              <option value="date_desc">{tr('sort_date_desc', 'ახალი → ძველი')}</option>
+              <option value="date_asc">{tr('sort_date_asc', 'ძველი → ახალი')}</option>
+              <option value="price_asc">{tr('sort_price_asc', 'ფასი ↑')}</option>
+              <option value="price_desc">{tr('sort_price_desc', 'ფასი ↓')}</option>
+              <option value="area_asc">{tr('sort_area_asc', 'ფართობი ↑')}</option>
+              <option value="area_desc">{tr('sort_area_desc', 'ფართობი ↓')}</option>
+              <option value="views_desc">{tr('sort_views_desc', 'ნახვები ↓')}</option>
+              <option value="views_asc">{tr('sort_views_asc', 'ნახვები ↑')}</option>
             </select>
           </div>
         </div>
@@ -307,7 +321,7 @@ export default function HomePage() {
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:text-zinc-200"
           >
             ←
           </button>
@@ -325,7 +339,7 @@ export default function HomePage() {
               (page === totalPages - 1 && currentPage < totalPages - 3);
 
             if (showEllipsis) {
-              return <span key={page} className="px-2 text-slate-400">...</span>;
+              return <span key={page} className="px-2 text-slate-400 dark:text-zinc-600">...</span>;
             }
 
             if (!showPage) return null;
@@ -336,8 +350,8 @@ export default function HomePage() {
                 onClick={() => handlePageChange(page)}
                 className={`min-w-[40px] px-3 py-2 rounded-lg border transition-colors ${
                   page === currentPage
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'border-slate-300 hover:bg-slate-100'
+                    ? 'bg-blue-600 text-white border-blue-600 dark:bg-amber-500 dark:border-amber-500 dark:text-black'
+                    : 'border-slate-300 hover:bg-slate-100 dark:border-zinc-600 dark:hover:bg-zinc-800 dark:text-zinc-200'
                 }`}
               >
                 {page}
@@ -349,7 +363,7 @@ export default function HomePage() {
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-zinc-600 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:text-zinc-200"
           >
             →
           </button>

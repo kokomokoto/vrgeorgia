@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/config';
 
 interface Message {
   _id: string;
@@ -45,7 +46,7 @@ export default function AdminMessages() {
         limit: '50'
       });
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/messages?${params}`, {
+      const res = await fetch(`${API_BASE}/api/admin/messages?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

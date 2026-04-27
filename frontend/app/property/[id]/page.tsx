@@ -115,7 +115,7 @@ function PropertyMessageForm({ propertyId, propertyTitle }: { propertyId: string
       setMessage('');
       setTimeout(() => setSent(false), 3000);
     } catch (err: any) {
-      alert(err.message || 'შეცდომა');
+      alert(err.message || t('error'));
     } finally {
       setSending(false);
     }
@@ -123,17 +123,17 @@ function PropertyMessageForm({ propertyId, propertyTitle }: { propertyId: string
 
   return (
     <div className="w-full border-t border-slate-200 pt-3 mt-1">
-      <div className="text-xs font-medium text-slate-600 mb-2">✉️ შეტყობინების გაგზავნა</div>
+      <div className="text-xs font-medium text-slate-600 mb-2">✉️ {t('send_message_title')}</div>
       {sent ? (
         <div className="text-center py-3 text-sm text-green-600 font-medium">
-          ✓ შეტყობინება გაიგზავნა!
+          ✓ {t('message_sent_success')}
         </div>
       ) : (
         <>
           <textarea
             value={message}
             onChange={e => setMessage(e.target.value)}
-            placeholder={`შეტყობინება "${propertyTitle.slice(0, 30)}${propertyTitle.length > 30 ? '...' : ''}"-ს შესახებ...`}
+            placeholder={t('message_about_placeholder', { title: propertyTitle.slice(0, 30) + (propertyTitle.length > 30 ? '...' : '') })}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[70px] focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
             maxLength={2000}
           />
@@ -142,7 +142,7 @@ function PropertyMessageForm({ propertyId, propertyTitle }: { propertyId: string
             disabled={!message.trim() || sending}
             className="w-full mt-2 px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {sending ? 'იგზავნება...' : 'გაგზავნა'}
+            {sending ? t('sending') : t('send')}
           </button>
         </>
       )}
@@ -404,7 +404,7 @@ export default function PropertyDetailPage() {
             if (!embedUrl || !embedUrl.startsWith('http')) {
               return (
                 <div className="h-[200px] flex items-center justify-center bg-slate-100 rounded-md">
-                  <p className="text-slate-500">3D ლინკი არ არის მითითებული ან არასწორია</p>
+                  <p className="text-slate-500">{t('invalid_3d_link')}</p>
                 </div>
               );
             }
@@ -427,7 +427,7 @@ export default function PropertyDetailPage() {
                   rel="noopener noreferrer"
                   className="absolute top-2 left-2 bg-white hover:bg-white px-3 py-1.5 rounded-lg shadow text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
                 >
-                  🔗 ახალ ტაბში
+                  🔗 {t('open_new_tab')}
                 </a>
               </div>
             );
@@ -461,7 +461,7 @@ export default function PropertyDetailPage() {
       {/* ბროკერის პანელი - მარჯვნივ */}
       <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
         <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:sticky lg:top-4">
-          <div className="text-sm font-semibold mb-3">ბროკერი</div>
+          <div className="text-sm font-semibold mb-3">{t('broker')}</div>
           <div className="flex flex-col items-center text-center gap-3">
             {owner?.avatar ? (
               <img 
@@ -518,8 +518,8 @@ export default function PropertyDetailPage() {
       {isOwner && property.privateNotes && (
         <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-3 sm:p-4">
           <div className="text-sm font-semibold mb-2 flex items-center gap-2 text-amber-800">
-            🔒 პირადი ჩანაწერი
-            <span className="text-xs font-normal text-amber-600">(მხოლოდ თქვენ ხედავთ)</span>
+            🔒 {t('private_notes')}
+            <span className="text-xs font-normal text-amber-600">({t('only_you_see')})</span>
           </div>
           <div className="text-sm text-slate-700 whitespace-pre-wrap">{property.privateNotes}</div>
         </div>
@@ -527,14 +527,14 @@ export default function PropertyDetailPage() {
 
       {/* დეტალური ინფორმაცია - ზემოთ */}
       <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-        <div className="text-sm font-semibold mb-3 sm:mb-4">დეტალური ინფორმაცია</div>
+        <div className="text-sm font-semibold mb-3 sm:mb-4">{t('detailed_info')}</div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
           {(property.sqm ?? 0) > 0 && (
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
               <span className="text-xl sm:text-2xl">📐</span>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">ფართი</div>
-                <div className="text-sm sm:text-base font-medium text-slate-800">{property.sqm} მ²</div>
+                <div className="text-xs text-slate-500">{t('area_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.sqm} {t('sqm_unit_short')}</div>
               </div>
             </div>
           )}
@@ -542,7 +542,7 @@ export default function PropertyDetailPage() {
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
               <span className="text-xl sm:text-2xl">🚪</span>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">ოთახები</div>
+                <div className="text-xs text-slate-500">{t('rooms_detail')}</div>
                 <div className="text-sm sm:text-base font-medium text-slate-800">{property.rooms || property.roomCount}</div>
               </div>
             </div>
@@ -551,7 +551,7 @@ export default function PropertyDetailPage() {
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
               <span className="text-xl sm:text-2xl">🏢</span>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">სართული</div>
+                <div className="text-xs text-slate-500">{t('floor_detail')}</div>
                 <div className="text-sm sm:text-base font-medium text-slate-800">
                   {property.floor}{property.totalFloors ? ` / ${property.totalFloors}` : ''}
                 </div>
@@ -562,9 +562,9 @@ export default function PropertyDetailPage() {
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
               <span className="text-xl sm:text-2xl">🏠</span>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">პროექტი</div>
+                <div className="text-xs text-slate-500">{t('project_detail')}</div>
                 <div className="text-sm sm:text-base font-medium text-slate-800">
-                  {{ czech: 'ჩეხური', khrushchev: 'ხრუშჩოვი', urban: 'ქალაქური', lvov: 'ლვოვური', budapest: 'ბუდაპეშტური', kiev: 'კიევური', moscow: 'მოსკოვური', new_build: 'ახალაშენებული', tbilisi: 'თბილისური', other: 'სხვა' }[property.buildingProject] || property.buildingProject}
+                  {t(`project_${property.buildingProject}`) || property.buildingProject}
                 </div>
               </div>
             </div>
@@ -573,7 +573,7 @@ export default function PropertyDetailPage() {
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
               <span className="text-xl sm:text-2xl">🌅</span>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">აივანი</div>
+                <div className="text-xs text-slate-500">{t('balcony_detail')}</div>
                 <div className="text-sm sm:text-base font-medium text-slate-800">{property.balcony}</div>
               </div>
             </div>
@@ -582,7 +582,7 @@ export default function PropertyDetailPage() {
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
               <span className="text-xl sm:text-2xl">🪟</span>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">ლოჯია</div>
+                <div className="text-xs text-slate-500">{t('loggia_detail')}</div>
                 <div className="text-sm sm:text-base font-medium text-slate-800">{property.loggia}</div>
               </div>
             </div>
@@ -591,8 +591,26 @@ export default function PropertyDetailPage() {
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
               <span className="text-xl sm:text-2xl">🚿</span>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">სველი წერტილი</div>
+                <div className="text-xs text-slate-500">{t('bathroom_detail')}</div>
                 <div className="text-sm sm:text-base font-medium text-slate-800">{property.bathroom}</div>
+              </div>
+            </div>
+          )}
+          {(property.constructionYear ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏗️</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('construction_year')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.constructionYear}</div>
+              </div>
+            </div>
+          )}
+          {(property.renovationYear ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🛠️</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('renovation_year')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.renovationYear}</div>
               </div>
             </div>
           )}
@@ -600,7 +618,7 @@ export default function PropertyDetailPage() {
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg col-span-2">
               <span className="text-xl sm:text-2xl">📋</span>
               <div className="min-w-0">
-                <div className="text-xs text-slate-500">საკადასტრო კოდი</div>
+                <div className="text-xs text-slate-500">{t('cadastral_code')}</div>
                 <div className="text-sm font-medium text-slate-800 font-mono truncate">{property.cadastralCode}</div>
               </div>
             </div>
@@ -625,96 +643,108 @@ export default function PropertyDetailPage() {
       {/* კომფორტი და კომუნიკაციები */}
       {property.amenities && Object.values(property.amenities).some(v => v) && (
         <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <div className="text-sm font-semibold mb-3 sm:mb-4">კომფორტი და კომუნიკაციები</div>
+          <div className="text-sm font-semibold mb-3 sm:mb-4">{t('comfort_communications')}</div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {property.amenities.elevator && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🛗</span>
-                <span className="text-sm font-medium">ლიფტი</span>
+                <span className="text-sm font-medium">{t('amenity_elevator')}</span>
               </div>
             )}
             {property.amenities.furniture && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🛋️</span>
-                <span className="text-sm font-medium">ავეჯი</span>
+                <span className="text-sm font-medium">{t('amenity_furniture')}</span>
               </div>
             )}
             {property.amenities.garage && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🚗</span>
-                <span className="text-sm font-medium">ავტოფარეხი</span>
+                <span className="text-sm font-medium">{t('amenity_garage')}</span>
               </div>
             )}
             {property.amenities.basement && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🏚️</span>
-                <span className="text-sm font-medium">სარდაფი</span>
+                <span className="text-sm font-medium">{t('amenity_basement')}</span>
               </div>
             )}
             {property.amenities.centralHeating && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🔥</span>
-                <span className="text-sm font-medium">ცენტრ. გათბობა</span>
+                <span className="text-sm font-medium">{t('amenity_centralHeating')}</span>
               </div>
             )}
             {property.amenities.naturalGas && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🔵</span>
-                <span className="text-sm font-medium">ბუნებრივი აირი</span>
+                <span className="text-sm font-medium">{t('amenity_naturalGas')}</span>
               </div>
             )}
             {property.amenities.storage && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">📦</span>
-                <span className="text-sm font-medium">საკუჭნაო</span>
+                <span className="text-sm font-medium">{t('amenity_storage')}</span>
               </div>
             )}
             {property.amenities.internet && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">📶</span>
-                <span className="text-sm font-medium">ინტერნეტი</span>
+                <span className="text-sm font-medium">{t('amenity_internet')}</span>
               </div>
             )}
             {property.amenities.electricity && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">⚡</span>
-                <span className="text-sm font-medium">ელექტროობა</span>
+                <span className="text-sm font-medium">{t('amenity_electricity')}</span>
               </div>
             )}
             {property.amenities.water && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">💧</span>
-                <span className="text-sm font-medium">წყალი</span>
+                <span className="text-sm font-medium">{t('amenity_water')}</span>
               </div>
             )}
             {property.amenities.security && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🔒</span>
-                <span className="text-sm font-medium">დაცვა</span>
+                <span className="text-sm font-medium">{t('amenity_security')}</span>
               </div>
             )}
             {property.amenities.airConditioner && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">❄️</span>
-                <span className="text-sm font-medium">კონდიციონერი</span>
+                <span className="text-sm font-medium">{t('amenity_airConditioner')}</span>
               </div>
             )}
             {property.amenities.fireplace && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🪵</span>
-                <span className="text-sm font-medium">ბუხარი</span>
+                <span className="text-sm font-medium">{t('amenity_fireplace')}</span>
               </div>
             )}
             {property.amenities.pool && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🏊</span>
-                <span className="text-sm font-medium">აუზი</span>
+                <span className="text-sm font-medium">{t('amenity_pool')}</span>
               </div>
             )}
             {property.amenities.garden && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🌳</span>
-                <span className="text-sm font-medium">ბაღი</span>
+                <span className="text-sm font-medium">{t('amenity_garden')}</span>
+              </div>
+            )}
+            {property.amenities.balcony && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🌅</span>
+                <span className="text-sm font-medium">{t('balcony')}</span>
+              </div>
+            )}
+            {property.amenities.terrace && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🏞️</span>
+                <span className="text-sm font-medium">{t('terrace')}</span>
               </div>
             )}
           </div>
@@ -729,7 +759,7 @@ export default function PropertyDetailPage() {
             <span>📅 {new Date(property.createdAt).toLocaleDateString('ka-GE')}</span>
           )}
           {typeof property.views === 'number' && (
-            <span>👁️ {property.views} ნახვა</span>
+            <span>👁️ {property.views} {t('views_count')}</span>
           )}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -764,7 +794,7 @@ export default function PropertyDetailPage() {
       {/* მსგავსი ობიექტები */}
       {similarProperties.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <div className="text-sm font-semibold mb-4">მსგავსი ობიექტები</div>
+          <div className="text-sm font-semibold mb-4">{t('similar_properties')}</div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {similarProperties.map((p) => (
               <PropertyCard key={p._id} p={p} />

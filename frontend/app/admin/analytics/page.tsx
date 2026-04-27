@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/config';
 
 interface AnalyticsData {
   period: number;
@@ -29,8 +30,6 @@ export default function AdminAnalytics() {
   const [period, setPeriod] = useState('7d');
   const [error, setError] = useState('');
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-
   useEffect(() => {
     fetchAnalytics();
   }, [period]);
@@ -41,7 +40,7 @@ export default function AdminAnalytics() {
 
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/admin/analytics?period=${period}`, {
+      const res = await fetch(`${API_BASE}/api/admin/analytics?period=${period}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.status === 403) { setError('წვდომა აკრძალულია'); return; }

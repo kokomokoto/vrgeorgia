@@ -5,6 +5,7 @@ import { Property } from '../models/Property.js';
 import { requireAuth } from '../middleware/auth.js';
 import { translateText } from '../services/translate.js';
 import { uploadPropertyPhotos, deleteCloudinaryImage } from '../services/cloudinary.js';
+import { getJWTSecret } from '../config/jwt.js';
 
 const router = express.Router();
 
@@ -17,11 +18,42 @@ function pickLanguage(req) {
   return supported.includes(lang) ? lang : 'ka';
 }
 
+/** Multi-select rooms/bedrooms: value 6 means „6+“ → field >= 6 */
+function applyRoomLikeInFilter(filter, fieldName, rawJson) {
+  try {
+    const arr = JSON.parse(rawJson);
+    if (!Array.isArray(arr) || arr.length === 0) return;
+    const nums = arr.map((x) => Number(x)).filter((n) => Number.isFinite(n));
+    if (nums.length === 0) return;
+    const wantsSixPlus = nums.includes(6);
+    const exact = nums.filter((n) => n !== 6);
+    const parts = [];
+    if (exact.length > 0) parts.push({ [fieldName]: { $in: exact } });
+    if (wantsSixPlus) parts.push({ [fieldName]: { $gte: 6 } });
+    if (parts.length === 0) return;
+    if (parts.length === 1) {
+      Object.assign(filter, parts[0]);
+    } else {
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: parts });
+    }
+  } catch (e) {
+    // ignore parse error
+  }
+}
+
 function applyTranslation(property, lang) {
   if (lang === 'ka') return property;
   const t = property.translations?.get(lang);
   if (!t) return property;
   return { ...property, title: t.title ?? property.title, desc: t.desc ?? property.desc };
+}
+
+/** საჯაროდ არ ჩანს საკადასტრო, თუ მონიშნულია დამალვა */
+function stripHiddenCadastral(p) {
+  if (!p?.cadastralHidden) return p;
+  const { cadastralCode, cadastralHidden, ...rest } = p;
+  return rest;
 }
 
 // CREATE (protected) - multipart with photos
@@ -43,6 +75,7 @@ router.post(
     body('rooms').optional().isNumeric().withMessage('ოთახების რაოდენობა უნდა იყოს რიცხვი'),
     body('bedrooms').optional().isNumeric().withMessage('საძინებლების რაოდენობა უნდა იყოს რიცხვი'),
     body('buildingProject').optional().isString().trim(),
+    body('renovationStatus').optional().isString().trim(),
     body('priceCurrency').optional().isIn(['USD', 'GEL']).withMessage('ვალუტა უნდა იყოს USD ან GEL'),
     body('priceType').optional().isIn(['total', 'per_sqm']).withMessage('ფასის ტიპი უნდა იყოს total ან per_sqm'),
     body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
@@ -65,47 +98,94 @@ router.post(
       }
     }
 
+    const cadastralHidden =
+      req.body.cadastralHidden === true ||
+      req.body.cadastralHidden === 'true';
+
     const photos = (req.files || []).map((f) => f.path);
 
-    const property = await Property.create({
-      title: req.body.title,
-      desc: req.body.desc,
-      price: Number(req.body.price),
-      priceCurrency: req.body.priceCurrency || 'USD',
-      priceType: req.body.priceType || 'total',
-      city: req.body.city || '',
-      region: req.body.region || '',
-      tbilisiDistrict: req.body.tbilisiDistrict || '',
-      tbilisiSubdistricts: req.body.tbilisiSubdistricts ? JSON.parse(req.body.tbilisiSubdistricts) : [],
-      sqm: Number(req.body.sqm) || 0,
-      rooms: Number(req.body.rooms) || 0,
-      bedrooms: Number(req.body.bedrooms) || 0,
-      roomCount: Number(req.body.roomCount) || 0,
-      floor: Number(req.body.floor) || 0,
-      totalFloors: Number(req.body.totalFloors) || 0,
-      balcony: Number(req.body.balcony) || 0,
-      loggia: Number(req.body.loggia) || 0,
-      bathroom: Number(req.body.bathroom) || 0,
-      cadastralCode: (req.body.cadastralCode || '').trim(),
-      buildingProject: req.body.buildingProject || '',
-      amenities: req.body.amenities ? JSON.parse(req.body.amenities) : {},
-      location: { lat: Number(req.body.lat), lng: Number(req.body.lng) },
-      type: req.body.type,
-      dealType: req.body.dealType,
-      photos,
-      threeDLink: req.body.threeDLink || '',
-      exteriorLink: req.body.exteriorLink || '',
-      interiorLink: req.body.interiorLink || '',
-      mediaLinks: req.body.mediaLinks ? JSON.parse(req.body.mediaLinks) : [],
-      contact: {
-        phone: req.body.contactPhone || '',
-        email: req.body.contactEmail || ''
-      },
-      userId: req.user.id,
-      privateNotes: req.body.privateNotes || ''
-    });
+    let tbilisiSubdistricts = [];
+    try {
+      tbilisiSubdistricts = req.body.tbilisiSubdistricts ? JSON.parse(req.body.tbilisiSubdistricts) : [];
+      if (!Array.isArray(tbilisiSubdistricts)) tbilisiSubdistricts = [];
+    } catch {
+      return res.status(400).json({ message: 'tbilisiSubdistricts JSON არასწორია' });
+    }
 
-    res.status(201).json({ property });
+    let amenities = {};
+    try {
+      amenities = req.body.amenities ? JSON.parse(req.body.amenities) : {};
+      if (!amenities || typeof amenities !== 'object' || Array.isArray(amenities)) amenities = {};
+    } catch {
+      return res.status(400).json({ message: 'amenities JSON არასწორია' });
+    }
+
+    let mediaLinks = [];
+    try {
+      mediaLinks = req.body.mediaLinks ? JSON.parse(req.body.mediaLinks) : [];
+      if (!Array.isArray(mediaLinks)) mediaLinks = [];
+    } catch {
+      return res.status(400).json({ message: 'mediaLinks JSON არასწორია' });
+    }
+
+    try {
+      const property = await Property.create({
+        title: req.body.title,
+        desc: req.body.desc,
+        price: Number(req.body.price),
+        priceCurrency: req.body.priceCurrency || 'USD',
+        priceType: req.body.priceType || 'total',
+        city: req.body.city || '',
+        region: req.body.region || '',
+        tbilisiDistrict: req.body.tbilisiDistrict || '',
+        tbilisiSubdistricts,
+        sqm: Number(req.body.sqm) || 0,
+        rooms: Number(req.body.rooms) || 0,
+        bedrooms: Number(req.body.bedrooms) || 0,
+        roomCount: Number(req.body.roomCount) || 0,
+        floor: Number(req.body.floor) || 0,
+        totalFloors: Number(req.body.totalFloors) || 0,
+        balcony: Number(req.body.balcony) || 0,
+        loggia: Number(req.body.loggia) || 0,
+        bathroom: Number(req.body.bathroom) || 0,
+        constructionYear: req.body.constructionYear ? Number(req.body.constructionYear) : null,
+        renovationYear: req.body.renovationYear ? Number(req.body.renovationYear) : null,
+        cadastralCode: (req.body.cadastralCode || '').trim(),
+        cadastralHidden,
+        buildingProject: req.body.buildingProject || '',
+        renovationStatus: req.body.renovationStatus || '',
+        amenities,
+        location: { lat: Number(req.body.lat), lng: Number(req.body.lng) },
+        type: req.body.type,
+        dealType: req.body.dealType,
+        photos,
+        threeDLink: req.body.threeDLink || '',
+        exteriorLink: req.body.exteriorLink || '',
+        interiorLink: req.body.interiorLink || '',
+        mediaLinks,
+        status: 'pending',
+        contact: {
+          phone: req.body.contactPhone || '',
+          email: req.body.contactEmail || ''
+        },
+        userId: req.user.id,
+        privateNotes: req.body.privateNotes || ''
+      });
+
+      res.status(201).json({ property });
+    } catch (err) {
+      console.error('Property.create failed:', err);
+      if (err.code === 11000) {
+        return res.status(400).json({ message: 'ამ მონაცემებით ჩანაწერი უკვე არსებობს (უნიკალური ველი)' });
+      }
+      if (err.name === 'ValidationError') {
+        const msgs = Object.values(err.errors || {}).map((e) => e.message).join(', ');
+        return res.status(400).json({ message: msgs || err.message || 'ვალიდაციის შეცდომა' });
+      }
+      return res.status(500).json({
+        message: err.message || 'ობიექტის შენახვა ვერ მოხერხდა. შეამოწმეთ MongoDB, Cloudinary env და სერვერის ლოგი.',
+      });
+    }
   }
 );
 
@@ -136,12 +216,20 @@ router.get(
     query('hasPhotos').optional({ values: 'falsy' }).isIn(['true', 'false']),
     query('minSqm').optional({ values: 'falsy' }).isNumeric(),
     query('maxSqm').optional({ values: 'falsy' }).isNumeric(),
+    query('minConstructionYear').optional({ values: 'falsy' }).isNumeric(),
+    query('maxConstructionYear').optional({ values: 'falsy' }).isNumeric(),
+    query('minRenovationYear').optional({ values: 'falsy' }).isNumeric(),
+    query('maxRenovationYear').optional({ values: 'falsy' }).isNumeric(),
+    query('rooms').optional({ values: 'falsy' }).isString(),
+    query('bedrooms').optional({ values: 'falsy' }).isString(),
     query('minRooms').optional({ values: 'falsy' }).isNumeric(),
     query('maxRooms').optional({ values: 'falsy' }).isNumeric(),
     query('minBedrooms').optional({ values: 'falsy' }).isNumeric(),
     query('maxBedrooms').optional({ values: 'falsy' }).isNumeric(),
     query('amenities').optional({ values: 'falsy' }).isString(), // მასივი JSON ფორმატში
+    query('balconies').optional({ values: 'falsy' }).isString(),
     query('buildingProject').optional({ values: 'falsy' }).isString().trim(),
+    query('renovationStatus').optional({ values: 'falsy' }).isString().trim(),
     query('priceCurrency').optional({ values: 'falsy' }).isIn(['USD', 'GEL']),
     query('priceType').optional({ values: 'falsy' }).isIn(['total', 'per_sqm']),
     query('sort').optional({ values: 'falsy' }).isString(),
@@ -153,7 +241,15 @@ router.get(
 
     const lang = pickLanguage(req);
 
-    const filter = {};
+    // Backward compatibility:
+    // legacy properties may not have `status` set yet, treat them as active for public listing.
+    const filter = {
+      $or: [
+        { status: 'active' },
+        { status: 'pending' },
+        { status: { $exists: false } }
+      ]
+    };
 
     // ტექსტური ძიება - ეძებს ყველა ველში
     if (req.query.q) {
@@ -167,10 +263,16 @@ router.get(
         { region: regex },
         { tbilisiDistrict: regex },
         { tbilisiSubdistricts: regex },
-        { cadastralCode: regex },
+        {
+          $and: [
+            { cadastralCode: regex },
+            { cadastralHidden: { $ne: true } },
+          ],
+        },
         { type: regex },
         { dealType: regex },
         { buildingProject: regex },
+        { renovationStatus: regex },
         { 'contact.phone': regex },
         { 'contact.email': regex },
         { privateNotes: regex },
@@ -312,16 +414,44 @@ router.get(
       if (req.query.maxSqm) filter.sqm.$lte = Number(req.query.maxSqm);
     }
 
-    if (req.query.minRooms || req.query.maxRooms) {
+    if (req.query.minConstructionYear || req.query.maxConstructionYear) {
+      filter.constructionYear = {};
+      if (req.query.minConstructionYear) filter.constructionYear.$gte = Number(req.query.minConstructionYear);
+      if (req.query.maxConstructionYear) filter.constructionYear.$lte = Number(req.query.maxConstructionYear);
+    }
+
+    if (req.query.minRenovationYear || req.query.maxRenovationYear) {
+      filter.renovationYear = {};
+      if (req.query.minRenovationYear) filter.renovationYear.$gte = Number(req.query.minRenovationYear);
+      if (req.query.maxRenovationYear) filter.renovationYear.$lte = Number(req.query.maxRenovationYear);
+    }
+
+    if (req.query.rooms) {
+      applyRoomLikeInFilter(filter, 'rooms', req.query.rooms);
+    } else if (req.query.minRooms || req.query.maxRooms) {
       filter.rooms = {};
       if (req.query.minRooms) filter.rooms.$gte = Number(req.query.minRooms);
       if (req.query.maxRooms) filter.rooms.$lte = Number(req.query.maxRooms);
     }
 
-    if (req.query.minBedrooms || req.query.maxBedrooms) {
+    if (req.query.bedrooms) {
+      applyRoomLikeInFilter(filter, 'bedrooms', req.query.bedrooms);
+    } else     if (req.query.minBedrooms || req.query.maxBedrooms) {
       filter.bedrooms = {};
       if (req.query.minBedrooms) filter.bedrooms.$gte = Number(req.query.minBedrooms);
       if (req.query.maxBedrooms) filter.bedrooms.$lte = Number(req.query.maxBedrooms);
+    }
+
+    if (req.query.balconies) {
+      try {
+        const balcon = JSON.parse(req.query.balconies);
+        if (Array.isArray(balcon) && balcon.length > 0) {
+          const nums = balcon.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n >= 0);
+          if (nums.length > 0) filter.balcony = { $in: nums };
+        }
+      } catch (e) {
+        // ignore parse error
+      }
     }
 
     if (req.query.has3d === 'true') {
@@ -369,6 +499,18 @@ router.get(
       }
     }
 
+    // რემონტის სტატუსის ფილტრი
+    if (req.query.renovationStatus) {
+      try {
+        const statuses = JSON.parse(req.query.renovationStatus);
+        if (Array.isArray(statuses) && statuses.length > 0) {
+          filter.renovationStatus = { $in: statuses };
+        }
+      } catch (e) {
+        filter.renovationStatus = req.query.renovationStatus;
+      }
+    }
+
     // ID-ით ძებნა (ციფრული numericId)
     if (req.query.propertyId) {
       const numId = Number(req.query.propertyId);
@@ -405,7 +547,7 @@ router.get(
 
     const translated = properties.map((p) => {
       const { privateNotes, ...safe } = applyTranslation(p, lang);
-      return safe;
+      return stripHiddenCadastral(safe);
     });
     res.json({ properties: translated });
   }
@@ -426,7 +568,7 @@ router.get(
 
     const translated = properties.map((p) => {
       const { privateNotes, ...safe } = applyTranslation(p, lang);
-      return safe;
+      return stripHiddenCadastral(safe);
     });
     res.json({ properties: translated });
   }
@@ -457,13 +599,25 @@ router.get(
     if (token) {
       try {
         const jwt = await import('jsonwebtoken');
-        const decoded = jwt.default.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.default.verify(token, getJWTSecret());
         requestUserId = decoded.sub;
       } catch (_) {}
     }
     const ownerIdStr = property.userId?._id?.toString() || property.userId?.toString();
+    const canViewNonActive = !!requestUserId && requestUserId === ownerIdStr;
+    const isPubliclyVisible =
+      property.status === 'active' ||
+      property.status === 'pending' ||
+      property.status === undefined;
+    if (!canViewNonActive && !isPubliclyVisible) {
+      return res.status(404).json({ message: 'Not found' });
+    }
     if (!requestUserId || requestUserId !== ownerIdStr) {
       delete property.privateNotes;
+      if (property.cadastralHidden) {
+        delete property.cadastralCode;
+        delete property.cadastralHidden;
+      }
     }
 
     res.json({ property: applyTranslation(property, lang) });
@@ -492,7 +646,8 @@ router.put(
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('photos').optional().isArray(),
-    body('mainPhoto').optional().isInt({ min: 0 })
+    body('mainPhoto').optional().isInt({ min: 0 }),
+    body('cadastralHidden').optional().isBoolean()
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -503,7 +658,7 @@ router.put(
     if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
 
     const patch = {};
-    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode', 'privateNotes', 'buildingProject']) {
+    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode', 'privateNotes', 'buildingProject', 'renovationStatus', 'cadastralHidden']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
     }
     // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას (თუ მითითებულია)
@@ -528,6 +683,8 @@ router.put(
     if (req.body.balcony !== undefined) patch.balcony = Number(req.body.balcony);
     if (req.body.loggia !== undefined) patch.loggia = Number(req.body.loggia);
     if (req.body.bathroom !== undefined) patch.bathroom = Number(req.body.bathroom);
+    if (req.body.constructionYear !== undefined) patch.constructionYear = req.body.constructionYear ? Number(req.body.constructionYear) : null;
+    if (req.body.renovationYear !== undefined) patch.renovationYear = req.body.renovationYear ? Number(req.body.renovationYear) : null;
     if (req.body.amenities !== undefined) patch.amenities = req.body.amenities;
     if (req.body.contactPhone !== undefined || req.body.contactEmail !== undefined) {
       patch.contact = {

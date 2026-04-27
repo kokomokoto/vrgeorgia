@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useCompare } from './CompareProvider';
 
 interface CompareButtonProps {
@@ -11,6 +12,7 @@ interface CompareButtonProps {
 
 export default function CompareButton({ propertyId, size = 'md', className = '' }: CompareButtonProps) {
   const { addToCompare, removeFromCompare, isInCompare, compareList, maxItems } = useCompare();
+  const { t } = useTranslation();
   
   const inCompare = isInCompare(propertyId);
   const isFull = compareList.length >= maxItems;
@@ -49,7 +51,7 @@ export default function CompareButton({ propertyId, size = 'md', className = '' 
             ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
             : 'bg-white/90 text-slate-500 hover:bg-white hover:text-blue-500'
       } shadow-md ${className}`}
-      title={inCompare ? 'წაშლა შედარებიდან' : isFull ? `მაქს. ${maxItems} ქონება` : 'შედარებაში დამატება'}
+      title={inCompare ? t('removeFromCompare') : isFull ? `${t('max')} ${maxItems}` : t('addToCompare')}
     >
       <svg 
         className={iconSizes[size]} 

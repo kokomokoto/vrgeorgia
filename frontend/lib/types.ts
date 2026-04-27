@@ -3,6 +3,7 @@ export type PropertyType = 'apartment' | 'house' | 'commercial' | 'land' | 'cott
 export type PriceCurrency = 'USD' | 'GEL';
 export type PriceType = 'total' | 'per_sqm';
 export type BuildingProject = '' | 'czech' | 'khrushchev' | 'urban' | 'lvov' | 'budapest' | 'kiev' | 'moscow' | 'new_build' | 'tbilisi' | 'other';
+export type RenovationStatus = '' | 'green_frame' | 'white_frame' | 'black_frame' | 'renovated' | 'to_renovate';
 
 export type Amenities = {
   basement?: boolean;
@@ -20,6 +21,8 @@ export type Amenities = {
   fireplace?: boolean;
   pool?: boolean;
   garden?: boolean;
+  balcony?: boolean;
+  terrace?: boolean;
   isolatedKitchen?: boolean;
   heatingCooling?: boolean;
 };
@@ -47,8 +50,13 @@ export type Property = {
   balcony?: number;
   loggia?: number;
   bathroom?: number;
+  constructionYear?: number;
+  renovationYear?: number;
   cadastralCode?: string;
+  /** true: საკადასტრო არ ჩანს საჯაროდ და არ იძებნება ძიებით */
+  cadastralHidden?: boolean;
   buildingProject?: BuildingProject;
+  renovationStatus?: RenovationStatus;
   
   // კომფორტი
   amenities?: Amenities;

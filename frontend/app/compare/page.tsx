@@ -20,7 +20,9 @@ export default function ComparePage() {
     { key: 'sqm', label: t('sqm'), getValue: (p) => p.sqm || 0 },
     { key: 'rooms', label: t('rooms'), getValue: (p) => p.rooms || 0 },
     { key: 'pricePerSqm', label: t('pricePerSqm'), getValue: (p) => p.sqm ? Math.round(p.price / p.sqm) : 0 },
-    { key: 'floor', label: 'სართული', getValue: (p) => p.floor || 0 },
+    { key: 'floor', label: t('floor'), getValue: (p) => p.floor || 0 },
+    { key: 'constructionYear', label: t('construction_year'), getValue: (p) => p.constructionYear || 0 },
+    { key: 'renovationYear', label: t('renovation_year'), getValue: (p) => p.renovationYear || 0 },
   ];
 
   const handleSort = (key: string) => {
@@ -48,26 +50,29 @@ export default function ComparePage() {
 
   const specs = [
     { key: 'price', label: t('price'), format: (p: Property) => `$${p.price.toLocaleString()}` },
-    { key: 'sqm', label: t('sqm'), format: (p: Property) => p.sqm ? `${p.sqm} კვ.მ` : '-' },
+    { key: 'sqm', label: t('sqm'), format: (p: Property) => p.sqm ? `${p.sqm} ${t('sqm_unit_short')}` : '-' },
     { key: 'rooms', label: t('rooms'), format: (p: Property) => p.rooms ? p.rooms.toString() : '-' },
     { key: 'pricePerSqm', label: t('pricePerSqm'), format: (p: Property) => p.sqm ? `$${Math.round(p.price / p.sqm).toLocaleString()}` : '-' },
     { key: 'type', label: t('type'), format: (p: Property) => t(p.type) },
     { key: 'dealType', label: t('dealType'), format: (p: Property) => t(p.dealType === 'rent' ? 'rentType' : p.dealType) },
     { key: 'city', label: t('city'), format: (p: Property) => p.city || '-' },
     { key: 'region', label: t('region'), format: (p: Property) => p.region ? t(`region_${p.region}`) : '-' },
-    { key: 'floor', label: 'სართული', format: (p: Property) => p.floor ? `${p.floor}${p.totalFloors ? ` / ${p.totalFloors}` : ''}` : '-' },
-    { key: 'balcony', label: 'აივანი', format: (p: Property) => p.balcony ? p.balcony.toString() : '-' },
-    { key: 'bathroom', label: 'სველი წერტილი', format: (p: Property) => p.bathroom ? p.bathroom.toString() : '-' },
-    { key: 'elevator', label: '🛗 ლიფტი', format: (p: Property) => p.amenities?.elevator ? '✓' : '✗' },
-    { key: 'furniture', label: '🛋️ ავეჯი', format: (p: Property) => p.amenities?.furniture ? '✓' : '✗' },
-    { key: 'internet', label: '📶 ინტერნეტი', format: (p: Property) => p.amenities?.internet ? '✓' : '✗' },
-    { key: 'airConditioner', label: '❄️ კონდიციონერი', format: (p: Property) => p.amenities?.airConditioner ? '✓' : '✗' },
-    { key: 'centralHeating', label: '🔥 გათბობა', format: (p: Property) => p.amenities?.centralHeating ? '✓' : '✗' },
-    { key: 'naturalGas', label: '🔵 აირი', format: (p: Property) => p.amenities?.naturalGas ? '✓' : '✗' },
-    { key: 'garage', label: '🚗 ავტოფარეხი', format: (p: Property) => p.amenities?.garage ? '✓' : '✗' },
-    { key: 'security', label: '🔒 დაცვა', format: (p: Property) => p.amenities?.security ? '✓' : '✗' },
-    { key: 'pool', label: '🏊 აუზი', format: (p: Property) => p.amenities?.pool ? '✓' : '✗' },
-    { key: 'garden', label: '🌳 ბაღი', format: (p: Property) => p.amenities?.garden ? '✓' : '✗' },
+    { key: 'floor', label: t('floor'), format: (p: Property) => p.floor ? `${p.floor}${p.totalFloors ? ` / ${p.totalFloors}` : ''}` : '-' },
+    { key: 'constructionYear', label: t('construction_year'), format: (p: Property) => p.constructionYear ? p.constructionYear.toString() : '-' },
+    { key: 'renovationYear', label: t('renovation_year'), format: (p: Property) => p.renovationYear ? p.renovationYear.toString() : '-' },
+    { key: 'balcony', label: t('balcony'), format: (p: Property) => (p.balcony ?? 0) > 0 ? String(p.balcony) : '-' },
+    { key: 'bathroom', label: t('bathroom'), format: (p: Property) => p.bathroom ? p.bathroom.toString() : '-' },
+    { key: 'elevator', label: `🛗 ${t('amenity_elevator')}`, format: (p: Property) => p.amenities?.elevator ? '✓' : '✗' },
+    { key: 'furniture', label: `🛋️ ${t('amenity_furniture')}`, format: (p: Property) => p.amenities?.furniture ? '✓' : '✗' },
+    { key: 'internet', label: `📶 ${t('amenity_internet')}`, format: (p: Property) => p.amenities?.internet ? '✓' : '✗' },
+    { key: 'airConditioner', label: `❄️ ${t('amenity_airConditioner')}`, format: (p: Property) => p.amenities?.airConditioner ? '✓' : '✗' },
+    { key: 'centralHeating', label: `🔥 ${t('amenity_centralHeating')}`, format: (p: Property) => p.amenities?.centralHeating ? '✓' : '✗' },
+    { key: 'naturalGas', label: `🔵 ${t('amenity_naturalGas')}`, format: (p: Property) => p.amenities?.naturalGas ? '✓' : '✗' },
+    { key: 'garage', label: `🚗 ${t('amenity_garage')}`, format: (p: Property) => p.amenities?.garage ? '✓' : '✗' },
+    { key: 'security', label: `🔒 ${t('amenity_security')}`, format: (p: Property) => p.amenities?.security ? '✓' : '✗' },
+    { key: 'pool', label: `🏊 ${t('amenity_pool')}`, format: (p: Property) => p.amenities?.pool ? '✓' : '✗' },
+    { key: 'garden', label: `🌳 ${t('amenity_garden')}`, format: (p: Property) => p.amenities?.garden ? '✓' : '✗' },
+    { key: 'amenityTerrace', label: `🏞️ ${t('terrace')}`, format: (p: Property) => p.amenities?.terrace ? '✓' : '✗' },
     { key: 'has3d', label: t('has3d'), format: (p: Property) => (p.exteriorLink || p.interiorLink || p.threeDLink) ? '✓' : '✗' },
   ];
 
@@ -77,7 +82,7 @@ export default function ComparePage() {
         <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
           <div className="text-6xl mb-4">📊</div>
           <div className="text-lg font-medium text-slate-700 mb-2">{t('compareProperties')}</div>
-          <div className="text-slate-500 mb-4">შედარებაში არაფერია დამატებული</div>
+          <div className="text-slate-500 mb-4">{t('compare_empty')}</div>
           <Link 
             href="/" 
             className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -108,7 +113,7 @@ export default function ComparePage() {
 
       {/* დალაგების ღილაკები */}
       <div className="rounded-lg border border-slate-200 bg-white p-3 mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-sm text-slate-500 font-medium mr-1">დალაგება:</span>
+        <span className="text-sm text-slate-500 font-medium mr-1">{t('sort_by')}:</span>
         {sortOptions.map((opt) => {
           const isActive = sortKey === opt.key;
           return (
@@ -133,7 +138,7 @@ export default function ComparePage() {
             onClick={() => { setSortKey(null); setSortDir('asc'); }}
             className="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600"
           >
-            ✕ გასუფთავება
+            ✕ {t('clear_filters')}
           </button>
         )}
       </div>

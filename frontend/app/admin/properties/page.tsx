@@ -5,20 +5,21 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/api';
+import { API_BASE } from '@/lib/config';
 
 interface Property {
   _id: string;
   title: string;
-  propertyType: string;
+  type: string;
   dealType: string;
   price: number;
-  currency: string;
+  priceCurrency: string;
   city: string;
-  district: string;
-  area: number;
+  tbilisiDistrict: string;
+  sqm: number;
   status: string;
-  images: string[];
-  owner?: {
+  photos: string[];
+  userId?: {
     name: string;
     email: string;
   };
@@ -43,6 +44,7 @@ function AdminProperties() {
   const [pages, setPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [typeFilter, setTypeFilter] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -61,10 +63,10 @@ function AdminProperties() {
         page: page.toString(),
         limit: '20',
         ...(statusFilter && { status: statusFilter }),
-        ...(typeFilter && { propertyType: typeFilter })
+        ...(typeFilter && { type: typeFilter })
       });
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/properties?${params}`, {
+      const res = await fetch(`${API_BASE}/api/admin/properties?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -84,6 +86,7 @@ function AdminProperties() {
       setProperties(data.properties || []);
       setTotal(data.total || 0);
       setPages(data.pages || 1);
+      setSelectedIds([]);
     } catch (err) {
       console.error('Admin properties fetch error:', err);
       setError('სერვერთან კავშირი ვერ მოხერხდა');
@@ -93,15 +96,20 @@ function AdminProperties() {
   };
 
   const handleStatusChange = async (propertyId: string, status: string) => {
+    const reason = status === 'rejected' ? (prompt('მიუთითეთ უარყოფის მიზეზი') || '').trim() : '';
+    if (status === 'rejected' && !reason) {
+      alert('უარყოფის მიზეზი აუცილებელია');
+      return;
+    }
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/properties/${propertyId}/status`, {
+      const res = await fetch(`${API_BASE}/api/admin/properties/${propertyId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, reason })
       });
 
       if (res.ok) {
@@ -112,12 +120,39 @@ function AdminProperties() {
     }
   };
 
+  const handleBulkStatusChange = async (status: string) => {
+    if (selectedIds.length === 0) return;
+    const reason = status === 'rejected' ? (prompt('მიუთითეთ უარყოფის მიზეზი') || '').trim() : '';
+    if (status === 'rejected' && !reason) {
+      alert('უარყოფის მიზეზი აუცილებელია');
+      return;
+    }
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/properties/bulk-status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ ids: selectedIds, status, reason })
+      });
+      if (res.ok) {
+        fetchProperties();
+      } else {
+        alert('მასიური განახლება ვერ მოხერხდა');
+      }
+    } catch (_err) {
+      alert('მასიური განახლება ვერ მოხერხდა');
+    }
+  };
+
   const handleDelete = async (propertyId: string) => {
     if (!confirm('ნამდვილად გსურთ განცხადების წაშლა?')) return;
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/properties/${propertyId}`, {
+      const res = await fetch(`${API_BASE}/api/admin/properties/${propertyId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -252,11 +287,29 @@ function AdminProperties() {
           </div>
         </div>
 
+        {selectedIds.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-4 mb-6 flex items-center justify-between">
+            <p className="text-sm text-gray-700">არჩეულია {selectedIds.length} განცხადება</p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleBulkStatusChange('active')} className="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm">მასიურად დამტკიცება</button>
+              <button onClick={() => handleBulkStatusChange('rejected')} className="px-3 py-2 bg-red-100 text-red-700 rounded-lg text-sm">მასიურად უარყოფა</button>
+              <button onClick={() => setSelectedIds([])} className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">გასუფთავება</button>
+            </div>
+          </div>
+        )}
+
         {/* Properties Table */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-4">
+                  <input
+                    type="checkbox"
+                    checked={properties.length > 0 && selectedIds.length === properties.length}
+                    onChange={(e) => setSelectedIds(e.target.checked ? properties.map((p) => p._id) : [])}
+                  />
+                </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">განცხადება</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ტიპი</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ფასი</th>
@@ -268,25 +321,35 @@ function AdminProperties() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     იტვირთება...
                   </td>
                 </tr>
               ) : properties.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     განცხადებები ვერ მოიძებნა
                   </td>
                 </tr>
               ) : (
                 properties.map((property) => (
                   <tr key={property._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(property._id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedIds((prev) => [...prev, property._id]);
+                          else setSelectedIds((prev) => prev.filter((id) => id !== property._id));
+                        }}
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-16 h-12 bg-gray-200 rounded-lg overflow-hidden relative flex-shrink-0">
-                          {property.images?.[0] ? (
+                          {property.photos?.[0] ? (
                             <Image
-                              src={resolveImageUrl(property.images[0])}
+                              src={resolveImageUrl(property.photos[0])}
                               alt={property.title}
                               fill
                               className="object-cover"
@@ -297,23 +360,23 @@ function AdminProperties() {
                         </div>
                         <div>
                           <div className="font-medium text-gray-800 max-w-[200px] truncate">{property.title}</div>
-                          <div className="text-sm text-gray-500">{property.city}, {property.district}</div>
+                          <div className="text-sm text-gray-500">{property.city}, {property.tbilisiDistrict || '-'}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-gray-800">{propertyTypeNames[property.propertyType]}</div>
+                      <div className="text-gray-800">{propertyTypeNames[property.type]}</div>
                       <div className="text-sm text-gray-500">{dealTypeNames[property.dealType]}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-800">
-                        {property.price?.toLocaleString()} {property.currency}
+                        {property.price?.toLocaleString()} {property.priceCurrency}
                       </div>
-                      <div className="text-sm text-gray-500">{property.area} მ²</div>
+                      <div className="text-sm text-gray-500">{property.sqm} მ²</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-gray-800">{property.owner?.name || '-'}</div>
-                      <div className="text-sm text-gray-500">{property.owner?.email || '-'}</div>
+                      <div className="text-gray-800">{property.userId?.name || '-'}</div>
+                      <div className="text-sm text-gray-500">{property.userId?.email || '-'}</div>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[property.status] || 'bg-gray-100 text-gray-700'}`}>

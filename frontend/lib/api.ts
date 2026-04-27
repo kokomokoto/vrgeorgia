@@ -1,8 +1,7 @@
 import type { Property, User } from './types';
+import { API_BASE } from './config';
 
 export type { Property, User };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
 /**
  * Resolve an image URL:
@@ -34,7 +33,37 @@ export type LoginBody = { email: string; password: string };
 
 function getToken() {
   if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem('token');
+  const raw = window.localStorage.getItem('token');
+  const t = raw?.trim();
+  return t || null;
+}
+
+function formatApiErrorBody(json: unknown, rawText: string, status: number): string {
+  if (json && typeof json === 'object') {
+    const o = json as Record<string, unknown>;
+    if (Array.isArray(o.errors)) {
+      const parts = o.errors.map((e: unknown) => {
+        if (e && typeof e === 'object') {
+          const x = e as Record<string, unknown>;
+          return String(x.msg ?? x.message ?? JSON.stringify(e));
+        }
+        return String(e);
+      });
+      const joined = parts.filter(Boolean).join(', ');
+      if (joined) return joined;
+    }
+    if (o.errors && typeof o.errors === 'object' && !Array.isArray(o.errors)) {
+      const entries = Object.entries(o.errors as Record<string, unknown>).map(
+        ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`
+      );
+      if (entries.length) return entries.join('; ');
+    }
+    if (typeof o.message === 'string' && o.message.trim()) return o.message.trim();
+    if (o.message && typeof o.message === 'object') return JSON.stringify(o.message);
+  }
+  const trimmed = rawText?.trim();
+  if (trimmed && trimmed !== '{}') return trimmed.slice(0, 500);
+  return `HTTP ${status} — სერვერმა ცარიელი ან გაურკვეველი პასუხი დააბრუნა. შეამოწმეთ backend ლოგი და Cloudinary/MongoDB კონფიგურაცია.`;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -52,23 +81,36 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     // Network error - სერვერი არ მუშაობს
     throw new Error('სერვერთან კავშირი ვერ მოხერხდა. გთხოვთ შეამოწმოთ backend გაშვებულია თუ არა (npm start backend ფოლდერში)');
   }
-  
+
   if (!res.ok) {
     const text = await res.text();
-    // Try to parse validation errors
+    let json: unknown = null;
     try {
-      const json = JSON.parse(text);
-      if (json.errors && Array.isArray(json.errors)) {
-        const messages = json.errors.map((e: any) => e.msg || e.message || 'შეცდომა').join(', ');
-        throw new Error(messages);
-      }
-      throw new Error(json.message || text);
-    } catch (e: any) {
-      if (e.message) throw e;
-      throw new Error(text || `Request failed: ${res.status}`);
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
     }
+    // არასწორი ტოკენი + user კვლავ localStorage-ში = „ზომბი“ სესია; login/register-ის 401 არ ვარტავთ
+    if (
+      res.status === 401 &&
+      typeof window !== 'undefined' &&
+      !path.includes('/api/auth/login') &&
+      !path.includes('/api/auth/register')
+    ) {
+      window.dispatchEvent(new CustomEvent('vr-auth-unauthorized'));
+    }
+    throw new Error(formatApiErrorBody(json, text, res.status));
   }
-  return (await res.json()) as T;
+
+  const raw = await res.text();
+  if (!raw?.trim()) {
+    throw new Error('სერვერმა ცარიელი პასუხი დააბრუნა');
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    throw new Error('სერვერმა არა-JSON პასუხი დააბრუნა');
+  }
 }
 
 export async function register(body: RegisterBody) {
@@ -101,12 +143,16 @@ export type PropertyQuery = {
   hasPhotos?: string;
   minSqm?: string;
   maxSqm?: string;
-  minRooms?: string;
-  maxRooms?: string;
-  minBedrooms?: string;
-  maxBedrooms?: string;
+  minConstructionYear?: string;
+  maxConstructionYear?: string;
+  minRenovationYear?: string;
+  maxRenovationYear?: string;
+  rooms?: string[];
+  bedrooms?: string[];
   amenities?: string[]; // კომფორტი და კომუნიკაციები
   buildingProject?: string[];
+  renovationStatus?: string[];
+  balconies?: string[];
   sort?: string;
   propertyId?: string;
   lang?: string;
@@ -116,7 +162,7 @@ export async function listProperties(query: PropertyQuery) {
   const params: Record<string, string> = {};
   for (const [k, v] of Object.entries(query)) {
     if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
-    if ((k === 'tbilisiSubdistricts' || k === 'type' || k === 'dealType' || k === 'amenities' || k === 'buildingProject') && Array.isArray(v)) {
+    if ((k === 'tbilisiSubdistricts' || k === 'type' || k === 'dealType' || k === 'amenities' || k === 'buildingProject' || k === 'renovationStatus' || k === 'balconies' || k === 'rooms' || k === 'bedrooms') && Array.isArray(v)) {
       params[k] = JSON.stringify(v);
     } else {
       params[k] = String(v);

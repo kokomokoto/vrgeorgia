@@ -4,9 +4,18 @@ import { Property } from '../models/Property.js';
 import Agent from '../models/Agent.js';
 import Message from '../models/Message.js';
 import { PageView } from '../models/PageView.js';
+import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
+
+async function writeAudit(adminId, action, targetType, targetId, meta = {}) {
+  try {
+    await AdminAuditLog.create({ adminId, action, targetType, targetId: String(targetId), meta });
+  } catch (_err) {
+    // audit logging must not block main flow
+  }
+}
 
 // Admin middleware - check if user is admin
 const adminMiddleware = async (req, res, next) => {
@@ -24,8 +33,9 @@ const adminMiddleware = async (req, res, next) => {
 // Get dashboard statistics
 router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments({ role: 'user' });
+    const totalUsers = await User.countDocuments();
     const totalAgents = await Agent.countDocuments();
+    const unverifiedAgents = await Agent.countDocuments({ verified: false });
     const totalProperties = await Property.countDocuments();
     const pendingProperties = await Property.countDocuments({ status: 'pending' });
     const activeProperties = await Property.countDocuments({ status: 'active' });
@@ -40,7 +50,7 @@ router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
     
     // Get properties by type
     const propertiesByType = await Property.aggregate([
-      { $group: { _id: '$propertyType', count: { $sum: 1 } } }
+      { $group: { _id: '$type', count: { $sum: 1 } } }
     ]);
     
     // Get properties by deal type
@@ -79,6 +89,7 @@ router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
     res.json({
       totalUsers,
       totalAgents,
+      unverifiedAgents,
       totalProperties,
       pendingProperties,
       activeProperties,
@@ -147,6 +158,7 @@ router.put('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
     }
     
+    await writeAudit(req.user.id, 'user.updated', 'user', req.params.id, { role, email, phone, name });
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'განახლება ვერ მოხერხდა' });
@@ -162,8 +174,9 @@ router.delete('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
     }
     
     // Also delete user's properties
-    await Property.deleteMany({ owner: req.params.id });
+    await Property.deleteMany({ userId: req.params.id });
     
+    await writeAudit(req.user.id, 'user.deleted', 'user', req.params.id);
     res.json({ message: 'მომხმარებელი წაიშალა' });
   } catch (error) {
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
@@ -183,7 +196,7 @@ router.get('/agents', requireAuth, adminMiddleware, async (req, res) => {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
-        { agency: { $regex: search, $options: 'i' } }
+        { company: { $regex: search, $options: 'i' } }
       ];
     }
     if (verified !== undefined) {
@@ -221,6 +234,7 @@ router.put('/agents/:id/verify', requireAuth, adminMiddleware, async (req, res) 
       return res.status(404).json({ message: 'აგენტი ვერ მოიძებნა' });
     }
     
+    await writeAudit(req.user.id, verified ? 'agent.verified' : 'agent.unverified', 'agent', req.params.id);
     res.json(agent);
   } catch (error) {
     res.status(500).json({ message: 'განახლება ვერ მოხერხდა' });
@@ -236,10 +250,11 @@ router.delete('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
     }
     
     // Also update user role if linked
-    if (agent.userId) {
-      await User.findByIdAndUpdate(agent.userId, { role: 'user' });
+    if (agent.user) {
+      await User.findByIdAndUpdate(agent.user, { role: 'user' });
     }
     
+    await writeAudit(req.user.id, 'agent.deleted', 'agent', req.params.id);
     res.json({ message: 'აგენტი წაიშალა' });
   } catch (error) {
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
@@ -252,19 +267,19 @@ router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const status = req.query.status || '';
-    const propertyType = req.query.propertyType || '';
+    const type = req.query.type || req.query.propertyType || '';
     
     const query = {};
     if (status) {
       query.status = status;
     }
-    if (propertyType) {
-      query.propertyType = propertyType;
+    if (type) {
+      query.type = type;
     }
     
     const total = await Property.countDocuments(query);
     const properties = await Property.find(query)
-      .populate('owner', 'name email')
+      .populate('userId', 'name email')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
@@ -283,20 +298,43 @@ router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
 // Approve/Reject property
 router.put('/properties/:id/status', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const { status } = req.body;
-    const property = await Property.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate('owner', 'name email');
+    const { status, reason = '' } = req.body;
+    const property = await Property.findById(req.params.id).populate('userId', 'name email');
     
     if (!property) {
       return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა' });
     }
+    property.status = status;
+    property.moderationHistory = property.moderationHistory || [];
+    property.moderationHistory.push({ status, reason, adminId: req.user.id });
+    await property.save();
     
+    await writeAudit(req.user.id, 'property.status_changed', 'property', req.params.id, { status, reason });
     res.json(property);
   } catch (error) {
     res.status(500).json({ message: 'განახლება ვერ მოხერხდა' });
+  }
+});
+
+router.put('/properties/bulk-status', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const { ids = [], status, reason = '' } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0 || !status) {
+      return res.status(400).json({ message: 'მიუთითეთ ids და status' });
+    }
+
+    const properties = await Property.find({ _id: { $in: ids } });
+    for (const property of properties) {
+      property.status = status;
+      property.moderationHistory = property.moderationHistory || [];
+      property.moderationHistory.push({ status, reason, adminId: req.user.id });
+      await property.save();
+      await writeAudit(req.user.id, 'property.bulk_status_changed', 'property', property._id, { status, reason });
+    }
+
+    res.json({ ok: true, updated: properties.length });
+  } catch (error) {
+    res.status(500).json({ message: 'მასიური განახლება ვერ მოხერხდა' });
   }
 });
 
@@ -308,6 +346,7 @@ router.delete('/properties/:id', requireAuth, adminMiddleware, async (req, res) 
       return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა' });
     }
     
+    await writeAudit(req.user.id, 'property.deleted', 'property', req.params.id);
     res.json({ message: 'განცხადება წაიშალა' });
   } catch (error) {
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
@@ -336,6 +375,20 @@ router.get('/messages', requireAuth, adminMiddleware, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'შეტყობინებების მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.get('/audit-logs', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const logs = await AdminAuditLog.find()
+      .populate('adminId', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+    res.json({ logs });
+  } catch (_error) {
+    res.status(500).json({ message: 'ლოგების მიღება ვერ მოხერხდა' });
   }
 });
 

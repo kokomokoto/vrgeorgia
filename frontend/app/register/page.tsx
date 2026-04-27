@@ -40,7 +40,7 @@ export default function RegisterPage() {
           }`}
           onClick={() => setRole('user')}
         >
-          👤 {t('user') || 'მომხმარებელი'}
+          👤 {t('user')}
         </button>
         <button
           type="button"
@@ -51,14 +51,14 @@ export default function RegisterPage() {
           }`}
           onClick={() => setRole('agent')}
         >
-          🏢 {t('agent') || 'აგენტი'}
+          🏢 {t('agent')}
         </button>
       </div>
 
       <div className="mt-4 grid gap-2">
         <input
           className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-          placeholder={t('name') || 'სახელი და გვარი'}
+          placeholder={t('full_name')}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -71,7 +71,7 @@ export default function RegisterPage() {
         <div className="relative">
           <input
             className="w-full rounded-md border border-slate-200 px-3 py-2 pr-10 text-sm"
-            placeholder="პაროლი (მინ. 6 სიმბოლო)"
+            placeholder={t('password_placeholder')}
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -101,7 +101,7 @@ export default function RegisterPage() {
           <>
             <input
               className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-              placeholder={t('personalId') || 'პირადი ნომერი'}
+              placeholder={t('personalId')}
               value={personalId}
               onChange={(e) => setPersonalId(e.target.value)}
               maxLength={11}
@@ -132,7 +132,7 @@ export default function RegisterPage() {
             }
           }}
         >
-          {role === 'agent' ? (t('registerAsAgent') || 'დარეგისტრირდი აგენტად') : t('submit')}
+          {role === 'agent' ? t('registerAsAgent') : t('submit')}
         </button>
       </div>
     </div>

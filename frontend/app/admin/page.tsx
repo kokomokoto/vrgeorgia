@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/config';
 
 interface Stats {
   totalUsers: number;
   totalAgents: number;
+  unverifiedAgents: number;
   totalProperties: number;
   pendingProperties: number;
   activeProperties: number;
@@ -18,11 +20,20 @@ interface Stats {
   usersByRole: { _id: string; count: number }[];
   dailyStats: { date: string; users: number; properties: number }[];
 }
+interface AuditLog {
+  _id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  createdAt: string;
+  adminId?: { name?: string; email?: string };
+}
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -38,7 +49,7 @@ export default function AdminDashboard() {
     }
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
+      const res = await fetch(`${API_BASE}/api/admin/stats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -50,8 +61,17 @@ export default function AdminDashboard() {
 
       if (!res.ok) throw new Error('Failed to load');
 
-      const data = await res.json();
-      setStats(data);
+      const [statsData, logsRes] = await Promise.all([
+        res.json(),
+        fetch(`${API_BASE}/api/admin/audit-logs?limit=12`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+      setStats(statsData);
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        setAuditLogs(logsData.logs || []);
+      }
     } catch (err) {
       setError('მონაცემების ჩატვირთვა ვერ მოხერხდა');
     } finally {
@@ -188,7 +208,7 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-gray-500 text-sm">აგენტები</p>
                 <p className="text-3xl font-bold text-gray-800">{stats?.totalAgents || 0}</p>
-                <p className="text-gray-400 text-sm mt-1">რეგისტრირებული</p>
+                <p className="text-gray-400 text-sm mt-1">რეგისტრირებული • {stats?.unverifiedAgents || 0} ვერიფიკაციის მოლოდინში</p>
               </div>
               <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center text-2xl">
                 🏢
@@ -343,6 +363,26 @@ export default function AdminDashboard() {
               <div className="text-sm text-gray-500">{stats?.totalMessages || 0} სულ</div>
             </Link>
           </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm p-6 mt-8">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">ადმინისტრატორის ქმედებების ჟურნალი</h3>
+          {auditLogs.length === 0 ? (
+            <p className="text-sm text-gray-500">ჩანაწერები ჯერ არ არის</p>
+          ) : (
+            <div className="space-y-2">
+              {auditLogs.map((log) => (
+                <div key={log._id} className="flex items-center justify-between border-b border-gray-100 pb-2 text-sm">
+                  <div className="text-gray-700">
+                    <span className="font-medium">{log.action}</span> • {log.targetType} • {log.targetId.slice(-6)}
+                  </div>
+                  <div className="text-gray-500">
+                    {(log.adminId?.name || log.adminId?.email || 'admin')} • {new Date(log.createdAt).toLocaleString('ka-GE')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

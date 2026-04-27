@@ -2,10 +2,9 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { PageView } from '../models/PageView.js';
 import { Analyst } from '../models/Analyst.js';
+import { getJWTSecret } from '../config/jwt.js';
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_in_production';
-
 // ──── User-Agent Parser ────
 function parseUserAgent(ua = '') {
   const lowerUA = ua.toLowerCase();
@@ -67,7 +66,7 @@ function requireAnalyst(req, res, next) {
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token) return res.status(401).json({ message: 'ავტორიზაცია საჭიროა' });
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, getJWTSecret());
     if (payload.role !== 'analyst') return res.status(403).json({ message: 'მხოლოდ ანალიტიკოსებისთვის' });
     req.analyst = { id: payload.sub, username: payload.username };
     next();
@@ -173,7 +172,7 @@ router.post('/login', async (req, res) => {
     
     const token = jwt.sign(
       { sub: analyst._id, username: analyst.username, role: 'analyst' },
-      JWT_SECRET,
+      getJWTSecret(),
       { expiresIn: '24h' }
     );
     

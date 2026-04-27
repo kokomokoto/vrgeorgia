@@ -55,7 +55,7 @@ export default function ProfilePage() {
   if (!user) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-6 text-center">
-        <p className="text-slate-600 mb-4">{t('loginRequired') || 'გთხოვთ გაიაროთ ავტორიზაცია'}</p>
+        <p className="text-slate-600 mb-4">{t('loginRequired')}</p>
         <Link href="/login" className="text-blue-600 hover:underline">
           {t('login')}
         </Link>
@@ -64,14 +64,14 @@ export default function ProfilePage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('დარწმუნებული ხართ რომ გსურთ წაშლა?')) return;
+    if (!confirm(t('confirm_delete'))) return;
     
     setDeleting(id);
     try {
       await deleteProperty(id);
       setProperties((prev) => prev.filter((p) => p._id !== id));
     } catch (err: any) {
-      alert(err.message || 'წაშლა ვერ მოხერხდა');
+      alert(err.message || t('error_delete_failed'));
     } finally {
       setDeleting(null);
     }
@@ -85,7 +85,7 @@ export default function ProfilePage() {
       if (token) setAuth(token, res.user);
       setEditMode(false);
     } catch (err: any) {
-      alert(err.message || 'შენახვა ვერ მოხერხდა');
+      alert(err.message || t('error_save_failed'));
     } finally {
       setSaving(false);
     }
@@ -101,7 +101,7 @@ export default function ProfilePage() {
       const token = localStorage.getItem('token');
       if (token) setAuth(token, res.user);
     } catch (err: any) {
-      alert(err.message || 'ატვირთვა ვერ მოხერხდა');
+      alert(err.message || t('error_upload_failed'));
     } finally {
       setUploadingAvatar(false);
     }
@@ -144,7 +144,7 @@ export default function ProfilePage() {
                 </div>
               )}
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-white text-xs">{uploadingAvatar ? '...' : 'შეცვლა'}</span>
+                <span className="text-white text-xs">{uploadingAvatar ? '...' : t('changeAvatar')}</span>
               </div>
             </div>
             <input
@@ -158,17 +158,17 @@ export default function ProfilePage() {
 
           {/* ინფორმაცია */}
           <div className="flex-1">
-            <h1 className="text-xl font-bold text-slate-800 mb-4">{t('profile') || 'პროფილი'}</h1>
+            <h1 className="text-xl font-bold text-slate-800 mb-4">{t('profile')}</h1>
             
             {editMode ? (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">სახელი</label>
+                  <label className="block text-xs text-slate-500 mb-1">{t('name_label')}</label>
                   <input
                     className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    placeholder="თქვენი სახელი"
+                    placeholder={t('your_name')}
                   />
                 </div>
                 <div>
@@ -196,13 +196,13 @@ export default function ProfilePage() {
                     disabled={saving}
                     className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {saving ? '...' : (t('save') || 'შენახვა')}
+                    {saving ? '...' : t('save')}
                   </button>
                   <button
                     onClick={() => setEditMode(false)}
                     className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    {t('cancel') || 'გაუქმება'}
+                    {t('cancel')}
                   </button>
                 </div>
               </div>
@@ -210,7 +210,7 @@ export default function ProfilePage() {
               <>
                 <div className="space-y-2 text-sm">
                   {(user as any).name && (
-                    <p><span className="text-slate-500">სახელი:</span> <span className="font-medium">{(user as any).name}</span></p>
+                    <p><span className="text-slate-500">{t('name_label')}:</span> <span className="font-medium">{(user as any).name}</span></p>
                   )}
                   <p><span className="text-slate-500">{t('email')}:</span> <span className="font-medium">{user.email}</span></p>
                   {user.phone && (
@@ -223,19 +223,19 @@ export default function ProfilePage() {
                     onClick={() => setEditMode(true)}
                     className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    {t('editProfile') || 'პროფილის რედაქტირება'}
+                    {t('editProfile')}
                   </button>
                   <Link
                     href="/upload"
                     className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                   >
-                    {t('upload') || 'განცხადების დამატება'}
+                    {t('upload')}
                   </Link>
                   <button
                     onClick={logout}
                     className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
                   >
-                    {t('logout') || 'გასვლა'}
+                    {t('logout')}
                   </button>
                 </div>
               </>
@@ -247,7 +247,7 @@ export default function ProfilePage() {
       {/* ჩემი განცხადებები */}
       <div className="rounded-lg border border-slate-200 bg-white p-6">
         <h2 className="text-lg font-semibold text-slate-800 mb-4">
-          {t('myProperties') || 'ჩემი განცხადებები'} ({properties.length})
+          {t('myProperties')} ({properties.length})
         </h2>
 
         {/* ძებნა და ფილტრაცია */}
@@ -261,7 +261,7 @@ export default function ProfilePage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ძებნა სათაურით, ქალაქით ან ID-ით..."
+                placeholder={t('search_placeholder')}
                 className="w-full rounded-md border border-slate-200 pl-9 pr-3 py-2 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
               />
             </div>
@@ -270,34 +270,34 @@ export default function ProfilePage() {
               onChange={(e) => setFilterType(e.target.value)}
               className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
             >
-              <option value="">ყველა ტიპი</option>
-              <option value="apartment">🏢 ბინა</option>
-              <option value="house">🏠 კერძო სახლი</option>
-              <option value="commercial">🏪 კომერციული</option>
-              <option value="land">🌍 მიწა</option>
-              <option value="cottage">🏡 აგარაკი</option>
-              <option value="hotel">🏨 სასტუმრო</option>
-              <option value="building">🏗️ შენობა</option>
-              <option value="warehouse">📦 საწყობი</option>
-              <option value="parking">🚗 ავტოფარეხი</option>
-              <option value="business">💼 ბიზნესი</option>
+              <option value="">{t('all_types')}</option>
+              <option value="apartment">🏢 {t('apartment')}</option>
+              <option value="house">🏠 {t('house')}</option>
+              <option value="commercial">🏪 {t('commercial')}</option>
+              <option value="land">🌍 {t('land')}</option>
+              <option value="cottage">🏡 {t('cottage')}</option>
+              <option value="hotel">🏨 {t('hotel')}</option>
+              <option value="building">🏗️ {t('building')}</option>
+              <option value="warehouse">📦 {t('warehouse')}</option>
+              <option value="parking">🚗 {t('parking')}</option>
+              <option value="business">💼 {t('business')}</option>
             </select>
             <select
               value={filterDealType}
               onChange={(e) => setFilterDealType(e.target.value)}
               className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
             >
-              <option value="">ყველა გარიგება</option>
-              <option value="sale">💰 იყიდება</option>
-              <option value="rent">🔑 ქირავდება</option>
-              <option value="mortgage">🏦 გირავდება</option>
+              <option value="">{t('all_deals')}</option>
+              <option value="sale">💰 {t('deal_sale')}</option>
+              <option value="rent">🔑 {t('deal_rent')}</option>
+              <option value="mortgage">🏦 {t('deal_mortgage')}</option>
             </select>
             {(searchQuery || filterType || filterDealType) && (
               <button
                 onClick={() => { setSearchQuery(''); setFilterType(''); setFilterDealType(''); }}
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
               >
-                ✕ გასუფთავება
+                ✕ {t('clear_filters')}
               </button>
             )}
           </div>
@@ -306,28 +306,28 @@ export default function ProfilePage() {
         {/* ფილტრის შედეგი */}
         {properties.length > 0 && (searchQuery || filterType || filterDealType) && (
           <p className="text-xs text-slate-500 mb-3">
-            ნაპოვნია: {filteredProperties.length} / {properties.length}
+            {t('found_results', { count: filteredProperties.length, total: properties.length })}
           </p>
         )}
 
         {loading ? (
-          <p className="text-sm text-slate-500">იტვირთება...</p>
+          <p className="text-sm text-slate-500">{t('loading')}</p>
         ) : error ? (
           <p className="text-sm text-red-600">{error}</p>
         ) : properties.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-slate-500 mb-4">{t('noProperties') || 'თქვენ ჯერ არ გაქვთ განცხადებები'}</p>
+            <p className="text-slate-500 mb-4">{t('noProperties')}</p>
             <Link
               href="/upload"
               className="text-blue-600 hover:underline"
             >
-              {t('addFirst') || 'დაამატეთ პირველი განცხადება'}
+              {t('addFirst')}
             </Link>
           </div>
         ) : (
           <div className="space-y-4">
             {filteredProperties.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">ძებნის შედეგი ცარიელია</p>
+              <p className="text-sm text-slate-500 text-center py-4">{t('empty_search_result')}</p>
             ) : filteredProperties.map((property) => {
               // მთავარი ფოტო
               const mainPhotoIndex = property.mainPhoto || 0;
@@ -348,7 +348,7 @@ export default function ProfilePage() {
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-slate-400 text-xs">
-                      ფოტო არ არის
+                      {t('no_photo')}
                     </div>
                   )}
                 </div>
@@ -381,14 +381,14 @@ export default function ProfilePage() {
                     href={`/property/${property._id}/edit`}
                     className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
                   >
-                    {t('edit') || 'რედაქტირება'}
+                    {t('edit')}
                   </Link>
                   <button
                     onClick={() => handleDelete(property._id)}
                     disabled={deleting === property._id}
                     className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                   >
-                    {deleting === property._id ? '...' : (t('delete') || 'წაშლა')}
+                    {deleting === property._id ? '...' : t('delete')}
                   </button>
                 </div>
               </div>

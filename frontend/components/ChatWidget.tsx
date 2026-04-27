@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthProvider';
 import { useRouter } from 'next/navigation';
 import {
@@ -16,6 +17,7 @@ import {
 export default function ChatWidget() {
   const { user, token } = useAuth();
   const router = useRouter();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedUser, setSelectedUser] = useState<Conversation['user'] | null>(null);
@@ -125,7 +127,7 @@ export default function ChatWidget() {
                 <span className="text-sm font-medium truncate">{selectedUser.username || selectedUser.email}</span>
               </div>
             ) : (
-              <span className="text-sm font-semibold">შეტყობინებები</span>
+              <span className="text-sm font-semibold">{t('messages')}</span>
             )}
             <button onClick={() => setOpen(false)} className="hover:bg-blue-700 rounded-full p-1 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
@@ -138,7 +140,7 @@ export default function ChatWidget() {
             <div className="flex-1 overflow-y-auto">
               {conversations.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-sm text-slate-400">
-                  ჯერ არ გაქვთ შეტყობინებები
+                  {t('no_messages_yet')}
                 </div>
               ) : (
                 conversations.map(conv => (
@@ -175,7 +177,7 @@ export default function ChatWidget() {
             <>
               <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
                 {loading && messages.length === 0 && (
-                  <div className="flex items-center justify-center h-full text-sm text-slate-400">იტვირთება...</div>
+                  <div className="flex items-center justify-center h-full text-sm text-slate-400">{t('loading')}</div>
                 )}
                 {messages.map(msg => {
                   const senderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
@@ -201,7 +203,7 @@ export default function ChatWidget() {
                   value={text}
                   onChange={e => setText(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                  placeholder="დაწერეთ შეტყობინება..."
+                  placeholder={t('write_message')}
                   className="flex-1 text-sm border border-slate-200 rounded-full px-4 py-2 focus:outline-none focus:border-blue-400"
                 />
                 <button
@@ -221,7 +223,7 @@ export default function ChatWidget() {
       <button
         onClick={handleOpen}
         className="fixed bottom-4 right-4 z-50 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105"
-        title="ჩათი"
+        title={t('chat')}
       >
         {open ? (
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>

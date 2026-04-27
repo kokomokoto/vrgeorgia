@@ -5,6 +5,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from './AuthProvider';
 
 export function Header() {
@@ -36,60 +37,65 @@ export function Header() {
   const messagesText = mounted ? t('messages') : 'შეტყობინებები';
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <header
+      data-site-header
+      className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-zinc-800 dark:!bg-black dark:backdrop-blur-sm"
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-3">
-          <a href="/" onClick={handleLogoClick} className="text-base font-semibold text-yellow-500 cursor-pointer">
+          <a href="/" onClick={handleLogoClick} className="text-base font-semibold text-yellow-500 cursor-pointer dark:text-amber-400 dark:hover:text-amber-300">
             {appName}
           </a>
         </div>
 
         <nav className="hidden items-center gap-4 md:flex">
-          <Link href="/agents" className="text-sm flex items-center gap-1 text-slate-700 hover:text-slate-900">
+          <Link href="/agents" className="text-sm flex items-center gap-1 text-slate-700 hover:text-slate-900 dark:text-zinc-200 dark:hover:text-white">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             {agentsText}
           </Link>
-          <Link href="/upload" className="text-sm">
+          <Link href="/upload" className="text-sm text-slate-800 hover:text-blue-700 dark:text-zinc-200 dark:hover:text-amber-400">
             {uploadText}
           </Link>
-          <Link href="/favorites" className="text-sm flex items-center gap-1 text-slate-700 hover:text-red-500">
+          <Link href="/favorites" className="text-sm flex items-center gap-1 text-slate-700 hover:text-red-500 dark:text-zinc-200 dark:hover:text-red-400">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
             {favoritesText}
           </Link>
-          <Link href="/compare" className="text-sm flex items-center gap-1 text-slate-700 hover:text-blue-600">
+          <Link href="/compare" className="text-sm flex items-center gap-1 text-slate-700 hover:text-blue-600 dark:text-zinc-200 dark:hover:text-amber-400">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v18m-7-4l3-8 3 8m-5.5-2h5M16 7l3 8m-5.5 0h5L16 7z" />
             </svg>
             {compareText}
           </Link>
           {!user ? (
-            <Link href="/login" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-              ავტორიზაცია
+            <Link href="/login" className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-amber-400 dark:hover:text-amber-300">
+              {loginText}
             </Link>
           ) : (
             <>
-              <Link href="/messages" className="text-sm flex items-center gap-1 text-slate-700 hover:text-green-600">
+              <Link href="/messages" className="text-sm flex items-center gap-1 text-slate-700 hover:text-green-600 dark:text-zinc-200 dark:hover:text-green-400">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
                 {messagesText}
               </Link>
-              <Link href="/profile" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+              <Link href="/profile" className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-amber-400 dark:hover:text-amber-300">
                 {profileText}
               </Link>
             </>
           )}
+          <ThemeToggle />
           <LanguageSwitcher />
         </nav>
 
         <div className="flex items-center gap-3 md:hidden">
+          <ThemeToggle />
           <LanguageSwitcher />
           <button
-            className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+            className="rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
             onClick={() => setOpen((v) => !v)}
             aria-label="Menu"
           >
@@ -99,7 +105,7 @@ export function Header() {
       </div>
 
       {open && (
-        <div className="border-t border-slate-200 bg-white md:hidden">
+        <div className="border-t border-slate-200 bg-white md:hidden dark:border-zinc-800 dark:bg-black">
           <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3">
             <Link href="/agents" onClick={() => setOpen(false)} className="text-sm flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -124,7 +130,7 @@ export function Header() {
             </Link>
             {!user ? (
               <Link href="/login" onClick={() => setOpen(false)} className="text-sm font-medium text-blue-600">
-                ავტორიზაცია
+                {loginText}
               </Link>
             ) : (
               <>

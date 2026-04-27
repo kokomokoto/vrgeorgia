@@ -16,7 +16,7 @@ interface MapInnerProps {
 const MapInner = dynamic<MapInnerProps>(() => import('./MapInner'), { 
   ssr: false,
   loading: () => (
-    <div className="flex h-full w-full items-center justify-center bg-slate-50 text-sm text-slate-400">
+    <div className="flex h-full w-full items-center justify-center bg-slate-50 text-sm text-slate-400 dark:bg-zinc-950 dark:text-zinc-500">
       რუკა იტვირთება...
     </div>
   )
@@ -24,7 +24,7 @@ const MapInner = dynamic<MapInnerProps>(() => import('./MapInner'), {
 
 export function MapView({ properties, onPick, selectedLocation, center, zoom }: MapInnerProps) {
   return (
-    <div className="relative z-0 h-[380px] w-full overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <div className="relative z-0 h-[380px] w-full overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
       <MapInner properties={properties} onPick={onPick} selectedLocation={selectedLocation} center={center} zoom={zoom} />
     </div>
   );

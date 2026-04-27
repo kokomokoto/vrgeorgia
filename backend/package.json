@@ -7,9 +7,9 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
-    "seed": "node src/seed.js"
+    "dev": "node --import ./src/env-bootstrap.js --watch src/server.js",
+    "start": "node --import ./src/env-bootstrap.js src/server.js",
+    "seed": "node --import ./src/env-bootstrap.js src/seed.js"
   },
   "dependencies": {
     "@google-cloud/translate": "^8.5.0",

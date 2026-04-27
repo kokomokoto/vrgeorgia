@@ -7,6 +7,7 @@ import { Footer } from '@/components/Footer';
 import { AuthProvider } from '@/components/AuthProvider';
 import { CompareProvider } from '@/components/CompareProvider';
 import { PageTracker } from '@/components/PageTracker';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
   title: {
@@ -42,16 +43,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <meta name="theme-color" content="#2563eb" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var k='vr-theme';var s=localStorage.getItem(k);var d=document.documentElement;if(s==='dark')d.classList.add('dark');else if(s==='light')d.classList.remove('dark');}catch(e){}})();`,
+          }}
+        />
       </head>
       <body suppressHydrationWarning>
-        <AuthProvider>
-          <CompareProvider>
-            <PageTracker />
-            <Header />
-            <main className="mx-auto max-w-7xl px-2 sm:px-4 py-4 sm:py-6">{children}</main>
-            <Footer />
-          </CompareProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <CompareProvider>
+              <PageTracker />
+              <Header />
+              <main className="mx-auto min-h-[50vh] max-w-7xl px-2 sm:px-4 py-4 sm:py-6 dark:bg-black">
+                {children}
+              </main>
+              <Footer />
+            </CompareProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

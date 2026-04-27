@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { API_BASE } from '@/lib/config';
 
 export default function AnalyticsLoginPage() {
   const router = useRouter();
@@ -18,7 +17,7 @@ export default function AnalyticsLoginPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/analytics/login`, {
+      const res = await fetch(`${API_BASE}/api/analytics/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })

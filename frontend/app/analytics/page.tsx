@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { API_BASE } from '@/lib/config';
 
 type DashboardData = {
   totalViews: number;
@@ -120,7 +119,7 @@ export default function AnalyticsDashboard() {
   useEffect(() => {
     if (tab !== 'overview') return;
     setLoading(true);
-    authFetch(`${API_BASE}/analytics/dashboard?period=${period}`)
+    authFetch(`${API_BASE}/api/analytics/dashboard?period=${period}`)
       .then(d => { setData(d); setError(''); })
       .catch(e => { if (e.message !== 'Unauthorized') setError(e.message); })
       .finally(() => setLoading(false));
@@ -130,7 +129,7 @@ export default function AnalyticsDashboard() {
   useEffect(() => {
     if (tab !== 'visits') return;
     setLoading(true);
-    authFetch(`${API_BASE}/analytics/visits?page=${visitsPage}&limit=30`)
+    authFetch(`${API_BASE}/api/analytics/visits?page=${visitsPage}&limit=30`)
       .then(d => { setVisits(d.visits); setVisitsTotal(d.total); setError(''); })
       .catch(e => { if (e.message !== 'Unauthorized') setError(e.message); })
       .finally(() => setLoading(false));
@@ -140,7 +139,7 @@ export default function AnalyticsDashboard() {
   useEffect(() => {
     if (tab !== 'realtime') return;
     const load = () => {
-      authFetch(`${API_BASE}/analytics/realtime`)
+      authFetch(`${API_BASE}/api/analytics/realtime`)
         .then(d => { setRealtime(d); setError(''); })
         .catch(e => { if (e.message !== 'Unauthorized') setError(e.message); });
     };

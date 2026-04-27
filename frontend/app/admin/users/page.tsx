@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/config';
 
 interface User {
   _id: string;
@@ -44,7 +45,7 @@ export default function AdminUsers() {
         ...(roleFilter && { role: roleFilter })
       });
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users?${params}`, {
+      const res = await fetch(`${API_BASE}/api/admin/users?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -75,7 +76,7 @@ export default function AdminUsers() {
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/${editingUser._id}`, {
+      const res = await fetch(`${API_BASE}/api/admin/users/${editingUser._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -98,7 +99,7 @@ export default function AdminUsers() {
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}`, {
+      const res = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

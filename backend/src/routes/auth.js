@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 import { uploadAvatar } from '../services/cloudinary.js';
+import { getJWTExpiresIn, getJWTSecret } from '../config/jwt.js';
 
 const router = express.Router();
 
@@ -53,8 +54,8 @@ router.post(
       });
     }
 
-    const token = jwt.sign({ sub: user._id.toString() }, process.env.JWT_SECRET || 'dev_secret_change_in_production', {
-      expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+    const token = jwt.sign({ sub: user._id.toString() }, getJWTSecret(), {
+      expiresIn: getJWTExpiresIn()
     });
 
     res.json({ token, user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role } });
@@ -76,8 +77,8 @@ router.post(
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign({ sub: user._id.toString() }, process.env.JWT_SECRET || 'dev_secret_change_in_production', {
-      expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+    const token = jwt.sign({ sub: user._id.toString() }, getJWTSecret(), {
+      expiresIn: getJWTExpiresIn()
     });
 
     res.json({ token, user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role } });

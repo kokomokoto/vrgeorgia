@@ -2,9 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
+import { API_BASE } from './config';
 
 const SESSION_KEY = 'vrgeorgia_session';
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 function getSessionId(): string {
   if (typeof window === 'undefined') return '';
@@ -84,9 +84,9 @@ export function usePageTracking() {
         });
         if (navigator.sendBeacon) {
           const blob = new Blob([body], { type: 'application/json' });
-          navigator.sendBeacon(`${API_BASE}/analytics/duration`, blob);
+          navigator.sendBeacon(`${API_BASE}/api/analytics/duration`, blob);
         } else {
-          fetch(`${API_BASE}/analytics/duration`, {
+          fetch(`${API_BASE}/api/analytics/duration`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body,
@@ -103,7 +103,7 @@ export function usePageTracking() {
     const { propertyId, agentId } = extractIds(pathname);
 
     collectDeviceInfo().then(deviceInfo => {
-      fetch(`${API_BASE}/analytics/pageview`, {
+      fetch(`${API_BASE}/api/analytics/pageview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,7 +130,7 @@ export function usePageTracking() {
         });
         if (navigator.sendBeacon) {
           const blob = new Blob([body], { type: 'application/json' });
-          navigator.sendBeacon(`${API_BASE}/analytics/duration`, blob);
+          navigator.sendBeacon(`${API_BASE}/api/analytics/duration`, blob);
         }
       }
     };

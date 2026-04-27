@@ -119,8 +119,8 @@ export default function FavoritesPage() {
                       ${property.price.toLocaleString()}
                     </div>
                     <div className="flex gap-3 text-xs text-slate-500 mt-2">
-                      {property.sqm && <span>{property.sqm} კვ.მ</span>}
-                      {property.rooms && <span>{property.rooms} ოთახი</span>}
+                      {property.sqm && <span>{property.sqm} {t('sqm_unit_short')}</span>}
+                      {property.rooms && <span>{property.rooms} {t('rooms_short')}</span>}
                     </div>
                   </div>
                 </Link>

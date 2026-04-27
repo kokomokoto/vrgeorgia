@@ -27,10 +27,15 @@ const propertySchema = new mongoose.Schema(
     balcony: { type: Number, default: 0 },
     loggia: { type: Number, default: 0 },
     bathroom: { type: Number, default: 0 },
+    constructionYear: { type: Number, default: null },
+    renovationYear: { type: Number, default: null },
     cadastralCode: { type: String, default: '', trim: true },
+    /** true = საკადასტრო არ ჩანს სიაში/ობიექტის გვერდზე და არ მოძებნება ტექსტური q-ით */
+    cadastralHidden: { type: Boolean, default: false },
     
     // ბინის პროექტის ტიპი (მხოლოდ apartment-ისთვის)
     buildingProject: { type: String, enum: ['', 'czech', 'khrushchev', 'urban', 'lvov', 'budapest', 'kiev', 'moscow', 'new_build', 'tbilisi', 'other'], default: '' },
+    renovationStatus: { type: String, enum: ['', 'green_frame', 'white_frame', 'black_frame', 'renovated', 'to_renovate'], default: '' },
     
     // კომფორტი და კომუნიკაციები
     amenities: {
@@ -49,6 +54,8 @@ const propertySchema = new mongoose.Schema(
       fireplace: { type: Boolean, default: false },
       pool: { type: Boolean, default: false },
       garden: { type: Boolean, default: false },
+      balcony: { type: Boolean, default: false },
+      terrace: { type: Boolean, default: false },
       isolatedKitchen: { type: Boolean, default: false },
       heatingCooling: { type: Boolean, default: false }
     },
@@ -80,6 +87,15 @@ const propertySchema = new mongoose.Schema(
     },
 
     views: { type: Number, default: 0 },
+    status: { type: String, enum: ['pending', 'active', 'rejected', 'sold'], default: 'pending' },
+    moderationHistory: [
+      {
+        status: { type: String, enum: ['pending', 'active', 'rejected', 'sold'], required: true },
+        reason: { type: String, default: '' },
+        adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
 
     // პირადი ჩანაწერი - მხოლოდ მფლობელისთვის ხილული
     privateNotes: { type: String, default: '' },

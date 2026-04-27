@@ -14,7 +14,7 @@ export function LanguageSwitcher() {
 
   return (
     <select
-      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm"
+      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
       value={i18n.language}
       onChange={(e) => i18n.changeLanguage(e.target.value)}
       aria-label="Language"

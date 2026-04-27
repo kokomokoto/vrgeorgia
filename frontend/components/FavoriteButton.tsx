@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface FavoriteButtonProps {
   propertyId: string;
@@ -52,6 +53,7 @@ export function useFavorites() {
 
 export default function FavoriteButton({ propertyId, size = 'md', className = '' }: FavoriteButtonProps) {
   const [isFavorite, setIsFavorite] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     setIsFavorite(getFavorites().includes(propertyId));
@@ -91,7 +93,7 @@ export default function FavoriteButton({ propertyId, size = 'md', className = ''
           ? 'bg-red-500 text-white hover:bg-red-600' 
           : 'bg-white/90 text-slate-500 hover:bg-white hover:text-red-500'
       } shadow-md ${className}`}
-      title={isFavorite ? 'წაშლა ფავორიტებიდან' : 'დამატება ფავორიტებში'}
+      title={isFavorite ? t('removeFromFavorites') : t('addToFavorites')}
     >
       <svg 
         className={iconSizes[size]} 

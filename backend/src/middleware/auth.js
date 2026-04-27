@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { getJWTSecret } from '../config/jwt.js';
 
 export function requireAuth(req, res, next) {
   const auth = req.headers.authorization || '';
@@ -7,10 +8,21 @@ export function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ message: 'Missing token' });
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev_secret_change_in_production');
+    const payload = jwt.verify(token, getJWTSecret());
     req.user = { id: payload.sub };
     next();
-  } catch {
-    return res.status(401).json({ message: 'Invalid token' });
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'production' && err && typeof err === 'object') {
+      console.error('[requireAuth]', err.name, err.message);
+    }
+    if (err && typeof err === 'object' && err.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        message: 'სესიის ვადა გასულია. გთხოვთ ხელახლა შეხვიდეთ სისტემაში.'
+      });
+    }
+    return res.status(401).json({
+      message:
+        'სესიის ტოკენი არასწორია ან ძველია (მაგ. სერვერი გადაიტვირთა სხვა საიდუმლოთი). გამოდით სისტემიდან და ხელახლა შედით ანგარიშში.'
+    });
   }
 }

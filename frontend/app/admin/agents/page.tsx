@@ -3,16 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/config';
 
 interface Agent {
   _id: string;
   name: string;
   email: string;
   phone: string;
-  agency: string;
+  company: string;
   verified: boolean;
-  rating: number;
-  totalSales: number;
+  avgRating: number;
+  totalReviews: number;
   createdAt: string;
 }
 
@@ -46,7 +47,7 @@ export default function AdminAgents() {
         ...(verifiedFilter && { verified: verifiedFilter })
       });
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/agents?${params}`, {
+      const res = await fetch(`${API_BASE}/api/admin/agents?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -75,7 +76,7 @@ export default function AdminAgents() {
   const handleVerify = async (agentId: string, verified: boolean) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/agents/${agentId}/verify`, {
+      const res = await fetch(`${API_BASE}/api/admin/agents/${agentId}/verify`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +98,7 @@ export default function AdminAgents() {
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/agents/${agentId}`, {
+      const res = await fetch(`${API_BASE}/api/admin/agents/${agentId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -209,7 +210,7 @@ export default function AdminAgents() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-800">{agent.name}</h3>
-                      <p className="text-sm text-gray-500">{agent.agency || 'დამოუკიდებელი'}</p>
+                      <p className="text-sm text-gray-500">{agent.company || 'დამოუკიდებელი'}</p>
                     </div>
                   </div>
                   {agent.verified ? (
@@ -231,10 +232,10 @@ export default function AdminAgents() {
                     <span>📞</span> {agent.phone || '-'}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span>⭐</span> რეიტინგი: {agent.rating?.toFixed(1) || '0.0'}
+                    <span>⭐</span> რეიტინგი: {agent.avgRating?.toFixed(1) || '0.0'}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span>🏠</span> გაყიდვები: {agent.totalSales || 0}
+                    <span>📝</span> შეფასებები: {agent.totalReviews || 0}
                   </div>
                   <div className="flex items-center gap-2">
                     <span>📅</span> რეგისტრაცია: {new Date(agent.createdAt).toLocaleDateString('ka-GE')}

@@ -46,7 +46,7 @@ export default function AgentPage() {
     : null;
 
   if (loading) {
-    return <div className="text-sm text-slate-500">იტვირთება...</div>;
+    return <div className="text-sm text-slate-500">{t('loading')}</div>;
   }
 
   if (error) {
@@ -71,7 +71,7 @@ export default function AgentPage() {
           )}
           <div>
             <h1 className="text-xl font-bold text-slate-800">
-              {owner?.name || owner?.email || 'მაკლერი'}
+              {owner?.name || owner?.email || t('agent')}
             </h1>
             {owner?.phone && (
               <p className="text-sm text-slate-600 mt-1">
@@ -84,7 +84,7 @@ export default function AgentPage() {
               </p>
             )}
             <p className="text-sm text-slate-500 mt-2">
-              განცხადებები: {properties.length}
+              {t('listings')}: {properties.length}
             </p>
           </div>
         </div>
@@ -93,12 +93,12 @@ export default function AgentPage() {
       {/* განცხადებები */}
       <div>
         <h2 className="text-lg font-semibold text-slate-800 mb-4">
-          ატვირთული განცხადებები
+          {t('uploaded_listings')}
         </h2>
         
         {properties.length === 0 ? (
           <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-slate-500">
-            ამ მაკლერს ჯერ არ აქვს განცხადებები
+            {t('agent_no_listings')}
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -113,7 +113,7 @@ export default function AgentPage() {
         href="/" 
         className="inline-block text-blue-600 hover:underline text-sm"
       >
-        ← უკან მთავარ გვერდზე
+        ← {t('back_to_home')}
       </Link>
     </div>
   );

@@ -29,19 +29,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (u) setUser(JSON.parse(u));
   }, []);
 
-  const setAuth = (t: string, u: User) => {
+  const setAuth = React.useCallback((t: string, u: User) => {
     setToken(t);
     setUser(u);
     window.localStorage.setItem('token', t);
     window.localStorage.setItem('user', JSON.stringify(u));
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = React.useCallback(() => {
     setToken(null);
     setUser(null);
     window.localStorage.removeItem('token');
     window.localStorage.removeItem('user');
-  };
+  }, []);
+
+  React.useEffect(() => {
+    const onUnauthorized = () => logout();
+    window.addEventListener('vr-auth-unauthorized', onUnauthorized);
+    return () => window.removeEventListener('vr-auth-unauthorized', onUnauthorized);
+  }, [logout]);
 
   return <AuthContext.Provider value={{ user, token, setAuth, logout }}>{children}</AuthContext.Provider>;
 }

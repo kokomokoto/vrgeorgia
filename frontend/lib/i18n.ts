@@ -56,6 +56,14 @@ const resources = {
       noPhoto: 'ფოტო არ არის',
       profile: 'პროფილი',
       myProperties: 'ჩემი განცხადებები',
+      listingVisibilityLabel: 'ხილვადობა (როგორც YouTube)',
+      listingMode_public: 'საჯარო',
+      listingMode_unlisted: 'დამალული (ლინკით)',
+      listingMode_private: 'პირადი',
+      listingMode_sold: 'გაყიდული',
+      copyPrivateLink: 'კერძო ლინკის აკოპირება',
+      linkCopied: 'ლინკი დაკოპირდა',
+      all_visibilities: 'ყველა ხილვადობა',
       noProperties: 'თქვენ ჯერ არ გაქვთ განცხადებები',
       addFirst: 'დაამატეთ პირველი განცხადება',
       favorites: 'ფავორიტები',
@@ -187,6 +195,7 @@ const resources = {
       },
       // Agents
       agents: 'აგენტები',
+      services_nav: 'მომსახურება',
       noAgents: 'აგენტები ვერ მოიძებნა',
       reviews: 'შეფასებები',
       yearsExperience: 'წლის გამოცდილება',
@@ -200,6 +209,36 @@ const resources = {
       reviewPlaceholder: 'დაწერეთ კომენტარი...',
       submitReview: 'გაგზავნა',
       noReviews: 'შეფასებები ჯერ არ არის',
+      // Services — არქიტექტურა, პროექტირება, დიზაინი
+      services_pageTitle: 'არქიტექტურული მომსახურება',
+      services_pageLead:
+        'ქვემოთ მოცემულია მიმართულებები, რომლებიც ეხება პროექტირებას, გეგმარებას, ინტერიერის დიზაინს, ვიზუალიზაციას და მშენებლობისწინა მზადებას — ერთი სივრციდან შეგიძლიათ გაეცნოთ სერვისების სპექტრს.',
+      services_section_arch_title: 'არქიტექტურული პროექტირება',
+      services_section_arch_body:
+        'კერძო სახლის, ბინის, კომერციული ობიექტისა და საჯარო დანიშნულების შენობების იდეის განვითარება, მოცულობითი გადაწყვეტა, ფასადის კონცეფცია, არქიტექტურული ნახაზები და ესკიზები.',
+      services_section_docs_title: 'სამშენებლო დოკუმენტაცია და ტექნიკური პროექტი',
+      services_section_docs_body:
+        'პროექტის სრული ან ეტაპობრივი ნაკვეთი, ტექნიკური პასპორტი, არსებულ შენობაზე ცვლილებები, ნებართვებთან შესაბამისობა და კოორდინაცია სპეციალისტებთან.',
+      services_section_planning_title: 'გეგმარება და ტერიტორიის ანალიზი',
+      services_section_planning_body:
+        'ნაკვეთის პოტენციალი, ზონირება და შეზღუდვები, სიმძლავრე, ფუნქციური განაწილება, იდეის შემოწმება ინვესტიციამდე ან შესყიდვამდე.',
+      services_section_interior_title: 'ინტერიერის დიზაინი',
+      services_section_interior_body:
+        'განლაგება, მასალებისა და ფერების პალიტრა, ავეჯის კონცეფცია, განათება, სანტექნიკა და ელექტრობა ერთი სტილის ფარგლებში, მშენებლობის ეტაპზე ზედამხედველობა.',
+      services_section_landscape_title: 'ლანდშაფტის არქიტექტურა',
+      services_section_landscape_body:
+        'ეზოს პროექტი, მწვანე ზონები, შემოსასვლელი, ტერასა, საფეხური და გარე განათება — ფუნქციისა და ესთეტიკის ბალანსი.',
+      services_section_vis_title: 'ვიზუალიზაცია, 3D და ვირტუალური ტური',
+      services_section_vis_body:
+        'ფოტორეალისტული რენდერები, ანიმაცია, ვირტუალური გასეირნება, ინვესტორის ან მყიდველისთვის პრეზენტაცია.',
+      services_section_heritage_title: 'რეკონსტრუქცია, გაძლიერება და მემკვიდრეობა',
+      services_section_heritage_body:
+        'არსებული კონსტრუქციის შეფასება, გამაგრება, ფუნქციის შეცვლა, ისტორიული ფასადის შენარჩუნება და ადაპტაცია თანამედროვე მოთხოვნებზე.',
+      services_section_consult_title: 'კონსულტაცია',
+      services_section_consult_body:
+        'ერთჯერადი შეხვედრა ან ონლაინ ზარი: ბიუჯეტი, ეტაპები, კონტრაქტორის არჩევა, რისკები და რეგულაციების მოკლე მიმოხილვა.',
+      services_footer_note:
+        'VR Georgia უძრავი ქონების განცხადებების პლატფორმაა; აღნიშნული მომსახურებების მიწოდება ხდება პროფესიონალებთან პირდაპირი შეთანხმებით.',
       // Mortgage Calculator
       mortgageCalculator: 'იპოთეკის კალკულატორი',
       propertyPrice: 'უძრავი ქონების ფასი',
@@ -239,6 +278,9 @@ const resources = {
       // UI general
       categories: 'კატეგორიები',
       map: 'რუკა',
+      map_open_full_view: 'სრული ხედი',
+      map_full_view_title: 'ძიება რუკაზე',
+      map_close_full: 'დახურვა',
       found: 'ნაპოვნია',
       objects: 'ობიექტი',
       page_of: 'გვერდი',
@@ -630,6 +672,14 @@ const resources = {
       noPhoto: 'No photo',
       profile: 'Profile',
       myProperties: 'My Properties',
+      listingVisibilityLabel: 'Visibility (like YouTube)',
+      listingMode_public: 'Public',
+      listingMode_unlisted: 'Unlisted (link only)',
+      listingMode_private: 'Private',
+      listingMode_sold: 'Sold',
+      copyPrivateLink: 'Copy private link',
+      linkCopied: 'Link copied',
+      all_visibilities: 'All visibilities',
       noProperties: 'You have no properties yet',
       addFirst: 'Add your first property',
       favorites: 'Favorites',
@@ -757,6 +807,7 @@ const resources = {
       },
       // Agents
       agents: 'Agents',
+      services_nav: 'Services',
       noAgents: 'No agents found',
       reviews: 'Reviews',
       yearsExperience: 'years experience',
@@ -770,6 +821,36 @@ const resources = {
       reviewPlaceholder: 'Write your review...',
       submitReview: 'Submit',
       noReviews: 'No reviews yet',
+      // Services — architecture & design
+      services_pageTitle: 'Architecture & design services',
+      services_pageLead:
+        'Below is an overview of areas related to design, planning, interior design, visualization, and pre-construction preparation — so you can see the full spectrum of professional support in one place.',
+      services_section_arch_title: 'Architectural design',
+      services_section_arch_body:
+        'Concept development for houses, apartments, commercial buildings, and public facilities: massing, façade concept, drawings, and design development.',
+      services_section_docs_title: 'Construction documentation & technical design',
+      services_section_docs_body:
+        'Full or phased drawing packages, technical passports, alterations to existing buildings, compliance with permits, and coordination with engineers.',
+      services_section_planning_title: 'Planning & site analysis',
+      services_section_planning_body:
+        'Site potential, zoning and constraints, capacity, functional layout, and feasibility checks before purchase or investment.',
+      services_section_interior_title: 'Interior design',
+      services_section_interior_body:
+        'Layouts, materials and colour palettes, furniture concept, lighting, sanitary and electrical coordination in one style, and site supervision during build-out.',
+      services_section_landscape_title: 'Landscape architecture',
+      services_section_landscape_body:
+        'Garden design, green zones, entrances, terraces, paths, and outdoor lighting — balancing function and aesthetics.',
+      services_section_vis_title: 'Visualization, 3D & virtual tours',
+      services_section_vis_body:
+        'Photorealistic renders, animation, walkthroughs, and presentations for investors or buyers.',
+      services_section_heritage_title: 'Renovation, strengthening & heritage',
+      services_section_heritage_body:
+        'Assessment of existing structures, strengthening, change of use, retention of historic façades, and adaptation to modern requirements.',
+      services_section_consult_title: 'Consulting',
+      services_section_consult_body:
+        'One-off meeting or online call: budget, phasing, contractor selection, risks, and a concise overview of regulations.',
+      services_footer_note:
+        'VR Georgia is a real-estate listings platform; delivery of these services is agreed directly with qualified professionals.',
       // Mortgage Calculator
       mortgageCalculator: 'Mortgage Calculator',
       propertyPrice: 'Property Price',
@@ -809,6 +890,9 @@ const resources = {
       // UI general
       categories: 'Categories',
       map: 'Map',
+      map_open_full_view: 'Full map view',
+      map_full_view_title: 'Search on map',
+      map_close_full: 'Close',
       found: 'Found',
       objects: 'properties',
       page_of: 'page',
@@ -1218,6 +1302,14 @@ const resources = {
       parking: 'Парковка',
       profile: 'Профиль',
       myProperties: 'Мои объявления',
+      listingVisibilityLabel: 'Видимость (как на YouTube)',
+      listingMode_public: 'Публично',
+      listingMode_unlisted: 'По ссылке',
+      listingMode_private: 'Приватно',
+      listingMode_sold: 'Продано',
+      copyPrivateLink: 'Копировать приватную ссылку',
+      linkCopied: 'Ссылка скопирована',
+      all_visibilities: 'Вся видимость',
       noProperties: 'У вас пока нет объявлений',
       addFirst: 'Добавьте первое объявление',
       edit: 'Редактировать',
@@ -1317,6 +1409,7 @@ const resources = {
       },
       // Agents
       agents: 'Агенты',
+      services_nav: 'Услуги',
       noAgents: 'Агенты не найдены',
       reviews: 'Отзывы',
       yearsExperience: 'лет опыта',
@@ -1330,6 +1423,36 @@ const resources = {
       reviewPlaceholder: 'Напишите отзыв...',
       submitReview: 'Отправить',
       noReviews: 'Отзывов пока нет',
+      // Services — архитектура и дизайн
+      services_pageTitle: 'Архитектурные услуги',
+      services_pageLead:
+        'Ниже — направления, связанные с проектированием, планировкой, дизайном интерьера, визуализацией и подготовкой к строительству: обзор спектра услуг на одной странице.',
+      services_section_arch_title: 'Архитектурное проектирование',
+      services_section_arch_body:
+        'Концепция для частных и многоквартирных домов, коммерческих и общественных зданий: объёмно-планировочное решение, фасад, архитектурные чертежи и эскизы.',
+      services_section_docs_title: 'Строительная документация и техпроект',
+      services_section_docs_body:
+        'Полный или поэтапный комплект чертежей, технический паспорт, перепланировки, согласование с разрешениями и координация со смежными специалистами.',
+      services_section_planning_title: 'Планирование и анализ участка',
+      services_section_planning_body:
+        'Потенциал участка, зонирование и ограничения, вместимость, функциональное зонирование, проверка идеи до покупки или инвестиций.',
+      services_section_interior_title: 'Дизайн интерьера',
+      services_section_interior_body:
+        'Планировки, материалы и палитра, концепция мебели, освещение, сантехника и электрика в едином стиле, авторский надзор на этапе отделки.',
+      services_section_landscape_title: 'Ландшафтная архитектура',
+      services_section_landscape_body:
+        'Проект двора, озеленение, входные группы, террасы, дорожки и наружное освещение — баланс функции и эстетики.',
+      services_section_vis_title: 'Визуализация, 3D и виртуальные туры',
+      services_section_vis_body:
+        'Фотореалистичные рендеры, анимация, виртуальные прогулки и презентации для инвесторов или покупателей.',
+      services_section_heritage_title: 'Реконструкция, усиление и наследие',
+      services_section_heritage_body:
+        'Обследование несущих конструкций, усиление, смена назначения, сохранение исторических фасадов и адаптация к современным требованиям.',
+      services_section_consult_title: 'Консультации',
+      services_section_consult_body:
+        'Разовая встреча или онлайн-звонок: бюджет, этапы, выбор подрядчика, риски и краткий обзор нормативов.',
+      services_footer_note:
+        'VR Georgia — платформа объявлений о недвижимости; оказание перечисленных услуг согласуется напрямую с квалифицированными специалистами.',
       // Mortgage Calculator
       mortgageCalculator: 'Ипотечный калькулятор',
       propertyPrice: 'Цена недвижимости',
@@ -1369,6 +1492,9 @@ const resources = {
       // UI general
       categories: 'Категории',
       map: 'Карта',
+      map_open_full_view: 'Полный вид',
+      map_full_view_title: 'Поиск на карте',
+      map_close_full: 'Закрыть',
       found: 'Найдено',
       objects: 'объектов',
       page_of: 'страница',

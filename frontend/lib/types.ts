@@ -79,6 +79,11 @@ export type Property = {
   userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string };
   views?: number;
   createdAt?: string;
+  status?: 'pending' | 'active' | 'rejected' | 'sold';
+  /** საჯარო სია: public | unlisted (ლინკით) | private (მხოლოდ მფლობელი) */
+  listingVisibility?: 'public' | 'unlisted' | 'private';
+  /** მხოლოდ მფლობლისთვის (unlisted ლინკის ასლი) */
+  shareToken?: string;
 };
 
 export type User = { id: string; _id?: string; email: string; phone?: string; avatar?: string; name?: string; role?: 'user' | 'agent' | 'admin' };

@@ -1,5 +1,6 @@
 import express from 'express';
 import { body, param, query, validationResult } from 'express-validator';
+import { nanoid } from 'nanoid';
 
 import { Property } from '../models/Property.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -55,6 +56,18 @@ function stripHiddenCadastral(p) {
   const { cadastralCode, cadastralHidden, ...rest } = p;
   return rest;
 }
+
+/** საჯარო სიისთვის: აქტიური/მოდერაციაში + საჯარო ხილვადობა */
+const PUBLIC_STATUS_OR = {
+  $or: [
+    { status: 'active' },
+    { status: 'pending' },
+    { status: { $exists: false } },
+  ],
+};
+const PUBLIC_LISTING_OR = {
+  $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
+};
 
 // CREATE (protected) - multipart with photos
 router.post(
@@ -241,14 +254,9 @@ router.get(
 
     const lang = pickLanguage(req);
 
-    // Backward compatibility:
-    // legacy properties may not have `status` set yet, treat them as active for public listing.
+    // საჯარო სია: სტატუსი + listingVisibility (არ ჩანს private/unlisted/gsold)
     const filter = {
-      $or: [
-        { status: 'active' },
-        { status: 'pending' },
-        { status: { $exists: false } }
-      ]
+      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }],
     };
 
     // ტექსტური ძიება - ეძებს ყველა ველში
@@ -256,7 +264,7 @@ router.get(
       const q = req.query.q.trim();
       const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = { $regex: escaped, $options: 'i' };
-      filter.$or = [
+      const textOr = [
         { title: regex },
         { desc: regex },
         { city: regex },
@@ -280,7 +288,7 @@ router.get(
       // რიცხვითი ძიება (ID, ფასი, ფართობი, ოთახები)
       const num = Number(q);
       if (!isNaN(num) && num > 0) {
-        filter.$or.push(
+        textOr.push(
           { numericId: num },
           { price: num },
           { sqm: num },
@@ -288,6 +296,7 @@ router.get(
           { bedrooms: num }
         );
       }
+      filter.$and.push({ $or: textOr });
     }
     // type შეიძლება იყოს მასივი (მრავალი კატეგორიის არჩევა)
     if (req.query.type) {
@@ -456,12 +465,13 @@ router.get(
 
     if (req.query.has3d === 'true') {
       // 3D აქვს თუ ერთი მაინც ლინკიდანაა შევსებული
-      filter.$or = filter.$or || [];
-      filter.$or.push(
-        { threeDLink: { $ne: '' } },
-        { exteriorLink: { $ne: '' } },
-        { interiorLink: { $ne: '' } }
-      );
+      filter.$and.push({
+        $or: [
+          { threeDLink: { $ne: '' } },
+          { exteriorLink: { $ne: '' } },
+          { interiorLink: { $ne: '' } },
+        ],
+      });
     }
     if (req.query.has3d === 'false') {
       // 3D არ აქვს თუ არცერთი ლინკი არ არის
@@ -471,7 +481,11 @@ router.get(
     }
 
     if (req.query.hasPhotos === 'true') filter.photos = { $exists: true, $ne: [] };
-    if (req.query.hasPhotos === 'false') filter.$or = [{ photos: { $exists: false } }, { photos: { $size: 0 } }];
+    if (req.query.hasPhotos === 'false') {
+      filter.$and.push({
+        $or: [{ photos: { $exists: false } }, { photos: { $size: 0 } }],
+      });
+    }
 
     // კომფორტი და კომუნიკაციების ფილტრაცია
     if (req.query.amenities) {
@@ -546,7 +560,7 @@ router.get(
     const properties = await Property.find(filter).sort(sortOption).limit(200).lean();
 
     const translated = properties.map((p) => {
-      const { privateNotes, ...safe } = applyTranslation(p, lang);
+      const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
       return stripHiddenCadastral(safe);
     });
     res.json({ properties: translated });
@@ -562,12 +576,15 @@ router.get(
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const lang = pickLanguage(req);
-    const properties = await Property.find({ userId: req.params.userId })
+    const properties = await Property.find({
+      userId: req.params.userId,
+      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }],
+    })
       .sort({ createdAt: -1 })
       .lean();
 
     const translated = properties.map((p) => {
-      const { privateNotes, ...safe } = applyTranslation(p, lang);
+      const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
       return stripHiddenCadastral(safe);
     });
     res.json({ properties: translated });
@@ -577,7 +594,10 @@ router.get(
 // GET by id (and optionally translate)
 router.get(
   '/:id',
-  [param('id').isString().trim().isLength({ min: 5 })],
+  [
+    param('id').isString().trim().isLength({ min: 5 }),
+    query('t').optional({ values: 'falsy' }).isString().trim().isLength({ min: 8, max: 64 }),
+  ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -604,16 +624,41 @@ router.get(
       } catch (_) {}
     }
     const ownerIdStr = property.userId?._id?.toString() || property.userId?.toString();
-    const canViewNonActive = !!requestUserId && requestUserId === ownerIdStr;
-    const isPubliclyVisible =
-      property.status === 'active' ||
-      property.status === 'pending' ||
-      property.status === undefined;
-    if (!canViewNonActive && !isPubliclyVisible) {
-      return res.status(404).json({ message: 'Not found' });
+    const isOwner = !!requestUserId && requestUserId === ownerIdStr;
+    const shareParam = (req.query.t || '').toString().trim();
+    const listingVisibility = property.listingVisibility || 'public';
+
+    if (!isOwner) {
+      if (property.status === 'rejected') {
+        return res.status(404).json({ message: 'Not found' });
+      }
+      if (property.status === 'sold') {
+        return res.status(404).json({ message: 'Not found' });
+      }
+      if (listingVisibility === 'private') {
+        return res.status(404).json({ message: 'Not found' });
+      }
+      if (listingVisibility === 'unlisted') {
+        const tokenOk =
+          property.shareToken &&
+          shareParam &&
+          shareParam === property.shareToken;
+        if (!tokenOk) {
+          return res.status(404).json({ message: 'Not found' });
+        }
+      }
+      const isPubliclyVisible =
+        property.status === 'active' ||
+        property.status === 'pending' ||
+        property.status === undefined;
+      if (listingVisibility === 'public' && !isPubliclyVisible) {
+        return res.status(404).json({ message: 'Not found' });
+      }
     }
-    if (!requestUserId || requestUserId !== ownerIdStr) {
+
+    if (!isOwner) {
       delete property.privateNotes;
+      delete property.shareToken;
       if (property.cadastralHidden) {
         delete property.cadastralCode;
         delete property.cadastralHidden;
@@ -647,7 +692,8 @@ router.put(
     body('contactEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('photos').optional().isArray(),
     body('mainPhoto').optional().isInt({ min: 0 }),
-    body('cadastralHidden').optional().isBoolean()
+    body('cadastralHidden').optional().isBoolean(),
+    body('brokerListingMode').optional().isIn(['public', 'unlisted', 'private', 'sold'])
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -693,7 +739,41 @@ router.put(
       };
     }
 
-    const updated = await Property.findByIdAndUpdate(req.params.id, patch, { new: true }).lean();
+    let unsetShareToken = false;
+    if (req.body.brokerListingMode !== undefined) {
+      const mode = req.body.brokerListingMode;
+      if (mode === 'sold') {
+        patch.status = 'sold';
+      } else {
+        if (existing.status === 'sold') {
+          patch.status = 'active';
+        }
+        if (mode === 'public') {
+          patch.listingVisibility = 'public';
+          unsetShareToken = true;
+        } else if (mode === 'unlisted') {
+          patch.listingVisibility = 'unlisted';
+          if (!existing.shareToken) {
+            patch.shareToken = nanoid(16);
+          }
+        } else if (mode === 'private') {
+          patch.listingVisibility = 'private';
+          unsetShareToken = true;
+        }
+      }
+    }
+
+    if (unsetShareToken) delete patch.shareToken;
+    const mongoUpdate = {};
+    if (Object.keys(patch).length > 0) mongoUpdate.$set = patch;
+    if (unsetShareToken) mongoUpdate.$unset = { shareToken: '' };
+
+    if (Object.keys(mongoUpdate).length === 0) {
+      const fresh = await Property.findById(req.params.id).lean();
+      return res.json({ property: fresh });
+    }
+
+    const updated = await Property.findByIdAndUpdate(req.params.id, mongoUpdate, { new: true }).lean();
     res.json({ property: updated });
   }
 );

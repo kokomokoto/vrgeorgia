@@ -65,6 +65,20 @@ const DEAL_TYPES = [
   { value: 'mortgage', key: 'deal_mortgage', icon: '🏦' },
 ];
 
+/** სრული რუკის sidebar — იგივე კატეგორიები, რაც მთავარ გვერდზე */
+const PROPERTY_TYPE_CHIPS = [
+  { value: 'apartment', key: 'apartment', icon: '🏢' },
+  { value: 'house', key: 'house', icon: '🏠' },
+  { value: 'commercial', key: 'commercial', icon: '🏪' },
+  { value: 'land', key: 'land', icon: '🌍' },
+  { value: 'cottage', key: 'cottage', icon: '🏡' },
+  { value: 'hotel', key: 'hotel', icon: '🏨' },
+  { value: 'building', key: 'building', icon: '🏗️' },
+  { value: 'warehouse', key: 'warehouse', icon: '📦' },
+  { value: 'parking', key: 'parking', icon: '🚗' },
+  { value: 'business', key: 'business', icon: '💼' },
+];
+
 export type FiltersState = {
   q: string;
   minPrice: string;
@@ -95,6 +109,9 @@ export type FiltersState = {
   propertyId: string;
 };
 
+/** mapSidebar: ჩამოსაშლელები document flow-ში — არ იჭრება overflow-y aside-ში */
+const FilterDropdownLayoutContext = React.createContext<{ inline: boolean }>({ inline: false });
+
 // Dropdown wrapper component
 function FilterDropdown({ label, summary, children, isActive }: {
   label: string;
@@ -102,6 +119,7 @@ function FilterDropdown({ label, summary, children, isActive }: {
   children: React.ReactNode;
   isActive: boolean;
 }) {
+  const { inline } = React.useContext(FilterDropdownLayoutContext);
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -114,6 +132,10 @@ function FilterDropdown({ label, summary, children, isActive }: {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  const panelClass = inline
+    ? 'relative z-10 mt-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900'
+    : 'absolute top-full left-0 right-0 z-30 mt-1 min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40';
 
   return (
     <div ref={ref} className="relative">
@@ -134,16 +156,21 @@ function FilterDropdown({ label, summary, children, isActive }: {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && (
-        <div className="absolute top-full left-0 right-0 z-30 mt-1 rounded-lg border border-slate-200 bg-white p-3 shadow-lg min-w-[280px] dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40">
-          {children}
-        </div>
-      )}
+      {open && <div className={panelClass}>{children}</div>}
     </div>
   );
 }
 
-export function Filters({ value, onChange }: { value: FiltersState; onChange: (v: FiltersState) => void }) {
+export function Filters({
+  value,
+  onChange,
+  variant = 'default'
+}: {
+  value: FiltersState;
+  onChange: (v: FiltersState) => void;
+  /** mapSidebar: სრული რუკის მარცხენა სვეტი — ფილტრები ყოველთვის ხილული, ბადე ვიწრო სვეტისთვის, dropdown-ები inline */
+  variant?: 'default' | 'mapSidebar';
+}) {
   const { t } = useTranslation();
   const [mounted, setMounted] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -274,30 +301,45 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
     value.maxRenovationYear
   );
 
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900" suppressHydrationWarning>
-      {/* მობაილზე - ჩამოსაშლელი ღილაკი */}
-      <button
-        type="button"
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
-      >
-        <div className="flex items-center gap-2">
-          <span>🔍</span>
-          <span>{labels.filters}</span>
-          {activeFilterCount > 0 && (
-            <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center dark:bg-amber-500 dark:text-black">
-              {activeFilterCount}
-            </span>
-          )}
-        </div>
-        <svg className={`w-5 h-5 text-slate-400 transition-transform ${mobileOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+  const mapSidebar = variant === 'mapSidebar';
 
-      {/* ფილტრების კონტენტი - მობაილზე ჩამოსაშლელი, დესკტოპზე ყოველთვის ჩანს */}
-      <div className={`${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`}>
+  return (
+    <FilterDropdownLayoutContext.Provider value={{ inline: mapSidebar }}>
+    <div
+      className={`rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900 ${
+        mapSidebar ? '!rounded-none border-0 bg-transparent p-0 shadow-none md:p-0' : ''
+      }`}
+      suppressHydrationWarning
+    >
+      {/* მობაილზე — მთავარი გვერდი; mapSidebar-ზე ფილტრები ყოველთვის ხილულია */}
+      {!mapSidebar && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
+        >
+          <div className="flex items-center gap-2">
+            <span>🔍</span>
+            <span>{labels.filters}</span>
+            {activeFilterCount > 0 && (
+              <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center dark:bg-amber-500 dark:text-black">
+                {activeFilterCount}
+              </span>
+            )}
+          </div>
+          <svg className={`w-5 h-5 text-slate-400 transition-transform ${mobileOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
+
+      <div
+        className={
+          mapSidebar
+            ? 'block'
+            : `${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`
+        }
+      >
       {/* გარიგების ტიპი - მრავალჯერადი არჩევა */}
       <div className="flex flex-wrap gap-2 mb-4">
         {DEAL_TYPES.map((dt) => {
@@ -325,6 +367,42 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
         })}
       </div>
 
+      {mapSidebar && (
+        <div className="mb-4">
+          <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+            {t('categories')}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {PROPERTY_TYPE_CHIPS.map((cat) => {
+              const isSelected = value.type.includes(cat.value);
+              return (
+                <button
+                  key={cat.value}
+                  type="button"
+                  title={t(cat.key)}
+                  onClick={() => {
+                    onChange({
+                      ...value,
+                      type: isSelected
+                        ? value.type.filter((x) => x !== cat.value)
+                        : [...value.type, cat.value]
+                    });
+                  }}
+                  className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-all ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-amber-500 dark:bg-amber-950/50 dark:text-amber-300'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-500'
+                  }`}
+                >
+                  <span className="text-sm">{cat.icon}</span>
+                  <span className="max-w-[5.5rem] truncate">{t(cat.key)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ძიება (ტექსტი ან ID) */}
       <div className="relative mb-3">
         <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -346,8 +424,14 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
         />
       </div>
 
-      {/* ფილტრები კომპაქტურად */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 mb-3">
+      {/* ფილტრები კომპაქტურად — mapSidebar: ვიწრო სვეტი, არა viewport lg:grid-cols-5 (იჭრებოდა) */}
+      <div
+        className={
+          mapSidebar
+            ? 'mb-3 grid grid-cols-1 gap-2'
+            : 'mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5'
+        }
+      >
         {/* ფასი dropdown */}
         <FilterDropdown label={t('filter_price')} summary={priceSummary()} isActive={priceActive}>
           <div className="space-y-3">
@@ -858,5 +942,6 @@ export function Filters({ value, onChange }: { value: FiltersState; onChange: (v
       </FilterDropdown>
       </div>
     </div>
+    </FilterDropdownLayoutContext.Provider>
   );
 }

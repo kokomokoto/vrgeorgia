@@ -172,9 +172,16 @@ export async function listProperties(query: PropertyQuery) {
   return request<{ properties: Property[] }>(`/api/properties${qs ? `?${qs}` : ''}`);
 }
 
-export async function getProperty(id: string, lang?: string) {
-  const qs = lang ? `?lang=${encodeURIComponent(lang)}` : '';
-  return request<{ property: Property }>(`/api/properties/${id}${qs}`);
+export async function getProperty(
+  id: string,
+  lang?: string,
+  opts?: { shareToken?: string }
+) {
+  const params = new URLSearchParams();
+  if (lang) params.set('lang', lang);
+  if (opts?.shareToken) params.set('t', opts.shareToken);
+  const q = params.toString();
+  return request<{ property: Property }>(`/api/properties/${id}${q ? `?${q}` : ''}`);
 }
 
 export async function createProperty(form: FormData) {
@@ -188,7 +195,12 @@ export async function getMyProperties() {
   return request<{ properties: Property[] }>('/api/properties/user/my');
 }
 
-export async function updateProperty(id: string, data: Partial<Property>) {
+export async function updateProperty(
+  id: string,
+  data: Partial<Property> & {
+    brokerListingMode?: 'public' | 'unlisted' | 'private' | 'sold';
+  }
+) {
   return request<{ property: Property }>(`/api/properties/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data)

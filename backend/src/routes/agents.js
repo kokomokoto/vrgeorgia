@@ -61,12 +61,29 @@ router.get('/:id/properties', async (req, res) => {
     const { page = 1, limit = 12 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
+    const publicAgentFilter = {
+      agentId: req.params.id,
+      $and: [
+        {
+          $or: [
+            { status: 'active' },
+            { status: 'pending' },
+            { status: { $exists: false } },
+          ],
+        },
+        {
+          $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
+        },
+      ],
+    };
+
     const [properties, total] = await Promise.all([
-      Property.find({ agentId: req.params.id })
+      Property.find(publicAgentFilter)
+        .select('-privateNotes -shareToken')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
-      Property.countDocuments({ agentId: req.params.id })
+      Property.countDocuments(publicAgentFilter),
     ]);
     
     res.json({ properties, total, page: parseInt(page), totalPages: Math.ceil(total / limit) });

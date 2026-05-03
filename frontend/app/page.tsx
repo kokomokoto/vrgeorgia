@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 
 import { listProperties } from '@/lib/api';
+import { buildMapHref } from '@/lib/mapQuery';
 import type { Property } from '@/lib/types';
 import { Filters, type FiltersState } from '@/components/Filters';
 import { MapView } from '@/components/MapView';
@@ -249,29 +251,43 @@ export default function HomePage() {
       
       {/* რუკა - მობაილზე ჩამოსაშლელი */}
       <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
-        <button
-          type="button"
-          onClick={() => setMapOpen(!mapOpen)}
-          className="w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
-        >
-          <div className="flex items-center gap-2">
-            <span>🗺️</span>
-            <span>{tr('map', 'რუკა')}</span>
-          </div>
-          <svg className={`w-5 h-5 text-slate-400 transition-transform ${mapOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setMapOpen(!mapOpen)}
+            className="flex min-w-0 flex-1 items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
+          >
+            <div className="flex items-center gap-2">
+              <span>🗺️</span>
+              <span>{tr('map', 'რუკა')}</span>
+            </div>
+            <svg className={`w-5 h-5 shrink-0 text-slate-400 transition-transform ${mapOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <Link
+            href={buildMapHref(filters, sortBy)}
+            className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400"
+          >
+            {tr('map_open_full_view', 'სრული ხედი')}
+          </Link>
+        </div>
         {mapOpen && (
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700">
-            <MapView properties={properties} />
+          <div className="mt-3 border-t border-slate-100 pt-3 dark:border-zinc-700">
+            <MapView properties={properties} richHoverTooltips />
           </div>
         )}
       </div>
 
       {/* რუკა - დესკტოპზე ყოველთვის ჩანს */}
-      <div className="hidden md:block">
-        <MapView properties={properties} />
+      <div className="relative hidden md:block">
+        <Link
+          href={buildMapHref(filters, sortBy)}
+          className="absolute right-3 top-3 z-[400] rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-md ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-zinc-900 dark:text-amber-400 dark:ring-zinc-600 dark:hover:bg-zinc-800"
+        >
+          {tr('map_open_full_view', 'სრული ხედი')}
+        </Link>
+        <MapView properties={properties} richHoverTooltips />
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200">{error}</div>}

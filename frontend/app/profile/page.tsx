@@ -6,8 +6,15 @@ import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
-import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl } from '@/lib/api';
+import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty } from '@/lib/api';
 import type { Property } from '@/lib/types';
+
+type BrokerListingMode = 'public' | 'unlisted' | 'private' | 'sold';
+
+function brokerListingModeFromProperty(p: Property): BrokerListingMode {
+  if (p.status === 'sold') return 'sold';
+  return p.listingVisibility || 'public';
+}
 
 export default function ProfilePage() {
   const { t } = useTranslation();
@@ -20,11 +27,15 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [visibilitySavingId, setVisibilitySavingId] = useState<string | null>(null);
+  const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
   
   // ძებნა / ფილტრაცია
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterDealType, setFilterDealType] = useState('');
+  /** აგენტისთვის: საჯარო / პირადი / ლინკით / გაყიდული */
+  const [filterVisibility, setFilterVisibility] = useState<'' | BrokerListingMode>('');
   
   // Profile editing
   const [editMode, setEditMode] = useState(false);
@@ -62,6 +73,27 @@ export default function ProfilePage() {
       </div>
     );
   }
+
+  const setBrokerListingMode = async (property: Property, mode: BrokerListingMode) => {
+    setVisibilitySavingId(property._id);
+    try {
+      const res = await updateProperty(property._id, { brokerListingMode: mode });
+      setProperties((prev) => prev.map((x) => (x._id === res.property._id ? res.property : x)));
+    } catch (err: any) {
+      alert(err.message || t('error_save_failed'));
+    } finally {
+      setVisibilitySavingId(null);
+    }
+  };
+
+  const copyUnlistedLink = (property: Property) => {
+    if (!property.shareToken) return;
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/property/${property._id}?t=${property.shareToken}`;
+    void navigator.clipboard.writeText(url).then(() => {
+      setLinkCopiedId(property._id);
+      window.setTimeout(() => setLinkCopiedId(null), 2000);
+    });
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm(t('confirm_delete'))) return;
@@ -118,6 +150,7 @@ export default function ProfilePage() {
     }
     if (filterType && p.type !== filterType) return false;
     if (filterDealType && p.dealType !== filterDealType) return false;
+    if (filterVisibility && brokerListingModeFromProperty(p) !== filterVisibility) return false;
     return true;
   });
 
@@ -292,9 +325,28 @@ export default function ProfilePage() {
               <option value="rent">🔑 {t('deal_rent')}</option>
               <option value="mortgage">🏦 {t('deal_mortgage')}</option>
             </select>
-            {(searchQuery || filterType || filterDealType) && (
+            {user.role === 'agent' && (
+              <select
+                value={filterVisibility}
+                onChange={(e) => setFilterVisibility((e.target.value || '') as '' | BrokerListingMode)}
+                title={t('listingVisibilityLabel')}
+                className="min-w-[10rem] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">{t('all_visibilities')}</option>
+                <option value="public">{t('listingMode_public')}</option>
+                <option value="unlisted">{t('listingMode_unlisted')}</option>
+                <option value="private">{t('listingMode_private')}</option>
+                <option value="sold">{t('listingMode_sold')}</option>
+              </select>
+            )}
+            {(searchQuery || filterType || filterDealType || filterVisibility) && (
               <button
-                onClick={() => { setSearchQuery(''); setFilterType(''); setFilterDealType(''); }}
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilterType('');
+                  setFilterDealType('');
+                  setFilterVisibility('');
+                }}
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
               >
                 ✕ {t('clear_filters')}
@@ -304,7 +356,7 @@ export default function ProfilePage() {
         )}
 
         {/* ფილტრის შედეგი */}
-        {properties.length > 0 && (searchQuery || filterType || filterDealType) && (
+        {properties.length > 0 && (searchQuery || filterType || filterDealType || filterVisibility) && (
           <p className="text-xs text-slate-500 mb-3">
             {t('found_results', { count: filteredProperties.length, total: properties.length })}
           </p>
@@ -373,6 +425,48 @@ export default function ProfilePage() {
                     )}
                     <span className="text-xs text-slate-400 font-mono">ID: {property.numericId || property._id.slice(-6)}</span>
                   </div>
+
+                  {user.role === 'agent' && (
+                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                      <p className="text-xs font-medium text-slate-600">{t('listingVisibilityLabel')}</p>
+                      <div className="flex flex-wrap gap-1">
+                        {(
+                          [
+                            ['public', t('listingMode_public')],
+                            ['unlisted', t('listingMode_unlisted')],
+                            ['private', t('listingMode_private')],
+                            ['sold', t('listingMode_sold')],
+                          ] as const
+                        ).map(([mode, label]) => {
+                          const active = brokerListingModeFromProperty(property) === mode;
+                          return (
+                            <button
+                              key={mode}
+                              type="button"
+                              disabled={visibilitySavingId === property._id}
+                              onClick={() => setBrokerListingMode(property, mode)}
+                              className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                                active
+                                  ? 'bg-blue-600 text-white'
+                                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                              } disabled:opacity-50`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {brokerListingModeFromProperty(property) === 'unlisted' && property.shareToken && (
+                        <button
+                          type="button"
+                          onClick={() => copyUnlistedLink(property)}
+                          className="text-xs font-medium text-blue-600 hover:underline"
+                        >
+                          {linkCopiedId === property._id ? t('linkCopied') : t('copyPrivateLink')}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* მოქმედებები */}

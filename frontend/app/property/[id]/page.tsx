@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { getProperty, listProperties, resolveImageUrl, contactPropertyOwner } from '@/lib/api';
@@ -150,8 +150,10 @@ function PropertyMessageForm({ propertyId, propertyTitle }: { propertyId: string
   );
 }
 
-export default function PropertyDetailPage() {
+function PropertyDetailInner() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const shareTokenFromUrl = searchParams.get('t')?.trim() || undefined;
   const router = useRouter();
   const { i18n, t } = useTranslation();
   const { rate: USD_TO_GEL } = useCurrencyRate();
@@ -184,7 +186,7 @@ export default function PropertyDetailPage() {
   useEffect(() => {
     let alive = true;
     setError(null);
-    getProperty(params.id, i18n.language)
+    getProperty(params.id, i18n.language, { shareToken: shareTokenFromUrl })
       .then((r) => {
         if (!alive) return;
         setProperty(r.property);
@@ -210,7 +212,7 @@ export default function PropertyDetailPage() {
     return () => {
       alive = false;
     };
-  }, [params.id, i18n.language]);
+  }, [params.id, i18n.language, shareTokenFromUrl]);
 
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!property) return <div className="text-sm text-slate-500">Loading…</div>;
@@ -813,5 +815,13 @@ export default function PropertyDetailPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function PropertyDetailPage() {
+  return (
+    <Suspense fallback={<div className="text-sm text-slate-500">Loading…</div>}>
+      <PropertyDetailInner />
+    </Suspense>
   );
 }

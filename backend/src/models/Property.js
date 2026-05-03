@@ -87,6 +87,15 @@ const propertySchema = new mongoose.Schema(
     },
 
     views: { type: Number, default: 0 },
+    /** საჯარო სია/რუკა: public | unlisted (მხოლოდ ლინკით) | private (მხოლოდ მფლობელი) */
+    listingVisibility: {
+      type: String,
+      enum: ['public', 'unlisted', 'private'],
+      default: 'public',
+    },
+    /** unlisted რეჟიმისთვის — კერძო ლინკი ?t= */
+    shareToken: { type: String, trim: true, default: undefined },
+
     status: { type: String, enum: ['pending', 'active', 'rejected', 'sold'], default: 'pending' },
     moderationHistory: [
       {
@@ -121,6 +130,7 @@ const propertySchema = new mongoose.Schema(
 );
 
 propertySchema.index({ title: 'text', desc: 'text', city: 'text', region: 'text' });
+propertySchema.index({ shareToken: 1 }, { unique: true, sparse: true });
 
 // კატეგორიის მიხედვით ID-ის დიაპაზონები (100 000 თითოეულისთვის)
 const TYPE_RANGES = {

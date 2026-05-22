@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
+import CompareButton from '@/components/CompareButton';
 import FavoriteButton from '@/components/FavoriteButton';
 import { getProperty, resolveImageUrl } from '@/lib/api';
 import type { Property } from '@/lib/types';
@@ -108,7 +109,11 @@ export default function FavoritesPage() {
                         <span className="text-4xl">🏠</span>
                       </div>
                     )}
-                    <div className="absolute top-2 right-2" onClick={(e) => { e.preventDefault(); handleRemove(property._id); }}>
+                    <div
+                      className="absolute right-2 top-2 flex flex-row gap-1.5"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <CompareButton propertyId={property._id} size="sm" />
                       <FavoriteButton propertyId={property._id} size="sm" />
                     </div>
                   </div>

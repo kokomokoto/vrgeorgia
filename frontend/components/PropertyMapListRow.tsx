@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import type { Property } from '@/lib/types';
 import { resolveImageUrl } from '@/lib/api';
+import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
 
 type Props = {
@@ -51,8 +52,9 @@ export function PropertyMapListRow({ p, selected, onSelect, rowRef }: Props) {
           <Link href={`/property/${p._id}`} className="line-clamp-2 text-sm font-semibold text-blue-700 hover:underline dark:text-amber-400" onClick={(e) => e.stopPropagation()}>
             {p.title}
           </Link>
-          <span onClick={(e) => e.stopPropagation()} className="shrink-0">
-            <FavoriteButton propertyId={p._id} />
+          <span onClick={(e) => e.stopPropagation()} className="flex shrink-0 flex-row gap-1">
+            <CompareButton propertyId={p._id} size="sm" />
+            <FavoriteButton propertyId={p._id} size="sm" />
           </span>
         </div>
         <div className="mt-0.5 text-xs text-slate-600 dark:text-zinc-400">

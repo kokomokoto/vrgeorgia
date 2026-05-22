@@ -2,17 +2,20 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
-import { getProperty, listProperties, resolveImageUrl, contactPropertyOwner } from '@/lib/api';
-import { useCurrencyRate } from '@/lib/currency';
+import { getProperty, listProperties, resolveImageUrl } from '@/lib/api';
+import { getPropertyAddressLine } from '@/lib/propertyDisplay';
 import { useAutoTranslate } from '@/lib/translate';
 import { MapView } from '@/components/MapView';
 import { ShareButtons } from '@/components/ShareButtons';
 import FavoriteButton from '@/components/FavoriteButton';
 import CompareButton from '@/components/CompareButton';
 import { PropertyCard } from '@/components/PropertyCard';
+import { PropertyPriceRow } from '@/components/PropertyPriceRow';
+import { PropertySpecChips } from '@/components/PropertySpecChips';
+import { BrokerContactChannels } from '@/components/BrokerContactChannels';
 import { useAuth } from '@/components/AuthProvider';
 import type { Property } from '@/lib/types';
 
@@ -96,74 +99,17 @@ function LightboxModal({ photos, index, onClose, onChangeIndex }: {
   );
 }
 
-// შეტყობინების ფორმა ბროკერის პანელში
-function PropertyMessageForm({ propertyId, propertyTitle }: { propertyId: string; propertyTitle: string }) {
-  const { user } = useAuth();
-  const router = useRouter();
-  const { t } = useTranslation();
-  const [message, setMessage] = React.useState('');
-  const [sending, setSending] = React.useState(false);
-  const [sent, setSent] = React.useState(false);
-
-  const handleSend = async () => {
-    if (!user) { router.push('/login'); return; }
-    if (!message.trim() || sending) return;
-    setSending(true);
-    try {
-      await contactPropertyOwner(propertyId, message.trim());
-      setSent(true);
-      setMessage('');
-      setTimeout(() => setSent(false), 3000);
-    } catch (err: any) {
-      alert(err.message || t('error'));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="w-full border-t border-slate-200 pt-3 mt-1">
-      <div className="text-xs font-medium text-slate-600 mb-2">✉️ {t('send_message_title')}</div>
-      {sent ? (
-        <div className="text-center py-3 text-sm text-green-600 font-medium">
-          ✓ {t('message_sent_success')}
-        </div>
-      ) : (
-        <>
-          <textarea
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            placeholder={t('message_about_placeholder', { title: propertyTitle.slice(0, 30) + (propertyTitle.length > 30 ? '...' : '') })}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-[70px] focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-            maxLength={2000}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!message.trim() || sending}
-            className="w-full mt-2 px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {sending ? t('sending') : t('send')}
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
 function PropertyDetailInner() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const shareTokenFromUrl = searchParams.get('t')?.trim() || undefined;
-  const router = useRouter();
   const { i18n, t } = useTranslation();
-  const { rate: USD_TO_GEL } = useCurrencyRate();
   const { user: currentUser } = useAuth();
 
   const [property, setProperty] = useState<Property | null>(null);
   const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [currency, setCurrency] = useState<'USD' | 'GEL'>('USD');
   const [view3dMode, setView3dMode] = useState<'exterior' | 'interior'>('exterior');
 
   // ენის დეტექცია - hooks ყოველთვის ერთნაირად უნდა გამოიძახონ
@@ -220,30 +166,8 @@ function PropertyDetailInner() {
   const photos = property.photos || [];
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
-  // ფასების გამოთვლა - გავითვალისწინოთ ორიგინალი ვალუტა
-  const originalCurrency = property.priceCurrency || 'USD';
-  
-  // გამოვთვალოთ ფასი ორივე ვალუტაში
-  let priceUSD: number;
-  let priceGEL: number;
-  
-  if (originalCurrency === 'USD') {
-    priceUSD = property.price;
-    priceGEL = Math.round(property.price * USD_TO_GEL);
-  } else {
-    priceGEL = property.price;
-    priceUSD = Math.round(property.price / USD_TO_GEL);
-  }
-  
-  const displayPrice = currency === 'USD' ? priceUSD : priceGEL;
-  const currencySymbol = currency === 'USD' ? '$' : '₾';
-
-  // ფასი კვადრატზე / სრული ფასი
   const sqm = property.sqm || 0;
   const rooms = property.rooms || 0;
-  const isPerSqm = property.priceType === 'per_sqm';
-  const pricePerSqm = isPerSqm ? displayPrice : (sqm > 0 ? Math.round(displayPrice / sqm) : null);
-  const totalPrice = isPerSqm && sqm > 0 ? Math.round(displayPrice * sqm) : null;
 
   // მომხმარებლის ინფორმაცია
   const owner = typeof property.userId === 'object' ? property.userId : null;
@@ -270,10 +194,6 @@ function PropertyDetailInner() {
       if (location) parts.push(`${t('location')}: ${location}`);
     }
     
-    if (pricePerSqm) {
-      parts.push(`${t('pricePerSqm')}: ${currencySymbol}${pricePerSqm.toLocaleString()}`);
-    }
-    
     return parts;
   };
 
@@ -282,96 +202,167 @@ function PropertyDetailInner() {
   // საბოლოო ტექსტები
   const displayTitle = needsTranslation && translatedTitle ? translatedTitle : property.title;
   const displayDesc = needsTranslation && translatedDesc ? translatedDesc : property.desc;
+  const addressLine = getPropertyAddressLine(property);
+
+  const link3dExterior = (property.exteriorLink || property.threeDLink || '').trim();
+  const link3dInterior = (property.interiorLink || '').trim();
+  const has3dExterior = !!link3dExterior;
+  const has3dInterior = !!link3dInterior;
+  const has3dTour = has3dExterior || has3dInterior;
+  const showing3dInterior = view3dMode === 'interior' && has3dInterior;
+  const showing3dExterior = !showing3dInterior && has3dExterior;
+
+  const ownerRoleLabel =
+    owner && typeof owner === 'object' && owner.role === 'agent' ? t('agent_role') : t('broker');
+
+  const listedDateLabel = property.createdAt
+    ? new Date(property.createdAt).toLocaleDateString('ka-GE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : null;
+  const displayId = property.numericId ?? property._id;
+
+  const sharePageUrl =
+    typeof window !== 'undefined'
+      ? window.location.href
+      : `https://vrgeorgia.ge/property/${property._id}${shareTokenFromUrl ? `?t=${shareTokenFromUrl}` : ''}`;
+
+  const sidebarPanels = (
+    <>
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+        <PropertyPriceRow p={property} />
+        <PropertySpecChips p={property} gapClass="gap-1.5" />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+        <div className="flex items-center gap-3">
+          {owner?.avatar ? (
+            <img
+              src={resolveImageUrl(owner.avatar)}
+              alt=""
+              className="h-14 w-14 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xl text-slate-400">
+              {owner?.email?.[0]?.toUpperCase() || '?'}
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="truncate font-semibold text-slate-900">
+              {owner?.name || owner?.email || t('unknown')}
+            </div>
+            <div className="text-sm text-slate-500">{ownerRoleLabel}</div>
+          </div>
+        </div>
+
+        <BrokerContactChannels
+          phone={property.contact?.phone || owner?.phone}
+          email={property.contact?.email || owner?.email}
+        />
+
+        {owner?._id && (
+          <Link
+            href={`/agent/${owner._id}`}
+            className="block w-full rounded-md bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            {t('otherListings')}
+          </Link>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+        <ShareButtons
+          variant="sidebar"
+          url={sharePageUrl}
+          title={displayTitle}
+          description={displayDesc}
+        />
+      </div>
+    </>
+  );
 
   return (
-    <div className="grid gap-3 sm:gap-4 max-w-6xl mx-auto w-full min-w-0 overflow-hidden">
-      {/* სათაური და ფასი - ყველაზე ზემოთ */}
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-          <div className="min-w-0">
-            <div className="text-base sm:text-xl font-semibold text-slate-900 break-words">
-              {displayTitle}
-              {translatingTitle && (
-                <span className="ml-2 text-sm text-slate-400 font-normal">{t('translating')}...</span>
-              )}
-            </div>
-            <div className="mt-1 text-sm text-slate-600">
-              {property.city || ''}{property.city && property.region ? ' • ' : ''}
-              {property.region ? t(`region_${property.region}`) : ''}
-            </div>
-          </div>
-          <div className="sm:text-right flex-shrink-0">
-            <div className="text-xl sm:text-2xl font-bold text-blue-700">
-              {currencySymbol}{displayPrice.toLocaleString()}{property.priceType === 'per_sqm' ? <span className="text-base font-normal text-slate-500">/{t('sqmUnit')}</span> : ''}
-            </div>
-            {/* ვალუტის გადართვა */}
-            <div className="mt-1 flex gap-1 sm:justify-end">
-              <button
-                onClick={() => setCurrency('USD')}
-                className={`px-2 py-1 text-xs rounded ${currency === 'USD' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-              >
-                USD
-              </button>
-              <button
-                onClick={() => setCurrency('GEL')}
-                className={`px-2 py-1 text-xs rounded ${currency === 'GEL' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-              >
-                GEL
-              </button>
-            </div>
-            {/* ფასი კვადრატზე / სრული ფასი */}
-            {isPerSqm && totalPrice && (
-              <div className="mt-1 text-sm text-slate-500">
-                სრული: {currencySymbol}{totalPrice.toLocaleString()}
-              </div>
+    <div className="grid w-full min-w-0 gap-3 overflow-hidden sm:gap-4 lg:grid-cols-[1fr_minmax(280px,320px)] lg:items-start">
+      {/* სათაური + მისამართი — მარცხე სვეტი (3D-ის სიგანე) */}
+      <div className="flex min-w-0 gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:gap-4 sm:p-4 lg:col-start-1 lg:row-start-1">
+        <div className="min-w-0 flex-1">
+          <h1 className="break-words text-base font-semibold text-slate-900 sm:text-xl">
+            {displayTitle}
+            {translatingTitle && (
+              <span className="ml-2 text-sm font-normal text-slate-400">{t('translating')}...</span>
             )}
-            {!isPerSqm && pricePerSqm && (
-              <div className="mt-1 text-sm text-slate-500">
-                {currencySymbol}{pricePerSqm.toLocaleString()}/{t('sqmUnit')}
-              </div>
-            )}
-            {/* მიმდინარე კურსი */}
-            {currency === 'GEL' && (
-              <div className="mt-1 text-xs text-slate-400">
-                {t('exchangeRate')}: 1$ = {USD_TO_GEL.toFixed(2)}₾
-              </div>
-            )}
-          </div>
+          </h1>
+          {addressLine ? (
+            <div className="mt-1.5 flex min-w-0 items-start gap-1.5 text-sm text-slate-600">
+              <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="min-w-0 break-words">{addressLine}</span>
+            </div>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 gap-1.5 self-start">
+          <CompareButton propertyId={property._id} size="md" />
+          <FavoriteButton propertyId={property._id} size="md" />
         </div>
       </div>
 
-      {/* 3D + ფოტოები (მარცხნივ) და ბროკერი (მარჯვნივ) */}
-      <div className="grid lg:grid-cols-[1fr_280px] gap-3 sm:gap-4">
-      <div className="grid gap-3 sm:gap-4">
-      {/* 3D - ექსტერიერი და ინტერიერი */}
-      {(property.exteriorLink || property.interiorLink || property.threeDLink) && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-semibold">{t('view3d')}</div>
-            {property.exteriorLink && property.interiorLink && (
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setView3dMode('exterior')}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    view3dMode === 'exterior'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {t('exterior')}
-                </button>
-                <button
-                  onClick={() => setView3dMode('interior')}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    view3dMode === 'interior'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {t('interior')}
-                </button>
-              </div>
+      {/* ID, თარიღი, ნახვები — მარჯვე სვეტი (ფასის პანელის სიგანე) */}
+      <div className="flex flex-col justify-center gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:col-start-2 lg:row-start-1">
+        <div className="font-mono text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
+          ID: {displayId}
+        </div>
+        {(listedDateLabel || typeof property.views === 'number') && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
+            {listedDateLabel && <span>📅 {listedDateLabel}</span>}
+            {typeof property.views === 'number' && (
+              <span>
+                👁️ {property.views} {t('views_count')}
+              </span>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* 3D + მარჯვე პანელები (desktop) */}
+      {has3dTour && (
+        <>
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:col-start-1 lg:row-start-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold">{t('view3d')}</div>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                disabled={!has3dExterior}
+                onClick={() => has3dExterior && setView3dMode('exterior')}
+                className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  showing3dExterior
+                    ? 'bg-blue-600 text-white'
+                    : has3dExterior
+                      ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      : 'cursor-not-allowed bg-slate-50 text-slate-300'
+                }`}
+              >
+                {t('exterior')}
+              </button>
+              <button
+                type="button"
+                disabled={!has3dInterior}
+                onClick={() => has3dInterior && setView3dMode('interior')}
+                className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  showing3dInterior
+                    ? 'bg-blue-600 text-white'
+                    : has3dInterior
+                      ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      : 'cursor-not-allowed bg-slate-50 text-slate-300'
+                }`}
+              >
+                {t('interior')}
+              </button>
+            </div>
           </div>
           {(() => {
             const convertToEmbedUrl = (input: string) => {
@@ -397,24 +388,22 @@ function PropertyDetailInner() {
               return url;
             };
             
-            const rawUrl = property.exteriorLink && property.interiorLink
-              ? (view3dMode === 'exterior' ? property.exteriorLink : property.interiorLink)
-              : (property.exteriorLink || property.interiorLink || property.threeDLink);
+            const rawUrl = showing3dInterior ? link3dInterior : link3dExterior || link3dInterior;
             
             const embedUrl = convertToEmbedUrl(rawUrl || '');
             
             if (!embedUrl || !embedUrl.startsWith('http')) {
               return (
-                <div className="h-[200px] flex items-center justify-center bg-slate-100 rounded-md">
+                <div className="mx-auto flex aspect-video w-full max-h-[85vh] items-center justify-center rounded-md border border-slate-200 bg-slate-100">
                   <p className="text-slate-500">{t('invalid_3d_link')}</p>
                 </div>
               );
             }
             
             return (
-              <div className="relative">
-                <iframe 
-                  className="h-[250px] sm:h-[350px] md:h-[450px] w-full rounded-md border border-slate-200" 
+              <div className="relative mx-auto aspect-video w-full max-h-[85vh] overflow-hidden rounded-md border border-slate-200">
+                <iframe
+                  className="absolute inset-0 h-full w-full"
                   src={embedUrl}
                   title="3D Tour"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; xr-spatial-tracking; web-share"
@@ -423,11 +412,11 @@ function PropertyDetailInner() {
                   loading="lazy"
                   style={{ border: 'none' }}
                 />
-                <a 
+                <a
                   href={embedUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="absolute top-2 left-2 bg-white hover:bg-white px-3 py-1.5 rounded-lg shadow text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
+                  className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow transition-colors hover:text-blue-600"
                 >
                   🔗 {t('open_new_tab')}
                 </a>
@@ -435,9 +424,20 @@ function PropertyDetailInner() {
             );
           })()}
         </div>
+
+        <div className="flex flex-col gap-4 sm:gap-5 lg:col-start-2 lg:row-start-2 lg:self-start">
+          {sidebarPanels}
+        </div>
+        </>
       )}
 
-      {/* ფოტოები - ჰორიზონტალური სქროლით, 3D-ის ქვემოთ */}
+      {/* ფოტოები, აღწერა, დეტალები — სრული სიგანე */}
+      <div
+        className={`grid w-full min-w-0 gap-3 sm:gap-4 ${
+          has3dTour ? 'lg:col-span-2 lg:row-start-3' : 'lg:col-start-1 lg:row-start-2'
+        }`}
+      >
+      {/* ფოტოები - ჰორიზონტალური სქროლით */}
       {photos.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="mb-3 text-sm font-semibold">{t('photos')} ({photos.length})</div>
@@ -458,52 +458,7 @@ function PropertyDetailInner() {
           </div>
         </div>
       )}
-      </div>
 
-      {/* ბროკერის პანელი - მარჯვნივ */}
-      <div className="lg:col-start-2 lg:row-start-1 lg:row-span-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:sticky lg:top-4">
-          <div className="text-sm font-semibold mb-3">{t('broker')}</div>
-          <div className="flex flex-col items-center text-center gap-3">
-            {owner?.avatar ? (
-              <img 
-                src={resolveImageUrl(owner.avatar)} 
-                alt="Avatar" 
-                className="w-20 h-20 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center text-2xl text-slate-400">
-                {owner?.email?.[0]?.toUpperCase() || '?'}
-              </div>
-            )}
-            <div>
-              <div className="font-medium text-slate-800">
-                {owner?.name || owner?.email || t('unknown')}
-              </div>
-              {property.contact?.phone && (
-                <div className="mt-1 text-sm text-slate-600">{t('phone')}: {property.contact.phone}</div>
-              )}
-              {property.contact?.email && (
-                <div className="text-sm text-slate-600">{t('email')}: {property.contact.email}</div>
-              )}
-            </div>
-            {owner?._id && (
-              <Link
-                href={`/agent/${owner._id}`}
-                className="w-full text-center px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                {t('otherListings')}
-              </Link>
-            )}
-
-            {/* შეტყობინების გაგზავნა */}
-            {owner?._id && !isOwner && <PropertyMessageForm propertyId={property._id} propertyTitle={property.title} />}
-          </div>
-        </div>
-      </div>
-      </div>
-
-      {/* ავტორის აღწერა - სურათების შემდეგ */}
       {property.desc && (
         <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="text-sm font-semibold mb-3">
@@ -753,30 +708,6 @@ function PropertyDetailInner() {
         </div>
       )}
 
-      {/* ID, თარიღი, ნახვები, გაზიარება - რუკის ზემოთ */}
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <span className="font-mono bg-slate-100 px-2 py-0.5 rounded truncate max-w-[200px]">ID: {property.numericId || property._id}</span>
-          {property.createdAt && (
-            <span>📅 {new Date(property.createdAt).toLocaleDateString('ka-GE')}</span>
-          )}
-          {typeof property.views === 'number' && (
-            <span>👁️ {property.views} {t('views_count')}</span>
-          )}
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <ShareButtons 
-            url={typeof window !== 'undefined' ? window.location.href : `https://vrgeorgia.ge/property/${property._id}`}
-            title={displayTitle}
-            description={displayDesc}
-          />
-          <div className="flex gap-1">
-            <FavoriteButton propertyId={property._id} />
-            <CompareButton propertyId={property._id} />
-          </div>
-        </div>
-      </div>
-
       {/* რუკა - ადგილმდებარეობა */}
       <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
         <div className="text-sm font-semibold mb-3">{t('mapLocation')}</div>
@@ -792,10 +723,18 @@ function PropertyDetailInner() {
           {t('coordinates')}: {property.location.lat.toFixed(5)}, {property.location.lng.toFixed(5)}
         </div>
       </div>
+      </div>
 
-      {/* მსგავსი ობიექტები */}
+      {/* ფასი, ბროკერი, გაზიარება — 3D-ის გარეშე */}
+      {!has3dTour && (
+        <div className="flex flex-col gap-4 sm:gap-5 lg:col-start-2 lg:row-start-2 lg:sticky lg:top-4 lg:self-start">
+          {sidebarPanels}
+        </div>
+      )}
+
+      {/* მსგავსი ობიექტები — სრული სიგანე */}
       {similarProperties.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:col-span-2">
           <div className="text-sm font-semibold mb-4">{t('similar_properties')}</div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {similarProperties.map((p) => (

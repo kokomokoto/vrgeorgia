@@ -83,6 +83,7 @@ router.post(
     body('type').isIn(['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking', 'business']).withMessage('აირჩიეთ ტიპი'),
     body('dealType').isIn(['sale', 'rent', 'mortgage']).withMessage('აირჩიეთ გარიგების ტიპი'),
     body('city').optional().isString().trim().isLength({ max: 80 }),
+    body('street').optional().isString().trim().isLength({ max: 200 }),
     body('region').optional().isString().trim().isLength({ max: 80 }),
     body('sqm').optional().isNumeric().withMessage('ფართობი უნდა იყოს რიცხვი'),
     body('rooms').optional().isNumeric().withMessage('ოთახების რაოდენობა უნდა იყოს რიცხვი'),
@@ -149,6 +150,7 @@ router.post(
         priceCurrency: req.body.priceCurrency || 'USD',
         priceType: req.body.priceType || 'total',
         city: req.body.city || '',
+        street: (req.body.street || '').trim(),
         region: req.body.region || '',
         tbilisiDistrict: req.body.tbilisiDistrict || '',
         tbilisiSubdistricts,
@@ -609,7 +611,7 @@ router.get(
       { $inc: { views: 1 } },
       { new: true }
     )
-      .populate('userId', 'email name phone avatar')
+      .populate('userId', 'email name phone avatar role')
       .lean();
     if (!property) return res.status(404).json({ message: 'Not found' });
 
@@ -681,6 +683,7 @@ router.put(
     body('type').optional().isIn(['apartment', 'house', 'commercial', 'land', 'cottage', 'hotel', 'building', 'warehouse', 'parking', 'business']),
     body('dealType').optional().isIn(['sale', 'rent', 'mortgage']),
     body('city').optional().isString().trim().isLength({ max: 80 }),
+    body('street').optional().isString().trim().isLength({ max: 200 }),
     body('region').optional().isString().trim().isLength({ max: 80 }),
     body('sqm').optional().isNumeric(),
     body('rooms').optional().isNumeric(),
@@ -704,7 +707,7 @@ router.put(
     if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
 
     const patch = {};
-    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode', 'privateNotes', 'buildingProject', 'renovationStatus', 'cadastralHidden']) {
+    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'street', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode', 'privateNotes', 'buildingProject', 'renovationStatus', 'cadastralHidden']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
     }
     // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას (თუ მითითებულია)

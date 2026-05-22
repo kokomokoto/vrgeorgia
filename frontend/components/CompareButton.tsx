@@ -42,28 +42,28 @@ export default function CompareButton({ propertyId, size = 'md', className = '' 
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       disabled={!inCompare && isFull}
-      className={`${sizeClasses[size]} rounded-full flex items-center justify-center transition-all ${
-        inCompare 
-          ? 'bg-blue-500 text-white hover:bg-blue-600' 
+      className={`${sizeClasses[size]} flex items-center justify-center rounded-full transition-all ${
+        inCompare
+          ? 'bg-blue-500 text-white shadow-md hover:bg-blue-600'
           : isFull
-            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            : 'bg-white/90 text-slate-500 hover:bg-white hover:text-blue-500'
-      } shadow-md ${className}`}
+            ? 'cursor-not-allowed bg-slate-200/95 text-slate-400 shadow-md'
+            : 'bg-white/95 text-slate-500 shadow-md hover:bg-white hover:text-blue-500'
+      } ${className}`}
       title={inCompare ? t('removeFromCompare') : isFull ? `${t('max')} ${maxItems}` : t('addToCompare')}
+      aria-pressed={inCompare}
     >
-      <svg 
-        className={iconSizes[size]} 
-        fill="none" 
-        stroke="currentColor" 
-        viewBox="0 0 24 24"
-      >
-        {inCompare ? (
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        ) : (
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v18m-7-4l3-8 3 8m-5.5-2h5M16 7l3 8m-5.5 0h5L16 7z" />
-        )}
+      <svg className={iconSizes[size]} viewBox="0 0 24 24" aria-hidden>
+        <path
+          fill={inCompare ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={inCompare ? 0 : 2}
+          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+        />
       </svg>
     </button>
   );

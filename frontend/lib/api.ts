@@ -1,5 +1,5 @@
 import type { Property, User } from './types';
-import { API_BASE } from './config';
+import { API_BASE, getApiBase } from './config';
 
 export type { Property, User };
 
@@ -14,7 +14,7 @@ export function resolveImageUrl(path: string | null | undefined): string {
   // Already a full URL (Cloudinary or other CDN)
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   // Old-style local path like /uploads/xxx.jpg
-  return `${API_BASE}${path}`;
+  return `${getApiBase()}${path}`;
 }
 
 export type RegisterBody = { 
@@ -76,7 +76,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, { ...init, headers, cache: 'no-store' });
+    res = await fetch(`${getApiBase()}${path}`, { ...init, headers, cache: 'no-store' });
   } catch (fetchError) {
     // Network error - სერვერი არ მუშაობს
     throw new Error('სერვერთან კავშირი ვერ მოხერხდა. გთხოვთ შეამოწმოთ backend გაშვებულია თუ არა (npm start backend ფოლდერში)');

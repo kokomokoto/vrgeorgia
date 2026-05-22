@@ -269,7 +269,7 @@ export default function HomePage() {
             href={buildMapHref(filters, sortBy)}
             className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400"
           >
-            {tr('map_open_full_view', 'სრული ხედი')}
+            {tr('map_open_full_view', 'რუკაზე ძებნა')}
           </Link>
         </div>
         {mapOpen && (
@@ -285,7 +285,7 @@ export default function HomePage() {
           href={buildMapHref(filters, sortBy)}
           className="absolute right-3 top-3 z-[400] rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-md ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-zinc-900 dark:text-amber-400 dark:ring-zinc-600 dark:hover:bg-zinc-800"
         >
-          {tr('map_open_full_view', 'სრული ხედი')}
+          {tr('map_open_full_view', 'რუკაზე ძებნა')}
         </Link>
         <MapView properties={properties} richHoverTooltips />
       </div>
@@ -326,7 +326,7 @@ export default function HomePage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {paginatedProperties.map((p) => (
-          <PropertyCard key={p._id} p={p} />
+          <PropertyCard key={p._id} p={p} compactPhoto />
         ))}
       </div>
 

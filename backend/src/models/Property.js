@@ -10,6 +10,8 @@ const propertySchema = new mongoose.Schema(
     priceType: { type: String, enum: ['total', 'per_sqm'], default: 'total' },
 
     city: { type: String, default: '' },
+    /** ქუჩა / სრული მისამართის ხაზი (რუკიდან ან ძებნიდან) */
+    street: { type: String, default: '' },
     region: { type: String, default: '' },
     
     // თბილისის სპეციფიკური ველები

@@ -10,6 +10,7 @@ import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
 import { reverseGeocodeLabel } from '@/lib/reverseGeocode';
+import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { PropertyRoomsBedroomsSelectors } from '@/components/PropertyRoomsBedroomsSelectors';
 import type { Property } from '@/lib/types';
@@ -101,6 +102,7 @@ export default function UploadPage() {
   const [priceCurrency, setPriceCurrency] = React.useState<'USD' | 'GEL'>('USD');
   const [priceType, setPriceType] = React.useState<'total' | 'per_sqm'>('total');
   const [city, setCity] = React.useState('');
+  const [street, setStreet] = React.useState('');
   const [region, setRegion] = React.useState('');
   const [tbilisiDistrict, setTbilisiDistrict] = React.useState('');
   const [tbilisiSubdistricts, setTbilisiSubdistricts] = React.useState<string[]>([]);
@@ -302,6 +304,10 @@ export default function UploadPage() {
       form.set('priceCurrency', priceCurrency);
       form.set('priceType', priceType);
       form.set('city', city);
+      form.set(
+        'street',
+        street.trim() || splitStreetFromFullAddress(addressMapFill.text, city)
+      );
       form.set('region', region);
       form.set('tbilisiDistrict', tbilisiDistrict);
       form.set('tbilisiSubdistricts', JSON.stringify(tbilisiSubdistricts));
@@ -379,7 +385,7 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full min-w-0">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
@@ -620,12 +626,16 @@ export default function UploadPage() {
                     onSelect={(searchLat, searchLng, address) => {
                       setLat(searchLat);
                       setLng(searchLng);
+                      let nextCity = city;
                       if (!city && address) {
-                        const parts = address.split(',').map(p => p.trim());
+                        const parts = address.split(',').map((p) => p.trim());
                         if (parts.length > 1) {
-                          setCity(parts[parts.length - 1]);
+                          nextCity = parts[parts.length - 1];
+                          setCity(nextCity);
                         }
                       }
+                      setStreet(splitStreetFromFullAddress(address, nextCity));
+                      setAddressMapFill((s) => ({ key: s.key + 1, text: address }));
                     }}
                   />
                 </div>
@@ -641,6 +651,7 @@ export default function UploadPage() {
                       setLng(b);
                       const label = await reverseGeocodeLabel(a, b);
                       if (label) {
+                        setStreet(splitStreetFromFullAddress(label, city));
                         setAddressMapFill((s) => ({ key: s.key + 1, text: label }));
                       }
                     }}

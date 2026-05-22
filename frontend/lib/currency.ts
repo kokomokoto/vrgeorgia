@@ -73,3 +73,21 @@ export function useCurrencyRate() {
 
   return { rate, loading };
 }
+
+/** სიის ბარათებზე ფასის ჩვენების ვალუტა — ერთი არჩევანი მთელი საიტისთვის */
+export type DisplayCurrency = 'GEL' | 'USD';
+
+export function convertDisplayMoney(
+  amount: number,
+  from: DisplayCurrency,
+  to: DisplayCurrency,
+  usdToGel: number
+): number {
+  if (from === to) return amount;
+  if (from === 'USD' && to === 'GEL') return Math.round(amount * usdToGel);
+  return Math.round(amount / usdToGel);
+}
+
+export function displayCurrencySymbol(c: DisplayCurrency): string {
+  return c === 'GEL' ? '₾' : '$';
+}

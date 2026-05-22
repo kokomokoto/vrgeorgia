@@ -4,6 +4,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { CityCombobox } from './CityCombobox';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from './TbilisiDistrictSelector';
+import { ExtendedSearchModal } from './ExtendedSearchModal';
 
 // საქართველოს რეგიონები
 const GEORGIAN_REGIONS = [
@@ -174,6 +175,7 @@ export function Filters({
   const { t } = useTranslation();
   const [mounted, setMounted] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [extendedOpen, setExtendedOpen] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
@@ -236,6 +238,8 @@ export function Filters({
     city: mounted ? t('city') : 'ქალაქი',
     region: mounted ? t('region') : 'რეგიონი',
     any: mounted ? t('any') : 'ყველა',
+    extended_search: mounted ? t('extended_search') : 'გაფართოებული ძიება',
+    close: mounted ? t('close') : 'დახურვა',
   };
 
   const set = (k: keyof FiltersState, v: string) => onChange({ ...value, [k]: v });
@@ -303,6 +307,54 @@ export function Filters({
 
   const mapSidebar = variant === 'mapSidebar';
 
+  const extendedOnlyActiveCount =
+    (value.region ? 1 : 0) +
+    (value.city ? 1 : 0) +
+    (value.tbilisiDistrict ? 1 : 0) +
+    (value.tbilisiSubdistricts?.length || 0) +
+    (yearActive ? 1 : 0) +
+    (value.has3d === 'true' ? 1 : 0) +
+    (value.hasPhotos === 'true' ? 1 : 0) +
+    (value.amenities?.length || 0) +
+    value.buildingProject.length +
+    value.renovationStatus.length;
+
+  const compactGridClass = mapSidebar
+    ? 'mb-3 grid grid-cols-1 gap-2'
+    : 'mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4';
+
+  const extendedGridClass = mapSidebar
+    ? 'mb-3 grid grid-cols-1 gap-2'
+    : 'mb-3 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3';
+
+  const renderSearchField = (wrapperClassName: string) => (
+    <div className={wrapperClassName}>
+      <svg
+        className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-zinc-500"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        aria-hidden
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        className="w-full min-w-0 rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+        placeholder={`${labels.search} / ID...`}
+        value={value.q || value.propertyId || ''}
+        onChange={(e) => {
+          const v = e.target.value;
+          const isNumericId = /^\d+$/.test(v.trim()) && Number(v.trim()) > 0;
+          if (isNumericId) {
+            onChange({ ...value, q: '', propertyId: v.trim() });
+          } else {
+            onChange({ ...value, q: v, propertyId: '' });
+          }
+        }}
+      />
+    </div>
+  );
+
   return (
     <FilterDropdownLayoutContext.Provider value={{ inline: mapSidebar }}>
     <div
@@ -311,7 +363,10 @@ export function Filters({
       }`}
       suppressHydrationWarning
     >
-      {/* მობაილზე — მთავარი გვერდი; mapSidebar-ზე ფილტრები ყოველთვის ხილულია */}
+      {/* მობაილზე ძიება ყოველთვის პირველი (ფილტრების ჩამოსაშლელის გარეთ) */}
+      {!mapSidebar && renderSearchField('relative mb-3 md:hidden')}
+
+      {/* მობაილზე — დანარჩენი ფილტრები; mapSidebar-ზე ყოველთვის ხილულია */}
       {!mapSidebar && (
         <button
           type="button"
@@ -340,33 +395,6 @@ export function Filters({
             : `${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`
         }
       >
-      {/* გარიგების ტიპი - მრავალჯერადი არჩევა */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {DEAL_TYPES.map((dt) => {
-          const isSelected = value.dealType.includes(dt.value);
-          return (
-            <button
-              key={dt.value}
-              type="button"
-              onClick={() => {
-                const newDealType = isSelected
-                  ? value.dealType.filter(d => d !== dt.value)
-                  : [...value.dealType, dt.value];
-                onChange({ ...value, dealType: newDealType });
-              }}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                isSelected
-                  ? 'bg-blue-600 text-white shadow-md dark:bg-amber-500 dark:text-black dark:shadow-amber-900/40'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
-              }`}
-            >
-              <span>{dt.icon}</span>
-              <span>{t(dt.key)}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {mapSidebar && (
         <div className="mb-4">
           <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
@@ -403,35 +431,46 @@ export function Filters({
         </div>
       )}
 
-      {/* ძიება (ტექსტი ან ID) */}
-      <div className="relative mb-3">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          className="w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-          placeholder={`${labels.search} / ID...`}
-          value={value.q || value.propertyId || ''}
-          onChange={(e) => {
-            const v = e.target.value;
-            const isNumericId = /^\d+$/.test(v.trim()) && Number(v.trim()) > 0;
-            if (isNumericId) {
-              onChange({ ...value, q: '', propertyId: v.trim() });
-            } else {
-              onChange({ ...value, q: v, propertyId: '' });
-            }
-          }}
-        />
+      {/* გარიგების ტიპი + ძიება (დესკტოპზე ერთ ხაზზე); მობაილზე მხოლოდ ტიპები — ძიება ზემოთაა */}
+      <div
+        className={`mb-3 flex flex-col gap-2 ${
+          mapSidebar ? '' : 'md:flex-row md:flex-wrap md:items-center md:flex-nowrap md:gap-3'
+        }`}
+      >
+        {renderSearchField(
+          mapSidebar
+            ? 'relative order-1 min-w-0 w-full'
+            : 'relative order-1 hidden min-w-0 w-full md:order-2 md:block md:min-w-[10rem] md:flex-1'
+        )}
+        <div className={`order-2 flex shrink-0 flex-wrap gap-2 ${mapSidebar ? '' : 'md:order-1 md:flex-nowrap'}`}>
+          {DEAL_TYPES.map((dt) => {
+            const isSelected = value.dealType.includes(dt.value);
+            return (
+              <button
+                key={dt.value}
+                type="button"
+                onClick={() => {
+                  const newDealType = isSelected
+                    ? value.dealType.filter((d) => d !== dt.value)
+                    : [...value.dealType, dt.value];
+                  onChange({ ...value, dealType: newDealType });
+                }}
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium transition-all sm:px-4 ${
+                  isSelected
+                    ? 'bg-blue-600 text-white shadow-md dark:bg-amber-500 dark:text-black dark:shadow-amber-900/40'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                <span>{dt.icon}</span>
+                <span>{t(dt.key)}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ფილტრები კომპაქტურად — mapSidebar: ვიწრო სვეტი, არა viewport lg:grid-cols-5 (იჭრებოდა) */}
-      <div
-        className={
-          mapSidebar
-            ? 'mb-3 grid grid-cols-1 gap-2'
-            : 'mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5'
-        }
-      >
+      {/* მთავარი ფილტრები: ფასი, ფართობი, ოთახები + გაფართოებული ძიება */}
+      <div className={compactGridClass}>
         {/* ფასი dropdown */}
         <FilterDropdown label={t('filter_price')} summary={priceSummary()} isActive={priceActive}>
           <div className="space-y-3">
@@ -568,50 +607,6 @@ export function Filters({
           </div>
         </FilterDropdown>
 
-        {/* აშენების/რემონტის წლები */}
-        <FilterDropdown label="🏗️ აშენება/რემონტი" summary={yearSummary()} isActive={yearActive}>
-          <div className="space-y-4">
-            <div>
-              <div className="text-[10px] text-slate-500 mb-1.5">აშენების წელი (დიაპაზონი)</div>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="დან"
-                  value={value.minConstructionYear}
-                  onChange={(e) => set('minConstructionYear', e.target.value)}
-                />
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="მდე"
-                  value={value.maxConstructionYear}
-                  onChange={(e) => set('maxConstructionYear', e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] text-slate-500 mb-1.5">რემონტის წელი (დიაპაზონი)</div>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="დან"
-                  value={value.minRenovationYear}
-                  onChange={(e) => set('minRenovationYear', e.target.value)}
-                />
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="მდე"
-                  value={value.maxRenovationYear}
-                  onChange={(e) => set('maxRenovationYear', e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        </FilterDropdown>
-
         {/* ოთახები dropdown */}
         <FilterDropdown label={t('filter_rooms')} summary={roomsSummary()} isActive={roomsActive || bedroomsActive || balconiesActive}>
           <div className="space-y-3">
@@ -714,71 +709,266 @@ export function Filters({
           </div>
         </FilterDropdown>
 
-        {/* რეგიონი — ყოველთვის ჩანს, ქალაქამდე */}
-        <select
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm transition-all ${
-            value.region
-              ? 'border-blue-400 bg-blue-50 text-blue-700'
-              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+        <button
+          type="button"
+          onClick={() => setExtendedOpen(true)}
+          className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+            extendedOnlyActiveCount > 0
+              ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
+              : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600'
           }`}
-          value={value.region}
-          onChange={(e) => {
-            const newRegion = e.target.value;
-            const newValue = { ...value, region: newRegion };
-            // თუ ქალაქი არ ეკუთვნის ახალ რეგიონს, გავასუფთავოთ
-            if (newValue.city && newRegion) {
-              const cityRegion = CITY_REGION_MAP[newValue.city];
-              if (cityRegion && cityRegion !== newRegion) {
-                newValue.city = '';
-                newValue.tbilisiDistrict = '';
-                newValue.tbilisiSubdistricts = [];
-              }
-            }
-            // თბილისის რეგიონის არჩევისას ავტომატურად აირჩეს თბილისი ქალაქიც
-            if (newRegion === 'tbilisi' && !newValue.city) {
-              newValue.city = 'თბილისი';
-            }
-            if (!newRegion) {
-              // რეგიონის გასუფთავებისას ქალაქს არ ვეხებით
-            }
-            onChange(newValue);
-          }}
         >
-          <option value="">{labels.region}: {labels.any}</option>
-          {GEORGIAN_REGIONS.map((r) => (
-            <option key={r.value} value={r.value}>{t(r.key)}</option>
-          ))}
-        </select>
-
-        {/* ქალაქი — რეგიონით გაფილტრული */}
-        <CityCombobox
-          value={value.city}
-          label={labels.city}
-          anyLabel={labels.any}
-          allowedCities={value.region ? Object.entries(CITY_REGION_MAP).filter(([, r]) => r === value.region).map(([c]) => c) : undefined}
-          onChange={(v) => {
-            const newValue = { ...value, city: v };
-            if (!v) {
-              // გასუფთავება — ქალაქის წაშლა
-              newValue.tbilisiDistrict = '';
-              newValue.tbilisiSubdistricts = [];
-            } else {
-              // ავტომატურად მოინიშნოს რეგიონი ქალაქის მიხედვით
-              const autoRegion = CITY_REGION_MAP[v] || '';
-              if (autoRegion) newValue.region = autoRegion;
-              // თუ ქალაქი არ არის უბნებიანი, გავასუფთავოთ უბნები
-              if (!CITIES_WITH_DISTRICTS.includes(v)) {
-                newValue.tbilisiDistrict = '';
-                newValue.tbilisiSubdistricts = [];
-              }
-            }
-            onChange(newValue);
-          }}
-        />
+          <div className="flex min-w-0 items-center gap-2 text-left">
+            <span className="text-base" aria-hidden>
+              ⚙️
+            </span>
+            <span className="truncate">{labels.extended_search}</span>
+            {extendedOnlyActiveCount > 0 && (
+              <span className="bg-blue-600 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center dark:bg-amber-500 dark:text-black">
+                {extendedOnlyActiveCount}
+              </span>
+            )}
+          </div>
+          <svg className="h-4 w-4 flex-shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
 
-      {/* უბნები — თბილისი, ბათუმი, ქუთაისი, რუსთავი */}
-      {CITIES_WITH_DISTRICTS.includes(value.city) && (
+      <ExtendedSearchModal
+        open={extendedOpen}
+        onClose={() => setExtendedOpen(false)}
+        title={labels.extended_search}
+        closeLabel={labels.close}
+      >
+        <FilterDropdownLayoutContext.Provider value={{ inline: true }}>
+          <div className="space-y-4">
+            <div className={extendedGridClass}>
+              {/* ფასი */}
+              <FilterDropdown label={t('filter_price')} summary={priceSummary()} isActive={priceActive}>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-[10px] text-slate-500 mb-1.5">{t('filter_currency')}</div>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...value, priceCurrency: value.priceCurrency === 'USD' ? '' : 'USD' })}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                          value.priceCurrency === 'USD' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        $ USD
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...value, priceCurrency: value.priceCurrency === 'GEL' ? '' : 'GEL' })}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                          value.priceCurrency === 'GEL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        ₾ GEL
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500 mb-1.5">{t('filter_price_type')}</div>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...value, priceType: value.priceType === 'total' ? '' : 'total' })}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                          value.priceType === 'total' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {t('filter_total')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onChange({ ...value, priceType: value.priceType === 'per_sqm' ? '' : 'per_sqm' })}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                          value.priceType === 'per_sqm' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {t('filter_per_sqm')}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_minimum')}</label>
+                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="0" value={value.minPrice} onChange={(e) => set('minPrice', e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_maximum')}</label>
+                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="∞" value={value.maxPrice} onChange={(e) => set('maxPrice', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              </FilterDropdown>
+
+              <FilterDropdown label={t('filter_area')} summary={areaSummary()} isActive={areaActive}>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_min_sqm')}</label>
+                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" value={value.minSqm} onChange={(e) => set('minSqm', e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_max_sqm')}</label>
+                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" value={value.maxSqm} onChange={(e) => set('maxSqm', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              </FilterDropdown>
+
+              <FilterDropdown label="🏗️ აშენება/რემონტი" summary={yearSummary()} isActive={yearActive}>
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-[10px] text-slate-500 mb-1.5">აშენების წელი</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="დან" value={value.minConstructionYear} onChange={(e) => set('minConstructionYear', e.target.value)} />
+                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="მდე" value={value.maxConstructionYear} onChange={(e) => set('maxConstructionYear', e.target.value)} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500 mb-1.5">რემონტის წელი</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="დან" value={value.minRenovationYear} onChange={(e) => set('minRenovationYear', e.target.value)} />
+                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="მდე" value={value.maxRenovationYear} onChange={(e) => set('maxRenovationYear', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+              </FilterDropdown>
+
+              <FilterDropdown label={t('filter_rooms')} summary={roomsSummary()} isActive={roomsActive || bedroomsActive || balconiesActive}>
+                <div className="space-y-3">
+                  <div className="text-xs text-slate-500 mb-2">{t('filter_choose_rooms')}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['1', '2', '3', '4', '5', '6'].map((r) => {
+                      const isSelected = value.rooms.includes(r);
+                      const displayLabel = r === '6' ? '6+' : r;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => {
+                            const nextRooms = isSelected ? value.rooms.filter((room) => room !== r) : [...value.rooms, r].sort((a, b) => Number(a) - Number(b));
+                            const nextRoomNums = nextRooms.map((room) => Number(room)).filter((n) => !Number.isNaN(n));
+                            const maxRoom = nextRoomNums.length > 0 ? Math.max(...nextRoomNums) : null;
+                            const openEnded = nextRooms.includes('6');
+                            const nextBedrooms = value.bedrooms.filter((b) => {
+                              if (openEnded) return true;
+                              if (maxRoom === null) return false;
+                              return Number(b) <= maxRoom;
+                            });
+                            onChange({ ...value, rooms: nextRooms, bedrooms: nextBedrooms });
+                          }}
+                          className={`min-w-[2.5rem] flex-1 py-2.5 rounded-lg text-sm font-medium ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                        >
+                          {displayLabel}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t border-slate-100 pt-3">
+                    <div className="text-xs text-slate-500 mb-2">{t('filter_choose_bedrooms')}</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['1', '2', '3', '4', '5', '6'].map((r) => {
+                        const isSelected = value.bedrooms.includes(r);
+                        const roomNumber = Number(r);
+                        const isDisabled = !hasOpenEndedRooms && maxAllowedBedrooms !== null && roomNumber > maxAllowedBedrooms;
+                        const displayLabel = r === '6' ? '6+' : r;
+                        return (
+                          <button
+                            key={r}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => {
+                              const nextBedrooms = isSelected ? value.bedrooms.filter((bedroom) => bedroom !== r) : [...value.bedrooms, r].sort((a, b) => Number(a) - Number(b));
+                              onChange({ ...value, bedrooms: nextBedrooms });
+                            }}
+                            className={`min-w-[2.5rem] flex-1 py-2.5 rounded-lg text-sm font-medium ${isDisabled ? 'opacity-60 cursor-not-allowed' : isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}
+                          >
+                            {displayLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-100 pt-3">
+                    <div className="text-xs text-slate-500 mb-2">{t('filter_balcony_count')}</div>
+                    <div className="flex gap-1.5">
+                      {['1', '2', '3'].map((b) => {
+                        const isSelected = value.balconies.includes(b);
+                        return (
+                          <button
+                            key={b}
+                            type="button"
+                            onClick={() => {
+                              const next = isSelected ? value.balconies.filter((x) => x !== b) : [...value.balconies, b].sort((a, c) => Number(a) - Number(c));
+                              onChange({ ...value, balconies: next });
+                            }}
+                            className={`flex-1 py-2.5 rounded-lg text-sm font-medium ${isSelected ? 'bg-orange-600 text-white' : 'bg-slate-100'}`}
+                          >
+                            {b}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </FilterDropdown>
+
+              <select
+                className={`w-full rounded-lg border px-3 py-2.5 text-sm ${
+                  value.region ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-700'
+                }`}
+                value={value.region}
+                onChange={(e) => {
+                  const newRegion = e.target.value;
+                  const newValue = { ...value, region: newRegion };
+                  if (newValue.city && newRegion) {
+                    const cityRegion = CITY_REGION_MAP[newValue.city];
+                    if (cityRegion && cityRegion !== newRegion) {
+                      newValue.city = '';
+                      newValue.tbilisiDistrict = '';
+                      newValue.tbilisiSubdistricts = [];
+                    }
+                  }
+                  if (newRegion === 'tbilisi' && !newValue.city) newValue.city = 'თბილისი';
+                  onChange(newValue);
+                }}
+              >
+                <option value="">{labels.region}: {labels.any}</option>
+                {GEORGIAN_REGIONS.map((r) => (
+                  <option key={r.value} value={r.value}>{t(r.key)}</option>
+                ))}
+              </select>
+
+              <CityCombobox
+                value={value.city}
+                label={labels.city}
+                anyLabel={labels.any}
+                allowedCities={value.region ? Object.entries(CITY_REGION_MAP).filter(([, r]) => r === value.region).map(([c]) => c) : undefined}
+                onChange={(v) => {
+                  const newValue = { ...value, city: v };
+                  if (!v) {
+                    newValue.tbilisiDistrict = '';
+                    newValue.tbilisiSubdistricts = [];
+                  } else {
+                    const autoRegion = CITY_REGION_MAP[v] || '';
+                    if (autoRegion) newValue.region = autoRegion;
+                    if (!CITIES_WITH_DISTRICTS.includes(v)) {
+                      newValue.tbilisiDistrict = '';
+                      newValue.tbilisiSubdistricts = [];
+                    }
+                  }
+                  onChange(newValue);
+                }}
+              />
+            </div>
+
+            {CITIES_WITH_DISTRICTS.includes(value.city) && (
         <FilterDropdown
           label={t('filter_districts')}
           summary={value.tbilisiDistrict ? `${value.tbilisiDistrict}${value.tbilisiSubdistricts.length ? ` (${value.tbilisiSubdistricts.length})` : ''}` : t('filter_choose')}
@@ -794,8 +984,7 @@ export function Filters({
         </FilterDropdown>
       )}
 
-      {/* კომფორტი + 3D/ფოტო ფილტრები */}
-      <FilterDropdown
+            <FilterDropdown
         label={t('filter_comfort')}
         summary={(() => {
           const count = (value.amenities?.length || 0)
@@ -867,8 +1056,7 @@ export function Filters({
         </div>
       </FilterDropdown>
 
-      {/* პროექტის ტიპი (მხოლოდ ბინისთვის) */}
-      {value.type.includes('apartment') && (
+            {value.type.includes('apartment') && (
         <FilterDropdown
           label={`🏠 ${t('filter_project')}`}
           summary={value.buildingProject.length > 0 ? value.buildingProject.map(p => t(`project_${p}`)).join(', ') : ''}
@@ -904,8 +1092,7 @@ export function Filters({
         </FilterDropdown>
       )}
 
-      {/* რემონტის სტატუსი */}
-      <FilterDropdown
+            <FilterDropdown
         label={`🧱 ${t('filter_renovation')}`}
         summary={value.renovationStatus.length > 0 ? value.renovationStatus.map((s) => t(`renovation_${s}`)).join(', ') : labels.any}
         isActive={value.renovationStatus.length > 0}
@@ -940,6 +1127,9 @@ export function Filters({
           ))}
         </div>
       </FilterDropdown>
+          </div>
+        </FilterDropdownLayoutContext.Provider>
+      </ExtendedSearchModal>
       </div>
     </div>
     </FilterDropdownLayoutContext.Provider>

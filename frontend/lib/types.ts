@@ -36,6 +36,7 @@ export type Property = {
   priceCurrency?: PriceCurrency;
   priceType?: PriceType;
   city?: string;
+  street?: string;
   region?: string;
   tbilisiDistrict?: string;
   tbilisiSubdistricts?: string[];
@@ -76,7 +77,7 @@ export type Property = {
   }>;
   contact?: { phone?: string; email?: string };
   privateNotes?: string;
-  userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string };
+  userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string; role?: 'user' | 'agent' | 'admin' };
   views?: number;
   createdAt?: string;
   status?: 'pending' | 'active' | 'rejected' | 'sold';

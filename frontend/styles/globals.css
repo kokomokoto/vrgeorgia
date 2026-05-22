@@ -10,9 +10,9 @@
   color-scheme: dark;
 }
 
-/* ჰედერი: bg-white/90 vs dark:bg შეუთანხმებლობის გარეშე სრული მუქი ფონი */
+/* ჰედერი: მსუბუქი შუშა ეფექტი, ფონი ჩანს */
 .dark [data-site-header] {
-  background-color: #000000 !important;
+  background-color: rgba(3, 7, 18, 0.82) !important;
 }
 
 html,
@@ -23,7 +23,61 @@ body {
 }
 
 body {
-  @apply bg-white text-slate-900 transition-colors duration-200 dark:bg-black dark:text-amber-400;
+  position: relative;
+  @apply text-slate-900 transition-colors duration-200 dark:text-amber-400;
+  background-color: #e8eef6;
+}
+
+/* უკანა ფონი — გრადიენტები + რბილი ბადე */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 110% 70% at 50% -25%, rgba(59, 130, 246, 0.22), transparent 58%),
+    radial-gradient(ellipse 65% 55% at 100% 20%, rgba(56, 189, 248, 0.14), transparent 52%),
+    radial-gradient(ellipse 55% 50% at 0% 75%, rgba(99, 102, 241, 0.1), transparent 48%),
+    radial-gradient(ellipse 40% 35% at 80% 90%, rgba(14, 165, 233, 0.08), transparent 45%),
+    linear-gradient(165deg, #dce6f2 0%, #e8eef6 28%, #f1f5f9 55%, #f8fafc 82%, #ffffff 100%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(rgba(100, 116, 139, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, 0.07) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 92%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 40%, transparent 92%);
+}
+
+.dark body {
+  background-color: #020617;
+}
+
+.dark body::before {
+  background:
+    radial-gradient(ellipse 95% 65% at 50% -18%, rgba(245, 158, 11, 0.14), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 92% 25%, rgba(59, 130, 246, 0.1), transparent 52%),
+    radial-gradient(ellipse 50% 42% at 8% 65%, rgba(180, 83, 9, 0.08), transparent 48%),
+    radial-gradient(ellipse 45% 38% at 70% 95%, rgba(37, 99, 235, 0.06), transparent 45%),
+    linear-gradient(180deg, #020617 0%, #030712 38%, #0a0a0a 100%);
+}
+
+.dark body::after {
+  opacity: 0.22;
+  background-image:
+    linear-gradient(rgba(245, 158, 11, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 158, 11, 0.05) 1px, transparent 1px);
+  mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 90%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 90%);
 }
 
 a {

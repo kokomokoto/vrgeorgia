@@ -10,6 +10,7 @@ import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
 import { reverseGeocodeLabel } from '@/lib/reverseGeocode';
+import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { PropertyRoomsBedroomsSelectors } from '@/components/PropertyRoomsBedroomsSelectors';
 import type { Property } from '@/lib/types';
@@ -88,6 +89,7 @@ export default function EditPropertyPage() {
   const [priceCurrency, setPriceCurrency] = useState<'USD' | 'GEL'>('USD');
   const [priceType, setPriceType] = useState<'total' | 'per_sqm'>('total');
   const [city, setCity] = useState('');
+  const [street, setStreet] = useState('');
   const [region, setRegion] = useState('');
   const [tbilisiDistrict, setTbilisiDistrict] = useState('');
   const [tbilisiSubdistricts, setTbilisiSubdistricts] = useState<string[]>([]);
@@ -160,6 +162,13 @@ export default function EditPropertyPage() {
         setPriceCurrency(p.priceCurrency || 'USD');
         setPriceType(p.priceType || 'total');
         setCity(p.city || '');
+        setStreet(p.street || '');
+        if (p.street || p.city) {
+          setAddressMapFill({
+            key: 1,
+            text: [p.street, p.city].filter(Boolean).join(', '),
+          });
+        }
         setRegion(p.region || '');
         setTbilisiDistrict((p as any).tbilisiDistrict || '');
         setTbilisiSubdistricts((p as any).tbilisiSubdistricts || []);
@@ -332,7 +341,7 @@ export default function EditPropertyPage() {
         title, desc,
         price: Number(price),
         priceCurrency, priceType,
-        city, region,
+        city, street: street.trim(), region,
         tbilisiDistrict, tbilisiSubdistricts,
         sqm: Number(sqm) || 0,
         rooms: roomsPayload,
@@ -364,7 +373,7 @@ export default function EditPropertyPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full min-w-0">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
@@ -572,10 +581,16 @@ export default function EditPropertyPage() {
                     onSelect={(searchLat, searchLng, address) => {
                       setLat(searchLat);
                       setLng(searchLng);
+                      let nextCity = city;
                       if (!city && address) {
-                        const parts = address.split(',').map(p => p.trim());
-                        if (parts.length > 1) setCity(parts[parts.length - 1]);
+                        const parts = address.split(',').map((p) => p.trim());
+                        if (parts.length > 1) {
+                          nextCity = parts[parts.length - 1];
+                          setCity(nextCity);
+                        }
                       }
+                      setStreet(splitStreetFromFullAddress(address, nextCity));
+                      setAddressMapFill((s) => ({ key: s.key + 1, text: address }));
                     }}
                   />
                 </div>
@@ -590,6 +605,7 @@ export default function EditPropertyPage() {
                       setLng(b);
                       const label = await reverseGeocodeLabel(a, b);
                       if (label) {
+                        setStreet(splitStreetFromFullAddress(label, city));
                         setAddressMapFill((s) => ({ key: s.key + 1, text: label }));
                       }
                     }}

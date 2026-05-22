@@ -42,3 +42,24 @@ Open: `http://localhost:3000`
 
 - Photos are stored locally in `backend/uploads` and served by backend.
 - If you want real translations, configure Google Cloud Translate in `backend/.env`.
+
+## Production (Render / vrgeorgia.ge)
+
+**Backend** environment variables:
+
+| Variable | Example |
+|----------|---------|
+| `NODE_ENV` | `production` |
+| `MONGODB_URI` | `mongodb+srv://...mongodb.net/vrgeorgia` (Atlas — not localhost) |
+| `JWT_SECRET` | long random string |
+| `ALLOWED_ORIGINS` | `https://vrgeorgia.ge,https://www.vrgeorgia.ge` (optional if defaults match) |
+
+**Frontend** build variable:
+
+| Variable | Example |
+|----------|---------|
+| `NEXT_PUBLIC_API_BASE` | `https://vrgeorgia-api.onrender.com` |
+
+After changing frontend env, **rebuild and redeploy** the frontend (Next.js bakes `NEXT_PUBLIC_*` into the bundle).
+
+Health check: `GET https://vrgeorgia-api.onrender.com/api/health` should return `"db":"connected"`.

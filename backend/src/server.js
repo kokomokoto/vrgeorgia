@@ -25,6 +25,13 @@ const HOST = '0.0.0.0';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/vrgeorgia';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+if (NODE_ENV === 'production' && !process.env.MONGODB_URI) {
+  console.error(
+    'FATAL: MONGODB_URI is required in production (e.g. MongoDB Atlas connection string).'
+  );
+  process.exit(1);
+}
+
 // ──── Security ────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
@@ -32,9 +39,22 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.set('trust proxy', 1);
 
 // CORS: production-ზე მხოლოდ ჩვენი დომენი, dev-ზე ყველა
+const defaultDevOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3003',
+  'http://127.0.0.1:3000',
+];
+const defaultProdOrigins = [
+  'https://vrgeorgia.ge',
+  'https://www.vrgeorgia.ge',
+  'https://vrgeorgia.onrender.com',
+  'https://vrgeorgia-frontend.onrender.com',
+];
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:3000', 'http://localhost:3003', 'http://192.168.1.206:3003'];
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : NODE_ENV === 'production'
+    ? defaultProdOrigins
+    : defaultDevOrigins;
 
 app.use(cors({
   origin: NODE_ENV === 'production'
@@ -73,7 +93,14 @@ app.use('/uploads', express.static(uploadsDir, {
   etag: true
 }));
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, env: NODE_ENV }));
+app.get('/api/health', (_req, res) => {
+  const dbReady = mongoose.connection.readyState === 1;
+  res.status(dbReady ? 200 : 503).json({
+    ok: dbReady,
+    env: NODE_ENV,
+    db: dbReady ? 'connected' : 'disconnected',
+  });
+});
 
 // Rate limit on auth routes (login/register brute-force protection)
 app.use('/api/auth/login', authLimiter);
@@ -96,6 +123,12 @@ app.use((err, _req, res, _next) => {
 });
 
 async function start() {
+  mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
+  });
+  mongoose.connection.on('disconnected', () => {
+    console.warn('MongoDB disconnected');
+  });
   await mongoose.connect(MONGODB_URI);
   console.log('Connected to MongoDB');
   console.log(`Environment: ${NODE_ENV}`);

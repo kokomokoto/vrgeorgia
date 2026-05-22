@@ -1,11 +1,23 @@
-/** API მისამართი — ბრაუზერში იგივე hostname, რაც საიტის URL-ში (LAN-ისთვის). */
-function getApiBase(): string {
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:5000`;
-  }
-  return process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+const DEFAULT_LOCAL_API = 'http://localhost:5000';
+
+function normalizeApiBase(url: string): string {
+  return url.trim().replace(/\/$/, '');
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+/**
+ * API მისამართი.
+ * პროდაქშენი: NEXT_PUBLIC_API_BASE (მაგ. Render backend).
+ * LAN/dev: იგივე hostname, პორტი 5000 — თუ env არ არის მითითებული.
+ */
+export function getApiBase(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_API_BASE;
+  if (fromEnv) return normalizeApiBase(fromEnv);
 
-export { API_BASE, getApiBase };
+  if (typeof window !== 'undefined') {
+    return normalizeApiBase(`${window.location.protocol}//${window.location.hostname}:5000`);
+  }
+
+  return DEFAULT_LOCAL_API;
+}
+
+export const API_BASE = getApiBase();

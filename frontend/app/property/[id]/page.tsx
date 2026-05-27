@@ -217,6 +217,7 @@ function PropertyDetailInner() {
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [view3dMode, setView3dMode] = useState<'exterior' | 'interior'>('exterior');
+  const propertyMapSectionRef = React.useRef<HTMLDivElement>(null);
 
   // ენის დეტექცია - hooks ყოველთვის ერთნაირად უნდა გამოიძახონ
   const currentLang = i18n.language || 'ka';
@@ -234,6 +235,55 @@ function PropertyDetailInner() {
     'ka',
     currentLang
   );
+
+  const tour3dWrapRef = React.useRef<HTMLDivElement>(null);
+  const propertyMapWrapRef = React.useRef<HTMLDivElement>(null);
+  const toggleTour3dFullscreen = React.useCallback(() => {
+    const el = tour3dWrapRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void el.requestFullscreen();
+    }
+  }, []);
+  const togglePropertyMapFullscreen = React.useCallback(() => {
+    const el = propertyMapWrapRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void el.requestFullscreen();
+    }
+  }, []);
+
+  const scrollToPropertyMap = React.useCallback(() => {
+    const el =
+      propertyMapSectionRef.current ??
+      document.getElementById('property-map-section');
+    if (!el) return;
+
+    // lightbox / მოდალები ხშირად ტოვებს overflow:hidden-ს
+    if (document.body.style.overflow === 'hidden') {
+      document.body.style.overflow = '';
+    }
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth';
+
+    // scroll-margin-top (scroll-mt-24) + block:start — ჰედერის ქვეშ არ ჩაიფაროს
+    el.scrollIntoView({ behavior, block: 'start', inline: 'nearest' });
+
+    // ზოგ ბრაუზერში scrollIntoView არ მოძრაობს — window.scrollTo სათადარო
+    requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      const headerOffset = 96;
+      const targetTop = window.scrollY + rect.top - headerOffset;
+      if (Math.abs(window.scrollY - targetTop) > 8) {
+        window.scrollTo({ top: Math.max(0, targetTop), behavior });
+      }
+    });
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -390,7 +440,7 @@ function PropertyDetailInner() {
   );
 
   return (
-    <div className="grid w-full min-w-0 gap-3 overflow-hidden sm:gap-4 lg:grid-cols-[1fr_minmax(280px,320px)] lg:items-start">
+    <div className="grid w-full min-w-0 gap-3 sm:gap-4 lg:grid-cols-[1fr_minmax(280px,320px)] lg:items-start">
       {/* სათაური + მისამართი — მარცხე სვეტი (3D-ის სიგანე) */}
       <div className="flex min-w-0 gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:gap-4 sm:p-4 lg:col-start-1 lg:row-start-1">
         <div className="min-w-0 flex-1">
@@ -401,13 +451,22 @@ function PropertyDetailInner() {
             )}
           </h1>
           {addressLine ? (
-            <div className="mt-1.5 flex min-w-0 items-start gap-1.5 text-sm text-slate-600">
+            <a
+              href="#property-map-section"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToPropertyMap();
+              }}
+              className="mt-1.5 flex w-full min-w-0 cursor-pointer items-start gap-1.5 rounded-md text-left text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-700"
+            >
               <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="min-w-0 break-words">{addressLine}</span>
-            </div>
+              <span className="min-w-0 flex-1 break-words underline decoration-slate-300 decoration-dotted underline-offset-2">
+                {addressLine}
+              </span>
+            </a>
           ) : null}
         </div>
         <div className="flex shrink-0 gap-1.5 self-start">
@@ -507,7 +566,10 @@ function PropertyDetailInner() {
             }
             
             return (
-              <div className="relative mx-auto aspect-video w-full max-h-[85vh] overflow-hidden rounded-md border border-slate-200">
+              <div
+                ref={tour3dWrapRef}
+                className="relative mx-auto aspect-video w-full max-h-[85vh] overflow-hidden rounded-md border border-slate-200"
+              >
                 <iframe
                   className="absolute inset-0 h-full w-full"
                   src={embedUrl}
@@ -526,6 +588,20 @@ function PropertyDetailInner() {
                 >
                   🔗 {t('open_new_tab')}
                 </a>
+                <button
+                  type="button"
+                  aria-label="სრული ეკრანი"
+                  className="absolute bottom-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-all hover:bg-black/80"
+                  onClick={toggleTour3dFullscreen}
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
+                    />
+                  </svg>
+                </button>
               </div>
             );
           })()}
@@ -823,15 +899,38 @@ function PropertyDetailInner() {
       )}
 
       {/* რუკა - ადგილმდებარეობა */}
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+      <div
+        ref={propertyMapSectionRef}
+        id="property-map-section"
+        className="scroll-mt-24 rounded-lg border border-slate-200 bg-white p-3 sm:p-4"
+      >
         <div className="text-sm font-semibold mb-3">{t('mapLocation')}</div>
-        <div className="h-[200px] sm:h-[300px] rounded-lg overflow-hidden">
-          <MapView 
-            properties={[property]} 
+        <div
+          ref={propertyMapWrapRef}
+          className="relative h-[200px] overflow-hidden rounded-lg sm:h-[300px]"
+        >
+          <MapView
+            properties={[property]}
             selectedLocation={property.location}
             center={property.location}
             zoom={15}
+            heightClassName="h-full"
+            className="h-full rounded-none border-0"
           />
+          <button
+            type="button"
+            aria-label="სრული ეკრანი"
+            className="absolute bottom-3 right-3 z-[1000] flex h-11 w-11 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-all hover:bg-black/80"
+            onClick={togglePropertyMapFullscreen}
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
+              />
+            </svg>
+          </button>
         </div>
         <div className="mt-2 text-xs text-slate-500">
           {t('coordinates')}: {property.location.lat.toFixed(5)}, {property.location.lng.toFixed(5)}

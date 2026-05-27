@@ -9,9 +9,10 @@ import { detectPanoramaFromFile } from '@/lib/panorama';
 import {
   MAX_PROPERTY_PHOTOS,
   adjustMainIndexAfterRemoval,
-  resolveDropToIndex,
   reorderArray,
 } from '@/lib/propertyPhotos';
+import { captureFlipPositions } from '@/lib/flipAnimation';
+import { PhotoSortableGrid } from '@/components/PhotoSortableGrid';
 import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
 import { useAuth } from '@/components/AuthProvider';
 import { MapView } from '@/components/MapView';
@@ -192,9 +193,18 @@ export default function UploadPage() {
     };
   }, [photoFiles]);
 
-  const handlePhotoReorder = React.useCallback((from: number, target: number, placement: 'before' | 'after') => {
+  const photoGridRef = React.useRef<HTMLDivElement>(null);
+  const pendingFlipRef = React.useRef<Map<string, DOMRect> | null>(null);
+
+  const photoFlipKey = (file: File) => `${file.name}-${file.size}-${file.lastModified}`;
+  const photoLayoutKey = photoFiles.map(photoFlipKey).join('|');
+
+  const handlePhotoReorder = React.useCallback((from: number, to: number) => {
+    if (from === to) return;
+    if (photoGridRef.current) {
+      pendingFlipRef.current = captureFlipPositions(photoGridRef.current);
+    }
     setPhotoFiles((prev) => {
-      const to = resolveDropToIndex(from, target, placement);
       const next = reorderArray(prev, from, to);
       setMainPhotoIndex((mi) => {
         const mainPhoto = prev[mi];
@@ -206,7 +216,11 @@ export default function UploadPage() {
     });
   }, []);
 
-  const { getThumbDragProps, isInsertBefore, isInsertAfter, getNudgeClass } = usePhotoDragReorder(handlePhotoReorder);
+  const { getThumbDragProps, isDragging, draggingIndex } = usePhotoDragReorder(handlePhotoReorder);
+  const draggingFlipKey =
+    draggingIndex !== null && photoFiles[draggingIndex]
+      ? photoFlipKey(photoFiles[draggingIndex])
+      : null;
 
   // ეტაპების შემოწმება
   const isStep1Complete = type !== '';
@@ -1231,28 +1245,26 @@ export default function UploadPage() {
                       <p className="text-xs text-slate-500">
                         💡 {t('click_main_photo')} · {t('photo_drag_reorder_hint')}
                       </p>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                        {photoPreviews.map((preview, index) => (
+                      <PhotoSortableGrid
+                        className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"
+                        layoutKey={photoLayoutKey}
+                        gridRef={photoGridRef}
+                        pendingFlipRef={pendingFlipRef}
+                        draggingFlipKey={draggingFlipKey}
+                      >
+                        {photoPreviews.map((preview, index) => {
+                          const file = photoFiles[index];
+                          const stableKey = file ? photoFlipKey(file) : `preview-${index}`;
+                          return (
                           <div
-                            key={`${preview.slice(0, 32)}-${index}`}
+                            key={stableKey}
+                            data-flip-key={stableKey}
                             {...getThumbDragProps(index)}
-                            className={`relative group aspect-square cursor-grab active:cursor-grabbing transition-transform duration-150 ${
+                            className={`relative group aspect-square cursor-grab active:cursor-grabbing ${
                               index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''
-                            } ${getNudgeClass(index)}`}
+                            } ${isDragging(index) ? 'z-20 scale-[1.03] opacity-90 ring-2 ring-amber-400 ring-offset-1' : ''}`}
                             onClick={() => setAsMainPhoto(index)}
                           >
-                            {isInsertBefore(index) && (
-                              <span
-                                className="pointer-events-none absolute inset-y-2 -left-1.5 z-20 w-0.5 rounded-full bg-amber-400 shadow-[0_0_0_2px_rgba(251,191,36,0.25)]"
-                                aria-hidden
-                              />
-                            )}
-                            {isInsertAfter(index) && (
-                              <span
-                                className="pointer-events-none absolute inset-y-2 -right-1.5 z-20 w-0.5 rounded-full bg-amber-400 shadow-[0_0_0_2px_rgba(251,191,36,0.25)]"
-                                aria-hidden
-                              />
-                            )}
                             <span className="absolute left-1 top-1 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
                               {index + 1}
                             </span>
@@ -1284,8 +1296,9 @@ export default function UploadPage() {
                               </span>
                             )}
                           </div>
-                        ))}
-                      </div>
+                        );
+                        })}
+                      </PhotoSortableGrid>
                     </div>
 
                     {photoFiles.length < MAX_PHOTOS && (

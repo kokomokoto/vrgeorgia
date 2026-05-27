@@ -2,69 +2,55 @@
 
 import { useCallback, useRef, useState } from 'react';
 
-export type DropPlacement = 'before' | 'after';
+import { resolveDropToIndex, type DropPlacement } from '@/lib/propertyPhotos';
 
-export function usePhotoDragReorder(
-  onReorder: (fromIndex: number, targetIndex: number, placement: DropPlacement) => void
-) {
-  const dragFromRef = useRef<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [dropPlacement, setDropPlacement] = useState<DropPlacement>('after');
+/** drag-ის დროს ცოცხალი გადალაგება — ხელის გაშვებამდე ფოტო უკვე იკავებს ადგილს */
+export function usePhotoDragReorder(onLiveReorder: (fromIndex: number, toIndex: number) => void) {
+  const dragIndexRef = useRef<number | null>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const onDragEnd = useCallback(() => {
-    dragFromRef.current = null;
-    setDragOverIndex(null);
-    setDropPlacement('after');
+    dragIndexRef.current = null;
+    setDraggingIndex(null);
   }, []);
 
   const getThumbDragProps = useCallback(
     (index: number) => ({
       draggable: true,
       onDragStart: (e: React.DragEvent) => {
-        dragFromRef.current = index;
+        dragIndexRef.current = index;
+        setDraggingIndex(index);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(index));
       },
       onDragOver: (e: React.DragEvent) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        setDragOverIndex(index);
+        const from = dragIndexRef.current;
+        if (from === null) return;
+
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        setDropPlacement(x < rect.width / 2 ? 'before' : 'after');
-      },
-      onDragLeave: () => {
-        setDragOverIndex((prev) => {
-          if (prev !== index) return prev;
-          setDropPlacement('after');
-          return null;
-        });
+        const placement: DropPlacement =
+          e.clientX - rect.left < rect.width / 2 ? 'before' : 'after';
+        const to = resolveDropToIndex(from, index, placement);
+
+        if (to !== from) {
+          onLiveReorder(from, to);
+          dragIndexRef.current = to;
+          setDraggingIndex(to);
+        }
       },
       onDrop: (e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        const from = dragFromRef.current;
-        if (from !== null && from !== index) onReorder(from, index, dropPlacement);
         onDragEnd();
       },
       onDragEnd,
     }),
-    [dropPlacement, onDragEnd, onReorder]
+    [onDragEnd, onLiveReorder]
   );
 
-  const isInsertBefore = (index: number) =>
-    dragOverIndex === index && dropPlacement === 'before';
-  const isInsertAfter = (index: number) =>
-    dragOverIndex === index && dropPlacement === 'after';
+  const isDragging = (index: number) => draggingIndex === index;
 
-  const getNudgeClass = (index: number) => {
-    if (dragOverIndex === null) return '';
-    const beforeIndex = dropPlacement === 'before' ? dragOverIndex - 1 : dragOverIndex;
-    const afterIndex = dropPlacement === 'before' ? dragOverIndex : dragOverIndex + 1;
-    if (index === beforeIndex) return '-translate-x-1.5';
-    if (index === afterIndex) return 'translate-x-1.5';
-    return '';
-  };
-
-  return { getThumbDragProps, isInsertBefore, isInsertAfter, getNudgeClass };
+  return { getThumbDragProps, isDragging, draggingIndex };
 }

@@ -207,6 +207,18 @@ export async function updateProperty(
   });
 }
 
+export async function addPropertyPhotos(id: string, files: File[], panoramaFlags?: boolean[]) {
+  const form = new FormData();
+  for (const f of files) form.append('photos', f);
+  if (panoramaFlags?.length) {
+    form.append('panoramaFlags', JSON.stringify(panoramaFlags));
+  }
+  return request<{ photos: string[]; panoramaPhotos?: string[] }>(`/api/properties/${id}/photos`, {
+    method: 'POST',
+    body: form,
+  });
+}
+
 export async function deleteProperty(id: string) {
   return request<{ ok: boolean }>(`/api/properties/${id}`, {
     method: 'DELETE'

@@ -1,14 +1,10 @@
-import './globals-client';
-import '@/styles/globals.css';
+import './globals.css';
 
 import type { Metadata } from 'next';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
-import { AuthProvider } from '@/components/AuthProvider';
-import { CompareProvider } from '@/components/CompareProvider';
 import { PageTracker } from '@/components/PageTracker';
-import { ThemeProvider } from '@/components/ThemeProvider';
-import { DisplayCurrencyProvider } from '@/components/DisplayCurrencyProvider';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: {
@@ -51,22 +47,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body suppressHydrationWarning className="min-h-screen">
-        <ThemeProvider>
-          <DisplayCurrencyProvider>
-          <AuthProvider>
-            <CompareProvider>
-              <div className="relative flex min-h-screen flex-col">
-                <PageTracker />
-                <Header />
-                <main className="relative z-0 mx-auto w-full min-h-[50vh] max-w-7xl flex-1 px-2 py-4 sm:px-4 sm:py-6">
-                  {children}
-                </main>
-                <Footer />
-              </div>
-            </CompareProvider>
-          </AuthProvider>
-          </DisplayCurrencyProvider>
-        </ThemeProvider>
+        <Providers>
+          <div className="relative flex min-h-screen flex-col">
+            <PageTracker />
+            <Header />
+            <main className="relative z-0 mx-auto w-full min-h-[50vh] max-w-7xl flex-1 px-2 py-4 sm:px-4 sm:py-6">
+              {children}
+            </main>
+            <Footer />
+          </div>
+        </Providers>
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { createProperty, getMe } from '@/lib/api';
+import { detectPanoramaFromFile } from '@/lib/panorama';
 import { useAuth } from '@/components/AuthProvider';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
@@ -363,10 +364,13 @@ export default function UploadPage() {
       
       if (photoFiles.length > 0) {
         const photoArray = [...photoFiles];
-        form.append('photos', photoArray[mainPhotoIndex]);
-        photoArray.forEach((f, i) => {
-          if (i !== mainPhotoIndex) form.append('photos', f);
-        });
+        const ordered = [
+          photoArray[mainPhotoIndex],
+          ...photoArray.filter((_, i) => i !== mainPhotoIndex),
+        ];
+        const panoramaFlags = await Promise.all(ordered.map((f) => detectPanoramaFromFile(f)));
+        form.set('panoramaFlags', JSON.stringify(panoramaFlags));
+        ordered.forEach((f) => form.append('photos', f));
       }
 
       const res = await createProperty(form);

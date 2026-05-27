@@ -5,12 +5,31 @@ import { nanoid } from 'nanoid';
 import { Property } from '../models/Property.js';
 import { requireAuth } from '../middleware/auth.js';
 import { translateText } from '../services/translate.js';
-import { uploadPropertyPhotos, deleteCloudinaryImage } from '../services/cloudinary.js';
+import { uploadPropertyPhotosMiddleware, deleteCloudinaryImage } from '../services/cloudinary.js';
+import { uploadPropertyPhotosFromFiles } from '../services/photoUpload.js';
 import { getJWTSecret } from '../config/jwt.js';
 
 const router = express.Router();
 
-const upload = uploadPropertyPhotos;
+function normalizePhotoUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const u = new URL(trimmed);
+      return `${u.origin}${u.pathname}`.toLowerCase();
+    } catch {
+      return trimmed.toLowerCase();
+    }
+  }
+  return trimmed.toLowerCase();
+}
+
+function photoUrlInList(url, list) {
+  if (!url || !Array.isArray(list)) return false;
+  const key = normalizePhotoUrl(url);
+  return list.some((p) => p === url || normalizePhotoUrl(p) === key);
+}
 
 function pickLanguage(req) {
   const raw = (req.query.lang || req.headers['accept-language'] || 'ka').toString();
@@ -73,7 +92,7 @@ const PUBLIC_LISTING_OR = {
 router.post(
   '/',
   requireAuth,
-  upload.array('photos', 12),
+  uploadPropertyPhotosMiddleware(12),
   [
     body('title').isString().trim().isLength({ min: 2, max: 120 }).withMessage('სათაური უნდა იყოს 2-120 სიმბოლო'),
     body('desc').isString().trim().isLength({ min: 3, max: 5000 }).withMessage('აღწერა უნდა იყოს მინიმუმ 3 სიმბოლო'),
@@ -116,7 +135,22 @@ router.post(
       req.body.cadastralHidden === true ||
       req.body.cadastralHidden === 'true';
 
-    const photos = (req.files || []).map((f) => f.path);
+    let photos = [];
+    let panoramaPhotos = [];
+    try {
+      const uploaded = await uploadPropertyPhotosFromFiles(req.files || []);
+      photos = uploaded.urls;
+      let panoramaFlags = [];
+      try {
+        panoramaFlags = req.body.panoramaFlags ? JSON.parse(req.body.panoramaFlags) : [];
+        if (!Array.isArray(panoramaFlags)) panoramaFlags = [];
+      } catch {
+        panoramaFlags = [];
+      }
+      panoramaPhotos = photos.filter((_, i) => Boolean(panoramaFlags[i]));
+    } catch (uploadErr) {
+      return res.status(400).json({ message: uploadErr.message || 'ფოტოს ატვირთვა ვერ მოხერხდა' });
+    }
 
     let tbilisiSubdistricts = [];
     try {
@@ -174,6 +208,7 @@ router.post(
         type: req.body.type,
         dealType: req.body.dealType,
         photos,
+        panoramaPhotos,
         threeDLink: req.body.threeDLink || '',
         exteriorLink: req.body.exteriorLink || '',
         interiorLink: req.body.interiorLink || '',
@@ -671,6 +706,47 @@ router.get(
   }
 );
 
+// ADD PHOTOS (protected; only owner) - multipart with photos
+router.post(
+  '/:id/photos',
+  requireAuth,
+  uploadPropertyPhotosMiddleware(12),
+  [param('id').isString().trim().isLength({ min: 5 })],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const existing = await Property.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Not found' });
+    if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
+
+    let uploaded = [];
+    try {
+      const result = await uploadPropertyPhotosFromFiles(req.files || []);
+      uploaded = result.urls;
+    } catch (uploadErr) {
+      return res.status(400).json({ message: uploadErr.message || 'ფოტოს ატვირთვა ვერ მოხერხდა' });
+    }
+    if (uploaded.length === 0) return res.status(400).json({ message: 'ფოტო არ აიტვირთა' });
+
+    let panoramaFlags = [];
+    try {
+      panoramaFlags = req.body.panoramaFlags ? JSON.parse(req.body.panoramaFlags) : [];
+      if (!Array.isArray(panoramaFlags)) panoramaFlags = [];
+    } catch {
+      panoramaFlags = [];
+    }
+    const newPanoramas = uploaded.filter((_, i) => Boolean(panoramaFlags[i]));
+    const next = [...(existing.photos || []), ...uploaded].slice(0, 30);
+    const nextPanorama = [...(existing.panoramaPhotos || []), ...newPanoramas].filter((u) => next.includes(u));
+    existing.photos = next;
+    existing.panoramaPhotos = [...new Set(nextPanorama)];
+    await existing.save();
+
+    res.json({ photos: existing.photos, panoramaPhotos: existing.panoramaPhotos });
+  }
+);
+
 // UPDATE (protected; only owner)
 router.put(
   '/:id',
@@ -694,6 +770,7 @@ router.put(
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('photos').optional().isArray(),
+    body('panoramaPhotos').optional().isArray(),
     body('mainPhoto').optional().isInt({ min: 0 }),
     body('cadastralHidden').optional().isBoolean(),
     body('brokerListingMode').optional().isIn(['public', 'unlisted', 'private', 'sold'])
@@ -725,6 +802,13 @@ router.put(
     if (req.body.rooms !== undefined) patch.rooms = Number(req.body.rooms);
     if (req.body.bedrooms !== undefined) patch.bedrooms = Number(req.body.bedrooms);
     if (req.body.photos !== undefined) patch.photos = req.body.photos;
+    if (req.body.panoramaPhotos !== undefined) {
+      const list = Array.isArray(req.body.panoramaPhotos) ? req.body.panoramaPhotos : [];
+      const photoList = req.body.photos !== undefined ? req.body.photos : existing.photos;
+      patch.panoramaPhotos = list.filter(
+        (u) => typeof u === 'string' && u.trim() && photoUrlInList(u, photoList)
+      );
+    }
     if (req.body.mainPhoto !== undefined) patch.mainPhoto = Number(req.body.mainPhoto);
     if (req.body.location !== undefined) patch.location = req.body.location;
     if (req.body.floor !== undefined) patch.floor = Number(req.body.floor);

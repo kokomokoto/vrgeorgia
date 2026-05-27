@@ -5,7 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
-import { getProperty, updateProperty, resolveImageUrl } from '@/lib/api';
+import { addPropertyPhotos, getProperty, updateProperty, resolveImageUrl } from '@/lib/api';
+import { detectPanoramaFromFile, isPanoramaPhoto, normalizePhotoUrl } from '@/lib/panorama';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
@@ -108,7 +109,10 @@ export default function EditPropertyPage() {
 
   // ფოტოები
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
+  const [panoramaPhotos, setPanoramaPhotos] = useState<string[]>([]);
   const [mainPhotoIndex, setMainPhotoIndex] = useState(0);
+  const [addingPhotos, setAddingPhotos] = useState(false);
+  const addPhotosInputRef = useRef<HTMLInputElement | null>(null);
 
   // დეტალური ინფორმაცია
   const [roomCount, setRoomCount] = useState<number | null>(null);
@@ -147,6 +151,7 @@ export default function EditPropertyPage() {
   /** „6+“ ველის შენახვა რედაქტირებაში (ზუსტი რიცხვი API-დან) */
   const loadedRoomsRef = useRef(0);
   const loadedBedroomsRef = useRef(0);
+  const [panoramaSaving, setPanoramaSaving] = useState(false);
 
   useEffect(() => setHydrated(true), []);
 
@@ -182,6 +187,7 @@ export default function EditPropertyPage() {
         setLat(p.location.lat);
         setLng(p.location.lng);
         setExistingPhotos(p.photos || []);
+        setPanoramaPhotos((p as Property).panoramaPhotos || []);
         setMainPhotoIndex((p as any).mainPhoto || 0);
         setCadastralCode((p as any).cadastralCode || '');
         setCadastralHidden(Boolean((p as any).cadastralHidden));
@@ -301,12 +307,70 @@ export default function EditPropertyPage() {
 
   // ფოტოს წაშლა
   const handleDeletePhoto = (index: number) => {
+    const removed = existingPhotos[index];
     const newPhotos = existingPhotos.filter((_, i) => i !== index);
     setExistingPhotos(newPhotos);
+    if (removed) {
+      setPanoramaPhotos((prev) => prev.filter((u) => u !== removed));
+    }
     if (mainPhotoIndex >= newPhotos.length) {
       setMainPhotoIndex(Math.max(0, newPhotos.length - 1));
     } else if (index < mainPhotoIndex) {
       setMainPhotoIndex(mainPhotoIndex - 1);
+    }
+  };
+
+  const cleanPanoramaList = (list: string[], photos: string[]) =>
+    list.filter((u) => photos.some((p) => p === u || normalizePhotoUrl(p) === normalizePhotoUrl(u)));
+
+  const persistPanoramaPhotos = async (next: string[]) => {
+    const clean = cleanPanoramaList(next, existingPhotos);
+    setPanoramaSaving(true);
+    try {
+      const res = await updateProperty(id, {
+        photos: existingPhotos,
+        panoramaPhotos: clean,
+      } as any);
+      setPanoramaPhotos((res.property as Property).panoramaPhotos || clean);
+    } finally {
+      setPanoramaSaving(false);
+    }
+  };
+
+  const togglePanoramaPhoto = async (photoUrl: string) => {
+    const prev = panoramaPhotos;
+    const wasOn = isPanoramaPhoto(photoUrl, prev);
+    const next = wasOn
+      ? prev.filter((u) => !isPanoramaPhoto(photoUrl, [u]))
+      : [...prev.filter((u) => !isPanoramaPhoto(photoUrl, [u])), photoUrl];
+    setPanoramaPhotos(next);
+    try {
+      await persistPanoramaPhotos(next);
+    } catch (err: unknown) {
+      setPanoramaPhotos(prev);
+      setError(err instanceof Error ? err.message : t('error_save_failed'));
+    }
+  };
+
+  const handleAddMorePhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const list = Array.from(files);
+    setAddingPhotos(true);
+    setError(null);
+    try {
+      const panoramaFlags = await Promise.all(list.map((f) => detectPanoramaFromFile(f)));
+      const res = await addPropertyPhotos(id, list, panoramaFlags);
+      setExistingPhotos(res.photos || []);
+      setPanoramaPhotos(res.panoramaPhotos || []);
+      setMainPhotoIndex((prev) => {
+        const nextLen = (res.photos || []).length;
+        return prev >= nextLen ? Math.max(0, nextLen - 1) : prev;
+      });
+      if (addPhotosInputRef.current) addPhotosInputRef.current.value = '';
+    } catch (err: any) {
+      setError(err.message || t('error_save_failed'));
+    } finally {
+      setAddingPhotos(false);
     }
   };
 
@@ -352,6 +416,7 @@ export default function EditPropertyPage() {
         contactPhone, contactEmail,
         location: { lat, lng },
         photos: existingPhotos,
+        panoramaPhotos: cleanPanoramaList(panoramaPhotos, existingPhotos),
         mainPhoto: mainPhotoIndex,
         floor: Number(floor) || 0,
         totalFloors: Number(totalFloors) || 0,
@@ -979,9 +1044,39 @@ export default function EditPropertyPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-slate-700">📸 {existingPhotos.length} {t('photos_count')}</span>
                     </div>
-                    <p className="text-xs text-slate-500">💡 {t('click_main_photo')}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        ref={addPhotosInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => handleAddMorePhotos(e.target.files)}
+                      />
+                      <button
+                        type="button"
+                        disabled={addingPhotos}
+                        onClick={() => addPhotosInputRef.current?.click()}
+                        className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          addingPhotos
+                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {addingPhotos ? t('saving') : `+ ${t('add_new_photos')}`}
+                      </button>
+                      <div className="text-xs text-slate-500">
+                        {t('choose_or_drop_photos')}
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      💡 {t('click_main_photo')} · {t('photo_360_toggle_hint')}
+                      {panoramaSaving ? ` (${t('saving')}…)` : ''}
+                    </p>
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                      {existingPhotos.map((photo, index) => (
+                      {existingPhotos.map((photo, index) => {
+                        const is360 = isPanoramaPhoto(photo, panoramaPhotos);
+                        return (
                         <div
                           key={photo}
                           className={`relative group aspect-square cursor-pointer ${index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
@@ -990,7 +1085,7 @@ export default function EditPropertyPage() {
                           <img
                             src={resolveImageUrl(photo)}
                             alt={`${t('photo')} ${index + 1}`}
-                            className="w-full h-full object-cover rounded-lg border border-slate-200"
+                            className={`w-full h-full rounded-lg border border-slate-200 ${is360 ? 'object-contain bg-slate-900' : 'object-cover'}`}
                           />
                           <button
                             type="button"
@@ -999,19 +1094,52 @@ export default function EditPropertyPage() {
                           >
                             ✕
                           </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); togglePanoramaPhoto(photo); }}
+                            className={`absolute top-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-bold text-white shadow transition-colors ${
+                              is360 ? 'bg-blue-600' : 'bg-slate-600/90 hover:bg-slate-700'
+                            }`}
+                            title={t('photo_360_toggle')}
+                          >
+                            360°
+                          </button>
                           {index === mainPhotoIndex && (
                             <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded">
                               ⭐ {t('main_photo')}
                             </span>
                           )}
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   </div>
                 ) : (
                   <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
                     <div className="text-5xl mb-3">📸</div>
                     <p className="text-slate-500">{t('no_photos')}</p>
+                    <div className="mt-4 flex justify-center">
+                      <input
+                        ref={addPhotosInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => handleAddMorePhotos(e.target.files)}
+                      />
+                      <button
+                        type="button"
+                        disabled={addingPhotos}
+                        onClick={() => addPhotosInputRef.current?.click()}
+                        className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                          addingPhotos
+                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {addingPhotos ? t('saving') : t('add_photos')}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

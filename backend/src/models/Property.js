@@ -71,6 +71,8 @@ const propertySchema = new mongoose.Schema(
     dealType: { type: String, enum: ['sale', 'rent', 'mortgage'], required: true },
 
     photos: [{ type: String }],
+    /** 360° equirectangular ფოტოების URL-ები (photos-ის ქვემნიჯვანეობა) */
+    panoramaPhotos: [{ type: String }],
     mainPhoto: { type: Number, default: 0 }, // photos მასივში მთავარი ფოტოს ინდექსი
     threeDLink: { type: String, default: '' }, // ძველი ველი - ბექვორდ კომპატიბილობისთვის
     exteriorLink: { type: String, default: '' }, // 3D ექსტერიერი

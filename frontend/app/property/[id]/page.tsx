@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -16,16 +17,52 @@ import { PropertyCard } from '@/components/PropertyCard';
 import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
 import { BrokerContactChannels } from '@/components/BrokerContactChannels';
+import { PanoramaViewer } from '@/components/PanoramaViewer';
+import { isPanoramaPhoto } from '@/lib/panorama';
 import { useAuth } from '@/components/AuthProvider';
 import type { Property } from '@/lib/types';
 
-// Lightbox კომპონენტი - keyboard ნავიგაცია + დიდი ღილაკები
-function LightboxModal({ photos, index, onClose, onChangeIndex }: {
+// Lightbox — ჩვეულებრივი ფოტო ან 360° პანორამა
+function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, t }: {
   photos: string[];
+  panoramaPhotos?: string[];
   index: number;
   onClose: () => void;
   onChangeIndex: (i: number) => void;
+  t: (key: string) => string;
 }) {
+  const currentUrl = resolveImageUrl(photos[index]);
+  const is360 = isPanoramaPhoto(photos[index], panoramaPhotos);
+  const viewerWrapRef = React.useRef<HTMLDivElement>(null);
+  const [show360Ui, setShow360Ui] = React.useState(true);
+  const hide360Overlay = React.useCallback(() => {
+    setShow360Ui((prev) => (prev ? false : prev));
+  }, []);
+  const [portalReady, setPortalReady] = React.useState(false);
+
+  React.useEffect(() => {
+    setShow360Ui(true);
+  }, [index]);
+
+  React.useEffect(() => {
+    setPortalReady(true);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  const toggleViewerFullscreen = React.useCallback(() => {
+    const el = viewerWrapRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void el.requestFullscreen();
+    }
+  }, []);
+
   React.useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -36,21 +73,20 @@ function LightboxModal({ photos, index, onClose, onChangeIndex }: {
     return () => window.removeEventListener('keydown', handleKey);
   }, [index, photos.length, onClose, onChangeIndex]);
 
-  return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+  if (!portalReady) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
     >
-      <button 
-        className="absolute top-4 right-4 text-white text-4xl hover:text-slate-300 z-50 w-12 h-12 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 transition-colors"
-        onClick={onClose}
-      >
-        ×
-      </button>
-      
       {index > 0 && (
         <button
-          className="absolute left-0 top-0 h-full w-20 md:w-32 flex items-center justify-center z-50 cursor-pointer hover:bg-white/10 transition-colors"
+          type="button"
+          aria-label={t('previous_photo') || 'Previous photo'}
+          className="absolute left-0 top-28 bottom-32 z-[210] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
           onClick={(e) => { e.stopPropagation(); onChangeIndex(index - 1); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
@@ -59,16 +95,61 @@ function LightboxModal({ photos, index, onClose, onChangeIndex }: {
         </button>
       )}
       
-      <img
-        src={resolveImageUrl(photos[index])}
-        alt={`Photo ${index + 1}`}
-        className="max-h-[90vh] max-w-[90vw] object-contain"
-        onClick={(e) => e.stopPropagation()}
-      />
+      {is360 ? (
+        <div
+          className="mx-auto flex w-[min(96vw,1600px)] flex-col items-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            ref={viewerWrapRef}
+            className="relative h-[min(94vh,1040px)] w-full min-h-[560px]"
+          >
+          <PanoramaViewer
+            key={currentUrl}
+            src={currentUrl}
+            showNavbar={false}
+            onContainerClick={hide360Overlay}
+            className="h-full w-full rounded-lg"
+          />
+
+          <button
+            type="button"
+            aria-label="სრული ეკრანი"
+            className="absolute bottom-4 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-all hover:bg-black/75"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleViewerFullscreen();
+            }}
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+            </svg>
+          </button>
+
+          {show360Ui && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <span className="select-none rounded-2xl bg-black/50 px-8 py-4 text-5xl font-bold tracking-wide text-white shadow-2xl backdrop-blur-sm md:text-6xl">
+                360°
+              </span>
+            </div>
+          )}
+
+          </div>
+        </div>
+      ) : (
+        <img
+          src={currentUrl}
+          alt={`Photo ${index + 1}`}
+          className="max-h-[90vh] max-w-[90vw] object-contain"
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
       
       {index < photos.length - 1 && (
         <button
-          className="absolute right-0 top-0 h-full w-20 md:w-32 flex items-center justify-center z-50 cursor-pointer hover:bg-white/10 transition-colors"
+          type="button"
+          aria-label={t('next_photo') || 'Next photo'}
+          className="absolute right-0 top-28 bottom-32 z-[210] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
           onClick={(e) => { e.stopPropagation(); onChangeIndex(index + 1); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
@@ -77,25 +158,50 @@ function LightboxModal({ photos, index, onClose, onChangeIndex }: {
         </button>
       )}
       
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-4 py-2 rounded-full">
+      <div className="absolute bottom-4 left-1/2 z-[210] -translate-x-1/2 rounded-full bg-black/50 px-4 py-2 text-sm text-white">
         {index + 1} / {photos.length}
       </div>
-      
-      {/* ქვედა thumbnails */}
-      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-1.5 max-w-[80vw] overflow-x-auto p-2" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="absolute bottom-16 left-1/2 z-[210] flex max-w-[80vw] -translate-x-1/2 gap-1.5 overflow-x-auto p-2"
+        onClick={(e) => e.stopPropagation()}
+      >
         {photos.map((p, i) => (
           <button
             key={i}
+            type="button"
             onClick={() => onChangeIndex(i)}
-            className={`flex-shrink-0 w-12 h-12 rounded-md overflow-hidden border-2 transition-all ${
-              i === index ? 'border-white scale-110' : 'border-transparent opacity-60 hover:opacity-100'
+            className={`h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border-2 transition-all ${
+              i === index ? 'scale-110 border-white' : 'border-transparent opacity-60 hover:opacity-100'
             }`}
           >
-            <img src={resolveImageUrl(p)} alt="" className="w-full h-full object-cover" />
+            <img src={resolveImageUrl(p)} alt="" className="h-full w-full object-cover" />
           </button>
         ))}
       </div>
-    </div>
+
+      <button
+        type="button"
+        aria-label={t('close') || 'Close'}
+        className="absolute top-4 right-4 z-[220] flex h-11 w-11 items-center justify-center rounded-full bg-black/60 p-0 text-white shadow-lg transition-colors hover:bg-black/80"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <svg
+          className="block h-6 w-6 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>,
+    document.body
   );
 }
 
@@ -425,7 +531,7 @@ function PropertyDetailInner() {
           })()}
         </div>
 
-        <div className="flex flex-col gap-4 sm:gap-5 lg:col-start-2 lg:row-start-2 lg:self-start">
+        <div className="flex flex-col gap-4 sm:gap-5 lg:col-start-2 lg:row-start-2 lg:h-full lg:self-stretch lg:justify-between">
           {sidebarPanels}
         </div>
         </>
@@ -442,19 +548,27 @@ function PropertyDetailInner() {
         <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="mb-3 text-sm font-semibold">{t('photos')} ({photos.length})</div>
           <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-thin">
-            {photos.map((p, idx) => (
+            {photos.map((p, idx) => {
+              const is360Thumb = isPanoramaPhoto(p, property.panoramaPhotos);
+              return (
               <div 
                 key={p} 
-                className="flex-shrink-0 cursor-pointer overflow-hidden rounded-lg hover:opacity-90 transition-opacity"
+                className="relative flex-shrink-0 cursor-pointer overflow-hidden rounded-lg hover:opacity-90 transition-opacity"
                 onClick={() => setLightboxIndex(idx)}
               >
                 <img 
                   src={resolveImageUrl(p)} 
                   alt={`Photo ${idx + 1}`} 
-                  className="h-[140px] sm:h-[180px] w-auto object-cover rounded-lg" 
+                  className={`h-[140px] sm:h-[180px] w-auto rounded-lg ${is360Thumb ? 'object-contain bg-slate-900 min-w-[200px]' : 'object-cover'}`}
                 />
+                {is360Thumb && (
+                  <span className="absolute left-1.5 top-1.5 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
+                    {t('photo_360')}
+                  </span>
+                )}
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}
@@ -748,9 +862,11 @@ function PropertyDetailInner() {
       {lightboxIndex !== null && (
         <LightboxModal
           photos={photos}
+          panoramaPhotos={property.panoramaPhotos}
           index={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           onChangeIndex={setLightboxIndex}
+          t={t}
         />
       )}
     </div>

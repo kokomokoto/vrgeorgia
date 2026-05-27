@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  transpilePackages: ['@photo-sphere-viewer/core'],
   // Production-ზე standalone output Render.com-ისთვის
   output: 'standalone',
   // სურათების დომენი

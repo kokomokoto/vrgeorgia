@@ -66,6 +66,8 @@ export type Property = {
   type: PropertyType;
   dealType: DealType;
   photos: string[];
+  /** 360° equirectangular ფოტოების URL-ები */
+  panoramaPhotos?: string[];
   mainPhoto?: number;
   threeDLink?: string; // ძველი ველი - ბექვორდ კომპატიბილობა
   exteriorLink?: string; // 3D ექსტერიერი

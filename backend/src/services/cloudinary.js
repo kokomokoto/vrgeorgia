@@ -33,7 +33,7 @@ const avatarStorage = new CloudinaryStorage({
 /** ობიექტის ფოტოები — memory (პირდაპირ Cloudinary-ზე არა, photoUpload.js ამუშავებს) */
 export const uploadPropertyPhotos = multer({
   storage: multer.memoryStorage(),
-  limits: { files: 12, fileSize: PROPERTY_PHOTO_MAX_BYTES },
+  limits: { files: 30, fileSize: PROPERTY_PHOTO_MAX_BYTES },
 });
 
 export const uploadAgentPhoto = multer({
@@ -46,7 +46,7 @@ export const uploadAvatar = multer({
   limits: { fileSize: 3 * 1024 * 1024 },
 });
 
-export function uploadPropertyPhotosMiddleware(maxFiles = 12) {
+export function uploadPropertyPhotosMiddleware(maxFiles = 30) {
   return (req, res, next) => {
     uploadPropertyPhotos.array('photos', maxFiles)(req, res, (err) => {
       if (!err) return next();

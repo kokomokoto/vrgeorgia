@@ -6,6 +6,13 @@ import { useTranslation } from 'react-i18next';
 
 import { createProperty, getMe } from '@/lib/api';
 import { detectPanoramaFromFile } from '@/lib/panorama';
+import {
+  MAX_PROPERTY_PHOTOS,
+  adjustMainIndexAfterRemoval,
+  resolveDropToIndex,
+  reorderArray,
+} from '@/lib/propertyPhotos';
+import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
 import { useAuth } from '@/components/AuthProvider';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
@@ -117,7 +124,7 @@ export default function UploadPage() {
   const [lat, setLat] = React.useState<number | null>(null);
   const [lng, setLng] = React.useState<number | null>(null);
   const [addressMapFill, setAddressMapFill] = React.useState({ key: 0, text: '' });
-  const MAX_PHOTOS = 12;
+  const MAX_PHOTOS = MAX_PROPERTY_PHOTOS;
   const [photoFiles, setPhotoFiles] = React.useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = React.useState<string[]>([]);
   const [mainPhotoIndex, setMainPhotoIndex] = React.useState<number>(0);
@@ -184,6 +191,22 @@ export default function UploadPage() {
       cancelled = true;
     };
   }, [photoFiles]);
+
+  const handlePhotoReorder = React.useCallback((from: number, target: number, placement: 'before' | 'after') => {
+    setPhotoFiles((prev) => {
+      const to = resolveDropToIndex(from, target, placement);
+      const next = reorderArray(prev, from, to);
+      setMainPhotoIndex((mi) => {
+        const mainPhoto = prev[mi];
+        if (!mainPhoto) return 0;
+        const nextIndex = next.indexOf(mainPhoto);
+        return nextIndex >= 0 ? nextIndex : 0;
+      });
+      return next;
+    });
+  }, []);
+
+  const { getThumbDragProps, isInsertBefore, isInsertAfter, getNudgeClass } = usePhotoDragReorder(handlePhotoReorder);
 
   // ეტაპების შემოწმება
   const isStep1Complete = type !== '';
@@ -255,7 +278,11 @@ export default function UploadPage() {
     if (!files?.length) return;
     const incoming = Array.from(files).filter((f) => f.type.startsWith('image/'));
     if (incoming.length === 0) return;
-    setPhotoFiles((prev) => [...prev, ...incoming].slice(0, MAX_PHOTOS));
+    setPhotoFiles((prev) => {
+      const space = MAX_PHOTOS - prev.length;
+      if (space <= 0) return prev;
+      return [...prev, ...incoming.slice(0, space)];
+    });
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -272,11 +299,7 @@ export default function UploadPage() {
   // ფოტოს წაშლა
   const removePhoto = (index: number) => {
     setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
-    if (index === mainPhotoIndex) {
-      setMainPhotoIndex(0);
-    } else if (index < mainPhotoIndex) {
-      setMainPhotoIndex((prev) => prev - 1);
-    }
+    setMainPhotoIndex((prev) => adjustMainIndexAfterRemoval(prev, index));
   };
 
   // მთავარი ფოტოს არჩევა
@@ -363,14 +386,12 @@ export default function UploadPage() {
       form.set('privateNotes', privateNotes);
       
       if (photoFiles.length > 0) {
-        const photoArray = [...photoFiles];
-        const ordered = [
-          photoArray[mainPhotoIndex],
-          ...photoArray.filter((_, i) => i !== mainPhotoIndex),
-        ];
-        const panoramaFlags = await Promise.all(ordered.map((f) => detectPanoramaFromFile(f)));
+        form.set('mainPhoto', String(mainPhotoIndex));
+        const panoramaFlags = await Promise.all(
+          photoFiles.map((f) => detectPanoramaFromFile(f))
+        );
         form.set('panoramaFlags', JSON.stringify(panoramaFlags));
-        ordered.forEach((f) => form.append('photos', f));
+        photoFiles.forEach((f) => form.append('photos', f));
       }
 
       const res = await createProperty(form);
@@ -1207,18 +1228,45 @@ export default function UploadPage() {
                           {t('delete_all')}
                         </button>
                       </div>
-                      <p className="text-xs text-slate-500">💡 {t('click_main_photo')}</p>
+                      <p className="text-xs text-slate-500">
+                        💡 {t('click_main_photo')} · {t('photo_drag_reorder_hint')}
+                      </p>
                       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                         {photoPreviews.map((preview, index) => (
                           <div
-                            key={index}
-                            className={`relative group aspect-square cursor-pointer ${index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+                            key={`${preview.slice(0, 32)}-${index}`}
+                            {...getThumbDragProps(index)}
+                            className={`relative group aspect-square cursor-grab active:cursor-grabbing transition-transform duration-150 ${
+                              index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                            } ${getNudgeClass(index)}`}
                             onClick={() => setAsMainPhoto(index)}
                           >
+                            {isInsertBefore(index) && (
+                              <span
+                                className="pointer-events-none absolute inset-y-2 -left-1.5 z-20 w-0.5 rounded-full bg-amber-400 shadow-[0_0_0_2px_rgba(251,191,36,0.25)]"
+                                aria-hidden
+                              />
+                            )}
+                            {isInsertAfter(index) && (
+                              <span
+                                className="pointer-events-none absolute inset-y-2 -right-1.5 z-20 w-0.5 rounded-full bg-amber-400 shadow-[0_0_0_2px_rgba(251,191,36,0.25)]"
+                                aria-hidden
+                              />
+                            )}
+                            <span className="absolute left-1 top-1 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                              {index + 1}
+                            </span>
+                            <span
+                              className="absolute bottom-1 right-1 z-10 rounded bg-black/40 px-1 text-[10px] text-white opacity-80"
+                              aria-hidden
+                            >
+                              ⋮⋮
+                            </span>
                             <img
                               src={preview}
                               alt={`${t('photo')} ${index + 1}`}
-                              className="w-full h-full object-cover rounded-lg border border-slate-200"
+                              className="pointer-events-none h-full w-full rounded-lg border border-slate-200 object-cover"
+                              draggable={false}
                             />
                             <button
                               type="button"

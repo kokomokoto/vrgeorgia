@@ -104,7 +104,9 @@ export function PropertyCard({
             compactPhoto ? 'px-3 pb-2 pt-1.5' : 'px-3.5 pb-3 pt-2.5'
           }`}
         >
-          <PropertyPriceRow p={p} />
+          <div onClick={stopNav}>
+            <PropertyPriceRow p={p} />
+          </div>
 
           <div className={`flex flex-col ${compactPhoto ? 'mt-1 gap-1.5' : 'mt-1.5 gap-2.5'}`}>
           <h3

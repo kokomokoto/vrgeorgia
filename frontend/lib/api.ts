@@ -77,9 +77,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${getApiBase()}${path}`, { ...init, headers, cache: 'no-store' });
-  } catch (fetchError) {
-    // Network error - სერვერი არ მუშაობს
-    throw new Error('სერვერთან კავშირი ვერ მოხერხდა. გთხოვთ შეამოწმოთ backend გაშვებულია თუ არა (npm start backend ფოლდერში)');
+  } catch {
+    const base = getApiBase();
+    throw new Error(
+      `სერვერთან კავშირი ვერ მოხერხდა (${base}). გაუშვით backend: cd backend && npm run dev`
+    );
   }
 
   if (!res.ok) {

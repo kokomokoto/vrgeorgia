@@ -1,12 +1,19 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
 import { addPropertyPhotos, getProperty, updateProperty, resolveImageUrl } from '@/lib/api';
 import { detectPanoramaFromFile, isPanoramaPhoto, normalizePhotoUrl } from '@/lib/panorama';
+import {
+  MAX_PROPERTY_PHOTOS,
+  adjustMainIndexAfterRemoval,
+  resolveDropToIndex,
+  reorderArray,
+} from '@/lib/propertyPhotos';
+import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
@@ -234,6 +241,22 @@ export default function EditPropertyPage() {
       .finally(() => setDataLoading(false));
   }, [hydrated, id]);
 
+  const handlePhotoReorder = useCallback((from: number, target: number, placement: 'before' | 'after') => {
+    setExistingPhotos((prev) => {
+      const to = resolveDropToIndex(from, target, placement);
+      const next = reorderArray(prev, from, to);
+      setMainPhotoIndex((mi) => {
+        const mainPhoto = prev[mi];
+        if (!mainPhoto) return 0;
+        const nextIndex = next.indexOf(mainPhoto);
+        return nextIndex >= 0 ? nextIndex : 0;
+      });
+      return next;
+    });
+  }, []);
+
+  const { getThumbDragProps, isInsertBefore, isInsertAfter, getNudgeClass } = usePhotoDragReorder(handlePhotoReorder);
+
   // ეტაპების შემოწმება
   const isStep1Complete = type !== '';
   const isStep2Complete = dealType !== '';
@@ -313,11 +336,7 @@ export default function EditPropertyPage() {
     if (removed) {
       setPanoramaPhotos((prev) => prev.filter((u) => u !== removed));
     }
-    if (mainPhotoIndex >= newPhotos.length) {
-      setMainPhotoIndex(Math.max(0, newPhotos.length - 1));
-    } else if (index < mainPhotoIndex) {
-      setMainPhotoIndex(mainPhotoIndex - 1);
-    }
+    setMainPhotoIndex((prev) => adjustMainIndexAfterRemoval(prev, index));
   };
 
   const cleanPanoramaList = (list: string[], photos: string[]) =>
@@ -354,7 +373,12 @@ export default function EditPropertyPage() {
 
   const handleAddMorePhotos = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const list = Array.from(files);
+    const remaining = MAX_PROPERTY_PHOTOS - existingPhotos.length;
+    if (remaining <= 0) {
+      setError(t('max_photos_reached', { max: MAX_PROPERTY_PHOTOS }));
+      return;
+    }
+    const list = Array.from(files).slice(0, remaining);
     setAddingPhotos(true);
     setError(null);
     try {
@@ -1055,10 +1079,10 @@ export default function EditPropertyPage() {
                       />
                       <button
                         type="button"
-                        disabled={addingPhotos}
+                        disabled={addingPhotos || existingPhotos.length >= MAX_PROPERTY_PHOTOS}
                         onClick={() => addPhotosInputRef.current?.click()}
                         className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          addingPhotos
+                          addingPhotos || existingPhotos.length >= MAX_PROPERTY_PHOTOS
                             ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
                             : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
@@ -1066,11 +1090,11 @@ export default function EditPropertyPage() {
                         {addingPhotos ? t('saving') : `+ ${t('add_new_photos')}`}
                       </button>
                       <div className="text-xs text-slate-500">
-                        {t('choose_or_drop_photos')}
+                        {t('choose_or_drop_photos')} ({existingPhotos.length}/{MAX_PROPERTY_PHOTOS})
                       </div>
                     </div>
                     <p className="text-xs text-slate-500">
-                      💡 {t('click_main_photo')} · {t('photo_360_toggle_hint')}
+                      💡 {t('click_main_photo')} · {t('photo_drag_reorder_hint')} · {t('photo_360_toggle_hint')}
                       {panoramaSaving ? ` (${t('saving')}…)` : ''}
                     </p>
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
@@ -1078,32 +1102,61 @@ export default function EditPropertyPage() {
                         const is360 = isPanoramaPhoto(photo, panoramaPhotos);
                         return (
                         <div
-                          key={photo}
-                          className={`relative group aspect-square cursor-pointer ${index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}
+                          key={`${photo}-${index}`}
+                          {...getThumbDragProps(index)}
+                          className={`relative group aspect-square cursor-grab active:cursor-grabbing transition-transform duration-150 ${
+                            index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                          } ${getNudgeClass(index)}`}
                           onClick={() => setMainPhotoIndex(index)}
                         >
+                          {isInsertBefore(index) && (
+                            <span
+                              className="pointer-events-none absolute inset-y-2 -left-1.5 z-20 w-0.5 rounded-full bg-amber-400 shadow-[0_0_0_2px_rgba(251,191,36,0.25)]"
+                              aria-hidden
+                            />
+                          )}
+                          {isInsertAfter(index) && (
+                            <span
+                              className="pointer-events-none absolute inset-y-2 -right-1.5 z-20 w-0.5 rounded-full bg-amber-400 shadow-[0_0_0_2px_rgba(251,191,36,0.25)]"
+                              aria-hidden
+                            />
+                          )}
+                          <span className="absolute left-1 top-1 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            {index + 1}
+                          </span>
+                          <span
+                            className="absolute bottom-1 right-1 z-10 rounded bg-black/40 px-1 text-[10px] text-white opacity-80"
+                            aria-hidden
+                          >
+                            ⋮⋮
+                          </span>
                           <img
                             src={resolveImageUrl(photo)}
                             alt={`${t('photo')} ${index + 1}`}
-                            className={`w-full h-full rounded-lg border border-slate-200 ${is360 ? 'object-contain bg-slate-900' : 'object-cover'}`}
-                          />
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleDeletePhoto(index); }}
-                            className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                          >
-                            ✕
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); togglePanoramaPhoto(photo); }}
-                            className={`absolute top-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-bold text-white shadow transition-colors ${
-                              is360 ? 'bg-blue-600' : 'bg-slate-600/90 hover:bg-slate-700'
+                            className={`pointer-events-none h-full w-full rounded-lg border border-slate-200 ${
+                              is360 ? 'object-contain bg-slate-900' : 'object-cover'
                             }`}
-                            title={t('photo_360_toggle')}
-                          >
-                            360°
-                          </button>
+                            draggable={false}
+                          />
+                          <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-0.5">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); togglePanoramaPhoto(photo); }}
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold text-white shadow transition-colors ${
+                                is360 ? 'bg-blue-600' : 'bg-slate-600/90 hover:bg-slate-700'
+                              }`}
+                              title={t('photo_360_toggle')}
+                            >
+                              360°
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleDeletePhoto(index); }}
+                              className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                            >
+                              ✕
+                            </button>
+                          </div>
                           {index === mainPhotoIndex && (
                             <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded">
                               ⭐ {t('main_photo')}

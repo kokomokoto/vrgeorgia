@@ -92,7 +92,7 @@ const PUBLIC_LISTING_OR = {
 router.post(
   '/',
   requireAuth,
-  uploadPropertyPhotosMiddleware(12),
+  uploadPropertyPhotosMiddleware(30),
   [
     body('title').isString().trim().isLength({ min: 2, max: 120 }).withMessage('სათაური უნდა იყოს 2-120 სიმბოლო'),
     body('desc').isString().trim().isLength({ min: 3, max: 5000 }).withMessage('აღწერა უნდა იყოს მინიმუმ 3 სიმბოლო'),
@@ -139,7 +139,7 @@ router.post(
     let panoramaPhotos = [];
     try {
       const uploaded = await uploadPropertyPhotosFromFiles(req.files || []);
-      photos = uploaded.urls;
+      photos = uploaded.urls.slice(0, 30);
       let panoramaFlags = [];
       try {
         panoramaFlags = req.body.panoramaFlags ? JSON.parse(req.body.panoramaFlags) : [];
@@ -209,6 +209,10 @@ router.post(
         dealType: req.body.dealType,
         photos,
         panoramaPhotos,
+        mainPhoto: Math.min(
+          Math.max(0, Number(req.body.mainPhoto) || 0),
+          Math.max(0, photos.length - 1)
+        ),
         threeDLink: req.body.threeDLink || '',
         exteriorLink: req.body.exteriorLink || '',
         interiorLink: req.body.interiorLink || '',
@@ -710,7 +714,7 @@ router.get(
 router.post(
   '/:id/photos',
   requireAuth,
-  uploadPropertyPhotosMiddleware(12),
+  uploadPropertyPhotosMiddleware(30),
   [param('id').isString().trim().isLength({ min: 5 })],
   async (req, res) => {
     const errors = validationResult(req);

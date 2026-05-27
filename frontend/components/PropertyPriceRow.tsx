@@ -41,7 +41,11 @@ export function PropertyPriceRow({ p, className = '' }: { p: Property; className
 
       <button
         type="button"
-        onClick={() => toggleDisplayCurrency()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleDisplayCurrency();
+        }}
         className="inline-flex h-[1.25rem] shrink-0 cursor-pointer items-center gap-0.5 rounded-full bg-slate-100 px-0.5 transition-colors hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 sm:h-[1.5rem]"
         aria-label={
           displayCurrency === 'GEL'

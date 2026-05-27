@@ -77,7 +77,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90"
+      className="fixed inset-0 !z-[9999] flex items-center justify-center bg-black/90"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -86,7 +86,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         <button
           type="button"
           aria-label={t('previous_photo') || 'Previous photo'}
-          className="absolute left-0 top-28 bottom-32 z-[210] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
+          className="absolute left-0 top-28 bottom-32 z-[10000] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
           onClick={(e) => { e.stopPropagation(); onChangeIndex(index - 1); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
@@ -149,7 +149,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         <button
           type="button"
           aria-label={t('next_photo') || 'Next photo'}
-          className="absolute right-0 top-28 bottom-32 z-[210] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
+          className="absolute right-0 top-28 bottom-32 z-[10000] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
           onClick={(e) => { e.stopPropagation(); onChangeIndex(index + 1); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
@@ -158,11 +158,11 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         </button>
       )}
       
-      <div className="absolute bottom-4 left-1/2 z-[210] -translate-x-1/2 rounded-full bg-black/50 px-4 py-2 text-sm text-white">
+      <div className="absolute bottom-4 left-1/2 z-[10000] -translate-x-1/2 rounded-full bg-black/50 px-4 py-2 text-sm text-white">
         {index + 1} / {photos.length}
       </div>
       <div
-        className="absolute bottom-16 left-1/2 z-[210] flex max-w-[80vw] -translate-x-1/2 gap-1.5 overflow-x-auto p-2"
+        className="absolute bottom-16 left-1/2 z-[10000] flex max-w-[80vw] -translate-x-1/2 gap-1.5 overflow-x-auto p-2"
         onClick={(e) => e.stopPropagation()}
       >
         {photos.map((p, i) => (
@@ -182,7 +182,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
       <button
         type="button"
         aria-label={t('close') || 'Close'}
-        className="absolute top-4 right-4 z-[220] flex h-11 w-11 items-center justify-center rounded-full bg-black/60 p-0 text-white shadow-lg transition-colors hover:bg-black/80"
+        className="absolute top-4 right-4 z-[10001] flex h-11 w-11 items-center justify-center rounded-full bg-black/60 p-0 text-white shadow-lg transition-colors hover:bg-black/80"
         onClick={(e) => {
           e.stopPropagation();
           onClose();

@@ -77,135 +77,129 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex flex-col bg-black/90"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
-      <div className="flex shrink-0 justify-end px-3 py-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
+      {index > 0 && (
         <button
           type="button"
-          aria-label={t('close') || 'Close'}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 p-0 text-white shadow-lg transition-colors hover:bg-black/80"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
+          aria-label={t('previous_photo') || 'Previous photo'}
+          className="absolute left-0 top-28 bottom-32 z-[210] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
+          onClick={(e) => { e.stopPropagation(); onChangeIndex(index - 1); }}
         >
-          <svg
-            className="block h-6 w-6 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <path d="M6 6l12 12M18 6 6 18" />
-          </svg>
+          <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
+            ‹
+          </span>
         </button>
-      </div>
-
-      <div className="relative flex min-h-0 flex-1 w-full items-stretch">
-        {index > 0 && (
-          <button
-            type="button"
-            aria-label={t('previous_photo') || 'Previous photo'}
-            className="z-10 flex h-24 w-12 shrink-0 cursor-pointer items-center justify-center self-center transition-colors hover:bg-white/10 sm:w-14"
-            onClick={(e) => {
-              e.stopPropagation();
-              onChangeIndex(index - 1);
-            }}
-          >
-            <span className="text-4xl leading-none text-white/80 drop-shadow-lg sm:text-5xl">‹</span>
-          </button>
-        )}
-
+      )}
+      
+      {is360 ? (
         <div
-          className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center px-1 sm:px-2"
+          className="mx-auto flex w-[min(96vw,1600px)] flex-col items-center"
           onClick={(e) => e.stopPropagation()}
         >
-          {is360 ? (
-            <div
-              ref={viewerWrapRef}
-              className="relative aspect-[2/1] max-h-full w-full max-w-[min(96vw,1600px)] min-h-[180px]"
-            >
-              <PanoramaViewer
-                key={currentUrl}
-                src={currentUrl}
-                showNavbar={false}
-                onContainerClick={hide360Overlay}
-                className="h-full w-full rounded-lg"
-              />
-              <button
-                type="button"
-                aria-label="სრული ეკრანი"
-                className="absolute bottom-3 right-3 z-30 flex h-11 w-11 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-all hover:bg-black/75"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleViewerFullscreen();
-                }}
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-                </svg>
-              </button>
-              {show360Ui && (
-                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-                  <span className="select-none rounded-2xl bg-black/50 px-8 py-4 text-5xl font-bold tracking-wide text-white shadow-2xl backdrop-blur-sm md:text-6xl">
-                    360°
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <img
-              src={currentUrl}
-              alt={`Photo ${index + 1}`}
-              className="max-h-full max-w-full object-contain"
-            />
-          )}
-        </div>
+          <div
+            ref={viewerWrapRef}
+            className="relative h-[min(94vh,1040px)] w-full min-h-[560px]"
+          >
+          <PanoramaViewer
+            key={currentUrl}
+            src={currentUrl}
+            showNavbar={false}
+            onContainerClick={hide360Overlay}
+            className="h-full w-full rounded-lg"
+          />
 
-        {index < photos.length - 1 && (
           <button
             type="button"
-            aria-label={t('next_photo') || 'Next photo'}
-            className="z-10 flex h-24 w-12 shrink-0 cursor-pointer items-center justify-center self-center transition-colors hover:bg-white/10 sm:w-14"
+            aria-label="სრული ეკრანი"
+            className="absolute bottom-4 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-all hover:bg-black/75"
             onClick={(e) => {
               e.stopPropagation();
-              onChangeIndex(index + 1);
+              toggleViewerFullscreen();
             }}
           >
-            <span className="text-4xl leading-none text-white/80 drop-shadow-lg sm:text-5xl">›</span>
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+            </svg>
           </button>
-        )}
-      </div>
 
+          {show360Ui && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <span className="select-none rounded-2xl bg-black/50 px-8 py-4 text-5xl font-bold tracking-wide text-white shadow-2xl backdrop-blur-sm md:text-6xl">
+                360°
+              </span>
+            </div>
+          )}
+
+          </div>
+        </div>
+      ) : (
+        <img
+          src={currentUrl}
+          alt={`Photo ${index + 1}`}
+          className="max-h-[90vh] max-w-[90vw] object-contain"
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
+      
+      {index < photos.length - 1 && (
+        <button
+          type="button"
+          aria-label={t('next_photo') || 'Next photo'}
+          className="absolute right-0 top-28 bottom-32 z-[210] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
+          onClick={(e) => { e.stopPropagation(); onChangeIndex(index + 1); }}
+        >
+          <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
+            ›
+          </span>
+        </button>
+      )}
+      
+      <div className="absolute bottom-4 left-1/2 z-[210] -translate-x-1/2 rounded-full bg-black/50 px-4 py-2 text-sm text-white">
+        {index + 1} / {photos.length}
+      </div>
       <div
-        className="shrink-0 space-y-2 px-3 pb-4 pt-2 sm:px-4"
+        className="absolute bottom-16 left-1/2 z-[210] flex max-w-[80vw] -translate-x-1/2 gap-1.5 overflow-x-auto p-2"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mx-auto flex max-w-[min(96vw,900px)] justify-center gap-1.5 overflow-x-auto p-1">
-          {photos.map((p, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onChangeIndex(i)}
-              className={`h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border-2 transition-all ${
-                i === index ? 'scale-110 border-white' : 'border-transparent opacity-60 hover:opacity-100'
-              }`}
-            >
-              <img src={resolveImageUrl(p)} alt="" className="h-full w-full object-cover" />
-            </button>
-          ))}
-        </div>
-        <p className="text-center text-sm text-white">
-          <span className="rounded-full bg-black/50 px-4 py-1.5">
-            {index + 1} / {photos.length}
-          </span>
-        </p>
+        {photos.map((p, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onChangeIndex(i)}
+            className={`h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border-2 transition-all ${
+              i === index ? 'scale-110 border-white' : 'border-transparent opacity-60 hover:opacity-100'
+            }`}
+          >
+            <img src={resolveImageUrl(p)} alt="" className="h-full w-full object-cover" />
+          </button>
+        ))}
       </div>
+
+      <button
+        type="button"
+        aria-label={t('close') || 'Close'}
+        className="absolute top-4 right-4 z-[220] flex h-11 w-11 items-center justify-center rounded-full bg-black/60 p-0 text-white shadow-lg transition-colors hover:bg-black/80"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <svg
+          className="block h-6 w-6 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
     </div>,
     document.body
   );

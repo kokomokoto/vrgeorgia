@@ -8,6 +8,12 @@ import { listProperties } from '@/lib/api';
 import { buildMapHref } from '@/lib/mapQuery';
 import type { Property } from '@/lib/types';
 import { Filters, type FiltersState } from '@/components/Filters';
+import {
+  clearHomeFiltersStorage,
+  HOME_FILTERS_INITIAL,
+  loadHomeFilters,
+  saveHomeFilters,
+} from '@/lib/homeFiltersStorage';
 import { MapView } from '@/components/MapView';
 import { PropertyCard } from '@/components/PropertyCard';
 
@@ -25,39 +31,11 @@ const PROPERTY_CATEGORIES = [
   { value: 'business', key: 'business', icon: '💼' },
 ];
 
-const initial: FiltersState = {
-  q: '',
-  minPrice: '',
-  maxPrice: '',
-  priceCurrency: '',
-  priceType: '',
-  city: '',
-  region: '',
-  tbilisiDistrict: '',
-  tbilisiSubdistricts: [],
-  type: [],
-  dealType: [],
-  has3d: '',
-  hasPhotos: '',
-  minSqm: '',
-  maxSqm: '',
-  minConstructionYear: '',
-  maxConstructionYear: '',
-  minRenovationYear: '',
-  maxRenovationYear: '',
-  rooms: [],
-  bedrooms: [],
-  amenities: [],
-  buildingProject: [],
-  renovationStatus: [],
-  balconies: [],
-  propertyId: ''
-};
-
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const [mounted, setMounted] = React.useState(false);
-  const [filters, setFilters] = React.useState<FiltersState>(initial);
+  const [filters, setFilters] = React.useState<FiltersState>(HOME_FILTERS_INITIAL);
+  const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const [properties, setProperties] = React.useState<Property[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -69,6 +47,19 @@ export default function HomePage() {
 
   React.useEffect(() => {
     setMounted(true);
+    const saved = loadHomeFilters();
+    if (saved) setFilters(saved);
+    setFiltersHydrated(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (!filtersHydrated) return;
+    saveHomeFilters(filters);
+  }, [filters, filtersHydrated]);
+
+  const clearAllFilters = React.useCallback(() => {
+    clearHomeFiltersStorage();
+    setFilters({ ...HOME_FILTERS_INITIAL });
   }, []);
 
   const tr = React.useCallback(
@@ -78,22 +69,23 @@ export default function HomePage() {
 
   // URL-დან amenities-ის წაკითხვა (property detail გვერდიდან გადამისამართებისას)
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!filtersHydrated || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const amenitiesParam = params.get('amenities');
     if (amenitiesParam) {
       try {
         const amenities = JSON.parse(amenitiesParam);
         if (Array.isArray(amenities) && amenities.length > 0) {
-          setFilters(prev => ({ ...prev, amenities }));
-          // URL-ის გასუფთავება
+          setFilters((prev) => ({ ...prev, amenities }));
           window.history.replaceState({}, '', '/');
         }
       } catch (e) {}
     }
-  }, []);
+  }, [filtersHydrated]);
 
   React.useEffect(() => {
+    if (!filtersHydrated) return;
+
     let alive = true;
     setLoading(true);
     setError(null);
@@ -120,7 +112,7 @@ export default function HomePage() {
     return () => {
       alive = false;
     };
-  }, [filters, sortBy, i18n.language]);
+  }, [filters, sortBy, i18n.language, filtersHydrated]);
 
   // ყველა პროპერტის ჩატვირთვა კატეგორიების რაოდენობისთვის
   const [allProperties, setAllProperties] = React.useState<Property[]>([]);
@@ -155,7 +147,7 @@ export default function HomePage() {
   return (
     <div className="grid gap-4 text-slate-900">
       {/* ფილტრები ჰორიზონტალურად */}
-      <Filters value={filters} onChange={setFilters} />
+      <Filters value={filters} onChange={setFilters} onClearAll={clearAllFilters} />
 
       {/* კატეგორიები - მობაილზე ჩამოსაშლელი, დესკტოპზე ყოველთვის ჩანს */}
       <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">

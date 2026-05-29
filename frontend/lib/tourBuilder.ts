@@ -18,6 +18,16 @@ function isProductionSiteHostname(hostname: string): boolean {
   return hostname === 'vrgeorgia.ge' || hostname.endsWith('.vrgeorgia.ge');
 }
 
+/** Render / production frontend — tour UI იმავე API ჰოსტზეა */
+function isProductionAppHostname(hostname: string): boolean {
+  return (
+    isProductionSiteHostname(hostname) ||
+    hostname === 'vrgeorgia-frontend.onrender.com' ||
+    hostname === 'vrgeorgia.onrender.com' ||
+    hostname === 'vrgeorgia-web.onrender.com'
+  );
+}
+
 /**
  * tour-builder აპის მისამართი — რედაქტორის გახსნა, publish-ის ბმული.
  * პროდაქშენზე არასოდეს აბრუნებს localhost-ს.
@@ -31,7 +41,7 @@ export function getTourBuilderOrigin(): string {
     if (isLocalHostname(hostname)) {
       return `${protocol}//${hostname}:3002`;
     }
-    if (isProductionSiteHostname(hostname)) {
+    if (isProductionAppHostname(hostname)) {
       return DEFAULT_PRODUCTION_TOUR_BUILDER;
     }
     // LAN / სხვა დომენი — იგივე host, tour-builder პორტი
@@ -44,7 +54,7 @@ export function getTourBuilderOrigin(): string {
 
 /** ახალი ტაბში იხსნება — ტური იქმნება და რედაქტორში გადადის */
 export function getTourBuilderEmbedUrl(): string {
-  return `${getTourBuilderOrigin()}/?from=vrgeorgia`;
+  return `${getTourBuilderOrigin()}/embed`;
 }
 
 export const VRGEORGIA_TOUR_STORAGE_KEY = 'vrgeorgia_pending_tour_link';
@@ -56,8 +66,10 @@ export function getPublishedTourUrl(tourId: string): string {
 /** გამოქვეყნებული ბმულიდან (/v/{id}) ამოაქვს tourId — host-ის მიუხედვავად */
 export function extractTourId(publicUrl: string): string | null {
   if (!publicUrl) return null;
-  const match = publicUrl.match(/\/v\/([^/?#]+)/);
-  return match ? match[1] : null;
+  const vMatch = publicUrl.match(/\/v\/([^/?#]+)/);
+  if (vMatch) return vMatch[1];
+  const editMatch = publicUrl.match(/\/tours\/([^/?#]+)\/edit/);
+  return editMatch ? editMatch[1] : null;
 }
 
 /**

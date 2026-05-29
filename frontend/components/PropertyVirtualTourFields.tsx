@@ -32,6 +32,7 @@ export function PropertyVirtualTourFields({
   const tourWindowRef = React.useRef<Window | null>(null);
   const [manualOpen, setManualOpen] = React.useState(false);
   const [manualValue, setManualValue] = React.useState('');
+  const [openError, setOpenError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -47,15 +48,18 @@ export function PropertyVirtualTourFields({
   }, [onTourChange]);
 
   const openTourBuilder = () => {
-    // არსებული ტურის რედაქტირება — იმავე ტურს ვხსნით; თუ არ არის — ახალს ვქმნით
+    setOpenError(null);
     const existingId = extractTourId(tourLink);
     const url = existingId ? getTourEditUrl(existingId) : getTourBuilderEmbedUrl();
-    // ახალ ტაბში; noopener-ს ვერ ვიყენებთ — საჭიროა window.opener postMessage-ისთვის
     const w = window.open(url, 'vrgeorgia-tour-builder');
     if (w) {
       tourWindowRef.current = w;
       w.focus();
+      return;
     }
+    setOpenError(
+      'ბრაუზერმა ახალი ტაბი დაბლოკა. ჩართეთ pop-up-ები ამ საიტისთვის, ან გამოიყენეთ ქვემოთ ბმული.'
+    );
   };
 
   const clearTour = () => {
@@ -117,6 +121,18 @@ export function PropertyVirtualTourFields({
                 >
                   {t('tour_3d_edit')}
                 </button>
+                <a
+                  href={
+                    extractTourId(tourLink)
+                      ? getTourEditUrl(extractTourId(tourLink)!)
+                      : getTourBuilderEmbedUrl()
+                  }
+                  target="_blank"
+                  rel="noopener"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900"
+                >
+                  ↗
+                </a>
                 <button
                   type="button"
                   onClick={clearTour}
@@ -136,6 +152,17 @@ export function PropertyVirtualTourFields({
                 <span aria-hidden>🧭</span>
                 {t('tour_3d_open_builder')}
               </button>
+              <a
+                href={getTourBuilderEmbedUrl()}
+                target="_blank"
+                rel="noopener"
+                className="block text-center text-xs text-blue-600 underline dark:text-amber-400"
+              >
+                {t('tour_3d_open_builder')} (ახალი ტაბი)
+              </a>
+              {openError && (
+                <p className="text-xs text-red-600 dark:text-red-400">{openError}</p>
+              )}
               <button
                 type="button"
                 onClick={() => setManualOpen((v) => !v)}

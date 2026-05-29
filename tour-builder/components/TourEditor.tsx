@@ -47,9 +47,18 @@ export function TourEditor({ tourId }: TourEditorProps) {
 
   const load = useCallback(async () => {
     setError(null);
-    const res = await tourFetch(`/api/tours/${tourId}`);
+    let res: Response;
+    try {
+      res = await tourFetch(`/api/tours/${tourId}`);
+    } catch {
+      setError("API-ს ვერ დავუკავშირდით. გადატვირთეთ გვერდი.");
+      return;
+    }
     if (!res.ok) {
-      setError("Tour not found");
+      const data = await res.json().catch(() => ({}));
+      setError(
+        typeof data.error === "string" ? data.error : "Tour not found"
+      );
       return;
     }
     const data: TourDraft = await res.json();

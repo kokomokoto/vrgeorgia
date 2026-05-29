@@ -37,7 +37,7 @@ function HomePageContent() {
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch("/api/tours", {
+      const res = await tourFetch("/api/tours", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: "VR Georgia listing tour" }),

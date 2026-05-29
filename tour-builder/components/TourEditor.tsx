@@ -593,8 +593,17 @@ export function TourEditor({ tourId }: TourEditorProps) {
 
   if (!draft) {
     return (
-      <div className="flex h-screen items-center justify-center text-zinc-500">
-        {error || "Loading tour…"}
+      <div className="flex h-screen flex-col items-center justify-center gap-3 px-6 text-center text-zinc-500">
+        <p>{error || "Loading tour…"}</p>
+        {error && (
+          <button
+            type="button"
+            onClick={() => load()}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500"
+          >
+            ხელახლა ცდა
+          </button>
+        )}
       </div>
     );
   }

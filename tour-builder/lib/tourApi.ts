@@ -1,3 +1,5 @@
+const PRODUCTION_API_BASE = "https://vrgeorgia-api.onrender.com";
+
 /**
  * Tour-builder UI → საერთო VR Georgia API (Express).
  * ლოკალურად: NEXT_PUBLIC_API_BASE=http://localhost:5000
@@ -13,6 +15,10 @@ export function getTourApiBase(): string {
 
   if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
     return "http://localhost:5000";
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return PRODUCTION_API_BASE;
   }
 
   return "";

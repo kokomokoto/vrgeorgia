@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "next dev --webpack -p 3002",
     "dev:lan": "next dev --webpack -H 0.0.0.0 -p 3002",
-    "build": "next build",
-    "start": "next start",
+    "build": "next build && node scripts/prepare-standalone.cjs",
+    "start": "node .next/standalone/server.js",
     "lint": "eslint"
   },
   "dependencies": {

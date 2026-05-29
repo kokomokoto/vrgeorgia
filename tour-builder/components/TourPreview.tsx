@@ -29,7 +29,14 @@ export function TourPreview({ tourId, source }: TourPreviewProps) {
     const res = await tourFetch(url);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || "Could not load tour");
+      if (res.status === 404 && source === "published") {
+        setError(
+          data.error ||
+            "ტური ვერ მოიძებნა ან ჯერ არ არის გამოქვეყნებული. გახსენი რედაქტორი, დაამატე სცენები და დააჭირე Publish."
+        );
+      } else {
+        setError(data.error || "Could not load tour");
+      }
       return;
     }
     const data = await res.json();

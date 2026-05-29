@@ -63,7 +63,7 @@ services:
     region: frankfurt
     rootDir: tour-builder
     buildCommand: npm install && npm run build
-    startCommand: npm run start
+    startCommand: node .next/standalone/server.js
     envVars:
       - key: NODE_ENV
         value: production

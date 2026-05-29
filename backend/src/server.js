@@ -14,6 +14,7 @@ import agentRoutes from './routes/agents.js';
 import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
+import tourApiRoutes from './routes/tourApi.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,14 +42,18 @@ app.set('trust proxy', 1);
 // CORS: production-ზე მხოლოდ ჩვენი დომენი, dev-ზე ყველა
 const defaultDevOrigins = [
   'http://localhost:3000',
+  'http://localhost:3002',
   'http://localhost:3003',
+  'http://localhost:3007',
   'http://127.0.0.1:3000',
+  'http://127.0.0.1:3002',
 ];
 const defaultProdOrigins = [
   'https://vrgeorgia.ge',
   'https://www.vrgeorgia.ge',
   'https://vrgeorgia.onrender.com',
   'https://vrgeorgia-frontend.onrender.com',
+  'https://vrgeorgia-tour-builder.onrender.com',
 ];
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
@@ -113,6 +118,7 @@ app.use('/api/agents', agentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api', tourApiRoutes);
 
 // Global error handler
 app.use((err, _req, res, _next) => {

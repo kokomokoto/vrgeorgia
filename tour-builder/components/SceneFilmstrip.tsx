@@ -1,5 +1,6 @@
 "use client";
 
+import { resolvePanoramaUrl } from "@/lib/tourApi";
 import type { Scene } from "@/lib/types";
 
 interface SceneFilmstripProps {
@@ -36,7 +37,7 @@ export function SceneFilmstrip({
               {scene.image_path ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={scene.image_path}
+                  src={resolvePanoramaUrl(scene.image_path)}
                   alt=""
                   className="h-full w-full object-cover"
                 />

@@ -17,6 +17,7 @@ import {
 } from "@/lib/scene-settings";
 import { preloadPanoramas } from "@/lib/panorama-preload";
 import type { Hotspot, Scene } from "@/lib/types";
+import { resolvePanoramaUrl } from "@/lib/tourApi";
 import { buildViewerNodes, sceneMarkers } from "@/lib/viewer-utils";
 
 export type ViewerMode = "edit" | "navigate";
@@ -102,6 +103,9 @@ export function PanoramaViewer({
   onSceneChangeRef.current = onSceneChange ?? onActiveSceneChange;
 
   const activeScene = scenes.find((s) => s.id === activeSceneId);
+  const activePanoramaUrl = activeScene?.image_path
+    ? resolvePanoramaUrl(activeScene.image_path)
+    : null;
 
   const tourKey = useMemo(() => tourViewerKey(scenes, mode), [scenes, mode]);
   const orderKey = useMemo(() => sceneOrderKey(scenes), [scenes]);
@@ -109,7 +113,8 @@ export function PanoramaViewer({
   useEffect(() => {
     const urls = scenes
       .map((s) => s.image_path)
-      .filter((u): u is string => Boolean(u));
+      .filter((u): u is string => Boolean(u))
+      .map((u) => resolvePanoramaUrl(u));
     preloadPanoramas(urls);
   }, [tourKey, scenes]);
 
@@ -159,7 +164,7 @@ export function PanoramaViewer({
       currentPanoramaRef.current !== activeScene.image_path
     ) {
       existing
-        .setPanorama(activeScene.image_path, {
+        .setPanorama(activePanoramaUrl, {
           caption: activeScene.name,
           showLoader: false,
           transition: { effect: "fade", rotation: false, speed: 300 },
@@ -201,7 +206,7 @@ export function PanoramaViewer({
 
     const viewer = new Viewer({
       container: containerRef.current,
-      panorama: activeScene.image_path,
+      panorama: activePanoramaUrl,
       defaultYaw: activeScene.default_yaw,
       defaultPitch: activeScene.default_pitch,
       defaultZoomLvl: activeScene.default_zoom,

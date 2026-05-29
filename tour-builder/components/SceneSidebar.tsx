@@ -12,6 +12,7 @@ import {
   SCENE_REORDER_MIME,
   sortScenesByOrder,
 } from "@/lib/scene-reorder";
+import { resolvePanoramaUrl } from "@/lib/tourApi";
 import type { Scene } from "@/lib/types";
 
 interface SceneSidebarProps {
@@ -429,7 +430,7 @@ export function SceneSidebar({
                   {scene.image_path ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={scene.image_path}
+                      src={resolvePanoramaUrl(scene.image_path)}
                       alt={scene.name}
                       draggable={false}
                       className={`pointer-events-none h-full w-full select-none object-cover ${

@@ -21,6 +21,7 @@ interface TourEditorProps {
 }
 
 import { VRGEORGIA_TOUR_MESSAGE, getPublicTourUrl } from "@/lib/vrgeorgia";
+import { tourFetch } from "@/lib/tourApi";
 
 export function TourEditor({ tourId }: TourEditorProps) {
   const searchParams = useSearchParams();
@@ -46,7 +47,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
 
   const load = useCallback(async () => {
     setError(null);
-    const res = await fetch(`/api/tours/${tourId}`);
+    const res = await tourFetch(`/api/tours/${tourId}`);
     if (!res.ok) {
       setError("Tour not found");
       return;
@@ -114,7 +115,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
         : null;
 
   async function updateTourTitle(title: string) {
-    await fetch(`/api/tours/${tourId}`, {
+    await tourFetch(`/api/tours/${tourId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
@@ -123,7 +124,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
   }
 
   async function addScene(name?: string): Promise<Scene | null> {
-    const res = await fetch("/api/scenes", {
+    const res = await tourFetch("/api/scenes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -143,7 +144,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
     const fd = new FormData();
     fd.append("sceneId", sceneId);
     fd.append("file", file);
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const res = await tourFetch("/api/upload", { method: "POST", body: fd });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       return {
@@ -228,7 +229,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
       return { ...d, scenes };
     });
 
-    const res = await fetch(`/api/tours/${tourId}/scenes/reorder`, {
+    const res = await tourFetch(`/api/tours/${tourId}/scenes/reorder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sceneIds }),
@@ -272,7 +273,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
   }
 
   async function deleteSceneById(id: string): Promise<boolean> {
-    const res = await fetch(`/api/scenes/${id}`, { method: "DELETE" });
+    const res = await tourFetch(`/api/scenes/${id}`, { method: "DELETE" });
     if (!res.ok) return false;
     if (activeSceneId === id) {
       setAddHotspotMode(false);
@@ -396,7 +397,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
     updateSceneNameLocal(sceneId, name);
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/scenes/${sceneId}`, {
+    const res = await tourFetch(`/api/scenes/${sceneId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -457,7 +458,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
 
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/scenes/${activeSceneId}`, {
+    const res = await tourFetch(`/api/scenes/${activeSceneId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -479,7 +480,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
       setError("Select a target scene before placing a hotspot");
       return;
     }
-    const res = await fetch("/api/hotspots", {
+    const res = await tourFetch("/api/hotspots", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -516,7 +517,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
   }
 
   async function updateHotspotTarget(hotspotId: string, targetSceneId: string) {
-    await fetch(`/api/hotspots/${hotspotId}`, {
+    await tourFetch(`/api/hotspots/${hotspotId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ targetSceneId }),
@@ -525,14 +526,14 @@ export function TourEditor({ tourId }: TourEditorProps) {
   }
 
   async function deleteHotspot(id: string) {
-    await fetch(`/api/hotspots/${id}`, { method: "DELETE" });
+    await tourFetch(`/api/hotspots/${id}`, { method: "DELETE" });
     load();
   }
 
   async function publish() {
     setPublishMsg(null);
     setError(null);
-    const res = await fetch(`/api/tours/${tourId}/publish`, { method: "POST" });
+    const res = await tourFetch(`/api/tours/${tourId}/publish`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(data.error || "Publish failed");

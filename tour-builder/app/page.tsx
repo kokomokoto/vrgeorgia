@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { Tour } from "@/lib/types";
+import { tourFetch } from "@/lib/tourApi";
 
 function HomePageContent() {
   const searchParams = useSearchParams();
@@ -18,7 +19,7 @@ function HomePageContent() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/tours");
+      const res = await tourFetch("/api/tours");
       if (!res.ok) throw new Error("Failed to load tours");
       setTours(await res.json());
     } catch (e) {
@@ -60,7 +61,7 @@ function HomePageContent() {
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch("/api/tours", {
+      const res = await tourFetch("/api/tours", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: `Tour ${tours.length + 1}` }),
@@ -76,7 +77,7 @@ function HomePageContent() {
 
   async function deleteTour(id: string) {
     if (!confirm("Delete this tour and all its scenes?")) return;
-    const res = await fetch(`/api/tours/${id}`, { method: "DELETE" });
+    const res = await tourFetch(`/api/tours/${id}`, { method: "DELETE" });
     if (res.ok) load();
   }
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { normalizeScene } from "@/lib/scene-settings";
+import { tourFetch } from "@/lib/tourApi";
 import type { Hotspot, PublishedSnapshot, Scene } from "@/lib/types";
 import { TourExperience } from "./TourExperience";
 
@@ -25,7 +26,7 @@ export function TourPreview({ tourId, source }: TourPreviewProps) {
       source === "published"
         ? `/api/tours/${tourId}/published`
         : `/api/tours/${tourId}`;
-    const res = await fetch(url);
+    const res = await tourFetch(url);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error || "Could not load tour");

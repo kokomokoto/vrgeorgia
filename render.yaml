@@ -25,6 +25,14 @@ services:
         value: https://vrgeorgia.ge,https://www.vrgeorgia.ge,https://vrgeorgia-tour-builder.onrender.com
       - key: TOUR_BUILDER_PUBLIC_URL
         value: https://vrgeorgia-tour-builder.onrender.com
+      - key: API_PUBLIC_URL
+        value: https://vrgeorgia-api.onrender.com
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
     disk:
       name: vrgeorgia-uploads
       mountPath: /opt/render/project/src/uploads
@@ -59,13 +67,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: MONGODB_URI
-        sync: false
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
-        sync: false
+      - key: NEXT_PUBLIC_API_BASE
+        value: https://vrgeorgia-api.onrender.com
       - key: NEXT_PUBLIC_TOUR_BUILDER_PUBLIC_URL
         value: https://vrgeorgia-tour-builder.onrender.com

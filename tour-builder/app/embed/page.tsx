@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { tourFetch } from '@/lib/tourApi';
 
 /** VR Georgia ატვირთვიდან იხსნება — ახალი ტური იქმნება და რედაქტორში გადადის */
 export default function EmbedPage() {
@@ -10,7 +11,7 @@ export default function EmbedPage() {
     let alive = true;
     (async () => {
       try {
-        const res = await fetch('/api/tours', {
+        const res = await tourFetch('/api/tours', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: 'VR Georgia listing tour' }),

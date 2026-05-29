@@ -1,4 +1,5 @@
 import { sortScenesByOrder } from "./scene-reorder";
+import { resolvePanoramaUrl } from "./tourApi";
 import type { Hotspot, Scene } from "./types";
 
 export interface ViewerNode {
@@ -17,7 +18,7 @@ export function buildViewerNodes(scenes: Scene[]): ViewerNode[] {
     .filter((s) => s.image_path)
     .map((scene) => ({
       id: scene.id,
-      panorama: scene.image_path!,
+      panorama: resolvePanoramaUrl(scene.image_path)!,
       name: scene.name,
       links: [],
     }));

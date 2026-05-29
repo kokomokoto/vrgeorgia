@@ -1,6 +1,6 @@
-/** tour-builder-ის production მისამართი (Render) */
+/** 3D ტური — API სერვისზე ჩაშენებული UI (ერთი Render სერვისი) */
 const DEFAULT_PRODUCTION_TOUR_BUILDER =
-  'https://vrgeorgia-tour-builder.onrender.com';
+  'https://vrgeorgia-api.onrender.com';
 
 function normalizeOrigin(url: string): string {
   return url.trim().replace(/\/$/, '');

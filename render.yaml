@@ -1,30 +1,33 @@
 # VR Georgia — Render.com Deployment
 # https://render.com/docs/yaml-spec
+#
+# 2 Web Service: API (+ 3D tour UI) + Frontend
+# 3D ტურის რედაქტორი/ნახვა: https://vrgeorgia-api.onrender.com/v/{id}
 
 services:
-  # ──── Backend API ────
+  # ──── Backend API + 3D Tour Builder UI ────
   - type: web
     name: vrgeorgia-api
     runtime: node
-    region: frankfurt  # ყველაზე ახლოს საქართველოსთან
+    region: frankfurt
     rootDir: backend
-    buildCommand: npm install
-    startCommand: node src/server.js
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 5000
       - key: JWT_SECRET
-        generateValue: true  # Render ავტომატურად დაგენერირებს
+        generateValue: true
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: MONGODB_URI
-        sync: false  # ხელით შეიყვანე MongoDB Atlas URI
+        sync: false
       - key: ALLOWED_ORIGINS
-        value: https://vrgeorgia.ge,https://www.vrgeorgia.ge,https://vrgeorgia-tour-builder.onrender.com
+        value: https://vrgeorgia.ge,https://www.vrgeorgia.ge,https://vrgeorgia-frontend.onrender.com,https://vrgeorgia-api.onrender.com
       - key: TOUR_BUILDER_PUBLIC_URL
-        value: https://vrgeorgia-tour-builder.onrender.com
+        value: https://vrgeorgia-api.onrender.com
       - key: API_PUBLIC_URL
         value: https://vrgeorgia-api.onrender.com
       - key: CLOUDINARY_CLOUD_NAME
@@ -36,7 +39,7 @@ services:
     disk:
       name: vrgeorgia-uploads
       mountPath: /opt/render/project/src/uploads
-      sizeGB: 1  # 1 GB უფასო
+      sizeGB: 1
 
   # ──── Frontend ────
   - type: web
@@ -54,20 +57,4 @@ services:
       - key: NEXT_PUBLIC_API_URL
         value: https://vrgeorgia-api.onrender.com/api
       - key: NEXT_PUBLIC_TOUR_BUILDER_URL
-        value: https://vrgeorgia-tour-builder.onrender.com
-
-  # ──── 3D Tour Builder ────
-  - type: web
-    name: vrgeorgia-tour-builder
-    runtime: node
-    region: frankfurt
-    rootDir: tour-builder
-    buildCommand: npm install && npm run build
-    startCommand: node .next/standalone/server.js
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NEXT_PUBLIC_API_BASE
         value: https://vrgeorgia-api.onrender.com
-      - key: NEXT_PUBLIC_TOUR_BUILDER_PUBLIC_URL
-        value: https://vrgeorgia-tour-builder.onrender.com

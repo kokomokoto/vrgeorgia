@@ -1,8 +1,13 @@
 const PRODUCTION_API_BASE = "https://vrgeorgia-api.onrender.com";
 
+function isSeparateTourDevServer(): boolean {
+  if (typeof window === "undefined") return false;
+  const port = window.location.port;
+  return port === "3002" || port === "3007";
+}
+
 /**
- * Tour-builder UI → საერთო VR Georgia API (Express).
- * ლოკალურად: NEXT_PUBLIC_API_BASE=http://localhost:5000
+ * Tour-builder UI → VR Georgia API (იგივე ჰოსტი merged deploy-ზე, ცალკე :5000 dev-ში).
  */
 export function getTourApiBase(): string {
   const fromBase = process.env.NEXT_PUBLIC_API_BASE?.trim();
@@ -13,8 +18,11 @@ export function getTourApiBase(): string {
     return fromUrl.replace(/\/api\/?$/, "").replace(/\/$/, "");
   }
 
-  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-    return "http://localhost:5000";
+  if (typeof window !== "undefined") {
+    if (isSeparateTourDevServer()) {
+      return "http://localhost:5000";
+    }
+    return window.location.origin;
   }
 
   if (process.env.NODE_ENV === "production") {

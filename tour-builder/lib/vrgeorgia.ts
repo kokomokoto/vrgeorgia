@@ -1,7 +1,7 @@
 export const VRGEORGIA_TOUR_MESSAGE = "VRGEORGIA_TOUR_PUBLISHED";
 export const VRGEORGIA_TOUR_STORAGE_KEY = "vrgeorgia_pending_tour_link";
 
-const DEFAULT_PUBLIC_BASE = "https://vrgeorgia-tour-builder.onrender.com";
+const DEFAULT_PUBLIC_BASE = "https://vrgeorgia-api.onrender.com";
 
 /**
  * საჯარო ტურის URL VR Georgia-ში შესანახად.

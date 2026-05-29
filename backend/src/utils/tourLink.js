@@ -3,7 +3,7 @@ export function getTourBuilderPublicBase() {
   const base =
     process.env.TOUR_BUILDER_PUBLIC_URL ||
     process.env.PUBLIC_TOUR_BUILDER_URL ||
-    'https://vrgeorgia-tour-builder.onrender.com';
+    'https://vrgeorgia-api.onrender.com';
   return base.replace(/\/$/, '');
 }
 

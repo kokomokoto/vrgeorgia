@@ -5,8 +5,10 @@
   "scripts": {
     "dev": "next dev --webpack -p 3002",
     "dev:lan": "next dev --webpack -H 0.0.0.0 -p 3002",
-    "build": "next build && node scripts/prepare-standalone.cjs",
-    "start": "node .next/standalone/server.js",
+    "build": "next build",
+    "build:standalone": "next build && node scripts/prepare-standalone.cjs",
+    "start": "next start -p 3002",
+    "start:standalone": "node .next/standalone/server.js",
     "lint": "eslint"
   },
   "dependencies": {
@@ -21,7 +23,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sharp": "^0.34.5",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "vrgeorgia-backend": "file:../backend"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

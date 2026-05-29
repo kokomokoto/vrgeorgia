@@ -15,6 +15,7 @@ import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
 import tourApiRoutes from './routes/tourApi.js';
+import { attachTourUi } from './tourUiServer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -119,13 +120,8 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api', tourApiRoutes);
-
-// Global error handler
-app.use((err, _req, res, _next) => {
-  console.error('Unhandled error:', err);
-  res.status(err.status || 500).json({
-    message: NODE_ENV === 'production' ? 'Internal server error' : err.message
-  });
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 async function start() {
@@ -138,7 +134,19 @@ async function start() {
   await mongoose.connect(MONGODB_URI);
   console.log('Connected to MongoDB');
   console.log(`Environment: ${NODE_ENV}`);
-  app.listen(PORT, HOST, () => console.log(`API listening on http://${HOST}:${PORT}`));
+
+  await attachTourUi(app);
+
+  app.use((err, _req, res, _next) => {
+    console.error('Unhandled error:', err);
+    res.status(err.status || 500).json({
+      message: NODE_ENV === 'production' ? 'Internal server error' : err.message
+    });
+  });
+
+  app.listen(PORT, HOST, () =>
+    console.log(`Server listening on http://${HOST}:${PORT} (API + tour UI)`)
+  );
 }
 
 start().catch((err) => {

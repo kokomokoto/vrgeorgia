@@ -31,10 +31,26 @@ export async function attachTourUi(app) {
   await nextApp.prepare();
   const handle = nextApp.getRequestHandler();
 
+  const defaultFrameAncestors =
+    "'self' https://vrgeorgia.ge https://www.vrgeorgia.ge https://vrgeorgia-frontend.onrender.com https://vrgeorgia-api.onrender.com";
+  const frameAncestors = (
+    process.env.TOUR_FRAME_ANCESTORS || defaultFrameAncestors
+  ).trim();
+
   app.use((req, res) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
       return res.status(404).end();
     }
+
+    // გამოქვეყნებული ტური — iframe-ში ჩასმა მთავარი საიტიდან
+    if (req.path.startsWith('/v/')) {
+      res.setHeader(
+        'Content-Security-Policy',
+        `frame-ancestors ${frameAncestors}`
+      );
+      res.removeHeader('X-Frame-Options');
+    }
+
     return handle(req, res);
   });
 

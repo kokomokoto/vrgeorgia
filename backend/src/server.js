@@ -34,8 +34,12 @@ if (NODE_ENV === 'production' && !process.env.MONGODB_URI) {
   process.exit(1);
 }
 
-// ──── Security ────
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+// ──── Security (მხოლოდ API — Next.js tour UI-ს სჭირდება inline scripts, iframe /v/) ────
+const apiHelmet = helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+});
+app.use('/api', apiHelmet);
+app.use('/uploads', apiHelmet);
 
 // Trust proxy on Render.com (required for rate-limit behind reverse proxy)
 app.set('trust proxy', 1);

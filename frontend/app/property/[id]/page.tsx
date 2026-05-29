@@ -216,7 +216,7 @@ function PropertyDetailInner() {
   const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [view3dMode, setView3dMode] = useState<'exterior' | 'interior'>('exterior');
+  const [view3dMode, setView3dMode] = useState<'exterior' | 'interior' | 'tour'>('exterior');
   const propertyMapSectionRef = React.useRef<HTMLDivElement>(null);
 
   // ენის დეტექცია - hooks ყოველთვის ერთნაირად უნდა გამოიძახონ
@@ -362,11 +362,14 @@ function PropertyDetailInner() {
 
   const link3dExterior = (property.exteriorLink || property.threeDLink || '').trim();
   const link3dInterior = (property.interiorLink || '').trim();
+  const link3dPanoramaTour = (property.tourLink || '').trim();
   const has3dExterior = !!link3dExterior;
   const has3dInterior = !!link3dInterior;
-  const has3dTour = has3dExterior || has3dInterior;
-  const showing3dInterior = view3dMode === 'interior' && has3dInterior;
-  const showing3dExterior = !showing3dInterior && has3dExterior;
+  const has3dPanoramaTour = !!link3dPanoramaTour;
+  const has3dTour = has3dExterior || has3dInterior || has3dPanoramaTour;
+  const showing3dTour = view3dMode === 'tour' && has3dPanoramaTour;
+  const showing3dInterior = !showing3dTour && view3dMode === 'interior' && has3dInterior;
+  const showing3dExterior = !showing3dTour && !showing3dInterior && has3dExterior;
 
   const ownerRoleLabel =
     owner && typeof owner === 'object' && owner.role === 'agent' ? t('agent_role') : t('broker');
@@ -527,6 +530,20 @@ function PropertyDetailInner() {
               >
                 {t('interior')}
               </button>
+              <button
+                type="button"
+                disabled={!has3dPanoramaTour}
+                onClick={() => has3dPanoramaTour && setView3dMode('tour')}
+                className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  showing3dTour
+                    ? 'bg-blue-600 text-white'
+                    : has3dPanoramaTour
+                      ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      : 'cursor-not-allowed bg-slate-50 text-slate-300'
+                }`}
+              >
+                {t('view3d_tour')}
+              </button>
             </div>
           </div>
           {(() => {
@@ -553,9 +570,13 @@ function PropertyDetailInner() {
               return url;
             };
             
-            const rawUrl = showing3dInterior ? link3dInterior : link3dExterior || link3dInterior;
-            
-            const embedUrl = convertToEmbedUrl(rawUrl || '');
+            const rawUrl = showing3dTour
+              ? link3dPanoramaTour
+              : showing3dInterior
+                ? link3dInterior
+                : link3dExterior || link3dInterior || link3dPanoramaTour;
+
+            const embedUrl = showing3dTour ? rawUrl : convertToEmbedUrl(rawUrl || '');
             
             if (!embedUrl || !embedUrl.startsWith('http')) {
               return (

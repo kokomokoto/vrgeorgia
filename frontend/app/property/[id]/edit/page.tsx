@@ -22,6 +22,7 @@ import { reverseGeocodeLabel } from '@/lib/reverseGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { PropertyRoomsBedroomsSelectors } from '@/components/PropertyRoomsBedroomsSelectors';
+import { PropertyVirtualTourFields } from '@/components/PropertyVirtualTourFields';
 import type { Property } from '@/lib/types';
 
 // საქართველოს რეგიონები
@@ -107,6 +108,7 @@ export default function EditPropertyPage() {
   const [dealType, setDealType] = useState('');
   const [exteriorLink, setExteriorLink] = useState('');
   const [interiorLink, setInteriorLink] = useState('');
+  const [tourLink, setTourLink] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [lat, setLat] = useState<number | null>(null);
@@ -190,6 +192,7 @@ export default function EditPropertyPage() {
         setDealType(p.dealType);
         setExteriorLink(p.exteriorLink || p.threeDLink || '');
         setInteriorLink(p.interiorLink || '');
+        setTourLink(p.tourLink || '');
         setContactPhone(p.contact?.phone || '');
         setContactEmail(p.contact?.email || '');
         setLat(p.location.lat);
@@ -325,6 +328,7 @@ export default function EditPropertyPage() {
           photos: existingPhotos,
           exteriorLink,
           interiorLink,
+          tourLink,
           contact: { phone: contactPhone, email: contactEmail }
         }]
       : [];
@@ -448,7 +452,7 @@ export default function EditPropertyPage() {
         bedrooms: bedroomsPayload,
         type: type as any,
         dealType: dealType as any,
-        exteriorLink, interiorLink,
+        exteriorLink, interiorLink, tourLink,
         contactPhone, contactEmail,
         location: { lat, lng },
         photos: existingPhotos,
@@ -820,23 +824,14 @@ export default function EditPropertyPage() {
                     />
                   </div>
                 </div>
-                <div className="pt-2 border-t">
-                  <p className="text-sm text-slate-500 mb-2">🔮 3D ({t('cadastral_optional')})</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <input
-                      className="rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      placeholder={t('exterior_3d')}
-                      value={exteriorLink}
-                      onChange={(e) => setExteriorLink(e.target.value)}
-                    />
-                    <input
-                      className="rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      placeholder={t('interior_3d')}
-                      value={interiorLink}
-                      onChange={(e) => setInteriorLink(e.target.value)}
-                    />
-                  </div>
-                </div>
+                <PropertyVirtualTourFields
+                  exteriorLink={exteriorLink}
+                  interiorLink={interiorLink}
+                  tourLink={tourLink}
+                  onExteriorChange={setExteriorLink}
+                  onInteriorChange={setInteriorLink}
+                  onTourChange={setTourLink}
+                />
                 {isStep5Complete && (
                   <button onClick={() => setCurrentStep(6)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                     {t('next_step')}

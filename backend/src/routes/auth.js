@@ -34,9 +34,10 @@ router.post(
     if (existing) return res.status(409).json({ message: 'Email already in use' });
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({ email, passwordHash, phone, name, role });
+    // ახალი რეგისტრაცია — ელოდება ადმინის დამტკიცებას
+    const user = await User.create({ email, passwordHash, phone, name, role, status: 'pending' });
 
-    // If registering as agent, create agent profile
+    // If registering as agent, create agent profile (active=false სანამ ადმინი დაამტკიცებს)
     if (role === 'agent') {
       const { personalId = '' } = req.body;
       // Update user with personalId
@@ -49,16 +50,16 @@ router.post(
         phone,
         email,
         personalId,
-        active: true,
+        active: false,
         verified: false
       });
     }
 
-    const token = jwt.sign({ sub: user._id.toString() }, getJWTSecret(), {
-      expiresIn: getJWTExpiresIn()
+    // ტოკენი არ გაიცემა — მომხმარებელი ვერ შედის სანამ ადმინი არ დაამტკიცებს
+    res.status(202).json({
+      pending: true,
+      message: 'რეგისტრაცია მიღებულია. ანგარიში გააქტიურდება ადმინისტრატორის დამტკიცების შემდეგ.'
     });
-
-    res.json({ token, user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role } });
   }
 );
 
@@ -77,11 +78,19 @@ router.post(
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
 
+    // რეგისტრაციის დამტკიცების შემოწმება (ძველი user-ები — status undefined — დაშვებულია)
+    if (user.status === 'pending') {
+      return res.status(403).json({ message: 'ანგარიში ელოდება ადმინისტრატორის დამტკიცებას.' });
+    }
+    if (user.status === 'rejected') {
+      return res.status(403).json({ message: 'რეგისტრაცია უარყოფილია ადმინისტრატორის მიერ.' });
+    }
+
     const token = jwt.sign({ sub: user._id.toString() }, getJWTSecret(), {
       expiresIn: getJWTExpiresIn()
     });
 
-    res.json({ token, user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role } });
+    res.json({ token, user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role, status: user.status } });
   }
 );
 
@@ -89,7 +98,7 @@ router.post(
 router.get('/me', requireAuth, async (req, res) => {
   const user = await User.findById(req.user.id);
   if (!user) return res.status(404).json({ message: 'User not found' });
-  res.json({ user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role } });
+  res.json({ user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role, status: user.status } });
 });
 
 // Update profile

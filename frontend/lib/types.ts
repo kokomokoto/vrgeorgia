@@ -72,6 +72,7 @@ export type Property = {
   threeDLink?: string; // ძველი ველი - ბექვორდ კომპატიბილობა
   exteriorLink?: string; // 3D ექსტერიერი
   interiorLink?: string; // 3D ინტერიერი
+  tourLink?: string; // VR 360° ტური (tour-builder)
   mediaLinks?: Array<{
     url: string;
     type: 'youtube' | 'facebook' | 'tiktok' | 'instagram' | 'other';
@@ -83,10 +84,13 @@ export type Property = {
   views?: number;
   createdAt?: string;
   status?: 'pending' | 'active' | 'rejected' | 'sold';
+  /** ადმინის მიერ აპინული — მთავარ გვერდზე პირველ რიგში */
+  pinned?: boolean;
+  pinnedAt?: string | null;
   /** საჯარო სია: public | unlisted (ლინკით) | private (მხოლოდ მფლობელი) */
   listingVisibility?: 'public' | 'unlisted' | 'private';
   /** მხოლოდ მფლობლისთვის (unlisted ლინკის ასლი) */
   shareToken?: string;
 };
 
-export type User = { id: string; _id?: string; email: string; phone?: string; avatar?: string; name?: string; role?: 'user' | 'agent' | 'admin' };
+export type User = { id: string; _id?: string; email: string; phone?: string; avatar?: string; name?: string; role?: 'user' | 'agent' | 'admin'; status?: 'pending' | 'approved' | 'rejected' };

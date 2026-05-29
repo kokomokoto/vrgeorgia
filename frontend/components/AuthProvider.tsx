@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { User } from '@/lib/types';
+import { getMe } from '@/lib/api';
 
 type AuthState = {
   user: User | null;
@@ -27,6 +28,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const u = window.localStorage.getItem('user');
     if (t) setToken(t);
     if (u) setUser(JSON.parse(u));
+
+    // role/status შეიძლება მოძველებული იყოს localStorage-ში — განვაახლოთ სერვერიდან,
+    // რომ ადმინის ბმული სწორად გამოჩნდეს და დამტკიცების სტატუსი იყოს ახალი.
+    if (t) {
+      getMe()
+        .then((res) => {
+          if (res?.user) {
+            setUser(res.user as User);
+            window.localStorage.setItem('user', JSON.stringify(res.user));
+          }
+        })
+        .catch(() => {
+          // 401-ს api.ts ამუშავებს (logout event)
+        });
+    }
   }, []);
 
   const setAuth = React.useCallback((t: string, u: User) => {

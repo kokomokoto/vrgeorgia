@@ -28,6 +28,7 @@ export default function LoginPage() {
   
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [regSuccess, setRegSuccess] = useState<string | null>(null);
 
   React.useEffect(() => setMounted(true), []);
 
@@ -58,10 +59,19 @@ export default function LoginPage() {
   const handleRegister = async () => {
     setLoading(true);
     setError(null);
+    setRegSuccess(null);
     try {
       const res = await register({ email: regEmail, password: regPassword, phone: regPhone || undefined });
-      setAuth(res.token, res.user);
-      router.push('/');
+      // ახალი ნაკადი — ანგარიში ელოდება ადმინის დამტკიცებას
+      if (res?.token && res?.user) {
+        setAuth(res.token, res.user);
+        router.push('/');
+      } else {
+        setRegSuccess(res?.message || t('register_pending_desc'));
+        setRegEmail('');
+        setRegPassword('');
+        setRegPhone('');
+      }
     } catch (e: any) {
       setError(e.message || t('error_register_failed'));
     } finally {
@@ -203,6 +213,7 @@ export default function LoginPage() {
             </div>
             
             {error && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{error}</div>}
+            {regSuccess && <div className="text-sm text-green-700 bg-green-50 px-3 py-2 rounded-md">✅ {regSuccess}</div>}
             
             <button
               className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"

@@ -77,6 +77,7 @@ const propertySchema = new mongoose.Schema(
     threeDLink: { type: String, default: '' }, // ძველი ველი - ბექვორდ კომპატიბილობისთვის
     exteriorLink: { type: String, default: '' }, // 3D ექსტერიერი
     interiorLink: { type: String, default: '' }, // 3D ინტერიერი
+    tourLink: { type: String, default: '' }, // VR 360° ტური (tour-builder /v/...)
     
     // მედია ლინკები (YouTube, Facebook, TikTok და ა.შ.)
     mediaLinks: [{
@@ -115,6 +116,10 @@ const propertySchema = new mongoose.Schema(
 
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
+
+    // ადმინის მიერ აპინული ობიექტი — მთავარ გვერდზე პირველ რიგში ჩანს
+    pinned: { type: Boolean, default: false },
+    pinnedAt: { type: Date, default: null },
 
     // Optional translated fields cache, keyed by language code.
     // Example: { en: { title: '...', desc: '...' }, ru: { ... } }

@@ -24,6 +24,23 @@ export default function RegisterPage() {
   
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [submitted, setSubmitted] = React.useState(false);
+
+  if (submitted) {
+    return (
+      <div className="mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-6 text-center">
+        <div className="text-5xl mb-3">✅</div>
+        <div className="text-lg font-semibold text-slate-800">{t('register_pending_title')}</div>
+        <p className="mt-2 text-sm text-slate-600">{t('register_pending_desc')}</p>
+        <button
+          className="mt-5 rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+          onClick={() => router.push('/login')}
+        >
+          {t('login')}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-4">
@@ -123,8 +140,13 @@ export default function RegisterPage() {
                 data.personalId = personalId;
               }
               const res = await register(data);
-              setAuth(res.token, res.user);
-              router.push('/');
+              // ახალი ნაკადი — ანგარიში ელოდება ადმინის დამტკიცებას, ტოკენი არ გაიცემა
+              if (res?.token && res?.user) {
+                setAuth(res.token, res.user);
+                router.push('/');
+              } else {
+                setSubmitted(true);
+              }
             } catch (e: any) {
               setError(e.message || 'Failed');
             } finally {

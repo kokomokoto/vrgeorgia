@@ -34,6 +34,7 @@ const adminMiddleware = async (req, res, next) => {
 router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
+    const pendingRegistrations = await User.countDocuments({ status: 'pending' });
     const totalAgents = await Agent.countDocuments();
     const unverifiedAgents = await Agent.countDocuments({ verified: false });
     const totalProperties = await Property.countDocuments();
@@ -88,6 +89,7 @@ router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
     
     res.json({
       totalUsers,
+      pendingRegistrations,
       totalAgents,
       unverifiedAgents,
       totalProperties,
@@ -114,6 +116,7 @@ router.get('/users', requireAuth, adminMiddleware, async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const search = req.query.search || '';
     const role = req.query.role || '';
+    const status = req.query.status || '';
     
     const query = {};
     if (search) {
@@ -124,6 +127,9 @@ router.get('/users', requireAuth, adminMiddleware, async (req, res) => {
     }
     if (role) {
       query.role = role;
+    }
+    if (status) {
+      query.status = status;
     }
     
     const total = await User.countDocuments(query);
@@ -165,19 +171,69 @@ router.put('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
   }
 });
 
-// Delete user
+// Approve a pending registration
+router.put('/users/:id/approve', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { status: 'approved' },
+      { new: true }
+    ).select('-passwordHash');
+    if (!user) return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
+
+    // აგენტის შემთხვევაში — გავააქტიუროთ პროფილი
+    if (user.role === 'agent') {
+      await Agent.findOneAndUpdate({ user: user._id }, { active: true });
+    }
+
+    await writeAudit(req.user.id, 'user.approved', 'user', req.params.id);
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'დამტკიცება ვერ მოხერხდა' });
+  }
+});
+
+// Reject a pending registration
+router.put('/users/:id/reject', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { status: 'rejected' },
+      { new: true }
+    ).select('-passwordHash');
+    if (!user) return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
+
+    if (user.role === 'agent') {
+      await Agent.findOneAndUpdate({ user: user._id }, { active: false });
+    }
+
+    await writeAudit(req.user.id, 'user.rejected', 'user', req.params.id);
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'უარყოფა ვერ მოხერხდა' });
+  }
+});
+
+// Delete user — optionally keep their properties (?keepProperties=true)
 router.delete('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
   try {
+    const keepProperties = req.query.keepProperties === 'true';
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
     }
-    
-    // Also delete user's properties
-    await Property.deleteMany({ userId: req.params.id });
-    
-    await writeAudit(req.user.id, 'user.deleted', 'user', req.params.id);
-    res.json({ message: 'მომხმარებელი წაიშალა' });
+
+    // დაკავშირებული აგენტის პროფილიც წაიშალოს
+    await Agent.deleteOne({ user: req.params.id });
+
+    let deletedProperties = 0;
+    if (!keepProperties) {
+      const result = await Property.deleteMany({ userId: req.params.id });
+      deletedProperties = result.deletedCount || 0;
+    }
+
+    await writeAudit(req.user.id, 'user.deleted', 'user', req.params.id, { keepProperties, deletedProperties });
+    res.json({ message: 'მომხმარებელი წაიშალა', deletedProperties });
   } catch (error) {
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
   }
@@ -241,21 +297,33 @@ router.put('/agents/:id/verify', requireAuth, adminMiddleware, async (req, res) 
   }
 });
 
-// Delete agent
+// Delete agent — optionally also delete their listings (?deleteProperties=true)
+// and optionally delete the linked user account (?deleteUser=true)
 router.delete('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
   try {
+    const deleteProperties = req.query.deleteProperties === 'true';
+    const deleteUser = req.query.deleteUser === 'true';
     const agent = await Agent.findByIdAndDelete(req.params.id);
     if (!agent) {
       return res.status(404).json({ message: 'აგენტი ვერ მოიძებნა' });
     }
-    
-    // Also update user role if linked
+
+    let deletedProperties = 0;
     if (agent.user) {
-      await User.findByIdAndUpdate(agent.user, { role: 'user' });
+      if (deleteProperties) {
+        const result = await Property.deleteMany({ userId: agent.user });
+        deletedProperties = result.deletedCount || 0;
+      }
+      if (deleteUser) {
+        await User.findByIdAndDelete(agent.user);
+      } else {
+        // ანგარიში რჩება, მაგრამ აღარ არის აგენტი
+        await User.findByIdAndUpdate(agent.user, { role: 'user' });
+      }
     }
-    
-    await writeAudit(req.user.id, 'agent.deleted', 'agent', req.params.id);
-    res.json({ message: 'აგენტი წაიშალა' });
+
+    await writeAudit(req.user.id, 'agent.deleted', 'agent', req.params.id, { deleteProperties, deleteUser, deletedProperties });
+    res.json({ message: 'აგენტი წაიშალა', deletedProperties });
   } catch (error) {
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
   }
@@ -348,6 +416,77 @@ router.delete('/properties/:id', requireAuth, adminMiddleware, async (req, res) 
     
     await writeAudit(req.user.id, 'property.deleted', 'property', req.params.id);
     res.json({ message: 'განცხადება წაიშალა' });
+  } catch (error) {
+    res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
+  }
+});
+
+// Pin/Unpin property — აპინული ობიექტები მთავარ გვერდზე პირველ რიგში ჩანს
+router.put('/properties/:id/pin', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const pinned = req.body.pinned !== false; // default true
+    const property = await Property.findByIdAndUpdate(
+      req.params.id,
+      { pinned, pinnedAt: pinned ? new Date() : null },
+      { new: true }
+    );
+    if (!property) return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა' });
+
+    await writeAudit(req.user.id, pinned ? 'property.pinned' : 'property.unpinned', 'property', req.params.id);
+    res.json(property);
+  } catch (error) {
+    res.status(500).json({ message: 'განახლება ვერ მოხერხდა' });
+  }
+});
+
+// ═══════════════════════════════════════
+// 3D ტურები — სრული სია, რედაქტირება, წაშლა
+// ═══════════════════════════════════════
+
+// Get all properties that have a 3D tour attached
+router.get('/tours', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
+
+    const query = { tourLink: { $exists: true, $ne: '' } };
+    if (search) {
+      query.title = { $regex: search, $options: 'i' };
+    }
+
+    const total = await Property.countDocuments(query);
+    const properties = await Property.find(query)
+      .select('title city tbilisiDistrict type dealType price priceCurrency photos status tourLink exteriorLink interiorLink userId createdAt')
+      .populate('userId', 'name email')
+      .sort({ updatedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      properties,
+      total,
+      page,
+      pages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    res.status(500).json({ message: '3D ტურების მიღება ვერ მოხერხდა' });
+  }
+});
+
+// Remove a 3D tour link from a property (does not delete the property)
+router.delete('/tours/:id', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const property = await Property.findByIdAndUpdate(
+      req.params.id,
+      { tourLink: '' },
+      { new: true }
+    );
+    if (!property) return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა' });
+
+    await writeAudit(req.user.id, 'tour.removed', 'property', req.params.id);
+    res.json({ message: '3D ტური წაიშალა განცხადებიდან' });
   } catch (error) {
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
   }

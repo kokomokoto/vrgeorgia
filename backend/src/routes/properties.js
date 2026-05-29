@@ -3,6 +3,7 @@ import { body, param, query, validationResult } from 'express-validator';
 import { nanoid } from 'nanoid';
 
 import { Property } from '../models/Property.js';
+import { User } from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 import { translateText } from '../services/translate.js';
 import { uploadPropertyPhotosMiddleware, deleteCloudinaryImage } from '../services/cloudinary.js';
@@ -114,6 +115,7 @@ router.post(
     body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
     body('exteriorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
+    body('tourLink').optional().isString().trim().isLength({ max: 2000 }),
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail(),
     body('cadastralCode').optional().isString().trim(),
@@ -216,6 +218,7 @@ router.post(
         threeDLink: req.body.threeDLink || '',
         exteriorLink: req.body.exteriorLink || '',
         interiorLink: req.body.interiorLink || '',
+        tourLink: req.body.tourLink || '',
         mediaLinks,
         status: 'pending',
         contact: {
@@ -511,6 +514,7 @@ router.get(
           { threeDLink: { $ne: '' } },
           { exteriorLink: { $ne: '' } },
           { interiorLink: { $ne: '' } },
+          { tourLink: { $ne: '' } },
         ],
       });
     }
@@ -519,6 +523,7 @@ router.get(
       filter.threeDLink = '';
       filter.exteriorLink = '';
       filter.interiorLink = '';
+      filter.tourLink = '';
     }
 
     if (req.query.hasPhotos === 'true') filter.photos = { $exists: true, $ne: [] };
@@ -598,7 +603,10 @@ router.get(
       sortOption = { createdAt: -1 }; // default
     }
 
-    const properties = await Property.find(filter).sort(sortOption).limit(200).lean();
+    // ადმინის მიერ აპინული ობიექტები ყოველთვის პირველ რიგში, მერე არჩეული სორტი
+    const finalSort = { pinned: -1, pinnedAt: -1, ...sortOption };
+
+    const properties = await Property.find(filter).sort(finalSort).limit(200).lean();
 
     const translated = properties.map((p) => {
       const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
@@ -771,6 +779,7 @@ router.put(
     body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
     body('exteriorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
+    body('tourLink').optional().isString().trim().isLength({ max: 2000 }),
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('photos').optional().isArray(),
@@ -785,10 +794,14 @@ router.put(
 
     const existing = await Property.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Not found' });
-    if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
+    if (existing.userId.toString() !== req.user.id) {
+      // ადმინს ნებისმიერი ობიექტის რედაქტირება შეუძლია
+      const me = await User.findById(req.user.id).select('role');
+      if (!me || me.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+    }
 
     const patch = {};
-    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'street', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'cadastralCode', 'privateNotes', 'buildingProject', 'renovationStatus', 'cadastralHidden']) {
+    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'street', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'tourLink', 'cadastralCode', 'privateNotes', 'buildingProject', 'renovationStatus', 'cadastralHidden']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
     }
     // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას (თუ მითითებულია)
@@ -873,7 +886,11 @@ router.put(
 router.delete('/:id', requireAuth, async (req, res) => {
   const existing = await Property.findById(req.params.id);
   if (!existing) return res.status(404).json({ message: 'Not found' });
-  if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
+  if (existing.userId.toString() !== req.user.id) {
+    // ადმინს ნებისმიერი ობიექტის წაშლა შეუძლია
+    const me = await User.findById(req.user.id).select('role');
+    if (!me || me.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+  }
 
   await Property.deleteOne({ _id: existing._id });
   res.json({ ok: true });

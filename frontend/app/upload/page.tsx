@@ -22,6 +22,7 @@ import { reverseGeocodeLabel } from '@/lib/reverseGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { PropertyRoomsBedroomsSelectors } from '@/components/PropertyRoomsBedroomsSelectors';
+import { PropertyVirtualTourFields } from '@/components/PropertyVirtualTourFields';
 import type { Property } from '@/lib/types';
 
 // საქართველოს რეგიონები
@@ -120,6 +121,7 @@ export default function UploadPage() {
   const [dealType, setDealType] = React.useState('');
   const [exteriorLink, setExteriorLink] = React.useState('');
   const [interiorLink, setInteriorLink] = React.useState('');
+  const [tourLink, setTourLink] = React.useState('');
   const [contactPhone, setContactPhone] = React.useState('');
   const [contactEmail, setContactEmail] = React.useState('');
   const [lat, setLat] = React.useState<number | null>(null);
@@ -271,6 +273,7 @@ export default function UploadPage() {
             photos: [],
             exteriorLink,
             interiorLink,
+            tourLink,
             contact: { phone: contactPhone, email: contactEmail }
           }
         ]
@@ -358,6 +361,7 @@ export default function UploadPage() {
       form.set('lng', String(lng));
       form.set('exteriorLink', exteriorLink);
       form.set('interiorLink', interiorLink);
+      form.set('tourLink', tourLink);
       form.set('contactPhone', contactPhone);
       form.set('contactEmail', contactEmail);
       form.set('cadastralCode', cadastralCode);
@@ -858,26 +862,14 @@ export default function UploadPage() {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t">
-                  <p className="text-sm text-slate-500 mb-2">🔮 3D ({t('cadastral_optional')})</p>
-                  <p className="text-xs text-slate-400 mb-3">
-                    YouTube, Matterport, Kuula, Supersplat
-                  </p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <input
-                      className="rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      placeholder={t('exterior_3d')}
-                      value={exteriorLink}
-                      onChange={(e) => setExteriorLink(e.target.value)}
-                    />
-                    <input
-                      className="rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      placeholder={t('interior_3d')}
-                      value={interiorLink}
-                      onChange={(e) => setInteriorLink(e.target.value)}
-                    />
-                  </div>
-                </div>
+                <PropertyVirtualTourFields
+                  exteriorLink={exteriorLink}
+                  interiorLink={interiorLink}
+                  tourLink={tourLink}
+                  onExteriorChange={setExteriorLink}
+                  onInteriorChange={setInteriorLink}
+                  onTourChange={setTourLink}
+                />
 
                 {isStep5Complete && (
                   <button 

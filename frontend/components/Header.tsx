@@ -36,6 +36,8 @@ export function Header() {
   const agentsText = mounted ? t('agents') : 'აგენტები';
   const servicesNavText = mounted ? t('services_nav') : 'მომსახურება';
   const messagesText = mounted ? t('messages') : 'შეტყობინებები';
+  const adminText = mounted ? t('admin_panel') : 'ადმინ პანელი';
+  const isAdmin = user?.role === 'admin';
 
   return (
     <header
@@ -105,6 +107,14 @@ export function Header() {
               <Link href="/profile" className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-amber-400 dark:hover:text-amber-300">
                 {profileText}
               </Link>
+              {isAdmin && (
+                <Link href="/admin" className="text-sm font-semibold flex items-center gap-1 text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  {adminText}
+                </Link>
+              )}
             </>
           )}
           <ThemeToggle />
@@ -179,6 +189,14 @@ export function Header() {
                 <Link href="/profile" onClick={() => setOpen(false)} className="text-sm font-medium text-blue-600">
                   {profileText}
                 </Link>
+                {isAdmin && (
+                  <Link href="/admin" onClick={() => setOpen(false)} className="text-sm font-semibold flex items-center gap-2 text-rose-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    {adminText}
+                  </Link>
+                )}
               </>
             )}
           </div>

@@ -116,7 +116,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export async function register(body: RegisterBody) {
-  return request<{ token: string; user: User }>('/api/auth/register', {
+  // რეგისტრაცია ელოდება ადმინის დამტკიცებას — სერვერი აბრუნებს { pending, message }
+  return request<{ pending?: boolean; message?: string; token?: string; user?: User }>('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify(body)
   });

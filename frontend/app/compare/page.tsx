@@ -73,7 +73,7 @@ export default function ComparePage() {
     { key: 'pool', label: `🏊 ${t('amenity_pool')}`, format: (p: Property) => p.amenities?.pool ? '✓' : '✗' },
     { key: 'garden', label: `🌳 ${t('amenity_garden')}`, format: (p: Property) => p.amenities?.garden ? '✓' : '✗' },
     { key: 'amenityTerrace', label: `🏞️ ${t('terrace')}`, format: (p: Property) => p.amenities?.terrace ? '✓' : '✗' },
-    { key: 'has3d', label: t('has3d'), format: (p: Property) => (p.exteriorLink || p.interiorLink || p.threeDLink) ? '✓' : '✗' },
+    { key: 'has3d', label: t('has3d'), format: (p: Property) => (p.exteriorLink || p.interiorLink || p.threeDLink || p.tourLink) ? '✓' : '✗' },
   ];
 
   if (compareProperties.length === 0) {

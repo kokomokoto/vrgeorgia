@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { API_BASE } from '@/lib/config';
+import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface AnalyticsData {
   period: number;
@@ -76,38 +77,7 @@ export default function AdminAnalytics() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 text-white p-4 z-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">🏠 VR Georgia</h1>
-          <p className="text-gray-400 text-sm">ადმინისტრატორის პანელი</p>
-        </div>
-        <nav className="space-y-2">
-          <Link href="/admin" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>📊</span> მიმოხილვა
-          </Link>
-          <Link href="/admin/users" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>👥</span> მომხმარებლები
-          </Link>
-          <Link href="/admin/agents" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>🏢</span> აგენტები
-          </Link>
-          <Link href="/admin/properties" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>🏘️</span> განცხადებები
-          </Link>
-          <Link href="/admin/messages" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>💬</span> შეტყობინებები
-          </Link>
-          <Link href="/admin/analytics" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 bg-blue-600 block">
-            <span>📈</span> ანალიტიკა
-          </Link>
-        </nav>
-        <div className="absolute bottom-4 left-4 right-4">
-          <Link href="/" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block text-gray-400">
-            <span>🏠</span> საიტზე დაბრუნება
-          </Link>
-        </div>
-      </div>
+      <AdminSidebar />
 
       {/* Main */}
       <div className="ml-64 p-8">

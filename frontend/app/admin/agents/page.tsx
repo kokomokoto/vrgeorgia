@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { API_BASE } from '@/lib/config';
+import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface Agent {
   _id: string;
@@ -95,10 +96,12 @@ export default function AdminAgents() {
 
   const handleDelete = async (agentId: string) => {
     if (!confirm('ნამდვილად გსურთ აგენტის წაშლა?')) return;
+    // OK = მისი განცხადებებიც წაიშლება; Cancel = განცხადებები რჩება
+    const deleteProperties = confirm('ასევე წავშალო ამ აგენტის ყველა განცხადება?\n\nOK — განცხადებებიც წაიშლება\nგაუქმება — განცხადებები დარჩება');
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/agents/${agentId}`, {
+      const res = await fetch(`${API_BASE}/api/admin/agents/${agentId}?deleteProperties=${deleteProperties}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -125,37 +128,7 @@ export default function AdminAgents() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 text-white p-4">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">🏠 VR Georgia</h1>
-          <p className="text-gray-400 text-sm">ადმინისტრატორის პანელი</p>
-        </div>
-
-        <nav className="space-y-2">
-          <Link href="/admin" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>📊</span> მიმოხილვა
-          </Link>
-          <Link href="/admin/users" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>👥</span> მომხმარებლები
-          </Link>
-          <div className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 bg-blue-600">
-            <span>🏢</span> აგენტები
-          </div>
-          <Link href="/admin/properties" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>🏘️</span> განცხადებები
-          </Link>
-          <Link href="/admin/messages" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>💬</span> შეტყობინებები
-          </Link>
-        </nav>
-
-        <div className="absolute bottom-4 left-4 right-4">
-          <Link href="/" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block text-gray-400">
-            <span>🏠</span> საიტზე დაბრუნება
-          </Link>
-        </div>
-      </div>
+      <AdminSidebar />
 
       {/* Main Content */}
       <div className="ml-64 p-8">
@@ -258,6 +231,14 @@ export default function AdminAgents() {
                       ✓ ვერიფიკაცია
                     </button>
                   )}
+                  <Link
+                    href={`/agents/${agent._id}`}
+                    target="_blank"
+                    className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm"
+                    title="პროფილი"
+                  >
+                    👁️
+                  </Link>
                   <button
                     onClick={() => handleDelete(agent._id)}
                     className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm"

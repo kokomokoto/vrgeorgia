@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
+import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface Property {
   _id: string;
@@ -18,6 +19,7 @@ interface Property {
   tbilisiDistrict: string;
   sqm: number;
   status: string;
+  pinned?: boolean;
   photos: string[];
   userId?: {
     name: string;
@@ -147,6 +149,27 @@ function AdminProperties() {
     }
   };
 
+  const handleTogglePin = async (propertyId: string, pinned: boolean) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/properties/${propertyId}/pin`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ pinned })
+      });
+      if (res.ok) {
+        setProperties((prev) => prev.map((p) => (p._id === propertyId ? { ...p, pinned } : p)));
+      } else {
+        alert('ოპერაცია ვერ შესრულდა');
+      }
+    } catch {
+      alert('ოპერაცია ვერ შესრულდა');
+    }
+  };
+
   const handleDelete = async (propertyId: string) => {
     if (!confirm('ნამდვილად გსურთ განცხადების წაშლა?')) return;
 
@@ -212,37 +235,7 @@ function AdminProperties() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 text-white p-4">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">🏠 VR Georgia</h1>
-          <p className="text-gray-400 text-sm">ადმინისტრატორის პანელი</p>
-        </div>
-
-        <nav className="space-y-2">
-          <Link href="/admin" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>📊</span> მიმოხილვა
-          </Link>
-          <Link href="/admin/users" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>👥</span> მომხმარებლები
-          </Link>
-          <Link href="/admin/agents" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>🏢</span> აგენტები
-          </Link>
-          <div className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 bg-blue-600">
-            <span>🏘️</span> განცხადებები
-          </div>
-          <Link href="/admin/messages" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block">
-            <span>💬</span> შეტყობინებები
-          </Link>
-        </nav>
-
-        <div className="absolute bottom-4 left-4 right-4">
-          <Link href="/" className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block text-gray-400">
-            <span>🏠</span> საიტზე დაბრუნება
-          </Link>
-        </div>
-      </div>
+      <AdminSidebar />
 
       {/* Main Content */}
       <div className="ml-64 p-8">
@@ -359,7 +352,10 @@ function AdminProperties() {
                           )}
                         </div>
                         <div>
-                          <div className="font-medium text-gray-800 max-w-[200px] truncate">{property.title}</div>
+                          <div className="font-medium text-gray-800 max-w-[200px] truncate flex items-center gap-1">
+                            {property.pinned && <span title="აპინულია" className="text-amber-500">📌</span>}
+                            {property.title}
+                          </div>
                           <div className="text-sm text-gray-500">{property.city}, {property.tbilisiDistrict || '-'}</div>
                         </div>
                       </div>
@@ -392,6 +388,20 @@ function AdminProperties() {
                         >
                           👁️
                         </Link>
+                        <Link
+                          href={`/property/${property._id}/edit`}
+                          className="text-amber-600 hover:text-amber-800 text-sm"
+                          title="რედაქტირება"
+                        >
+                          ✏️
+                        </Link>
+                        <button
+                          onClick={() => handleTogglePin(property._id, !property.pinned)}
+                          className={`text-sm ${property.pinned ? 'text-amber-600 hover:text-amber-800' : 'text-gray-400 hover:text-amber-600'}`}
+                          title={property.pinned ? 'აპინვის მოხსნა' : 'მთავარზე აპინვა'}
+                        >
+                          {property.pinned ? '📌' : '📍'}
+                        </button>
                         {property.status === 'pending' && (
                           <>
                             <button

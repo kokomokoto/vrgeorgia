@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { API_BASE } from '@/lib/config';
+import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface Stats {
   totalUsers: number;
+  pendingRegistrations: number;
   totalAgents: number;
   unverifiedAgents: number;
   totalProperties: number;
@@ -35,7 +37,6 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     checkAdminAccess();
@@ -123,63 +124,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 text-white p-4">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">🏠 VR Georgia</h1>
-          <p className="text-gray-400 text-sm">ადმინისტრატორის პანელი</p>
-        </div>
-
-        <nav className="space-y-2">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition ${
-              activeTab === 'overview' ? 'bg-blue-600' : 'hover:bg-gray-800'
-            }`}
-          >
-            <span>📊</span> მიმოხილვა
-          </button>
-          <Link
-            href="/admin/users"
-            className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block"
-          >
-            <span>👥</span> მომხმარებლები
-          </Link>
-          <Link
-            href="/admin/agents"
-            className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block"
-          >
-            <span>🏢</span> აგენტები
-          </Link>
-          <Link
-            href="/admin/properties"
-            className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block"
-          >
-            <span>🏘️</span> განცხადებები
-          </Link>
-          <Link
-            href="/admin/messages"
-            className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block"
-          >
-            <span>💬</span> შეტყობინებები
-          </Link>
-          <Link
-            href="/admin/analytics"
-            className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block"
-          >
-            <span>📈</span> ანალიტიკა
-          </Link>
-        </nav>
-
-        <div className="absolute bottom-4 left-4 right-4">
-          <Link
-            href="/"
-            className="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 hover:bg-gray-800 block text-gray-400"
-          >
-            <span>🏠</span> საიტზე დაბრუნება
-          </Link>
-        </div>
-      </div>
+      <AdminSidebar pendingCount={stats?.pendingRegistrations || 0} />
 
       {/* Main Content */}
       <div className="ml-64 p-8">
@@ -330,6 +275,19 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">სწრაფი მოქმედებები</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Link
+              href="/admin/registrations"
+              className="p-4 bg-rose-50 rounded-lg hover:bg-rose-100 transition text-center relative"
+            >
+              {(stats?.pendingRegistrations || 0) > 0 && (
+                <span className="absolute top-2 right-2 bg-rose-500 text-white text-xs font-bold rounded-full px-2 py-0.5">
+                  {stats?.pendingRegistrations}
+                </span>
+              )}
+              <div className="text-3xl mb-2">📝</div>
+              <div className="font-medium text-gray-800">რეგისტრაციები</div>
+              <div className="text-sm text-gray-500">{stats?.pendingRegistrations || 0} დასამტკიცებელი</div>
+            </Link>
             <Link
               href="/admin/properties?status=pending"
               className="p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition text-center"

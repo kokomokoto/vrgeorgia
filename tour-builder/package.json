@@ -24,10 +24,10 @@
     "react-dom": "19.2.4",
     "sharp": "^0.34.5",
     "uuid": "^14.0.0",
-    "vrgeorgia-backend": "file:../backend"
+    "@tailwindcss/postcss": "^4",
+    "tailwindcss": "^4"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -35,7 +35,6 @@
     "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
-    "tailwindcss": "^4",
     "typescript": "^5"
   }
 }

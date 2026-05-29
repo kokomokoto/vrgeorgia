@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node --import ./src/env-bootstrap.js --watch src/server.js",
-    "build:tour-ui": "npm install --prefix ../tour-builder && npm run build --prefix ../tour-builder",
+    "build:tour-ui": "npm install --include=dev --prefix ../tour-builder && npm run build --prefix ../tour-builder",
     "build": "npm run build:tour-ui",
     "start": "node --import ./src/env-bootstrap.js src/server.js",
     "seed": "node --import ./src/env-bootstrap.js src/seed.js"

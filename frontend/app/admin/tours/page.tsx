@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/api';
 import { API_BASE } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
-import { getTourEditUrl, extractTourId } from '@/lib/tourBuilder';
+import { getTourEditUrl, resolveTourPublicUrl } from '@/lib/tourBuilder';
 
 interface TourProperty {
   _id: string;
@@ -80,9 +80,11 @@ export default function AdminToursPage() {
     }
   };
 
+  const publicTourUrl = (tourLink: string) => resolveTourPublicUrl(tourLink);
   const editUrlFor = (tourLink: string) => {
-    const id = extractTourId(tourLink);
-    return id ? getTourEditUrl(id) : tourLink;
+    const resolved = resolveTourPublicUrl(tourLink);
+    const id = resolved.match(/\/v\/([^/?#]+)/)?.[1];
+    return id ? getTourEditUrl(id) : resolved;
   };
 
   if (error) {
@@ -145,14 +147,14 @@ export default function AdminToursPage() {
                       <div className="text-sm text-gray-500">{p.userId?.email || '-'}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <a href={p.tourLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-sm break-all max-w-[200px] inline-block truncate align-middle">
-                        {p.tourLink}
+                      <a href={publicTourUrl(p.tourLink)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-sm break-all max-w-[200px] inline-block truncate align-middle">
+                        {publicTourUrl(p.tourLink)}
                       </a>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <a
-                          href={p.tourLink}
+                          href={publicTourUrl(p.tourLink)}
                           target="_blank"
                           rel="noreferrer"
                           className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"

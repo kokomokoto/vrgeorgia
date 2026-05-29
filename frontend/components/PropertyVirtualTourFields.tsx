@@ -4,10 +4,11 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   getTourBuilderEmbedUrl,
-  getTourBuilderOrigin,
   getTourEditUrl,
+  getPublishedTourUrl,
   extractTourId,
   isTourPublishedMessage,
+  resolveTourPublicUrl,
 } from '@/lib/tourBuilder';
 
 type Props = {
@@ -33,12 +34,13 @@ export function PropertyVirtualTourFields({
   const [manualValue, setManualValue] = React.useState('');
 
   React.useEffect(() => {
-    const builderOrigin = getTourBuilderOrigin();
     const onMessage = (event: MessageEvent) => {
-      // ვიღებთ მხოლოდ tour-builder origin-იდან (cross-origin postMessage)
-      if (event.origin !== builderOrigin) return;
       if (!isTourPublishedMessage(event.data)) return;
-      onTourChange(event.data.url.trim());
+      const raw =
+        event.data.url.trim() ||
+        (event.data.tourId ? getPublishedTourUrl(event.data.tourId) : '');
+      const url = resolveTourPublicUrl(raw);
+      if (url) onTourChange(url);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);

@@ -20,7 +20,7 @@ interface TourEditorProps {
   tourId: string;
 }
 
-import { VRGEORGIA_TOUR_MESSAGE } from "@/lib/vrgeorgia";
+import { VRGEORGIA_TOUR_MESSAGE, getPublicTourUrl } from "@/lib/vrgeorgia";
 
 export function TourEditor({ tourId }: TourEditorProps) {
   const searchParams = useSearchParams();
@@ -538,7 +538,7 @@ export function TourEditor({ tourId }: TourEditorProps) {
       setError(data.error || "Publish failed");
       return;
     }
-    const publicUrl = `${window.location.origin}/v/${tourId}`;
+    const publicUrl = getPublicTourUrl(tourId, embedMode);
     if (embedMode) {
       setPublishedUrl(publicUrl);
       let delivered = false;

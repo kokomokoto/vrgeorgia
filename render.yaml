@@ -22,7 +22,9 @@ services:
       - key: MONGODB_URI
         sync: false  # ხელით შეიყვანე MongoDB Atlas URI
       - key: ALLOWED_ORIGINS
-        value: https://vrgeorgia.ge,https://www.vrgeorgia.ge
+        value: https://vrgeorgia.ge,https://www.vrgeorgia.ge,https://vrgeorgia-tour-builder.onrender.com
+      - key: TOUR_BUILDER_PUBLIC_URL
+        value: https://vrgeorgia-tour-builder.onrender.com
     disk:
       name: vrgeorgia-uploads
       mountPath: /opt/render/project/src/uploads
@@ -43,3 +45,27 @@ services:
         value: https://vrgeorgia-api.onrender.com
       - key: NEXT_PUBLIC_API_URL
         value: https://vrgeorgia-api.onrender.com/api
+      - key: NEXT_PUBLIC_TOUR_BUILDER_URL
+        value: https://vrgeorgia-tour-builder.onrender.com
+
+  # ──── 3D Tour Builder ────
+  - type: web
+    name: vrgeorgia-tour-builder
+    runtime: node
+    region: frankfurt
+    rootDir: tour-builder
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_TOUR_BUILDER_PUBLIC_URL
+        value: https://vrgeorgia-tour-builder.onrender.com

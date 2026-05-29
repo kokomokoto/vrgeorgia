@@ -19,6 +19,7 @@ import { PropertySpecChips } from '@/components/PropertySpecChips';
 import { BrokerContactChannels } from '@/components/BrokerContactChannels';
 import { PanoramaViewer } from '@/components/PanoramaViewer';
 import { isPanoramaPhoto } from '@/lib/panorama';
+import { resolveTourPublicUrl } from '@/lib/tourBuilder';
 import { useAuth } from '@/components/AuthProvider';
 import type { Property } from '@/lib/types';
 
@@ -362,7 +363,7 @@ function PropertyDetailInner() {
 
   const link3dExterior = (property.exteriorLink || property.threeDLink || '').trim();
   const link3dInterior = (property.interiorLink || '').trim();
-  const link3dPanoramaTour = (property.tourLink || '').trim();
+  const link3dPanoramaTour = resolveTourPublicUrl(property.tourLink);
   const has3dExterior = !!link3dExterior;
   const has3dInterior = !!link3dInterior;
   const has3dPanoramaTour = !!link3dPanoramaTour;

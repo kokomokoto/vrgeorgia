@@ -6,6 +6,7 @@ import Message from '../models/Message.js';
 import { PageView } from '../models/PageView.js';
 import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import { requireAuth } from '../middleware/auth.js';
+import { normalizeTourLink } from '../utils/tourLink.js';
 
 const router = express.Router();
 
@@ -463,6 +464,16 @@ router.get('/tours', requireAuth, adminMiddleware, async (req, res) => {
       .skip((page - 1) * limit)
       .limit(limit)
       .lean();
+
+    // ძველი localhost ბმულების ავტომატური გასწორება MongoDB-ში
+    for (const p of properties) {
+      if (!p.tourLink) continue;
+      const fixed = normalizeTourLink(p.tourLink);
+      if (fixed !== p.tourLink) {
+        await Property.updateOne({ _id: p._id }, { tourLink: fixed });
+      }
+      p.tourLink = fixed;
+    }
 
     res.json({
       properties,

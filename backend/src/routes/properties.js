@@ -9,6 +9,7 @@ import { translateText } from '../services/translate.js';
 import { uploadPropertyPhotosMiddleware, deleteCloudinaryImage } from '../services/cloudinary.js';
 import { uploadPropertyPhotosFromFiles } from '../services/photoUpload.js';
 import { getJWTSecret } from '../config/jwt.js';
+import { normalizeTourLink } from '../utils/tourLink.js';
 
 const router = express.Router();
 
@@ -218,7 +219,7 @@ router.post(
         threeDLink: req.body.threeDLink || '',
         exteriorLink: req.body.exteriorLink || '',
         interiorLink: req.body.interiorLink || '',
-        tourLink: req.body.tourLink || '',
+        tourLink: normalizeTourLink(req.body.tourLink || ''),
         mediaLinks,
         status: 'pending',
         contact: {
@@ -714,6 +715,10 @@ router.get(
       }
     }
 
+    if (property.tourLink) {
+      property.tourLink = normalizeTourLink(property.tourLink);
+    }
+
     res.json({ property: applyTranslation(property, lang) });
   }
 );
@@ -803,6 +808,9 @@ router.put(
     const patch = {};
     for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'street', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'tourLink', 'cadastralCode', 'privateNotes', 'buildingProject', 'renovationStatus', 'cadastralHidden']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
+    }
+    if (patch.tourLink !== undefined) {
+      patch.tourLink = normalizeTourLink(patch.tourLink);
     }
     // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას (თუ მითითებულია)
     if (req.body.cadastralCode && req.body.cadastralCode.trim()) {

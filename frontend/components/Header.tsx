@@ -38,6 +38,10 @@ export function Header() {
   const messagesText = mounted ? t('messages') : 'შეტყობინებები';
   const adminText = mounted ? t('admin_panel') : 'ადმინ პანელი';
   const isAdmin = profileLoaded && user?.role === 'admin';
+  const isAgent = profileLoaded && user?.role === 'agent';
+  const uploadLinkClass = isAgent
+    ? 'text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
+    : 'text-sm text-slate-800 hover:text-blue-700 dark:text-zinc-200 dark:hover:text-amber-400';
 
   return (
     <header
@@ -72,7 +76,7 @@ export function Header() {
             </svg>
             {agentsText}
           </Link>
-          <Link href="/upload" className="text-sm text-slate-800 hover:text-blue-700 dark:text-zinc-200 dark:hover:text-amber-400">
+          <Link href="/upload" className={uploadLinkClass}>
             {uploadText}
           </Link>
           <Link href="/favorites" className="text-sm flex items-center gap-1 text-slate-700 hover:text-red-500 dark:text-zinc-200 dark:hover:text-red-400">
@@ -154,7 +158,7 @@ export function Header() {
               </svg>
               {agentsText}
             </Link>
-            <Link href="/upload" onClick={() => setOpen(false)} className="text-sm">
+            <Link href="/upload" onClick={() => setOpen(false)} className={uploadLinkClass}>
               {uploadText}
             </Link>
             <Link href="/favorites" onClick={() => setOpen(false)} className="text-sm flex items-center gap-2">

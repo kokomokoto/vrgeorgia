@@ -34,7 +34,7 @@ export default function ProfilePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterDealType, setFilterDealType] = useState('');
-  /** აგენტისთვის: საჯარო / პირადი / ლინკით / გაყიდული */
+  /** აგენტი/ადმინი: საჯარო / პირადი / ლინკით / გაყიდული */
   const [filterVisibility, setFilterVisibility] = useState<'' | BrokerListingMode>('');
   
   // Profile editing
@@ -73,6 +73,8 @@ export default function ProfilePage() {
       </div>
     );
   }
+
+  const canSetListingVisibility = user.role === 'agent' || user.role === 'admin';
 
   const setBrokerListingMode = async (property: Property, mode: BrokerListingMode) => {
     setVisibilitySavingId(property._id);
@@ -325,7 +327,7 @@ export default function ProfilePage() {
               <option value="rent">🔑 {t('deal_rent')}</option>
               <option value="mortgage">🏦 {t('deal_mortgage')}</option>
             </select>
-            {user.role === 'agent' && (
+            {canSetListingVisibility && (
               <select
                 value={filterVisibility}
                 onChange={(e) => setFilterVisibility((e.target.value || '') as '' | BrokerListingMode)}
@@ -426,7 +428,7 @@ export default function ProfilePage() {
                     <span className="text-xs text-slate-400 font-mono">ID: {property.numericId || property._id.slice(-6)}</span>
                   </div>
 
-                  {user.role === 'agent' && (
+                  {canSetListingVisibility && (
                     <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                       <p className="text-xs font-medium text-slate-600">{t('listingVisibilityLabel')}</p>
                       <div className="flex flex-wrap gap-1">

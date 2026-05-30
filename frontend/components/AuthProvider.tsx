@@ -7,6 +7,8 @@ import { getMe } from '@/lib/api';
 type AuthState = {
   user: User | null;
   token: string | null;
+  /** true after getMe finishes (or when there is no token) — avoids stale admin link from localStorage */
+  profileLoaded: boolean;
   setAuth: (token: string, user: User) => void;
   logout: () => void;
 };
@@ -22,6 +24,7 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = React.useState<string | null>(null);
   const [user, setUser] = React.useState<User | null>(null);
+  const [profileLoaded, setProfileLoaded] = React.useState(false);
 
   React.useEffect(() => {
     const t = window.localStorage.getItem('token');
@@ -41,7 +44,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         .catch(() => {
           // 401-ს api.ts ამუშავებს (logout event)
-        });
+        })
+        .finally(() => setProfileLoaded(true));
+    } else {
+      setProfileLoaded(true);
     }
   }, []);
 
@@ -65,5 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('vr-auth-unauthorized', onUnauthorized);
   }, [logout]);
 
-  return <AuthContext.Provider value={{ user, token, setAuth, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, token, profileLoaded, setAuth, logout }}>{children}</AuthContext.Provider>
+  );
 }

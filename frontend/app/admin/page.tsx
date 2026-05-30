@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/config';
+import { getMe } from '@/lib/api';
+import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface Stats {
@@ -50,7 +51,20 @@ export default function AdminDashboard() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/admin/stats`, {
+      const { user } = await getMe();
+      if (user.role !== 'admin') {
+        const roleLabel =
+          user.role === 'agent' ? 'აგენტი' : user.role === 'user' ? 'მომხმარებელი' : String(user.role ?? '—');
+        setError(
+          `თქვენი ანგარიში (${user.email}) არ არის ადმინისტრატორი — მიმდინარე როლი: ${roleLabel}. ` +
+            'ადმინის უფლება უნდა დაენიჭოს ბაზაში (role: admin), შემდეგ გამოდით და ხელახლა შედით.'
+        );
+        setLoading(false);
+        return;
+      }
+
+      const api = getApiBase();
+      const res = await fetch(`${api}/api/admin/stats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -64,7 +78,7 @@ export default function AdminDashboard() {
 
       const [statsData, logsRes] = await Promise.all([
         res.json(),
-        fetch(`${API_BASE}/api/admin/audit-logs?limit=12`, {
+        fetch(`${api}/api/admin/audit-logs?limit=12`, {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/config';
+import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface User {
@@ -47,7 +47,7 @@ export default function AdminUsers() {
         ...(roleFilter && { role: roleFilter })
       });
 
-      const res = await fetch(`${API_BASE}/api/admin/users?${params}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/users?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -78,7 +78,7 @@ export default function AdminUsers() {
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/users/${editingUser._id}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/users/${editingUser._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -104,7 +104,7 @@ export default function AdminUsers() {
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/users/${userId}?keepProperties=${keepProperties}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/users/${userId}?keepProperties=${keepProperties}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

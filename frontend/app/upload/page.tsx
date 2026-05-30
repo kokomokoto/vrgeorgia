@@ -318,7 +318,7 @@ export default function UploadPage() {
   const isStep1Complete = dealType !== '' && type !== '';
   const isStep2Complete = lat !== null && lng !== null;
   const isStep3Complete = city !== '' && (city.toLowerCase() !== 'თბილისი' ? region !== '' : true);
-  const isStep4Complete = title !== '' && price !== '' && sqm !== '';
+  const isStep4Complete = title !== '' && price !== '';
   const isStep5Filled =
     roomCount !== null ||
     bedroomCount !== null ||
@@ -831,9 +831,11 @@ export default function UploadPage() {
                 {isStep4Complete && (
                   <span className="ml-auto text-green-600 font-medium">
                     {formatNumberForDisplay(price)} {priceCurrency === 'USD' ? '$' : '₾'}
-                    {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''} • {formatNumberForDisplay(sqm)}{' '}
-                    {t('sqm_unit_short')}
-                    {houseSqm ? ` • ${t('house_area_detail')}: ${formatNumberForDisplay(houseSqm)} ${t('sqm_unit_short')}` : ''}
+                    {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''}
+                    {houseSqm
+                      ? ` • ${t('house_area_detail')}: ${formatNumberForDisplay(houseSqm)} ${t('sqm_unit_short')}`
+                      : ''}
+                    {sqm ? ` • ${formatNumberForDisplay(sqm)} ${t('sqm_unit_short')}` : ''}
                   </span>
                 )}
               </div>
@@ -923,15 +925,6 @@ export default function UploadPage() {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">📐 {t('area_sqm')}</label>
-                      <FormattedNumberInput
-                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        placeholder="0"
-                        value={sqm}
-                        onChange={setSqm}
-                      />
-                    </div>
-                    <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
                         🏠 {t('house_sqm_label')}{' '}
                         <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
@@ -941,6 +934,18 @@ export default function UploadPage() {
                         placeholder="0"
                         value={houseSqm}
                         onChange={setHouseSqm}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        📐 {t('area_sqm')}{' '}
+                        <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                      </label>
+                      <FormattedNumberInput
+                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        placeholder="0"
+                        value={sqm}
+                        onChange={setSqm}
                       />
                     </div>
                   </div>
@@ -1590,19 +1595,19 @@ export default function UploadPage() {
                       </span>
                     </div>
                   )}
-                  {sqm && (
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <span>📐</span>
-                      <span>
-                        {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
-                      </span>
-                    </div>
-                  )}
                   {houseSqm && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>🏠</span>
                       <span>
                         {t('house_area_detail')}: {formatNumberForDisplay(houseSqm)} {t('sqm_unit_short')}
+                      </span>
+                    </div>
+                  )}
+                  {sqm && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span>📐</span>
+                      <span>
+                        {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
                       </span>
                     </div>
                   )}

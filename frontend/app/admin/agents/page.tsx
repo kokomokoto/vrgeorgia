@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/config';
+import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface Agent {
@@ -48,7 +48,7 @@ export default function AdminAgents() {
         ...(verifiedFilter && { verified: verifiedFilter })
       });
 
-      const res = await fetch(`${API_BASE}/api/admin/agents?${params}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/agents?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -77,7 +77,7 @@ export default function AdminAgents() {
   const handleVerify = async (agentId: string, verified: boolean) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/agents/${agentId}/verify`, {
+      const res = await fetch(`${getApiBase()}/api/admin/agents/${agentId}/verify`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -101,7 +101,7 @@ export default function AdminAgents() {
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/agents/${agentId}?deleteProperties=${deleteProperties}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/agents/${agentId}?deleteProperties=${deleteProperties}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -232,10 +232,17 @@ export default function AdminAgents() {
                     </button>
                   )}
                   <Link
-                    href={`/agents/${agent._id}`}
-                    target="_blank"
+                    href={`/admin/agents/${agent._id}`}
                     className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm"
-                    title="პროფილი"
+                    title="განცხადებები"
+                  >
+                    🏘️
+                  </Link>
+                  <Link
+                    href={`/agent/${agent._id}`}
+                    target="_blank"
+                    className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+                    title="საჯარო პროფილი"
                   >
                     👁️
                   </Link>

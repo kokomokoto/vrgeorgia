@@ -102,13 +102,15 @@ export default function EditPropertyPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const params = useParams();
-  const { user } = useAuth();
+  const { user, profileLoaded } = useAuth();
+  const isAdmin = profileLoaded && user?.role === 'admin';
   const id = params.id as string;
 
   const [hydrated, setHydrated] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [propertyOwnerId, setPropertyOwnerId] = useState<string | null>(null);
 
   // ეტაპი
   const [currentStep, setCurrentStep] = useState(1);
@@ -190,6 +192,14 @@ export default function EditPropertyPage() {
     getProperty(id)
       .then((res) => {
         const p = res.property;
+        const ownerRaw = p.userId as { _id?: string } | string | undefined;
+        const ownerId =
+          ownerRaw && typeof ownerRaw === 'object'
+            ? String(ownerRaw._id || '')
+            : ownerRaw
+              ? String(ownerRaw)
+              : '';
+        setPropertyOwnerId(ownerId || null);
         setTitle(p.title);
         setDesc(p.desc);
         setPrice(String(p.price));
@@ -298,7 +308,7 @@ export default function EditPropertyPage() {
   const isStep1Complete = dealType !== '' && type !== '';
   const isStep2Complete = lat !== null && lng !== null;
   const isStep3Complete = city !== '' && (city.toLowerCase() !== 'თბილისი' ? region !== '' : true);
-  const isStep4Complete = title !== '' && price !== '' && sqm !== '';
+  const isStep4Complete = title !== '' && price !== '';
   const isStep5Filled =
     roomCount !== null ||
     bedroomCount !== null ||
@@ -532,6 +542,11 @@ export default function EditPropertyPage() {
           {t('edit_property')}
         </h1>
         <p className="text-slate-600 mt-1">{t('edit_property_desc')}</p>
+        {isAdmin && propertyOwnerId && user?.id && propertyOwnerId !== user.id && (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+            ადმინის რეჟიმი — რედაქტირებთ სხვა მომხმარებლის განცხადებას.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -804,8 +819,11 @@ export default function EditPropertyPage() {
                 {isStep4Complete && (
                   <span className="ml-auto text-green-600 font-medium">
                     {formatNumberForDisplay(price)} {priceCurrency === 'USD' ? '$' : '₾'}
-                    {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''} • {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
-                    {houseSqm ? ` • ${t('house_area_detail')}: ${formatNumberForDisplay(houseSqm)} ${t('sqm_unit_short')}` : ''}
+                    {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''}
+                    {houseSqm
+                      ? ` • ${t('house_area_detail')}: ${formatNumberForDisplay(houseSqm)} ${t('sqm_unit_short')}`
+                      : ''}
+                    {sqm ? ` • ${formatNumberForDisplay(sqm)} ${t('sqm_unit_short')}` : ''}
                   </span>
                 )}
               </div>
@@ -856,15 +874,6 @@ export default function EditPropertyPage() {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">📐 {t('area_sqm')}</label>
-                      <FormattedNumberInput
-                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        placeholder="0"
-                        value={sqm}
-                        onChange={setSqm}
-                      />
-                    </div>
-                    <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
                         🏠 {t('house_sqm_label')}{' '}
                         <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
@@ -874,6 +883,18 @@ export default function EditPropertyPage() {
                         placeholder="0"
                         value={houseSqm}
                         onChange={setHouseSqm}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        📐 {t('area_sqm')}{' '}
+                        <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                      </label>
+                      <FormattedNumberInput
+                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        placeholder="0"
+                        value={sqm}
+                        onChange={setSqm}
                       />
                     </div>
                   </div>
@@ -1489,18 +1510,18 @@ export default function EditPropertyPage() {
                       </span>
                     </div>
                   )}
-                  {sqm && (
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <span>📐</span>
-                      <span>{formatNumberForDisplay(sqm)} {t('sqm_unit_short')}</span>
-                    </div>
-                  )}
                   {houseSqm && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>🏠</span>
                       <span>
                         {t('house_area_detail')}: {formatNumberForDisplay(houseSqm)} {t('sqm_unit_short')}
                       </span>
+                    </div>
+                  )}
+                  {sqm && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span>📐</span>
+                      <span>{formatNumberForDisplay(sqm)} {t('sqm_unit_short')}</span>
                     </div>
                   )}
                   {existingPhotos.length > 0 && (

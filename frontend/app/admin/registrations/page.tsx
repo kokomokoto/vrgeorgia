@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/config';
+import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface PendingUser {
@@ -37,7 +37,7 @@ export default function AdminRegistrationsPage() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/admin/users?status=pending&limit=100`, {
+      const res = await fetch(`${getApiBase()}/api/admin/users?status=pending&limit=100`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 403) {
@@ -66,7 +66,7 @@ export default function AdminRegistrationsPage() {
     const token = localStorage.getItem('token');
     setBusyId(id);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/users/${id}/${action}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/users/${id}/${action}`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}` },
       });

@@ -33,6 +33,32 @@ function photoUrlInList(url, list) {
   return list.some((p) => p === url || normalizePhotoUrl(p) === key);
 }
 
+/** JWT-დან მომხმარებლის id და ადმინის ფლაგი (საჯარო GET-ისთვის, სადაც requireAuth არაა) */
+async function getRequestUserContext(req) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return { userId: null, isAdmin: false };
+  try {
+    const jwt = await import('jsonwebtoken');
+    const decoded = jwt.default.verify(token, getJWTSecret());
+    const userId = decoded.sub;
+    const me = await User.findById(userId).select('role').lean();
+    return { userId, isAdmin: me?.role === 'admin' };
+  } catch {
+    return { userId: null, isAdmin: false };
+  }
+}
+
+/** მფლობელი ან ადმინი — რედაქტირება/ფოტოები/სრული ნახვა */
+async function userCanManageProperty(requestUserId, property) {
+  if (!requestUserId) return false;
+  const ownerId =
+    property.userId?._id?.toString?.() || property.userId?.toString?.() || String(property.userId);
+  if (requestUserId === ownerId) return true;
+  const me = await User.findById(requestUserId).select('role').lean();
+  return me?.role === 'admin';
+}
+
 function pickLanguage(req) {
   const raw = (req.query.lang || req.headers['accept-language'] || 'ka').toString();
   const lang = raw.split(',')[0].trim().toLowerCase();
@@ -701,18 +727,11 @@ router.get(
       .lean();
     if (!property) return res.status(404).json({ message: 'Not found' });
 
-    // privateNotes მხოლოდ მფლობელისთვის ხილული
-    const token = req.headers.authorization?.split(' ')[1];
-    let requestUserId = null;
-    if (token) {
-      try {
-        const jwt = await import('jsonwebtoken');
-        const decoded = jwt.default.verify(token, getJWTSecret());
-        requestUserId = decoded.sub;
-      } catch (_) {}
-    }
+    // privateNotes მხოლოდ მფლობელისთვის / ადმინისთვის ხილული
+    const { userId: requestUserId, isAdmin: requestIsAdmin } = await getRequestUserContext(req);
     const ownerIdStr = property.userId?._id?.toString() || property.userId?.toString();
-    const isOwner = !!requestUserId && requestUserId === ownerIdStr;
+    const isOwner =
+      !!requestUserId && (requestUserId === ownerIdStr || requestIsAdmin);
     const shareParam = (req.query.t || '').toString().trim();
     const listingVisibility = property.listingVisibility || 'public';
 
@@ -773,7 +792,9 @@ router.post(
 
     const existing = await Property.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Not found' });
-    if (existing.userId.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
+    if (!(await userCanManageProperty(req.user.id, existing))) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
 
     let uploaded = [];
     try {
@@ -838,10 +859,8 @@ router.put(
 
     const existing = await Property.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Not found' });
-    if (existing.userId.toString() !== req.user.id) {
-      // ადმინს ნებისმიერი ობიექტის რედაქტირება შეუძლია
-      const me = await User.findById(req.user.id).select('role');
-      if (!me || me.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+    if (!(await userCanManageProperty(req.user.id, existing))) {
+      return res.status(403).json({ message: 'Forbidden' });
     }
 
     const patch = {};
@@ -944,10 +963,8 @@ router.put(
 router.delete('/:id', requireAuth, async (req, res) => {
   const existing = await Property.findById(req.params.id);
   if (!existing) return res.status(404).json({ message: 'Not found' });
-  if (existing.userId.toString() !== req.user.id) {
-    // ადმინს ნებისმიერი ობიექტის წაშლა შეუძლია
-    const me = await User.findById(req.user.id).select('role');
-    if (!me || me.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+  if (!(await userCanManageProperty(req.user.id, existing))) {
+    return res.status(403).json({ message: 'Forbidden' });
   }
 
   await Property.deleteOne({ _id: existing._id });

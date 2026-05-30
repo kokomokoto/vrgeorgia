@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/config';
+import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface Message {
@@ -47,7 +47,7 @@ export default function AdminMessages() {
         limit: '50'
       });
 
-      const res = await fetch(`${API_BASE}/api/admin/messages?${params}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/messages?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

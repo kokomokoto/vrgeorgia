@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/api';
-import { API_BASE } from '@/lib/config';
+import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface Property {
@@ -68,7 +68,7 @@ function AdminProperties() {
         ...(typeFilter && { type: typeFilter })
       });
 
-      const res = await fetch(`${API_BASE}/api/admin/properties?${params}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/properties?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -105,7 +105,7 @@ function AdminProperties() {
     }
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/properties/${propertyId}/status`, {
+      const res = await fetch(`${getApiBase()}/api/admin/properties/${propertyId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ function AdminProperties() {
     }
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/properties/bulk-status`, {
+      const res = await fetch(`${getApiBase()}/api/admin/properties/bulk-status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +152,7 @@ function AdminProperties() {
   const handleTogglePin = async (propertyId: string, pinned: boolean) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/properties/${propertyId}/pin`, {
+      const res = await fetch(`${getApiBase()}/api/admin/properties/${propertyId}/pin`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -175,7 +175,7 @@ function AdminProperties() {
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/properties/${propertyId}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/properties/${propertyId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });

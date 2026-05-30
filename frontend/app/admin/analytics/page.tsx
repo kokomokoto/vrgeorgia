@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { API_BASE } from '@/lib/config';
+import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 
 interface AnalyticsData {
@@ -41,7 +41,7 @@ export default function AdminAnalytics() {
 
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/api/admin/analytics?period=${period}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/analytics?period=${period}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.status === 403) { setError('წვდომა აკრძალულია'); return; }

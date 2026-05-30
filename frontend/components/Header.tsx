@@ -10,7 +10,7 @@ import { useAuth } from './AuthProvider';
 
 export function Header() {
   const { t } = useTranslation();
-  const { user, logout } = useAuth();
+  const { user, logout, profileLoaded } = useAuth();
   const [open, setOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
 
@@ -37,7 +37,7 @@ export function Header() {
   const servicesNavText = mounted ? t('services_nav') : 'მომსახურება';
   const messagesText = mounted ? t('messages') : 'შეტყობინებები';
   const adminText = mounted ? t('admin_panel') : 'ადმინ პანელი';
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = profileLoaded && user?.role === 'admin';
 
   return (
     <header

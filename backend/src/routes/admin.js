@@ -277,6 +277,21 @@ router.get('/agents', requireAuth, adminMiddleware, async (req, res) => {
   }
 });
 
+// Single agent (admin) + listing count
+router.get('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const agent = await Agent.findById(req.params.id).populate('user', 'name email role');
+    if (!agent) {
+      return res.status(404).json({ message: 'აგენტი ვერ მოიძებნა' });
+    }
+    const userId = agent.user?._id || agent.user;
+    const propertyCount = userId ? await Property.countDocuments({ userId }) : 0;
+    res.json({ agent, propertyCount, userId: userId || null });
+  } catch (error) {
+    res.status(500).json({ message: 'აგენტის მიღება ვერ მოხერხდა' });
+  }
+});
+
 // Verify/Unverify agent
 router.put('/agents/:id/verify', requireAuth, adminMiddleware, async (req, res) => {
   try {
@@ -337,6 +352,7 @@ router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const status = req.query.status || '';
     const type = req.query.type || req.query.propertyType || '';
+    const userId = req.query.userId || '';
     
     const query = {};
     if (status) {
@@ -344,6 +360,9 @@ router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
     }
     if (type) {
       query.type = type;
+    }
+    if (userId) {
+      query.userId = userId;
     }
     
     const total = await Property.countDocuments(query);

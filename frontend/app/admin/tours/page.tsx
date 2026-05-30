@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { resolveImageUrl } from '@/lib/api';
-import { API_BASE } from '@/lib/config';
+import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { getTourEditUrl, resolveTourPublicUrl } from '@/lib/tourBuilder';
 
@@ -36,7 +36,7 @@ export default function AdminToursPage() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/admin/tours?limit=100`, {
+      const res = await fetch(`${getApiBase()}/api/admin/tours?limit=100`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 403) {
@@ -65,7 +65,7 @@ export default function AdminToursPage() {
     if (!confirm('ნამდვილად გსურთ ამ ობიექტიდან 3D ტურის მოხსნა? (ობიექტი არ წაიშლება)')) return;
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`${API_BASE}/api/admin/tours/${id}`, {
+      const res = await fetch(`${getApiBase()}/api/admin/tours/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

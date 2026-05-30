@@ -3,6 +3,9 @@
 #
 # 2 Web Service: API (+ 3D tour UI) + Frontend
 # 3D ტურის რედაქტორი/ნახვა: https://vrgeorgia-api.onrender.com/v/{id}
+#
+# მეხსიერება: Starter (512MB) შეიძლება არ ეყოთ API+Next.js ერთად.
+# თუ Render აგზავნის "exceeded memory limit" → Instance Type: Standard (2GB).
 
 services:
   # ──── Backend API + 3D Tour Builder UI ────
@@ -16,6 +19,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=460
       - key: PORT
         value: 5000
       - key: JWT_SECRET

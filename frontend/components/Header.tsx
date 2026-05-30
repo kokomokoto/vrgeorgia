@@ -39,9 +39,10 @@ export function Header() {
   const adminText = mounted ? t('admin_panel') : 'ადმინ პანელი';
   const isAdmin = profileLoaded && user?.role === 'admin';
   const isAgent = profileLoaded && user?.role === 'agent';
-  const uploadLinkClass = isAgent
-    ? 'text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
-    : 'text-sm text-slate-800 hover:text-blue-700 dark:text-zinc-200 dark:hover:text-amber-400';
+  const uploadLinkClass =
+    isAgent || isAdmin
+      ? 'text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'
+      : 'text-sm text-slate-800 hover:text-blue-700 dark:text-zinc-200 dark:hover:text-amber-400';
 
   return (
     <header

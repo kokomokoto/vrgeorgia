@@ -1521,7 +1521,9 @@ export default function EditPropertyPage() {
                   {sqm && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>📐</span>
-                      <span>{formatNumberForDisplay(sqm)} {t('sqm_unit_short')}</span>
+                      <span>
+                        {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
+                      </span>
                     </div>
                   )}
                   {existingPhotos.length > 0 && (

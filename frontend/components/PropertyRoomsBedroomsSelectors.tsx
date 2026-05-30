@@ -3,9 +3,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePresetCountDraftInput } from '@/components/usePresetCountDraftInput';
+
 const ROOM_BUTTONS = [1, 2, 3, 4, 5] as const;
-/** Same bucket as main filters: 6 means „6+“ */
-const ROOMS_PLUS = 6;
+const CUSTOM_ROOM_MIN = 6;
 
 type Props = {
   roomCount: number | null;
@@ -22,12 +23,37 @@ export function PropertyRoomsBedroomsSelectors({
 }: Props) {
   const { t } = useTranslation();
 
-  /** საძინებელი არ აღემატებოდეს ოთახებს (6+ ოთახი → ყველა საძინებელი დასაშვებია) */
-  const bedroomDisabled = (bucket: number | typeof ROOMS_PLUS) => {
+  const applyRoomCount = (next: number | null) => {
+    setRoomCount(next);
+    if (next !== null && bedroomCount !== null && bedroomCount > next) {
+      setBedroomCount(next);
+    }
+  };
+
+  const isCustomRoom = roomCount !== null && roomCount >= CUSTOM_ROOM_MIN;
+  const isCustomBedroom = bedroomCount !== null && bedroomCount >= CUSTOM_ROOM_MIN;
+  const showBedroomCustom = roomCount === null || roomCount >= CUSTOM_ROOM_MIN;
+  const bedroomCustomMax = roomCount ?? undefined;
+
+  const roomCustom = usePresetCountDraftInput({
+    value: roomCount,
+    customMin: CUSTOM_ROOM_MIN,
+    onCommit: applyRoomCount,
+  });
+
+  const bedroomCustom = usePresetCountDraftInput({
+    value: bedroomCount,
+    customMin: CUSTOM_ROOM_MIN,
+    max: bedroomCustomMax,
+    onCommit: (n) => {
+      if (n === null) setBedroomCount(null);
+      else setBedroomCount(n);
+    },
+  });
+
+  const bedroomDisabled = (num: number) => {
     if (roomCount === null) return false;
-    if (roomCount >= ROOMS_PLUS) return false;
-    if (bucket === ROOMS_PLUS) return true;
-    return bucket > roomCount;
+    return num > roomCount;
   };
 
   const roomSelectedClass = (selected: boolean) =>
@@ -37,52 +63,50 @@ export function PropertyRoomsBedroomsSelectors({
         : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
     }`;
 
-  const plusSelectedClass = (selected: boolean) =>
-    `px-4 h-12 rounded-xl border-2 font-bold transition-all hover:scale-105 ${
-      selected
-        ? 'border-blue-500 bg-blue-500 text-white shadow-md'
-        : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
-    }`;
+  const customRoomInputClass = `w-16 h-12 rounded-xl border-2 text-center font-bold text-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+    isCustomRoom
+      ? 'border-blue-500 bg-blue-500 text-white shadow-md'
+      : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+  }`;
+
+  const customBedroomInputClass = `w-16 h-12 rounded-xl border-2 text-center font-bold text-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+    isCustomBedroom
+      ? 'border-blue-500 bg-blue-500 text-white shadow-md'
+      : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+  }`;
 
   return (
     <>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-3">🚪 {t('rooms_count_label')}</label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {ROOM_BUTTONS.map((num) => (
             <button
               key={num}
               type="button"
               onClick={() => {
                 const next = roomCount === num ? null : num;
-                setRoomCount(next);
-                if (next !== null && next < ROOMS_PLUS && bedroomCount !== null) {
-                  if (bedroomCount >= ROOMS_PLUS || bedroomCount > next) {
-                    setBedroomCount(next);
-                  }
-                }
+                applyRoomCount(next);
               }}
               className={roomSelectedClass(roomCount === num)}
             >
               {num}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => {
-              const next = roomCount === ROOMS_PLUS ? null : ROOMS_PLUS;
-              setRoomCount(next);
-            }}
-            className={plusSelectedClass(roomCount === ROOMS_PLUS)}
-          >
-            6+
-          </button>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder={String(CUSTOM_ROOM_MIN)}
+            aria-label={t('rooms_count_custom') || t('rooms_count_label')}
+            className={customRoomInputClass}
+            {...roomCustom.inputProps}
+          />
         </div>
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-3 mt-5">🛏️ {t('bedrooms_count_label')}</label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {ROOM_BUTTONS.map((num) => (
             <button
               key={num}
@@ -96,19 +120,16 @@ export function PropertyRoomsBedroomsSelectors({
               {num}
             </button>
           ))}
-          <button
-            type="button"
-            disabled={bedroomDisabled(ROOMS_PLUS)}
-            onClick={() =>
-              !bedroomDisabled(ROOMS_PLUS) &&
-              setBedroomCount(bedroomCount === ROOMS_PLUS ? null : ROOMS_PLUS)
-            }
-            className={`${plusSelectedClass(bedroomCount === ROOMS_PLUS)} ${
-              bedroomDisabled(ROOMS_PLUS) ? 'opacity-40 cursor-not-allowed' : ''
-            }`}
-          >
-            6+
-          </button>
+          {showBedroomCustom && (
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder={String(CUSTOM_ROOM_MIN)}
+              aria-label={t('bedrooms_count_custom') || t('bedrooms_count_label')}
+              className={customBedroomInputClass}
+              {...bedroomCustom.inputProps}
+            />
+          )}
         </div>
       </div>
     </>

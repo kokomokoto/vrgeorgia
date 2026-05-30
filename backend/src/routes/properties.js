@@ -40,6 +40,39 @@ function pickLanguage(req) {
   return supported.includes(lang) ? lang : 'ka';
 }
 
+/** სართული ≤ სულ სართული; რემონტის წელი ≥ მშენებლობის წელი */
+function validatePropertyDetailNumbers(body) {
+  const floor = Number(body.floor) || 0;
+  const totalFloors = Number(body.totalFloors) || 0;
+  if (floor > 0 && totalFloors > 0 && floor > totalFloors) {
+    return {
+      msg: 'ბინის სართული არ შეიძლება აღემატებოდეს შენობის სართულების რაოდენობას',
+      path: 'floor',
+    };
+  }
+  const constructionYear =
+    body.constructionYear !== undefined && body.constructionYear !== null && body.constructionYear !== ''
+      ? Number(body.constructionYear)
+      : null;
+  const renovationYear =
+    body.renovationYear !== undefined && body.renovationYear !== null && body.renovationYear !== ''
+      ? Number(body.renovationYear)
+      : null;
+  if (
+    constructionYear &&
+    renovationYear &&
+    Number.isFinite(constructionYear) &&
+    Number.isFinite(renovationYear) &&
+    renovationYear < constructionYear
+  ) {
+    return {
+      msg: 'რემონტის წელი არ შეიძლება იყოს მშენებლობის წელზე ადრე',
+      path: 'renovationYear',
+    };
+  }
+  return null;
+}
+
 /** Multi-select rooms/bedrooms: value 6 means „6+“ → field >= 6 */
 function applyRoomLikeInFilter(filter, fieldName, rawJson) {
   try {
@@ -107,6 +140,7 @@ router.post(
     body('street').optional().isString().trim().isLength({ max: 200 }),
     body('region').optional().isString().trim().isLength({ max: 80 }),
     body('sqm').optional().isNumeric().withMessage('ფართობი უნდა იყოს რიცხვი'),
+    body('houseSqm').optional().isNumeric().withMessage('სახლის ფართობი უნდა იყოს რიცხვი'),
     body('rooms').optional().isNumeric().withMessage('ოთახების რაოდენობა უნდა იყოს რიცხვი'),
     body('bedrooms').optional().isNumeric().withMessage('საძინებლების რაოდენობა უნდა იყოს რიცხვი'),
     body('buildingProject').optional().isString().trim(),
@@ -179,6 +213,9 @@ router.post(
       return res.status(400).json({ message: 'mediaLinks JSON არასწორია' });
     }
 
+    const detailErr = validatePropertyDetailNumbers(req.body);
+    if (detailErr) return res.status(400).json({ errors: [detailErr] });
+
     try {
       const property = await Property.create({
         title: req.body.title,
@@ -192,6 +229,7 @@ router.post(
         tbilisiDistrict: req.body.tbilisiDistrict || '',
         tbilisiSubdistricts,
         sqm: Number(req.body.sqm) || 0,
+        houseSqm: Number(req.body.houseSqm) || 0,
         rooms: Number(req.body.rooms) || 0,
         bedrooms: Number(req.body.bedrooms) || 0,
         roomCount: Number(req.body.roomCount) || 0,
@@ -779,6 +817,7 @@ router.put(
     body('street').optional().isString().trim().isLength({ max: 200 }),
     body('region').optional().isString().trim().isLength({ max: 80 }),
     body('sqm').optional().isNumeric(),
+    body('houseSqm').optional().isNumeric(),
     body('rooms').optional().isNumeric(),
     body('bedrooms').optional().isNumeric(),
     body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
@@ -824,6 +863,7 @@ router.put(
     if (req.body.priceCurrency !== undefined) patch.priceCurrency = req.body.priceCurrency;
     if (req.body.priceType !== undefined) patch.priceType = req.body.priceType;
     if (req.body.sqm !== undefined) patch.sqm = Number(req.body.sqm);
+    if (req.body.houseSqm !== undefined) patch.houseSqm = Number(req.body.houseSqm);
     if (req.body.rooms !== undefined) patch.rooms = Number(req.body.rooms);
     if (req.body.bedrooms !== undefined) patch.bedrooms = Number(req.body.bedrooms);
     if (req.body.photos !== undefined) patch.photos = req.body.photos;
@@ -843,6 +883,16 @@ router.put(
     if (req.body.bathroom !== undefined) patch.bathroom = Number(req.body.bathroom);
     if (req.body.constructionYear !== undefined) patch.constructionYear = req.body.constructionYear ? Number(req.body.constructionYear) : null;
     if (req.body.renovationYear !== undefined) patch.renovationYear = req.body.renovationYear ? Number(req.body.renovationYear) : null;
+
+    const detailErr = validatePropertyDetailNumbers({
+      floor: req.body.floor !== undefined ? req.body.floor : existing.floor,
+      totalFloors: req.body.totalFloors !== undefined ? req.body.totalFloors : existing.totalFloors,
+      constructionYear:
+        req.body.constructionYear !== undefined ? req.body.constructionYear : existing.constructionYear,
+      renovationYear: req.body.renovationYear !== undefined ? req.body.renovationYear : existing.renovationYear,
+    });
+    if (detailErr) return res.status(400).json({ errors: [detailErr] });
+
     if (req.body.amenities !== undefined) patch.amenities = req.body.amenities;
     if (req.body.contactPhone !== undefined || req.body.contactEmail !== undefined) {
       patch.contact = {

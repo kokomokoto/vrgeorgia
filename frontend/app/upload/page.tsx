@@ -20,9 +20,30 @@ import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
 import { reverseGeocodeLabel } from '@/lib/reverseGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
+import {
+  applyConstructionYearChange,
+  applyFloorChange,
+  applyRenovationYearChange,
+  applyTotalFloorsChange,
+  getFloorInputMax,
+  getRenovationInputMin,
+  validateDetailFields,
+} from '@/lib/propertyDetailValidation';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { PropertyRoomsBedroomsSelectors } from '@/components/PropertyRoomsBedroomsSelectors';
+import {
+  BALCONY_CUSTOM_MIN,
+  BALCONY_PRESETS,
+  BATHROOM_CUSTOM_MIN,
+  BATHROOM_PRESETS,
+  COUNT_THEME_CYAN,
+  COUNT_THEME_ORANGE,
+  COUNT_THEME_PURPLE,
+  PropertyCountSelector,
+} from '@/components/PropertyCountSelector';
 import { PropertyVirtualTourFields } from '@/components/PropertyVirtualTourFields';
+import { FormattedNumberInput } from '@/components/FormattedNumberInput';
+import { formatNumberForDisplay } from '@/lib/formatNumberInput';
 import type { Property } from '@/lib/types';
 
 // საქართველოს რეგიონები
@@ -77,6 +98,15 @@ const CITY_TO_REGION: Record<string, string> = {
   'ამბროლაური': 'racha', 'ონი': 'racha', 'ცაგერი': 'racha', 'ლენტეხი': 'racha',
 };
 
+type UploadPhotoItem = { id: string; file: File };
+
+function createUploadPhotoId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `photo-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
 export default function UploadPage() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -117,6 +147,7 @@ export default function UploadPage() {
   const [tbilisiDistrict, setTbilisiDistrict] = React.useState('');
   const [tbilisiSubdistricts, setTbilisiSubdistricts] = React.useState<string[]>([]);
   const [sqm, setSqm] = React.useState('');
+  const [houseSqm, setHouseSqm] = React.useState('');
   const [type, setType] = React.useState('');
   const [dealType, setDealType] = React.useState('');
   const [exteriorLink, setExteriorLink] = React.useState('');
@@ -128,7 +159,7 @@ export default function UploadPage() {
   const [lng, setLng] = React.useState<number | null>(null);
   const [addressMapFill, setAddressMapFill] = React.useState({ key: 0, text: '' });
   const MAX_PHOTOS = MAX_PROPERTY_PHOTOS;
-  const [photoFiles, setPhotoFiles] = React.useState<File[]>([]);
+  const [photoItems, setPhotoItems] = React.useState<UploadPhotoItem[]>([]);
   const [photoPreviews, setPhotoPreviews] = React.useState<string[]>([]);
   const [mainPhotoIndex, setMainPhotoIndex] = React.useState<number>(0);
   const [cadastralCode, setCadastralCode] = React.useState('');
@@ -172,19 +203,19 @@ export default function UploadPage() {
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
-    if (photoFiles.length === 0) {
+    if (photoItems.length === 0) {
       setPhotoPreviews([]);
       return;
     }
     let cancelled = false;
     Promise.all(
-      photoFiles.map(
-        (file) =>
+      photoItems.map(
+        (item) =>
           new Promise<string>((resolve, reject) => {
             const r = new FileReader();
             r.onloadend = () => resolve(r.result as string);
             r.onerror = () => reject(new Error('read'));
-            r.readAsDataURL(file);
+            r.readAsDataURL(item.file);
           })
       )
     ).then((urls) => {
@@ -193,25 +224,27 @@ export default function UploadPage() {
     return () => {
       cancelled = true;
     };
-  }, [photoFiles]);
+  }, [photoItems]);
 
   const photoGridRef = React.useRef<HTMLDivElement>(null);
   const pendingFlipRef = React.useRef<Map<string, DOMRect> | null>(null);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
+  const [photoFileDropActive, setPhotoFileDropActive] = React.useState(false);
+  const fileDropDepthRef = React.useRef(0);
 
-  const photoFlipKey = (file: File) => `${file.name}-${file.size}-${file.lastModified}`;
-  const photoLayoutKey = photoFiles.map(photoFlipKey).join('|');
+  const photoLayoutKey = photoItems.map((item) => item.id).join('|');
 
   const handlePhotoReorder = React.useCallback((from: number, to: number) => {
     if (from === to) return;
     if (photoGridRef.current) {
       pendingFlipRef.current = captureFlipPositions(photoGridRef.current);
     }
-    setPhotoFiles((prev) => {
+    setPhotoItems((prev) => {
       const next = reorderArray(prev, from, to);
       setMainPhotoIndex((mi) => {
-        const mainPhoto = prev[mi];
-        if (!mainPhoto) return 0;
-        const nextIndex = next.indexOf(mainPhoto);
+        const mainId = prev[mi]?.id;
+        if (!mainId) return 0;
+        const nextIndex = next.findIndex((item) => item.id === mainId);
         return nextIndex >= 0 ? nextIndex : 0;
       });
       return next;
@@ -220,26 +253,105 @@ export default function UploadPage() {
 
   const { getThumbDragProps, isDragging, draggingIndex } = usePhotoDragReorder(handlePhotoReorder);
   const draggingFlipKey =
-    draggingIndex !== null && photoFiles[draggingIndex]
-      ? photoFlipKey(photoFiles[draggingIndex])
-      : null;
+    draggingIndex !== null && photoItems[draggingIndex] ? photoItems[draggingIndex].id : null;
+
+  const handlePhotoSelect = (files: FileList | null) => {
+    if (!files?.length) return;
+    const incoming = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (incoming.length === 0) return;
+    setPhotoItems((prev) => {
+      const space = MAX_PHOTOS - prev.length;
+      if (space <= 0) return prev;
+      return [
+        ...prev,
+        ...incoming.slice(0, space).map((file) => ({ id: createUploadPhotoId(), file })),
+      ];
+    });
+  };
+
+  const isExternalFileDrag = (e: React.DragEvent) => {
+    if (draggingIndex !== null) return false;
+    return Array.from(e.dataTransfer.types).includes('Files');
+  };
+
+  const handlePhotoFileDragEnter = (e: React.DragEvent) => {
+    if (!isExternalFileDrag(e)) return;
+    e.preventDefault();
+    fileDropDepthRef.current += 1;
+    setPhotoFileDropActive(true);
+  };
+
+  const handlePhotoFileDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggingIndex !== null) return;
+    fileDropDepthRef.current = Math.max(0, fileDropDepthRef.current - 1);
+    if (fileDropDepthRef.current === 0) setPhotoFileDropActive(false);
+  };
+
+  const handlePhotoFileDragOver = (e: React.DragEvent) => {
+    if (!isExternalFileDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handlePhotoFileDrop = (e: React.DragEvent) => {
+    if (!isExternalFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    fileDropDepthRef.current = 0;
+    setPhotoFileDropActive(false);
+    if (e.dataTransfer.files?.length) handlePhotoSelect(e.dataTransfer.files);
+  };
+
+  const openPhotoPicker = () => photoInputRef.current?.click();
+
+  const removePhoto = (index: number) => {
+    setPhotoItems((prev) => prev.filter((_, i) => i !== index));
+    setMainPhotoIndex((prev) => adjustMainIndexAfterRemoval(prev, index));
+  };
+
+  const setAsMainPhoto = (index: number) => {
+    setMainPhotoIndex(index);
+  };
 
   // ეტაპების შემოწმება
-  const isStep1Complete = type !== '';
-  const isStep2Complete = dealType !== '';
+  const isStep1Complete = dealType !== '' && type !== '';
+  const isStep2Complete = lat !== null && lng !== null;
   const isStep3Complete = city !== '' && (city.toLowerCase() !== 'თბილისი' ? region !== '' : true);
-  const isStep4Complete = lat !== null && lng !== null;
-  const isStep5Complete = title !== '' && price !== '' && sqm !== '';
-  // Step 6 მწვანდება თუ რამე შეავსო, მაგრამ არასავალდებულოა
-  const isStep6Filled = roomCount !== null || bedroomCount !== null || floor !== '' || balcony > 0 || loggia > 0 || bathroom > 0 || 
-    constructionYear !== '' || renovationYear !== '' || renovationStatus !== '' ||
-    basement || elevator || furniture || garage || centralHeating || naturalGas || internet || electricity || water || terrace;
-  const isStep6Complete = isStep6Filled; // ვიზუალურად მწვანე თუ რამე შეავსო
-  const isStep7Complete = photoFiles.length > 0;
-  const isStep8Complete = privateNotes.trim() !== '';
+  const isStep4Complete = title !== '' && price !== '' && sqm !== '';
+  const isStep5Filled =
+    roomCount !== null ||
+    bedroomCount !== null ||
+    floor !== '' ||
+    balcony > 0 ||
+    loggia > 0 ||
+    bathroom > 0 ||
+    constructionYear !== '' ||
+    renovationYear !== '' ||
+    renovationStatus !== '' ||
+    basement ||
+    elevator ||
+    furniture ||
+    garage ||
+    centralHeating ||
+    naturalGas ||
+    internet ||
+    electricity ||
+    water ||
+    terrace;
+  const isStep5Complete = isStep5Filled;
+  const isStep6Complete = photoItems.length > 0;
+  const isStep7Complete = privateNotes.trim() !== '';
 
-  // მთლიანი პროგრესი
-  const completedSteps = [isStep1Complete, isStep2Complete, isStep3Complete, isStep4Complete, isStep5Complete, isStep6Complete, isStep7Complete, isStep8Complete].filter(Boolean).length;
+  const completedSteps = [
+    isStep1Complete,
+    isStep2Complete,
+    isStep3Complete,
+    isStep4Complete,
+    isStep5Complete,
+    isStep6Complete,
+    isStep7Complete,
+  ].filter(Boolean).length;
 
   if (!hydrated) {
     return <div className="flex items-center justify-center min-h-[400px] text-slate-500">
@@ -281,48 +393,14 @@ export default function UploadPage() {
 
   // ეტაპების კონფიგურაცია
   const steps = [
-    { num: 1, title: t('property_type_select'), icon: '🏠', complete: isStep1Complete },
-    { num: 2, title: t('deal_type_select'), icon: '💼', complete: isStep2Complete },
+    { num: 1, title: t('type_and_deal_step'), icon: '🏠', complete: isStep1Complete },
+    { num: 2, title: t('map_marking'), icon: '🗺️', complete: isStep2Complete },
     { num: 3, title: t('location_step'), icon: '📍', complete: isStep3Complete },
-    { num: 4, title: t('map_marking'), icon: '🗺️', complete: isStep4Complete },
-    { num: 5, title: t('details_step'), icon: '📝', complete: isStep5Complete },
-    { num: 6, title: t('detailed_info_step'), icon: '🔧', complete: isStep6Complete },
-    { num: 7, title: t('photos_step'), icon: '📷', complete: isStep7Complete },
-    { num: 8, title: t('private_notes'), icon: '🔒', complete: isStep8Complete },
+    { num: 4, title: t('details_step'), icon: '📝', complete: isStep4Complete },
+    { num: 5, title: t('detailed_info_step'), icon: '🔧', complete: isStep5Complete },
+    { num: 6, title: t('photos_step'), icon: '📷', complete: isStep6Complete },
+    { num: 7, title: t('private_notes'), icon: '🔒', complete: isStep7Complete },
   ];
-
-  const handlePhotoSelect = (files: FileList | null) => {
-    if (!files?.length) return;
-    const incoming = Array.from(files).filter((f) => f.type.startsWith('image/'));
-    if (incoming.length === 0) return;
-    setPhotoFiles((prev) => {
-      const space = MAX_PHOTOS - prev.length;
-      if (space <= 0) return prev;
-      return [...prev, ...incoming.slice(0, space)];
-    });
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer.files?.length) handlePhotoSelect(e.dataTransfer.files);
-  };
-
-  // ფოტოს წაშლა
-  const removePhoto = (index: number) => {
-    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
-    setMainPhotoIndex((prev) => adjustMainIndexAfterRemoval(prev, index));
-  };
-
-  // მთავარი ფოტოს არჩევა
-  const setAsMainPhoto = (index: number) => {
-    setMainPhotoIndex(index);
-  };
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -337,7 +415,13 @@ export default function UploadPage() {
       if (lat === null || lng === null) throw new Error(t('choose_location_map'));
       if (!type) throw new Error(t('choose_property_type'));
       if (!dealType) throw new Error(t('choose_deal_type'));
-      
+
+      const detailError = validateDetailFields(floor, totalFloors, constructionYear, renovationYear);
+      if (detailError === 'floor_exceeds_total') throw new Error(t('error_floor_exceeds_total'));
+      if (detailError === 'renovation_before_construction') {
+        throw new Error(t('error_renovation_before_construction'));
+      }
+
       const form = new FormData();
       form.set('title', title);
       form.set('desc', desc);
@@ -353,6 +437,7 @@ export default function UploadPage() {
       form.set('tbilisiDistrict', tbilisiDistrict);
       form.set('tbilisiSubdistricts', JSON.stringify(tbilisiSubdistricts));
       form.set('sqm', sqm);
+      form.set('houseSqm', houseSqm);
       form.set('rooms', String(roomCount || 0));
       form.set('bedrooms', String(bedroomCount || 0));
       form.set('type', type);
@@ -403,13 +488,13 @@ export default function UploadPage() {
       form.set('amenities', JSON.stringify(amenities));
       form.set('privateNotes', privateNotes);
       
-      if (photoFiles.length > 0) {
+      if (photoItems.length > 0) {
         form.set('mainPhoto', String(mainPhotoIndex));
         const panoramaFlags = await Promise.all(
-          photoFiles.map((f) => detectPanoramaFromFile(f))
+          photoItems.map((item) => detectPanoramaFromFile(item.file))
         );
         form.set('panoramaFlags', JSON.stringify(panoramaFlags));
-        photoFiles.forEach((f) => form.append('photos', f));
+        photoItems.forEach((item) => form.append('photos', item.file));
       }
 
       const res = await createProperty(form);
@@ -441,7 +526,7 @@ export default function UploadPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* მთავარი ფორმა */}
         <div className="space-y-4">
-          {/* ეტაპი 1: ქონების ტიპი */}
+          {/* ეტაპი 1: გარიგების და ქონების ტიპი */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 1 ? 'border-blue-500 shadow-lg' : isStep1Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
               onClick={() => setCurrentStep(prev => prev === 1 ? 0 : 1)}
@@ -452,41 +537,88 @@ export default function UploadPage() {
                   {isStep1Complete ? '✓' : '1'}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800">🏠 {t('property_type_select')}</h3>
-                  <p className="text-sm text-slate-500">{t('what_selling')}</p>
+                  <h3 className="text-lg font-semibold text-slate-800">🏠 {t('type_and_deal_step')}</h3>
+                  <p className="text-sm text-slate-500">{t('type_and_deal_step_desc')}</p>
                 </div>
-                {isStep1Complete && <span className="ml-auto text-green-600 font-medium">{PROPERTY_TYPES.find(pt => pt.value === type) ? t(PROPERTY_TYPES.find(pt => pt.value === type)!.key) : ''}</span>}
+                {isStep1Complete && (
+                  <span className="ml-auto text-right text-sm text-green-600 font-medium">
+                    {DEAL_TYPES.find((d) => d.value === dealType) ? t(DEAL_TYPES.find((d) => d.value === dealType)!.key) : ''}
+                    {' · '}
+                    {PROPERTY_TYPES.find((pt) => pt.value === type) ? t(PROPERTY_TYPES.find((pt) => pt.value === type)!.key) : ''}
+                  </span>
+                )}
               </div>
             </button>
             
             {currentStep === 1 && (
-              <div className="grid grid-cols-3 gap-3 mt-4">
-                {PROPERTY_TYPES.map((item) => (
+              <div className="mt-4 space-y-6">
+                <div>
+                  <h4 className="mb-3 text-sm font-semibold text-slate-800">💼 {t('deal_type_select')}</h4>
+                  <p className="mb-3 text-sm text-slate-500">{t('what_deal')}</p>
+                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                    {DEAL_TYPES.map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => {
+                          if (dealType === item.value) {
+                            setDealType('');
+                            setType('');
+                          } else {
+                            setDealType(item.value);
+                          }
+                        }}
+                        className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                          dealType === item.value
+                            ? 'border-blue-500 bg-blue-50 shadow-md'
+                            : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="text-3xl mb-2">{item.icon}</div>
+                        <div className="font-medium text-slate-700 text-sm">{t(item.key)}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {dealType !== '' && (
+                  <div className="border-t border-slate-200 pt-6">
+                    <h4 className="mb-3 text-sm font-semibold text-slate-800">🏠 {t('property_type_select')}</h4>
+                    <p className="mb-3 text-sm text-slate-500">{t('what_selling')}</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {PROPERTY_TYPES.map((item) => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => setType(type === item.value ? '' : item.value)}
+                          className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                            type === item.value
+                              ? 'border-blue-500 bg-blue-50 shadow-md'
+                              : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="text-3xl mb-2">{item.icon}</div>
+                          <div className="font-medium text-slate-700">{t(item.key)}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {isStep1Complete && (
                   <button
-                    key={item.value}
-                    onClick={() => {
-                      if (type === item.value) {
-                        setType('');
-                      } else {
-                        setType(item.value);
-                        setCurrentStep(2);
-                      }
-                    }}
-                    className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
-                      type === item.value 
-                        ? 'border-blue-500 bg-blue-50 shadow-md' 
-                        : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
-                    }`}
+                    type="button"
+                    onClick={() => setCurrentStep(2)}
+                    className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white transition-colors hover:bg-blue-700"
                   >
-                    <div className="text-3xl mb-2">{item.icon}</div>
-                    <div className="font-medium text-slate-700">{t(item.key)}</div>
+                    {t('next_step')}
                   </button>
-                ))}
+                )}
               </div>
             )}
           </div>
 
-          {/* ეტაპი 2: გარიგების ტიპი */}
+          {/* ეტაპი 2: რუკაზე მონიშვნა */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 2 ? 'border-blue-500 shadow-lg' : isStep2Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
               onClick={() => setCurrentStep(prev => prev === 2 ? 0 : 2)}
@@ -497,145 +629,14 @@ export default function UploadPage() {
                   {isStep2Complete ? '✓' : '2'}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800">💼 {t('deal_type_select')}</h3>
-                  <p className="text-sm text-slate-500">{t('what_deal')}</p>
+                  <h3 className="text-lg font-semibold text-slate-800">🗺️ {t('map_marking')}</h3>
+                  <p className="text-sm text-slate-500">{t('specify_exact_location')}</p>
                 </div>
-                {isStep2Complete && <span className="ml-auto text-green-600 font-medium">{DEAL_TYPES.find(d => d.value === dealType) ? t(DEAL_TYPES.find(d => d.value === dealType)!.key) : ''}</span>}
+                {isStep2Complete && <span className="ml-auto text-green-600 font-medium">📍 {t('marked_on_map')}</span>}
               </div>
             </button>
             
             {currentStep === 2 && (
-              <div className="grid grid-cols-5 gap-3 mt-4">
-                {DEAL_TYPES.map((item) => (
-                  <button
-                    key={item.value}
-                    onClick={() => {
-                      if (dealType === item.value) {
-                        setDealType('');
-                      } else {
-                        setDealType(item.value);
-                        setCurrentStep(3);
-                      }
-                    }}
-                    className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
-                      dealType === item.value 
-                        ? 'border-blue-500 bg-blue-50 shadow-md' 
-                        : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="text-3xl mb-2">{item.icon}</div>
-                    <div className="font-medium text-slate-700 text-sm">{t(item.key)}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ეტაპი 3: მდებარეობა */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 3 ? 'border-blue-500 shadow-lg' : isStep3Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button 
-              onClick={() => setCurrentStep(prev => prev === 3 ? 0 : 3)}
-              className="w-full text-left"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep3Complete ? 'bg-green-500 text-white' : currentStep === 3 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep3Complete ? '✓' : '3'}
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-800">📍 {t('location_step')}</h3>
-                  <p className="text-sm text-slate-500">{t('where_located')}</p>
-                </div>
-                {isStep3Complete && <span className="ml-auto text-green-600 font-medium">{city}{tbilisiDistrict && `, ${tbilisiDistrict}`}</span>}
-              </div>
-            </button>
-            
-            {currentStep === 3 && (
-              <div className="space-y-4 mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">🏙️ {t('city')}</label>
-                    <CityCombobox 
-                      value={city} 
-                      onChange={(newCity) => {
-                        setCity(newCity);
-                        // ავტომატურად შევარჩიოთ რეგიონი ქალაქიდან
-                        const autoRegion = CITY_TO_REGION[newCity];
-                        if (autoRegion) {
-                          setRegion(autoRegion);
-                        }
-                        if (newCity.toLowerCase() !== 'თბილისი') {
-                          setTbilisiDistrict('');
-                          setTbilisiSubdistricts([]);
-                        } else {
-                          setRegion('tbilisi');
-                        }
-                      }} 
-                    />
-                  </div>
-                  {city.toLowerCase() !== 'თბილისი' ? (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">🗺️ {t('region')}</label>
-                      <select 
-                        className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" 
-                        value={region} 
-                        onChange={(e) => setRegion(e.target.value)}
-                      >
-                        <option value="">{t('filter_choose')} {t('region')}</option>
-                        {GEORGIAN_REGIONS.map((r) => (
-                          <option key={r.value} value={r.value}>{t(r.key)}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="flex items-end">
-                      <div className="w-full rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-blue-700">
-                        📍 {t('region')}: {t('region_tbilisi')}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {CITIES_WITH_DISTRICTS.includes(city) && (
-                  <TbilisiDistrictSelector
-                    city={city}
-                    selectedDistrict={tbilisiDistrict}
-                    selectedSubdistricts={tbilisiSubdistricts}
-                    onDistrictChange={setTbilisiDistrict}
-                    onSubdistrictsChange={setTbilisiSubdistricts}
-                  />
-                )}
-
-                {isStep3Complete && (
-                  <button 
-                    onClick={() => setCurrentStep(4)}
-                    className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                  >
-                    {t('next_step')}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ეტაპი 4: რუკა */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 4 ? 'border-blue-500 shadow-lg' : isStep4Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button 
-              onClick={() => setCurrentStep(prev => prev === 4 ? 0 : 4)}
-              className="w-full text-left"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep4Complete ? 'bg-green-500 text-white' : currentStep === 4 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep4Complete ? '✓' : '4'}
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-800">🗺️ {t('map_marking')}</h3>
-                  <p className="text-sm text-slate-500">{t('specify_exact_location')}</p>
-                </div>
-                {isStep4Complete && <span className="ml-auto text-green-600 font-medium">📍 {t('marked_on_map')}</span>}
-              </div>
-            </button>
-            
-            {currentStep === 4 && (
               <div className="space-y-4 mt-4">
                 {/* საკადასტრო კოდი */}
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -716,9 +717,9 @@ export default function UploadPage() {
                   </div>
                 )}
 
-                {isStep4Complete && (
+                {isStep2Complete && (
                   <button 
-                    onClick={() => setCurrentStep(5)}
+                    onClick={() => setCurrentStep(3)}
                     className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                   >
                     {t('next_step')}
@@ -728,25 +729,117 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* ეტაპი 5: დეტალები */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          {/* ეტაპი 3: მდებარეობა */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 3 ? 'border-blue-500 shadow-lg' : isStep3Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(prev => prev === 5 ? 0 : 5)}
+              onClick={() => setCurrentStep(prev => prev === 3 ? 0 : 3)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep5Complete ? 'bg-green-500 text-white' : currentStep === 5 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep5Complete ? '✓' : '5'}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep3Complete ? 'bg-green-500 text-white' : currentStep === 3 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep3Complete ? '✓' : '3'}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">📍 {t('location_step')}</h3>
+                  <p className="text-sm text-slate-500">{t('where_located')}</p>
+                </div>
+                {isStep3Complete && <span className="ml-auto text-green-600 font-medium">{city}{tbilisiDistrict && `, ${tbilisiDistrict}`}</span>}
+              </div>
+            </button>
+            
+            {currentStep === 3 && (
+              <div className="space-y-4 mt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">🏙️ {t('city')}</label>
+                    <CityCombobox 
+                      value={city} 
+                      onChange={(newCity) => {
+                        setCity(newCity);
+                        const autoRegion = CITY_TO_REGION[newCity];
+                        if (autoRegion) {
+                          setRegion(autoRegion);
+                        }
+                        if (newCity.toLowerCase() !== 'თბილისი') {
+                          setTbilisiDistrict('');
+                          setTbilisiSubdistricts([]);
+                        } else {
+                          setRegion('tbilisi');
+                        }
+                      }} 
+                    />
+                  </div>
+                  {city.toLowerCase() !== 'თბილისი' ? (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">🗺️ {t('region')}</label>
+                      <select 
+                        className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" 
+                        value={region} 
+                        onChange={(e) => setRegion(e.target.value)}
+                      >
+                        <option value="">{t('filter_choose')} {t('region')}</option>
+                        {GEORGIAN_REGIONS.map((r) => (
+                          <option key={r.value} value={r.value}>{t(r.key)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="flex items-end">
+                      <div className="w-full rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-blue-700">
+                        📍 {t('region')}: {t('region_tbilisi')}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {CITIES_WITH_DISTRICTS.includes(city) && (
+                  <TbilisiDistrictSelector
+                    city={city}
+                    selectedDistrict={tbilisiDistrict}
+                    selectedSubdistricts={tbilisiSubdistricts}
+                    onDistrictChange={setTbilisiDistrict}
+                    onSubdistrictsChange={setTbilisiSubdistricts}
+                  />
+                )}
+
+                {isStep3Complete && (
+                  <button 
+                    onClick={() => setCurrentStep(4)}
+                    className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    {t('next_step')}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ეტაპი 4: ძირითადი ინფორმაცია */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 4 ? 'border-blue-500 shadow-lg' : isStep4Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+            <button 
+              onClick={() => setCurrentStep(prev => prev === 4 ? 0 : 4)}
+              className="w-full text-left"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep4Complete ? 'bg-green-500 text-white' : currentStep === 4 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep4Complete ? '✓' : '4'}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">📝 {t('details_step')}</h3>
                   <p className="text-sm text-slate-500">{t('details_desc')}</p>
                 </div>
-                {isStep5Complete && <span className="ml-auto text-green-600 font-medium">{price} {priceCurrency === 'USD' ? '$' : '₾'}{priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''} • {sqm} {t('sqm_unit_short')}</span>}
+                {isStep4Complete && (
+                  <span className="ml-auto text-green-600 font-medium">
+                    {formatNumberForDisplay(price)} {priceCurrency === 'USD' ? '$' : '₾'}
+                    {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''} • {formatNumberForDisplay(sqm)}{' '}
+                    {t('sqm_unit_short')}
+                    {houseSqm ? ` • ${t('house_area_detail')}: ${formatNumberForDisplay(houseSqm)} ${t('sqm_unit_short')}` : ''}
+                  </span>
+                )}
               </div>
             </button>
             
-            {currentStep === 5 && (
+            {currentStep === 4 && (
               <div className="space-y-4 mt-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">✏️ {t('title_label_icon')}</label>
@@ -772,12 +865,11 @@ export default function UploadPage() {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">💵 {t('price_label_icon')}</label>
                     <div className="flex gap-2">
-                      <input 
-                        type="number"
-                        className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" 
-                        placeholder="0" 
-                        value={price} 
-                        onChange={(e) => setPrice(e.target.value)} 
+                      <FormattedNumberInput
+                        className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        placeholder="0"
+                        value={price}
+                        onChange={setPrice}
                       />
                       <div className="flex rounded-lg border border-slate-300 overflow-hidden">
                         <button
@@ -829,15 +921,28 @@ export default function UploadPage() {
                       </button>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">📐 {t('area_sqm')}</label>
-                    <input 
-                      type="number" 
-                      className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" 
-                      placeholder="0" 
-                      value={sqm} 
-                      onChange={(e) => setSqm(e.target.value)} 
-                    />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">📐 {t('area_sqm')}</label>
+                      <FormattedNumberInput
+                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        placeholder="0"
+                        value={sqm}
+                        onChange={setSqm}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        🏠 {t('house_sqm_label')}{' '}
+                        <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                      </label>
+                      <FormattedNumberInput
+                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        placeholder="0"
+                        value={houseSqm}
+                        onChange={setHouseSqm}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -871,9 +976,9 @@ export default function UploadPage() {
                   onTourChange={setTourLink}
                 />
 
-                {isStep5Complete && (
+                {isStep4Complete && (
                   <button 
-                    onClick={() => setCurrentStep(6)}
+                    onClick={() => setCurrentStep(5)}
                     className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                   >
                     {t('next_step')}
@@ -883,15 +988,15 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* ეტაპი 6: დეტალური ინფორმაცია */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          {/* ეტაპი 5: დეტალური ინფორმაცია */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(prev => prev === 6 ? 0 : 6)}
+              onClick={() => setCurrentStep(prev => prev === 5 ? 0 : 5)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep6Complete ? 'bg-green-500 text-white' : currentStep === 6 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep6Complete ? '✓' : '6'}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep5Complete ? 'bg-green-500 text-white' : currentStep === 5 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep5Complete ? '✓' : '5'}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">🔧 {t('detailed_info_header')}</h3>
@@ -899,14 +1004,14 @@ export default function UploadPage() {
                 </div>
                 {roomCount !== null && (
                   <span className="ml-auto text-green-600 font-medium">
-                    {(roomCount >= 6 ? '6+' : roomCount)} {t('rooms_short')}
-                    {bedroomCount !== null ? `, ${bedroomCount >= 6 ? '6+' : bedroomCount} ${t('bedrooms_short')}` : ''}
+                    {roomCount} {t('rooms_short')}
+                    {bedroomCount !== null ? `, ${bedroomCount} ${t('bedrooms_short')}` : ''}
                   </span>
                 )}
               </div>
             </button>
             
-            {currentStep === 6 && (
+            {currentStep === 5 && (
               <div className="space-y-6 mt-4">
                 <PropertyRoomsBedroomsSelectors
                   roomCount={roomCount}
@@ -915,11 +1020,53 @@ export default function UploadPage() {
                   setBedroomCount={setBedroomCount}
                 />
 
-                {/* სართული (ბინის შემთხვევაში) */}
-                {type === 'apartment' && (
-                  <>
+                {/* სართული, პროექტი, წლები, რემონტი — ყველა კატეგორიაში, არასავალდებულო */}
+                <>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">🏠 {t('building_project_label')}</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      🏢 {t('floor_label')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">{t('which_floor')}</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={getFloorInputMax(totalFloors)}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          placeholder={t('floor_example')}
+                          value={floor}
+                          onChange={(e) => setFloor(applyFloorChange(e.target.value, totalFloors))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">{t('total_floors')}</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          placeholder={t('total_floors_example')}
+                          value={totalFloors}
+                          onChange={(e) => {
+                            const next = applyTotalFloorsChange(e.target.value, floor);
+                            setTotalFloors(next.totalFloors);
+                            setFloor(next.floor);
+                          }}
+                        />
+                      </div>
+                    </div>
+                    {getFloorInputMax(totalFloors) !== undefined && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        {t('floor_max_hint', { max: getFloorInputMax(totalFloors) })}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      🏠 {t('building_project_label')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                       {[
                         { value: 'new_build', label: t('project_new_build') },
@@ -949,70 +1096,61 @@ export default function UploadPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">🏢 {t('floor_label')}</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      📅 {t('construction_renovation_years_label')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs text-slate-500 mb-1 block">{t('which_floor')}</label>
+                        <label className="text-xs text-slate-500 mb-1 block">{t('construction_year')}</label>
                         <input
                           type="number"
-                          min="1"
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder={t('floor_example')}
-                          value={floor}
-                          onChange={(e) => setFloor(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">{t('total_floors')}</label>
-                        <input
-                          type="number"
-                          min="1"
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder={t('total_floors_example')}
-                          value={totalFloors}
-                          onChange={(e) => setTotalFloors(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">📅 აშენების/რემონტის წლები</label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">აშენების წელი</label>
-                        <input
-                          type="number"
-                          min="1800"
-                          max="2100"
+                          min={1800}
+                          max={2100}
                           className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                           placeholder="მაგ: 2008"
                           value={constructionYear}
-                          onChange={(e) => setConstructionYear(e.target.value)}
+                          onChange={(e) => {
+                            const next = applyConstructionYearChange(e.target.value, renovationYear);
+                            setConstructionYear(next.constructionYear);
+                            setRenovationYear(next.renovationYear);
+                          }}
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-slate-500 mb-1 block">რემონტის წელი</label>
+                        <label className="text-xs text-slate-500 mb-1 block">{t('renovation_year')}</label>
                         <input
                           type="number"
-                          min="1800"
-                          max="2100"
+                          min={getRenovationInputMin(constructionYear) ?? 1800}
+                          max={2100}
                           className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                           placeholder="მაგ: 2021"
                           value={renovationYear}
                           onChange={(e) => setRenovationYear(e.target.value)}
+                          onBlur={() =>
+                            setRenovationYear(applyRenovationYearChange(renovationYear, constructionYear))
+                          }
                         />
                       </div>
                     </div>
+                    {getRenovationInputMin(constructionYear) !== undefined && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        {t('renovation_min_hint', { min: getRenovationInputMin(constructionYear) })}
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">🧱 რემონტი</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      🧱 {t('filter_renovation')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { value: 'green_frame', label: 'მწვანე კარკასი' },
-                        { value: 'white_frame', label: 'თეთრი კარკასი' },
-                        { value: 'black_frame', label: 'შავი კარკასი' },
-                        { value: 'renovated', label: 'გარემონტებული' },
-                        { value: 'to_renovate', label: 'გასარემონტებელი' },
+                        { value: 'green_frame', label: t('renovation_green_frame') },
+                        { value: 'white_frame', label: t('renovation_white_frame') },
+                        { value: 'black_frame', label: t('renovation_black_frame') },
+                        { value: 'renovated', label: t('renovation_renovated') },
+                        { value: 'to_renovate', label: t('renovation_to_renovate') },
                       ].map((item) => (
                         <button
                           key={item.value}
@@ -1029,70 +1167,45 @@ export default function UploadPage() {
                       ))}
                     </div>
                   </div>
-                  </>
-                )}
+                </>
 
                 {/* აივანი და ლოჯია */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">🌅 {t('balcony')}</label>
-                    <div className="flex gap-2">
-                      {[0, 1, 2, 3].map((num) => (
-                        <button
-                          key={num}
-                          type="button"
-                          onClick={() => setBalcony(num)}
-                          className={`w-12 h-12 rounded-xl border-2 font-bold transition-all ${
-                            balcony === num
-                              ? 'border-orange-500 bg-orange-500 text-white'
-                              : 'border-slate-200 bg-white text-slate-700 hover:border-orange-300'
-                          }`}
-                        >
-                          {num === 0 ? '—' : num}
-                        </button>
-                      ))}
-                    </div>
+                    <PropertyCountSelector
+                      value={balcony}
+                      onChange={setBalcony}
+                      presets={BALCONY_PRESETS}
+                      customMin={BALCONY_CUSTOM_MIN}
+                      ariaLabel={t('balcony_count_custom') || t('balcony')}
+                      theme={COUNT_THEME_ORANGE}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">🏠 {t('loggia')}</label>
-                    <div className="flex gap-2">
-                      {[0, 1, 2, 3].map((num) => (
-                        <button
-                          key={num}
-                          type="button"
-                          onClick={() => setLoggia(num)}
-                          className={`w-12 h-12 rounded-xl border-2 font-bold transition-all ${
-                            loggia === num
-                              ? 'border-purple-500 bg-purple-500 text-white'
-                              : 'border-slate-200 bg-white text-slate-700 hover:border-purple-300'
-                          }`}
-                        >
-                          {num === 0 ? '—' : num}
-                        </button>
-                      ))}
-                    </div>
+                    <PropertyCountSelector
+                      value={loggia}
+                      onChange={setLoggia}
+                      presets={BALCONY_PRESETS}
+                      customMin={BALCONY_CUSTOM_MIN}
+                      ariaLabel={t('loggia_count_custom') || t('loggia')}
+                      theme={COUNT_THEME_PURPLE}
+                    />
                   </div>
                 </div>
 
                 {/* სველი წერტილები */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-3">🚿 {t('bathroom_label')}</label>
-                  <div className="flex gap-2">
-                    {[0, 1, 2, 3, 4, 5].map((num) => (
-                      <button
-                        key={num}
-                        type="button"
-                        onClick={() => setBathroom(num)}
-                        className={`w-12 h-12 rounded-xl border-2 font-bold transition-all ${
-                          bathroom === num
-                            ? 'border-cyan-500 bg-cyan-500 text-white'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-300'
-                        }`}
-                      >
-                        {num === 0 ? '—' : num}
-                      </button>
-                    ))}
-                  </div>
+                  <PropertyCountSelector
+                    value={bathroom}
+                    onChange={setBathroom}
+                    presets={BATHROOM_PRESETS}
+                    customMin={BATHROOM_CUSTOM_MIN}
+                    ariaLabel={t('bathroom_count_custom') || t('bathroom_label')}
+                    theme={COUNT_THEME_CYAN}
+                  />
                 </div>
 
                 {/* დამატებითი კომფორტი */}
@@ -1161,7 +1274,7 @@ export default function UploadPage() {
 
                 {/* შემდეგი ეტაპი - ყოველთვის ხელმისაწვდომია რადგან Step 6 არასავალდებულოა */}
                 <button 
-                  onClick={() => setCurrentStep(7)}
+                  onClick={() => setCurrentStep(6)}
                   className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 >
                   {t('next_step')}
@@ -1170,84 +1283,112 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* ეტაპი 7: ფოტოები */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          {/* ეტაპი 6: ფოტოები */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(prev => prev === 7 ? 0 : 7)}
+              onClick={() => setCurrentStep(prev => prev === 6 ? 0 : 6)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep7Complete ? 'bg-green-500 text-white' : currentStep === 7 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep7Complete ? '✓' : '7'}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep6Complete ? 'bg-green-500 text-white' : currentStep === 6 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep6Complete ? '✓' : '6'}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">📷 {t('photos_step')}</h3>
                   <p className="text-sm text-slate-500">{t('photos_desc')}</p>
                 </div>
-                {isStep7Complete && <span className="ml-auto text-green-600 font-medium">{photoFiles.length} {t('photos_count')}</span>}
+                {isStep6Complete && <span className="ml-auto text-green-600 font-medium">{photoItems.length} {t('photos_count')}</span>}
               </div>
             </button>
             
-            {currentStep === 7 && (
-              <div className="space-y-4 mt-4">
-                {photoFiles.length === 0 ? (
-                  <div
-                    className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors"
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                  >
-                    <div className="text-5xl mb-3">📸</div>
-                    <p className="text-slate-600 mb-4">{t('choose_or_drop_photos')}</p>
-                    <input
-                      className="hidden"
-                      id="photo-upload"
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={(e) => {
-                        handlePhotoSelect(e.target.files);
-                        e.target.value = '';
-                      }}
-                    />
-                    <label
-                      htmlFor="photo-upload"
-                      className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg font-medium cursor-pointer hover:bg-blue-700 transition-colors"
+            {currentStep === 6 && (
+              <div
+                className={`mt-4 min-h-[12rem] rounded-xl transition-all ${
+                  photoFileDropActive
+                    ? 'border-2 border-dashed border-blue-500 bg-blue-50/60 ring-2 ring-blue-200'
+                    : 'border-2 border-dashed border-transparent'
+                }`}
+                onDragEnter={handlePhotoFileDragEnter}
+                onDragLeave={handlePhotoFileDragLeave}
+                onDragOver={handlePhotoFileDragOver}
+                onDrop={handlePhotoFileDrop}
+              >
+                <input
+                  ref={photoInputRef}
+                  className="hidden"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => {
+                    handlePhotoSelect(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+
+                {photoItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-xl p-8 py-14 text-center">
+                    <div className="mb-3 text-5xl">📸</div>
+                    <p className="mb-1 text-slate-700 font-medium">{t('choose_or_drop_photos')}</p>
+                    <p className="mb-5 text-sm text-slate-500">{t('photos_drop_zone_hint')}</p>
+                    <button
+                      type="button"
+                      onClick={openPhotoPicker}
+                      className="inline-block rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700"
                     >
                       {t('choose_photos')}
-                    </label>
+                    </button>
                   </div>
                 ) : (
-                  <>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <span className="text-sm font-medium text-slate-700">
-                          ✅ {t('selected_photos', { count: photoPreviews.length })}
-                        </span>
+                  <div className="space-y-3 p-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-slate-700">
+                        ✅ {t('selected_photos', { count: photoPreviews.length })}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoItems([]);
+                          setMainPhotoIndex(0);
+                        }}
+                        className="text-sm text-red-600 hover:text-red-700"
+                      >
+                        {t('delete_all')}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      💡 {t('click_main_photo')} · {t('photo_drag_reorder_hint')} · {t('photos_drop_zone_hint')}
+                    </p>
+                    <PhotoSortableGrid
+                      className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5"
+                      layoutKey={photoLayoutKey}
+                      gridRef={photoGridRef}
+                      pendingFlipRef={pendingFlipRef}
+                      draggingFlipKey={draggingFlipKey}
+                    >
+                      {photoItems.length < MAX_PHOTOS && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setPhotoFiles([]);
-                            setMainPhotoIndex(0);
-                          }}
-                          className="text-sm text-red-600 hover:text-red-700"
+                          data-flip-key="photo-add-slot"
+                          onClick={openPhotoPicker}
+                          className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
+                            photoFileDropActive
+                              ? 'border-blue-500 bg-blue-100 text-blue-700'
+                              : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
+                          }`}
                         >
-                          {t('delete_all')}
+                          <span className="text-2xl font-light leading-none">+</span>
+                          <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
+                            {t('add_new_photos')}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {photoItems.length}/{MAX_PHOTOS}
+                          </span>
                         </button>
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        💡 {t('click_main_photo')} · {t('photo_drag_reorder_hint')}
-                      </p>
-                      <PhotoSortableGrid
-                        className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"
-                        layoutKey={photoLayoutKey}
-                        gridRef={photoGridRef}
-                        pendingFlipRef={pendingFlipRef}
-                        draggingFlipKey={draggingFlipKey}
-                      >
-                        {photoPreviews.map((preview, index) => {
-                          const file = photoFiles[index];
-                          const stableKey = file ? photoFlipKey(file) : `preview-${index}`;
-                          return (
+                      )}
+                      {photoPreviews.map((preview, index) => {
+                        const item = photoItems[index];
+                        const stableKey = item?.id ?? `preview-${index}`;
+                        return (
                           <div
                             key={stableKey}
                             data-flip-key={stableKey}
@@ -1278,67 +1419,34 @@ export default function UploadPage() {
                                 e.stopPropagation();
                                 removePhoto(index);
                               }}
-                              className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                              className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
                             >
                               ✕
                             </button>
                             {index === mainPhotoIndex && (
-                              <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded">
+                              <span className="absolute bottom-1 left-1 rounded bg-blue-600 px-2 py-0.5 text-xs text-white">
                                 ⭐ {t('main_photo')}
                               </span>
                             )}
                           </div>
                         );
-                        })}
-                      </PhotoSortableGrid>
-                    </div>
-
-                    {photoFiles.length < MAX_PHOTOS && (
-                      <div
-                        className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/80 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-                        onDragOver={handleDragOver}
-                        onDrop={handleDrop}
-                      >
-                        <p className="text-sm text-slate-600 text-left">{t('add_new_photos')}</p>
-                        <div className="flex flex-wrap items-center gap-2 justify-end">
-                          <input
-                            className="hidden"
-                            id="photo-upload-more"
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={(e) => {
-                              handlePhotoSelect(e.target.files);
-                              e.target.value = '';
-                            }}
-                          />
-                          <label
-                            htmlFor="photo-upload-more"
-                            className="inline-block px-5 py-2.5 bg-white border-2 border-blue-500 text-blue-700 rounded-lg font-medium cursor-pointer hover:bg-blue-50 transition-colors text-sm"
-                          >
-                            + {t('choose_photos')}
-                          </label>
-                          <span className="text-xs text-slate-400">
-                            ({photoFiles.length}/{MAX_PHOTOS})
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                      })}
+                    </PhotoSortableGrid>
+                  </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* ეტაპი 8: პირადი ჩანაწერი */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 8 ? 'border-blue-500 shadow-lg' : isStep8Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          {/* ეტაპი 7: პირადი ჩანაწერი */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(prev => prev === 8 ? 0 : 8)}
+              onClick={() => setCurrentStep(prev => prev === 7 ? 0 : 7)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep8Complete ? 'bg-green-500 text-white' : currentStep === 8 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep8Complete ? '✓' : '8'}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep7Complete ? 'bg-green-500 text-white' : currentStep === 7 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep7Complete ? '✓' : '7'}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">🔒 {t('private_notes_header')}</h3>
@@ -1347,7 +1455,7 @@ export default function UploadPage() {
               </div>
             </button>
 
-            {currentStep === 8 && (
+            {currentStep === 7 && (
               <div className="space-y-4">
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
                   ⚠️ {t('private_notes_warning')}
@@ -1450,16 +1558,22 @@ export default function UploadPage() {
               <div className="mt-6 pt-4 border-t">
                 <h4 className="text-sm font-semibold text-slate-700 mb-3">📝 შევსებული:</h4>
                 <div className="space-y-2 text-sm">
-                  {type && (
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <span>{PROPERTY_TYPES.find(t => t.value === type)?.icon}</span>
-                      <span>{t(PROPERTY_TYPES.find((item) => item.value === type)?.key || '')}</span>
-                    </div>
-                  )}
                   {dealType && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>{DEAL_TYPES.find(d => d.value === dealType)?.icon}</span>
                       <span>{t(DEAL_TYPES.find((item) => item.value === dealType)?.key || '')}</span>
+                    </div>
+                  )}
+                  {type && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span>{PROPERTY_TYPES.find(pt => pt.value === type)?.icon}</span>
+                      <span>{t(PROPERTY_TYPES.find((item) => item.value === type)?.key || '')}</span>
+                    </div>
+                  )}
+                  {lat !== null && lng !== null && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span>🗺️</span>
+                      <span>{t('marked_on_map')}</span>
                     </div>
                   )}
                   {city && (
@@ -1471,25 +1585,31 @@ export default function UploadPage() {
                   {price && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>💵</span>
-                      <span>{price} {priceCurrency === 'USD' ? '$' : '₾'}</span>
+                      <span>
+                        {formatNumberForDisplay(price)} {priceCurrency === 'USD' ? '$' : '₾'}
+                      </span>
                     </div>
                   )}
                   {sqm && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>📐</span>
-                      <span>{sqm} კვ.მ</span>
+                      <span>
+                        {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
+                      </span>
                     </div>
                   )}
-                  {lat !== null && lng !== null && (
+                  {houseSqm && (
                     <div className="flex items-center gap-2 text-slate-600">
-                      <span>🗺️</span>
-                      <span>მდებარეობა მონიშნულია</span>
+                      <span>🏠</span>
+                      <span>
+                        {t('house_area_detail')}: {formatNumberForDisplay(houseSqm)} {t('sqm_unit_short')}
+                      </span>
                     </div>
                   )}
-                  {photoFiles.length > 0 && (
+                  {photoItems.length > 0 && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>📷</span>
-                      <span>{photoFiles.length} ფოტო</span>
+                      <span>{photoItems.length} ფოტო</span>
                     </div>
                   )}
                 </div>

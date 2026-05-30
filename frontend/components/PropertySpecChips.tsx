@@ -21,6 +21,7 @@ export function PropertySpecChips({
   const floor = p.floor || 0;
   const totalFloors = p.totalFloors || 0;
   const hasSqm = p.sqm != null && p.sqm > 0;
+  const hasHouseSqm = p.houseSqm != null && p.houseSqm > 0;
 
   const chips: { key: string; label: string; value: string; icon: React.ReactNode }[] = [];
 
@@ -32,6 +33,23 @@ export function PropertySpecChips({
       icon: (
         <svg className="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
           <path strokeWidth={2} strokeLinecap="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+      ),
+    });
+  }
+  if (hasHouseSqm) {
+    chips.push({
+      key: 'houseSqm',
+      label: t('house_area_detail'),
+      value: `${formatSqmCompact(p.houseSqm!)} ${t('sqm_unit_short')}`,
+      icon: (
+        <svg className="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+          <path
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3 10.5L12 4l9 6.5V20a1 1 0 01-1 1h-4v-6H8v6H4a1 1 0 01-1-1v-9.5z"
+          />
         </svg>
       ),
     });

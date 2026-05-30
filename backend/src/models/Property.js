@@ -19,6 +19,8 @@ const propertySchema = new mongoose.Schema(
     tbilisiSubdistricts: [{ type: String }], // კონკრეტული უბნები
 
     sqm: { type: Number, default: 0 },
+    /** სახლის ფართობი (კვ.მ) — მიწის/საერთო ფართობის (sqm) გარდა */
+    houseSqm: { type: Number, default: 0 },
     rooms: { type: Number, default: 0 },
     bedrooms: { type: Number, default: 0 },
     

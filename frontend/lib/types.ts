@@ -41,6 +41,7 @@ export type Property = {
   tbilisiDistrict?: string;
   tbilisiSubdistricts?: string[];
   sqm?: number;
+  houseSqm?: number;
   rooms?: number;
   bedrooms?: number;
   

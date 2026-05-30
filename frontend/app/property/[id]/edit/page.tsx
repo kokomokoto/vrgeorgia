@@ -20,9 +20,30 @@ import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
 import { reverseGeocodeLabel } from '@/lib/reverseGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
+import {
+  applyConstructionYearChange,
+  applyFloorChange,
+  applyRenovationYearChange,
+  applyTotalFloorsChange,
+  getFloorInputMax,
+  getRenovationInputMin,
+  validateDetailFields,
+} from '@/lib/propertyDetailValidation';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { PropertyRoomsBedroomsSelectors } from '@/components/PropertyRoomsBedroomsSelectors';
+import {
+  BALCONY_CUSTOM_MIN,
+  BALCONY_PRESETS,
+  BATHROOM_CUSTOM_MIN,
+  BATHROOM_PRESETS,
+  COUNT_THEME_CYAN,
+  COUNT_THEME_ORANGE,
+  COUNT_THEME_PURPLE,
+  PropertyCountSelector,
+} from '@/components/PropertyCountSelector';
 import { PropertyVirtualTourFields } from '@/components/PropertyVirtualTourFields';
+import { FormattedNumberInput } from '@/components/FormattedNumberInput';
+import { formatNumberForDisplay } from '@/lib/formatNumberInput';
 import type { Property } from '@/lib/types';
 
 // საქართველოს რეგიონები
@@ -104,6 +125,7 @@ export default function EditPropertyPage() {
   const [tbilisiDistrict, setTbilisiDistrict] = useState('');
   const [tbilisiSubdistricts, setTbilisiSubdistricts] = useState<string[]>([]);
   const [sqm, setSqm] = useState('');
+  const [houseSqm, setHouseSqm] = useState('');
   const [type, setType] = useState('');
   const [dealType, setDealType] = useState('');
   const [exteriorLink, setExteriorLink] = useState('');
@@ -158,9 +180,6 @@ export default function EditPropertyPage() {
   // პირადი ჩანაწერი
   const [privateNotes, setPrivateNotes] = useState('');
 
-  /** „6+“ ველის შენახვა რედაქტირებაში (ზუსტი რიცხვი API-დან) */
-  const loadedRoomsRef = useRef(0);
-  const loadedBedroomsRef = useRef(0);
   const [panoramaSaving, setPanoramaSaving] = useState(false);
 
   useEffect(() => setHydrated(true), []);
@@ -188,6 +207,7 @@ export default function EditPropertyPage() {
         setTbilisiDistrict((p as any).tbilisiDistrict || '');
         setTbilisiSubdistricts((p as any).tbilisiSubdistricts || []);
         setSqm(String(p.sqm || ''));
+        setHouseSqm(String((p as Property).houseSqm || ''));
         setType(p.type);
         setDealType(p.dealType);
         setExteriorLink(p.exteriorLink || p.threeDLink || '');
@@ -205,14 +225,16 @@ export default function EditPropertyPage() {
         // დეტალური ინფორმაცია
         const rawRooms = Number(p.rooms ?? (p as any).roomCount ?? 0);
         const rawBed = Number((p as any).bedrooms ?? 0);
-        loadedRoomsRef.current = rawRooms;
-        loadedBedroomsRef.current = rawBed;
-        setRoomCount(rawRooms <= 0 ? null : rawRooms >= 6 ? 6 : rawRooms);
-        setBedroomCount(rawBed <= 0 ? null : rawBed >= 6 ? 6 : rawBed);
-        setFloor(String((p as any).floor || ''));
-        setTotalFloors(String((p as any).totalFloors || ''));
-        setConstructionYear(String((p as any).constructionYear || ''));
-        setRenovationYear(String((p as any).renovationYear || ''));
+        setRoomCount(rawRooms <= 0 ? null : rawRooms);
+        setBedroomCount(rawBed <= 0 ? null : rawBed);
+        const loadedTotalFloors = String((p as any).totalFloors || '');
+        const loadedFloor = String((p as any).floor || '');
+        const loadedConstructionYear = String((p as any).constructionYear || '');
+        const loadedRenovationYear = String((p as any).renovationYear || '');
+        setTotalFloors(loadedTotalFloors);
+        setFloor(applyFloorChange(loadedFloor, loadedTotalFloors));
+        setConstructionYear(loadedConstructionYear);
+        setRenovationYear(applyRenovationYearChange(loadedRenovationYear, loadedConstructionYear));
         setRenovationStatus((p as any).renovationStatus || '');
         setBuildingProject((p as any).buildingProject || '');
         setBalcony((p as any).balcony || 0);
@@ -272,20 +294,44 @@ export default function EditPropertyPage() {
       ? existingPhotos[draggingIndex]
       : null;
 
-  // ეტაპების შემოწმება
-  const isStep1Complete = type !== '';
-  const isStep2Complete = dealType !== '';
+  // ეტაპების შემოწმება (იგივე რიგი, რაც ატვირთვაში)
+  const isStep1Complete = dealType !== '' && type !== '';
+  const isStep2Complete = lat !== null && lng !== null;
   const isStep3Complete = city !== '' && (city.toLowerCase() !== 'თბილისი' ? region !== '' : true);
-  const isStep4Complete = lat !== null && lng !== null;
-  const isStep5Complete = title !== '' && price !== '' && sqm !== '';
-  const isStep6Filled = roomCount !== null || bedroomCount !== null || floor !== '' || balcony > 0 || loggia > 0 || bathroom > 0 ||
-    constructionYear !== '' || renovationYear !== '' || renovationStatus !== '' ||
-    basement || elevator || furniture || garage || centralHeating || naturalGas || internet || electricity || water || terrace;
-  const isStep6Complete = isStep6Filled;
-  const isStep7Complete = existingPhotos.length > 0;
-  const isStep8Complete = privateNotes.trim() !== '';
+  const isStep4Complete = title !== '' && price !== '' && sqm !== '';
+  const isStep5Filled =
+    roomCount !== null ||
+    bedroomCount !== null ||
+    floor !== '' ||
+    balcony > 0 ||
+    loggia > 0 ||
+    bathroom > 0 ||
+    constructionYear !== '' ||
+    renovationYear !== '' ||
+    renovationStatus !== '' ||
+    basement ||
+    elevator ||
+    furniture ||
+    garage ||
+    centralHeating ||
+    naturalGas ||
+    internet ||
+    electricity ||
+    water ||
+    terrace;
+  const isStep5Complete = isStep5Filled;
+  const isStep6Complete = existingPhotos.length > 0;
+  const isStep7Complete = privateNotes.trim() !== '';
 
-  const completedSteps = [isStep1Complete, isStep2Complete, isStep3Complete, isStep4Complete, isStep5Complete, isStep6Complete, isStep7Complete, isStep8Complete].filter(Boolean).length;
+  const completedSteps = [
+    isStep1Complete,
+    isStep2Complete,
+    isStep3Complete,
+    isStep4Complete,
+    isStep5Complete,
+    isStep6Complete,
+    isStep7Complete,
+  ].filter(Boolean).length;
 
   if (!hydrated) {
     return <div className="flex items-center justify-center min-h-[400px] text-slate-500">
@@ -334,14 +380,13 @@ export default function EditPropertyPage() {
       : [];
 
   const steps = [
-    { num: 1, title: t('property_type_step'), icon: '🏠', complete: isStep1Complete },
-    { num: 2, title: t('deal_type_step'), icon: '💼', complete: isStep2Complete },
+    { num: 1, title: t('type_and_deal_step'), icon: '🏠', complete: isStep1Complete },
+    { num: 2, title: t('map_marking'), icon: '🗺️', complete: isStep2Complete },
     { num: 3, title: t('location_step'), icon: '📍', complete: isStep3Complete },
-    { num: 4, title: t('map_marking'), icon: '🗺️', complete: isStep4Complete },
-    { num: 5, title: t('details_step'), icon: '📝', complete: isStep5Complete },
-    { num: 6, title: t('detailed_info_step'), icon: '🔧', complete: isStep6Complete },
-    { num: 7, title: t('photos_step'), icon: '📷', complete: isStep7Complete },
-    { num: 8, title: t('private_notes_step'), icon: '🔒', complete: isStep8Complete },
+    { num: 4, title: t('details_step'), icon: '📝', complete: isStep4Complete },
+    { num: 5, title: t('detailed_info_step'), icon: '🔧', complete: isStep5Complete },
+    { num: 6, title: t('photos_step'), icon: '📷', complete: isStep6Complete },
+    { num: 7, title: t('private_notes_step'), icon: '🔒', complete: isStep7Complete },
   ];
 
   // ფოტოს წაშლა
@@ -423,6 +468,12 @@ export default function EditPropertyPage() {
       if (!dealType) throw new Error(t('error_select_deal_type'));
       // cadastralCode არასავალდებულოა
 
+      const detailError = validateDetailFields(floor, totalFloors, constructionYear, renovationYear);
+      if (detailError === 'floor_exceeds_total') throw new Error(t('error_floor_exceeds_total'));
+      if (detailError === 'renovation_before_construction') {
+        throw new Error(t('error_renovation_before_construction'));
+      }
+
       const amenities = {
         basement, elevator, furniture, garage, centralHeating,
         naturalGas, storage, internet, electricity, water,
@@ -432,14 +483,8 @@ export default function EditPropertyPage() {
         isolatedKitchen, heatingCooling
       };
 
-      const roomsPayload =
-        roomCount === null ? 0
-        : roomCount < 6 ? roomCount
-        : Math.max(6, loadedRoomsRef.current);
-      const bedroomsPayload =
-        bedroomCount === null ? 0
-        : bedroomCount < 6 ? bedroomCount
-        : Math.max(6, loadedBedroomsRef.current);
+      const roomsPayload = roomCount === null ? 0 : roomCount;
+      const bedroomsPayload = bedroomCount === null ? 0 : bedroomCount;
 
       await updateProperty(id, {
         title, desc,
@@ -448,6 +493,7 @@ export default function EditPropertyPage() {
         city, street: street.trim(), region,
         tbilisiDistrict, tbilisiSubdistricts,
         sqm: Number(sqm) || 0,
+        houseSqm: Number(houseSqm) || 0,
         rooms: roomsPayload,
         bedrooms: bedroomsPayload,
         type: type as any,
@@ -491,7 +537,7 @@ export default function EditPropertyPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* მთავარი ფორმა */}
         <div className="space-y-4">
-          {/* ეტაპი 1: ქონების ტიპი */}
+          {/* ეტაპი 1: გარიგების და ქონების ტიპი */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 1 ? 'border-blue-500 shadow-lg' : isStep1Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button onClick={() => setCurrentStep(prev => prev === 1 ? 0 : 1)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
@@ -499,37 +545,85 @@ export default function EditPropertyPage() {
                   {isStep1Complete ? '✓' : '1'}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800">🏠 {t('property_type_step')}</h3>
-                  <p className="text-sm text-slate-500">{t('what_selling')}</p>
+                  <h3 className="text-lg font-semibold text-slate-800">🏠 {t('type_and_deal_step')}</h3>
+                  <p className="text-sm text-slate-500">{t('type_and_deal_step_desc')}</p>
                 </div>
-                {isStep1Complete && <span className="ml-auto text-green-600 font-medium">{(() => { const pt = PROPERTY_TYPES.find(pt => pt.value === type); return pt ? t(pt.key) : ''; })()}</span>}
+                {isStep1Complete && (
+                  <span className="ml-auto text-right text-sm text-green-600 font-medium">
+                    {DEAL_TYPES.find((d) => d.value === dealType) ? t(DEAL_TYPES.find((d) => d.value === dealType)!.key) : ''}
+                    {' · '}
+                    {PROPERTY_TYPES.find((pt) => pt.value === type) ? t(PROPERTY_TYPES.find((pt) => pt.value === type)!.key) : ''}
+                  </span>
+                )}
               </div>
             </button>
             {currentStep === 1 && (
-              <div className="grid grid-cols-3 gap-3 mt-4">
-                {PROPERTY_TYPES.map((item) => (
+              <div className="mt-4 space-y-6">
+                <div>
+                  <h4 className="mb-3 text-sm font-semibold text-slate-800">💼 {t('deal_type_select')}</h4>
+                  <p className="mb-3 text-sm text-slate-500">{t('what_deal')}</p>
+                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                    {DEAL_TYPES.map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => {
+                          if (dealType === item.value) {
+                            setDealType('');
+                            setType('');
+                          } else {
+                            setDealType(item.value);
+                          }
+                        }}
+                        className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                          dealType === item.value
+                            ? 'border-blue-500 bg-blue-50 shadow-md'
+                            : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="text-3xl mb-2">{item.icon}</div>
+                        <div className="font-medium text-slate-700 text-sm">{t(item.key)}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {dealType !== '' && (
+                  <div className="border-t border-slate-200 pt-6">
+                    <h4 className="mb-3 text-sm font-semibold text-slate-800">🏠 {t('property_type_select')}</h4>
+                    <p className="mb-3 text-sm text-slate-500">{t('what_selling')}</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {PROPERTY_TYPES.map((item) => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => setType(type === item.value ? '' : item.value)}
+                          className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                            type === item.value
+                              ? 'border-blue-500 bg-blue-50 shadow-md'
+                              : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="text-3xl mb-2">{item.icon}</div>
+                          <div className="font-medium text-slate-700">{t(item.key)}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {isStep1Complete && (
                   <button
-                    key={item.value}
-                    onClick={() => {
-                      if (type === item.value) setType('');
-                      else {
-                        setType(item.value);
-                        setCurrentStep(2);
-                      }
-                    }}
-                    className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
-                      type === item.value ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
-                    }`}
+                    type="button"
+                    onClick={() => setCurrentStep(2)}
+                    className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white transition-colors hover:bg-blue-700"
                   >
-                    <div className="text-3xl mb-2">{item.icon}</div>
-                    <div className="font-medium text-slate-700">{t(item.key)}</div>
+                    {t('next_step')}
                   </button>
-                ))}
+                )}
               </div>
             )}
           </div>
 
-          {/* ეტაპი 2: გარიგების ტიპი */}
+          {/* ეტაპი 2: რუკაზე მონიშვნა */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 2 ? 'border-blue-500 shadow-lg' : isStep2Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button onClick={() => setCurrentStep(prev => prev === 2 ? 0 : 2)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
@@ -537,32 +631,87 @@ export default function EditPropertyPage() {
                   {isStep2Complete ? '✓' : '2'}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800">💼 {t('deal_type_step')}</h3>
-                  <p className="text-sm text-slate-500">{t('how_to_place')}</p>
+                  <h3 className="text-lg font-semibold text-slate-800">🗺️ {t('map_marking')}</h3>
+                  <p className="text-sm text-slate-500">{t('specify_exact_location')}</p>
                 </div>
-                {isStep2Complete && <span className="ml-auto text-green-600 font-medium">{(() => { const dt = DEAL_TYPES.find(d => d.value === dealType); return dt ? t(dt.key) : ''; })()}</span>}
+                {isStep2Complete && <span className="ml-auto text-green-600 font-medium">📍 {t('map_marked')}</span>}
               </div>
             </button>
             {currentStep === 2 && (
-              <div className="grid grid-cols-5 gap-3 mt-4">
-                {DEAL_TYPES.map((item) => (
-                  <button
-                    key={item.value}
-                    onClick={() => {
-                      if (dealType === item.value) setDealType('');
-                      else {
-                        setDealType(item.value);
-                        setCurrentStep(3);
+              <div className="space-y-4 mt-4">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">📋 {t('cadastral_code')} <span className="text-slate-400 text-xs">({t('cadastral_optional')})</span></label>
+                  <input
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    placeholder={t('cadastral_placeholder')}
+                    value={cadastralCode}
+                    onChange={(e) => setCadastralCode(e.target.value)}
+                  />
+                  <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={cadastralHidden}
+                      onChange={(e) => setCadastralHidden(e.target.checked)}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-slate-800">{t('cadastral_hide_label')}</span>
+                      <span className="mt-1 block text-xs text-slate-500">{t('cadastral_hide_hint')}</span>
+                    </span>
+                  </label>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-sm font-medium text-slate-700 mb-2">🔍 {t('address_search')}</div>
+                  <AddressSearch
+                    mapFillFromPick={addressMapFill}
+                    placeholder={t('address_search_placeholder')}
+                    onSelect={(searchLat, searchLng, address) => {
+                      setLat(searchLat);
+                      setLng(searchLng);
+                      let nextCity = city;
+                      if (!city && address) {
+                        const parts = address.split(',').map((p) => p.trim());
+                        if (parts.length > 1) {
+                          nextCity = parts[parts.length - 1];
+                          setCity(nextCity);
+                        }
+                      }
+                      setStreet(splitStreetFromFullAddress(address, nextCity));
+                      setAddressMapFill((s) => ({ key: s.key + 1, text: address }));
+                    }}
+                  />
+                </div>
+                <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '350px' }}>
+                  <MapView
+                    properties={previewProps}
+                    selectedLocation={lat !== null && lng !== null ? { lat, lng } : null}
+                    center={lat !== null && lng !== null ? { lat, lng } : undefined}
+                    zoom={lat !== null && lng !== null ? 17 : undefined}
+                    onPick={async (a, b) => {
+                      setLat(a);
+                      setLng(b);
+                      const label = await reverseGeocodeLabel(a, b);
+                      if (label) {
+                        setStreet(splitStreetFromFullAddress(label, city));
+                        setAddressMapFill((s) => ({ key: s.key + 1, text: label }));
                       }
                     }}
-                    className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
-                      dealType === item.value ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="text-3xl mb-2">{item.icon}</div>
-                    <div className="font-medium text-slate-700 text-sm">{t(item.key)}</div>
+                  />
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <span className="text-2xl">💡</span>
+                  <div className="text-sm text-blue-700">{t('map_hint')}</div>
+                </div>
+                {lat !== null && lng !== null && (
+                  <div className="p-3 rounded-lg bg-green-50 border border-green-200">
+                    <span className="text-green-700 text-sm">✅ {t('coordinates_label')}: {lat.toFixed(5)}, {lng.toFixed(5)}</span>
+                  </div>
+                )}
+                {isStep2Complete && (
+                  <button onClick={() => setCurrentStep(3)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                    {t('next_step')}
                   </button>
-                ))}
+                )}
               </div>
             )}
           </div>
@@ -641,7 +790,7 @@ export default function EditPropertyPage() {
             )}
           </div>
 
-          {/* ეტაპი 4: რუკა */}
+          {/* ეტაპი 4: ძირითადი ინფორმაცია */}
           <div className={`rounded-xl border-2 transition-all ${currentStep === 4 ? 'border-blue-500 shadow-lg' : isStep4Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button onClick={() => setCurrentStep(prev => prev === 4 ? 0 : 4)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
@@ -649,106 +798,19 @@ export default function EditPropertyPage() {
                   {isStep4Complete ? '✓' : '4'}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800">🗺️ {t('map_marking')}</h3>
-                  <p className="text-sm text-slate-500">{t('specify_exact_location')}</p>
-                </div>
-                {isStep4Complete && <span className="ml-auto text-green-600 font-medium">📍 {t('map_marked')}</span>}
-              </div>
-            </button>
-            {currentStep === 4 && (
-              <div className="space-y-4 mt-4">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">📋 {t('cadastral_code')} <span className="text-slate-400 text-xs">({t('cadastral_optional')})</span></label>
-                  <input
-                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                    placeholder={t('cadastral_placeholder')}
-                    value={cadastralCode}
-                    onChange={(e) => setCadastralCode(e.target.value)}
-                  />
-                  <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      checked={cadastralHidden}
-                      onChange={(e) => setCadastralHidden(e.target.checked)}
-                    />
-                    <span>
-                      <span className="block text-sm font-medium text-slate-800">{t('cadastral_hide_label')}</span>
-                      <span className="mt-1 block text-xs text-slate-500">{t('cadastral_hide_hint')}</span>
-                    </span>
-                  </label>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <div className="text-sm font-medium text-slate-700 mb-2">🔍 {t('address_search')}</div>
-                  <AddressSearch
-                    mapFillFromPick={addressMapFill}
-                    placeholder={t('address_search_placeholder')}
-                    onSelect={(searchLat, searchLng, address) => {
-                      setLat(searchLat);
-                      setLng(searchLng);
-                      let nextCity = city;
-                      if (!city && address) {
-                        const parts = address.split(',').map((p) => p.trim());
-                        if (parts.length > 1) {
-                          nextCity = parts[parts.length - 1];
-                          setCity(nextCity);
-                        }
-                      }
-                      setStreet(splitStreetFromFullAddress(address, nextCity));
-                      setAddressMapFill((s) => ({ key: s.key + 1, text: address }));
-                    }}
-                  />
-                </div>
-                <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '350px' }}>
-                  <MapView
-                    properties={previewProps}
-                    selectedLocation={lat !== null && lng !== null ? { lat, lng } : null}
-                    center={lat !== null && lng !== null ? { lat, lng } : undefined}
-                    zoom={lat !== null && lng !== null ? 17 : undefined}
-                    onPick={async (a, b) => {
-                      setLat(a);
-                      setLng(b);
-                      const label = await reverseGeocodeLabel(a, b);
-                      if (label) {
-                        setStreet(splitStreetFromFullAddress(label, city));
-                        setAddressMapFill((s) => ({ key: s.key + 1, text: label }));
-                      }
-                    }}
-                  />
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                  <span className="text-2xl">💡</span>
-                  <div className="text-sm text-blue-700">{t('map_hint')}</div>
-                </div>
-                {lat !== null && lng !== null && (
-                  <div className="p-3 rounded-lg bg-green-50 border border-green-200">
-                    <span className="text-green-700 text-sm">✅ {t('coordinates_label')}: {lat.toFixed(5)}, {lng.toFixed(5)}</span>
-                  </div>
-                )}
-                {isStep4Complete && (
-                  <button onClick={() => setCurrentStep(5)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                    {t('next_step')}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ეტაპი 5: დეტალები */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 5 ? 0 : 5)} className="w-full text-left">
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep5Complete ? 'bg-green-500 text-white' : currentStep === 5 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep5Complete ? '✓' : '5'}
-                </div>
-                <div>
                   <h3 className="text-lg font-semibold text-slate-800">📝 {t('details_step')}</h3>
                   <p className="text-sm text-slate-500">{t('details_desc')}</p>
                 </div>
-                {isStep5Complete && <span className="ml-auto text-green-600 font-medium">{price} {priceCurrency === 'USD' ? '$' : '₾'}{priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''} • {sqm} {t('sqm_unit_short')}</span>}
+                {isStep4Complete && (
+                  <span className="ml-auto text-green-600 font-medium">
+                    {formatNumberForDisplay(price)} {priceCurrency === 'USD' ? '$' : '₾'}
+                    {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''} • {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
+                    {houseSqm ? ` • ${t('house_area_detail')}: ${formatNumberForDisplay(houseSqm)} ${t('sqm_unit_short')}` : ''}
+                  </span>
+                )}
               </div>
             </button>
-            {currentStep === 5 && (
+            {currentStep === 4 && (
               <div className="space-y-4 mt-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">✏️ {t('title_label_icon')}</label>
@@ -772,12 +834,11 @@ export default function EditPropertyPage() {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">💵 {t('price_label_icon')}</label>
                     <div className="flex gap-2">
-                      <input
-                        type="number"
+                      <FormattedNumberInput
                         className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         placeholder="0"
                         value={price}
-                        onChange={(e) => setPrice(e.target.value)}
+                        onChange={setPrice}
                       />
                       <div className="flex rounded-lg border border-slate-300 overflow-hidden">
                         <button type="button" onClick={() => setPriceCurrency('USD')}
@@ -793,15 +854,28 @@ export default function EditPropertyPage() {
                         className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${priceType === 'per_sqm' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{t('price_per_sqm')}</button>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">📐 {t('area_sqm')}</label>
-                    <input
-                      type="number"
-                      className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      placeholder="0"
-                      value={sqm}
-                      onChange={(e) => setSqm(e.target.value)}
-                    />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">📐 {t('area_sqm')}</label>
+                      <FormattedNumberInput
+                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        placeholder="0"
+                        value={sqm}
+                        onChange={setSqm}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        🏠 {t('house_sqm_label')}{' '}
+                        <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                      </label>
+                      <FormattedNumberInput
+                        className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                        placeholder="0"
+                        value={houseSqm}
+                        onChange={setHouseSqm}
+                      />
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -832,8 +906,8 @@ export default function EditPropertyPage() {
                   onInteriorChange={setInteriorLink}
                   onTourChange={setTourLink}
                 />
-                {isStep5Complete && (
-                  <button onClick={() => setCurrentStep(6)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                {isStep4Complete && (
+                  <button onClick={() => setCurrentStep(5)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                     {t('next_step')}
                   </button>
                 )}
@@ -841,12 +915,12 @@ export default function EditPropertyPage() {
             )}
           </div>
 
-          {/* ეტაპი 6: დეტალური ინფორმაცია */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 6 ? 0 : 6)} className="w-full text-left">
+          {/* ეტაპი 5: დეტალური ინფორმაცია */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+            <button onClick={() => setCurrentStep(prev => prev === 5 ? 0 : 5)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep6Complete ? 'bg-green-500 text-white' : currentStep === 6 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep6Complete ? '✓' : '6'}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep5Complete ? 'bg-green-500 text-white' : currentStep === 5 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep5Complete ? '✓' : '5'}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">🔧 {t('detailed_info_header')}</h3>
@@ -854,13 +928,13 @@ export default function EditPropertyPage() {
                 </div>
                 {roomCount !== null && (
                   <span className="ml-auto text-green-600 font-medium">
-                    {(roomCount >= 6 ? '6+' : roomCount)} {t('rooms_short')}
-                    {bedroomCount !== null ? `, ${bedroomCount >= 6 ? '6+' : bedroomCount} ${t('bedrooms_short')}` : ''}
+                    {roomCount} {t('rooms_short')}
+                    {bedroomCount !== null ? `, ${bedroomCount} ${t('bedrooms_short')}` : ''}
                   </span>
                 )}
               </div>
             </button>
-            {currentStep === 6 && (
+            {currentStep === 5 && (
               <div className="space-y-6 mt-4">
                 <PropertyRoomsBedroomsSelectors
                   roomCount={roomCount}
@@ -869,11 +943,52 @@ export default function EditPropertyPage() {
                   setBedroomCount={setBedroomCount}
                 />
 
-                {/* სართული */}
-                {type === 'apartment' && (
-                  <>
+                <>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">🏠 {t('building_project_label')}</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      🏢 {t('floor_label')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">{t('which_floor')}</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={getFloorInputMax(totalFloors)}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          placeholder={t('floor_example')}
+                          value={floor}
+                          onChange={(e) => setFloor(applyFloorChange(e.target.value, totalFloors))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-500 mb-1 block">{t('total_floors')}</label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          placeholder={t('total_floors_example')}
+                          value={totalFloors}
+                          onChange={(e) => {
+                            const next = applyTotalFloorsChange(e.target.value, floor);
+                            setTotalFloors(next.totalFloors);
+                            setFloor(next.floor);
+                          }}
+                        />
+                      </div>
+                    </div>
+                    {getFloorInputMax(totalFloors) !== undefined && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        {t('floor_max_hint', { max: getFloorInputMax(totalFloors) })}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      🏠 {t('building_project_label')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                       {[
                         { value: 'new_build', label: t('project_new_build') },
@@ -903,44 +1018,61 @@ export default function EditPropertyPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">🏢 {t('floor_label')}</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      📅 {t('construction_renovation_years_label')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs text-slate-500 mb-1 block">{t('which_floor')}</label>
-                        <input type="number" min="1" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder={t('floor_example')} value={floor} onChange={(e) => setFloor(e.target.value)} />
+                        <label className="text-xs text-slate-500 mb-1 block">{t('construction_year')}</label>
+                        <input
+                          type="number"
+                          min={1800}
+                          max={2100}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          placeholder="მაგ: 2008"
+                          value={constructionYear}
+                          onChange={(e) => {
+                            const next = applyConstructionYearChange(e.target.value, renovationYear);
+                            setConstructionYear(next.constructionYear);
+                            setRenovationYear(next.renovationYear);
+                          }}
+                        />
                       </div>
                       <div>
-                        <label className="text-xs text-slate-500 mb-1 block">{t('total_floors')}</label>
-                        <input type="number" min="1" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder={t('total_floors_example')} value={totalFloors} onChange={(e) => setTotalFloors(e.target.value)} />
+                        <label className="text-xs text-slate-500 mb-1 block">{t('renovation_year')}</label>
+                        <input
+                          type="number"
+                          min={getRenovationInputMin(constructionYear) ?? 1800}
+                          max={2100}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          placeholder="მაგ: 2021"
+                          value={renovationYear}
+                          onChange={(e) => setRenovationYear(e.target.value)}
+                          onBlur={() =>
+                            setRenovationYear(applyRenovationYearChange(renovationYear, constructionYear))
+                          }
+                        />
                       </div>
                     </div>
+                    {getRenovationInputMin(constructionYear) !== undefined && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        {t('renovation_min_hint', { min: getRenovationInputMin(constructionYear) })}
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">📅 აშენების/რემონტის წლები</label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">აშენების წელი</label>
-                        <input type="number" min="1800" max="2100" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder="მაგ: 2008" value={constructionYear} onChange={(e) => setConstructionYear(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">რემონტის წელი</label>
-                        <input type="number" min="1800" max="2100" className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder="მაგ: 2021" value={renovationYear} onChange={(e) => setRenovationYear(e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">🧱 რემონტი</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      🧱 {t('filter_renovation')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { value: 'green_frame', label: 'მწვანე კარკასი' },
-                        { value: 'white_frame', label: 'თეთრი კარკასი' },
-                        { value: 'black_frame', label: 'შავი კარკასი' },
-                        { value: 'renovated', label: 'გარემონტებული' },
-                        { value: 'to_renovate', label: 'გასარემონტებელი' },
+                        { value: 'green_frame', label: t('renovation_green_frame') },
+                        { value: 'white_frame', label: t('renovation_white_frame') },
+                        { value: 'black_frame', label: t('renovation_black_frame') },
+                        { value: 'renovated', label: t('renovation_renovated') },
+                        { value: 'to_renovate', label: t('renovation_to_renovate') },
                       ].map((item) => (
                         <button
                           key={item.value}
@@ -957,46 +1089,45 @@ export default function EditPropertyPage() {
                       ))}
                     </div>
                   </div>
-                  </>
-                )}
+                </>
 
                 {/* აივანი და ლოჯია */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">🌅 {t('balcony')}</label>
-                    <div className="flex gap-2">
-                      {[0, 1, 2, 3].map((num) => (
-                        <button key={num} type="button" onClick={() => setBalcony(num)}
-                          className={`w-12 h-12 rounded-xl border-2 font-bold transition-all ${balcony === num ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-orange-300'}`}>
-                          {num === 0 ? '—' : num}
-                        </button>
-                      ))}
-                    </div>
+                    <PropertyCountSelector
+                      value={balcony}
+                      onChange={setBalcony}
+                      presets={BALCONY_PRESETS}
+                      customMin={BALCONY_CUSTOM_MIN}
+                      ariaLabel={t('balcony_count_custom') || t('balcony')}
+                      theme={COUNT_THEME_ORANGE}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">🏠 {t('loggia')}</label>
-                    <div className="flex gap-2">
-                      {[0, 1, 2, 3].map((num) => (
-                        <button key={num} type="button" onClick={() => setLoggia(num)}
-                          className={`w-12 h-12 rounded-xl border-2 font-bold transition-all ${loggia === num ? 'border-purple-500 bg-purple-500 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-purple-300'}`}>
-                          {num === 0 ? '—' : num}
-                        </button>
-                      ))}
-                    </div>
+                    <PropertyCountSelector
+                      value={loggia}
+                      onChange={setLoggia}
+                      presets={BALCONY_PRESETS}
+                      customMin={BALCONY_CUSTOM_MIN}
+                      ariaLabel={t('loggia_count_custom') || t('loggia')}
+                      theme={COUNT_THEME_PURPLE}
+                    />
                   </div>
                 </div>
 
                 {/* სველი წერტილები */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-3">🚿 {t('bathroom_label')}</label>
-                  <div className="flex gap-2">
-                    {[0, 1, 2, 3, 4, 5].map((num) => (
-                      <button key={num} type="button" onClick={() => setBathroom(num)}
-                        className={`w-12 h-12 rounded-xl border-2 font-bold transition-all ${bathroom === num ? 'border-cyan-500 bg-cyan-500 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-300'}`}>
-                        {num === 0 ? '—' : num}
-                      </button>
-                    ))}
-                  </div>
+                  <PropertyCountSelector
+                    value={bathroom}
+                    onChange={setBathroom}
+                    presets={BATHROOM_PRESETS}
+                    customMin={BATHROOM_CUSTOM_MIN}
+                    ariaLabel={t('bathroom_count_custom') || t('bathroom_label')}
+                    theme={COUNT_THEME_CYAN}
+                  />
                 </div>
 
                 {/* კომფორტი */}
@@ -1047,28 +1178,28 @@ export default function EditPropertyPage() {
                   </div>
                 </div>
 
-                <button onClick={() => setCurrentStep(7)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                <button onClick={() => setCurrentStep(6)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                   {t('next_step')}
                 </button>
               </div>
             )}
           </div>
 
-          {/* ეტაპი 7: ფოტოები */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 7 ? 0 : 7)} className="w-full text-left">
+          {/* ეტაპი 6: ფოტოები */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+            <button onClick={() => setCurrentStep(prev => prev === 6 ? 0 : 6)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep7Complete ? 'bg-green-500 text-white' : currentStep === 7 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep7Complete ? '✓' : '7'}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep6Complete ? 'bg-green-500 text-white' : currentStep === 6 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep6Complete ? '✓' : '6'}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">📷 {t('photos_step')}</h3>
                   <p className="text-sm text-slate-500">{t('manage_existing_photos')}</p>
                 </div>
-                {isStep7Complete && <span className="ml-auto text-green-600 font-medium">{existingPhotos.length} {t('photos_count')}</span>}
+                {isStep6Complete && <span className="ml-auto text-green-600 font-medium">{existingPhotos.length} {t('photos_count')}</span>}
               </div>
             </button>
-            {currentStep === 7 && (
+            {currentStep === 6 && (
               <div className="space-y-4 mt-4">
                 {existingPhotos.length > 0 ? (
                   <div className="space-y-3">
@@ -1201,15 +1332,15 @@ export default function EditPropertyPage() {
             )}
           </div>
 
-          {/* ეტაპი 8: პირადი ჩანაწერი */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 8 ? 'border-blue-500 shadow-lg' : isStep8Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          {/* ეტაპი 7: პირადი ჩანაწერი */}
+          <div className={`rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
             <button 
-              onClick={() => setCurrentStep(prev => prev === 8 ? 0 : 8)}
+              onClick={() => setCurrentStep(prev => prev === 7 ? 0 : 7)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep8Complete ? 'bg-green-500 text-white' : currentStep === 8 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
-                  {isStep8Complete ? '✓' : '8'}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep7Complete ? 'bg-green-500 text-white' : currentStep === 7 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
+                  {isStep7Complete ? '✓' : '7'}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">🔒 {t('private_notes_header')}</h3>
@@ -1218,7 +1349,7 @@ export default function EditPropertyPage() {
               </div>
             </button>
 
-            {currentStep === 8 && (
+            {currentStep === 7 && (
               <div className="space-y-4">
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
                   ⚠️ {t('private_notes_warning')}
@@ -1245,11 +1376,11 @@ export default function EditPropertyPage() {
           <div className="flex gap-3">
             <button
               className={`flex-1 py-4 rounded-xl text-lg font-bold transition-all ${
-                completedSteps >= 5
+                completedSteps >= 4
                   ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl'
                   : 'bg-slate-200 text-slate-500 cursor-not-allowed'
               }`}
-              disabled={saving || completedSteps < 5}
+              disabled={saving || completedSteps < 4}
               onClick={handleSave}
             >
               {saving ? (
@@ -1337,6 +1468,12 @@ export default function EditPropertyPage() {
                       <span>{(() => { const dt = DEAL_TYPES.find(d => d.value === dealType); return dt ? t(dt.key) : ''; })()}</span>
                     </div>
                   )}
+                  {lat !== null && lng !== null && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span>🗺️</span>
+                      <span>{t('location_marked')}</span>
+                    </div>
+                  )}
                   {city && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>📍</span>
@@ -1346,19 +1483,24 @@ export default function EditPropertyPage() {
                   {price && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>💵</span>
-                      <span>{price} {priceCurrency === 'USD' ? '$' : '₾'}</span>
+                      <span>
+                        {formatNumberForDisplay(price)} {priceCurrency === 'USD' ? '$' : '₾'}
+                        {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''}
+                      </span>
                     </div>
                   )}
                   {sqm && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>📐</span>
-                      <span>{sqm} {t('sqm_unit_short')}</span>
+                      <span>{formatNumberForDisplay(sqm)} {t('sqm_unit_short')}</span>
                     </div>
                   )}
-                  {lat !== null && lng !== null && (
+                  {houseSqm && (
                     <div className="flex items-center gap-2 text-slate-600">
-                      <span>🗺️</span>
-                      <span>{t('location_marked')}</span>
+                      <span>🏠</span>
+                      <span>
+                        {t('house_area_detail')}: {formatNumberForDisplay(houseSqm)} {t('sqm_unit_short')}
+                      </span>
                     </div>
                   )}
                   {existingPhotos.length > 0 && (

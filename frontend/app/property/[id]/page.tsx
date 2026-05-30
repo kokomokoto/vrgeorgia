@@ -217,6 +217,8 @@ function PropertyDetailInner() {
   const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [heroPhotoIndex, setHeroPhotoIndex] = useState(0);
+  const [hoverPhotoIndex, setHoverPhotoIndex] = useState<number | null>(null);
   const [view3dMode, setView3dMode] = useState<'exterior' | 'interior' | 'tour'>('exterior');
   const propertyMapSectionRef = React.useRef<HTMLDivElement>(null);
 
@@ -317,10 +319,23 @@ function PropertyDetailInner() {
     };
   }, [params.id, i18n.language, shareTokenFromUrl]);
 
+  useEffect(() => {
+    if (!property) return;
+    const ph = property.photos || [];
+    if (ph.length === 0) {
+      setHeroPhotoIndex(0);
+      return;
+    }
+    setHeroPhotoIndex(
+      Math.min(Math.max(0, property.mainPhoto ?? 0), ph.length - 1)
+    );
+  }, [property?._id, property?.photos?.length, property?.mainPhoto]);
+
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!property) return <div className="text-sm text-slate-500">Loading…</div>;
 
   const photos = property.photos || [];
+
   const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
 
   const sqm = property.sqm || 0;
@@ -368,6 +383,14 @@ function PropertyDetailInner() {
   const has3dInterior = !!link3dInterior;
   const has3dPanoramaTour = !!link3dPanoramaTour;
   const has3dTour = has3dExterior || has3dInterior || has3dPanoramaTour;
+  const showMediaHero = has3dTour || photos.length > 0;
+  const displayPhotoIndex =
+    hoverPhotoIndex !== null ? hoverPhotoIndex : heroPhotoIndex;
+  const displayPhotoUrl = photos[displayPhotoIndex];
+  const displayIs360 = displayPhotoUrl
+    ? isPanoramaPhoto(displayPhotoUrl, property.panoramaPhotos)
+    : false;
+  const usePhotoHero = showMediaHero && !has3dTour && photos.length > 0;
   const showing3dTour = view3dMode === 'tour' && has3dPanoramaTour;
   const showing3dInterior = !showing3dTour && view3dMode === 'interior' && has3dInterior;
   const showing3dExterior = !showing3dTour && !showing3dInterior && has3dExterior;
@@ -391,12 +414,12 @@ function PropertyDetailInner() {
 
   const sidebarPanels = (
     <>
-      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
         <PropertyPriceRow p={property} />
         <PropertySpecChips p={property} gapClass="gap-1.5" />
       </div>
 
-      <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
         <div className="flex items-center gap-3">
           {owner?.avatar ? (
             <img
@@ -432,7 +455,7 @@ function PropertyDetailInner() {
         )}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
         <ShareButtons
           variant="sidebar"
           url={sharePageUrl}
@@ -444,9 +467,9 @@ function PropertyDetailInner() {
   );
 
   return (
-    <div className="grid w-full min-w-0 gap-3 sm:gap-4 lg:grid-cols-[1fr_minmax(280px,320px)] lg:items-start">
+    <div className="grid w-full min-w-0 gap-2 sm:gap-2.5 lg:grid-cols-[1fr_minmax(280px,320px)] lg:items-start">
       {/* სათაური + მისამართი — მარცხე სვეტი (3D-ის სიგანე) */}
-      <div className="flex min-w-0 gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:gap-4 sm:p-4 lg:col-start-1 lg:row-start-1">
+      <div className="flex min-w-0 gap-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:gap-2.5 sm:p-3 lg:col-start-1 lg:row-start-1">
         <div className="min-w-0 flex-1">
           <h1 className="break-words text-base font-semibold text-slate-900 sm:text-xl">
             {displayTitle}
@@ -480,7 +503,7 @@ function PropertyDetailInner() {
       </div>
 
       {/* ID, თარიღი, ნახვები — მარჯვე სვეტი (ფასის პანელის სიგანე) */}
-      <div className="flex flex-col justify-center gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:col-start-2 lg:row-start-1">
+      <div className="flex flex-col justify-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 lg:col-start-2 lg:row-start-1">
         <div className="font-mono text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
           ID: {displayId}
         </div>
@@ -496,11 +519,13 @@ function PropertyDetailInner() {
         )}
       </div>
 
-      {/* 3D + მარჯვე პანელები (desktop) */}
-      {has3dTour && (
+      {/* 3D ან მთავარი ფოტო + მარჯვე პანელები (desktop) */}
+      {showMediaHero && (
         <>
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:col-start-1 lg:row-start-2">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 lg:col-start-1 lg:row-start-2">
+          {has3dTour ? (
+          <>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-semibold">{t('view3d')}</div>
             <div className="flex gap-1">
               <button
@@ -627,9 +652,70 @@ function PropertyDetailInner() {
               </div>
             );
           })()}
+          </>
+          ) : usePhotoHero ? (
+            <>
+              <div className="mb-2 text-sm font-semibold">
+                {t('photos')} ({photos.length})
+              </div>
+              <div className="relative mx-auto aspect-video w-full max-h-[85vh] overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+                {photos.length > 1 && displayPhotoIndex > 0 && (
+                  <button
+                    type="button"
+                    aria-label={t('previous_photo') || 'Previous photo'}
+                    className="absolute left-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-r from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
+                    onClick={() => {
+                      setHoverPhotoIndex(null);
+                      setHeroPhotoIndex((i) => Math.max(0, i - 1));
+                    }}
+                  >
+                    <span className="text-3xl leading-none drop-shadow-lg">‹</span>
+                  </button>
+                )}
+                {photos.length > 1 && displayPhotoIndex < photos.length - 1 && (
+                  <button
+                    type="button"
+                    aria-label={t('next_photo') || 'Next photo'}
+                    className="absolute right-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-l from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
+                    onClick={() => {
+                      setHoverPhotoIndex(null);
+                      setHeroPhotoIndex((i) => Math.min(photos.length - 1, i + 1));
+                    }}
+                  >
+                    <span className="text-3xl leading-none drop-shadow-lg">›</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="group relative block h-full w-full cursor-pointer text-left"
+                  onClick={() => setLightboxIndex(displayPhotoIndex)}
+                  aria-label={t('photos')}
+                >
+                  <img
+                    key={displayPhotoUrl}
+                    src={resolveImageUrl(displayPhotoUrl)}
+                    alt=""
+                    className={`h-full w-full transition-opacity group-hover:opacity-95 ${
+                      displayIs360 ? 'object-contain bg-slate-900' : 'object-cover'
+                    }`}
+                  />
+                  {displayIs360 && (
+                    <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow">
+                      {t('photo_360')}
+                    </span>
+                  )}
+                </button>
+                {photos.length > 1 && (
+                  <span className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                    {displayPhotoIndex + 1} / {photos.length}
+                  </span>
+                )}
+              </div>
+            </>
+          ) : null}
         </div>
 
-        <div className="flex flex-col gap-4 sm:gap-5 lg:col-start-2 lg:row-start-2 lg:h-full lg:self-stretch lg:justify-between">
+        <div className="flex flex-col gap-2 sm:gap-2.5 lg:col-start-2 lg:row-start-2 lg:h-full lg:self-stretch lg:justify-between">
           {sidebarPanels}
         </div>
         </>
@@ -637,22 +723,58 @@ function PropertyDetailInner() {
 
       {/* ფოტოები, აღწერა, დეტალები — სრული სიგანე */}
       <div
-        className={`grid w-full min-w-0 gap-3 sm:gap-4 ${
-          has3dTour ? 'lg:col-span-2 lg:row-start-3' : 'lg:col-start-1 lg:row-start-2'
+        className={`grid w-full min-w-0 gap-2 sm:gap-2.5 ${
+          showMediaHero ? 'lg:col-span-2 lg:row-start-3' : 'lg:col-start-1 lg:row-start-2'
         }`}
       >
       {/* ფოტოები - ჰორიზონტალური სქროლით */}
       {photos.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <div className="mb-3 text-sm font-semibold">{t('photos')} ({photos.length})</div>
-          <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 scrollbar-thin">
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+          {!usePhotoHero && (
+            <div className="mb-2 text-sm font-semibold">
+              {t('photos')} ({photos.length})
+            </div>
+          )}
+          <div className="flex gap-1.5 sm:gap-2 overflow-x-auto py-0.5 scrollbar-thin">
             {photos.map((p, idx) => {
               const is360Thumb = isPanoramaPhoto(p, property.panoramaPhotos);
+              const isThumbActive = usePhotoHero
+                ? hoverPhotoIndex === idx ||
+                  (hoverPhotoIndex === null && idx === heroPhotoIndex)
+                : false;
               return (
               <div 
                 key={p} 
-                className="relative flex-shrink-0 cursor-pointer overflow-hidden rounded-lg hover:opacity-90 transition-opacity"
-                onClick={() => setLightboxIndex(idx)}
+                role="button"
+                tabIndex={0}
+                className={`relative flex-shrink-0 cursor-pointer rounded-lg border-2 transition-all hover:opacity-90 ${
+                  isThumbActive ? 'border-blue-600' : 'border-transparent'
+                }`}
+                onMouseEnter={() => {
+                  if (usePhotoHero) setHoverPhotoIndex(idx);
+                }}
+                onMouseLeave={() => {
+                  if (usePhotoHero) setHoverPhotoIndex(null);
+                }}
+                onClick={() => {
+                  if (usePhotoHero) {
+                    setHoverPhotoIndex(null);
+                    setHeroPhotoIndex(idx);
+                  } else {
+                    setLightboxIndex(idx);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (usePhotoHero) {
+                      setHoverPhotoIndex(null);
+                      setHeroPhotoIndex(idx);
+                    } else {
+                      setLightboxIndex(idx);
+                    }
+                  }
+                }}
               >
                 <img 
                   src={resolveImageUrl(p)} 
@@ -672,8 +794,8 @@ function PropertyDetailInner() {
       )}
 
       {property.desc && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <div className="text-sm font-semibold mb-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+          <div className="text-sm font-semibold mb-2">
             {t('description')}
             {translatingDesc && (
               <span className="ml-2 text-xs text-slate-400 font-normal">{t('translating')}...</span>
@@ -685,7 +807,7 @@ function PropertyDetailInner() {
 
       {/* პირადი ჩანაწერი - მხოლოდ მფლობელისთვის */}
       {isOwner && property.privateNotes && (
-        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-3 sm:p-4">
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-2.5 sm:p-3">
           <div className="text-sm font-semibold mb-2 flex items-center gap-2 text-amber-800">
             🔒 {t('private_notes')}
             <span className="text-xs font-normal text-amber-600">({t('only_you_see')})</span>
@@ -695,15 +817,28 @@ function PropertyDetailInner() {
       )}
 
       {/* დეტალური ინფორმაცია - ზემოთ */}
-      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-        <div className="text-sm font-semibold mb-3 sm:mb-4">{t('detailed_info')}</div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+        <div className="text-sm font-semibold mb-2">{t('detailed_info')}</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5">
           {(property.sqm ?? 0) > 0 && (
             <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
               <span className="text-xl sm:text-2xl">📐</span>
               <div className="min-w-0">
                 <div className="text-xs text-slate-500">{t('area_detail')}</div>
-                <div className="text-sm sm:text-base font-medium text-slate-800">{property.sqm} {t('sqm_unit_short')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {property.sqm!.toLocaleString('en-US')} {t('sqm_unit_short')}
+                </div>
+              </div>
+            </div>
+          )}
+          {(property.houseSqm ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏠</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('house_area_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {property.houseSqm!.toLocaleString('en-US')} {t('sqm_unit_short')}
+                </div>
               </div>
             </div>
           )}
@@ -811,9 +946,9 @@ function PropertyDetailInner() {
 
       {/* კომფორტი და კომუნიკაციები */}
       {property.amenities && Object.values(property.amenities).some(v => v) && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <div className="text-sm font-semibold mb-3 sm:mb-4">{t('comfort_communications')}</div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+          <div className="text-sm font-semibold mb-2">{t('comfort_communications')}</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
             {property.amenities.elevator && (
               <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
                 <span className="text-xl">🛗</span>
@@ -924,9 +1059,9 @@ function PropertyDetailInner() {
       <div
         ref={propertyMapSectionRef}
         id="property-map-section"
-        className="scroll-mt-24 rounded-lg border border-slate-200 bg-white p-3 sm:p-4"
+        className="scroll-mt-24 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3"
       >
-        <div className="text-sm font-semibold mb-3">{t('mapLocation')}</div>
+        <div className="text-sm font-semibold mb-2">{t('mapLocation')}</div>
         <div
           ref={propertyMapWrapRef}
           className="relative h-[200px] overflow-hidden rounded-lg sm:h-[300px]"
@@ -960,18 +1095,18 @@ function PropertyDetailInner() {
       </div>
       </div>
 
-      {/* ფასი, ბროკერი, გაზიარება — 3D-ის გარეშე */}
-      {!has3dTour && (
-        <div className="flex flex-col gap-4 sm:gap-5 lg:col-start-2 lg:row-start-2 lg:sticky lg:top-4 lg:self-start">
+      {/* ფასი, ბროკერი — ფოტო/3D ჰეროს გარეშე */}
+      {!showMediaHero && (
+        <div className="flex flex-col gap-2 sm:gap-2.5 lg:col-start-2 lg:row-start-2 lg:sticky lg:top-4 lg:self-start">
           {sidebarPanels}
         </div>
       )}
 
       {/* მსგავსი ობიექტები — სრული სიგანე */}
       {similarProperties.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-4 lg:col-span-2">
-          <div className="text-sm font-semibold mb-4">{t('similar_properties')}</div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 lg:col-span-2">
+          <div className="text-sm font-semibold mb-2">{t('similar_properties')}</div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {similarProperties.map((p) => (
               <PropertyCard key={p._id} p={p} />
             ))}

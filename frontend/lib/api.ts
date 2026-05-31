@@ -66,6 +66,26 @@ function formatApiErrorBody(json: unknown, rawText: string, status: number): str
   return `HTTP ${status} — სერვერმა ცარიელი ან გაურკვეველი პასუხი დააბრუნა. შეამოწმეთ backend ლოგი და Cloudinary/MongoDB კონფიგურაცია.`;
 }
 
+function formatNetworkError(base: string, init: RequestInit): string {
+  const isLocal =
+    base.includes('localhost') || base.includes('127.0.0.1') || base.includes(':5000');
+  const isUpload = init.body instanceof FormData;
+  if (isLocal) {
+    return `სერვერთან კავშირი ვერ მოხერხდა (${base}). გაუშვით backend: cd backend && npm run dev`;
+  }
+  if (isUpload) {
+    return (
+      `სერვერთან კავშირი ვერ მოხერხდა (${base}). ` +
+      'შესაძლო მიზეზები: API დროებით გამორთულია (Render), მოთხოვნა ძალიან დიდია (ბევრი ფოტო), ან დრო ამოიწურა. ' +
+      'სცადეთ ხელახლა 1–2 წუთში, შეამცირეთ ფოტოების რაოდენობა/ზომა, ან შეამოწმეთ Render → vrgeorgia-api → Logs/Metrics.'
+    );
+  }
+  return (
+    `სერვერთან კავშირი ვერ მოხერხდა (${base}). ` +
+    'სცადეთ გვერდის განახლება; თუ არ გამოსწორდა — შეამოწმეთ Render-ზე API სერვისი.'
+  );
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(init.headers);
@@ -78,10 +98,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     res = await fetch(`${getApiBase()}${path}`, { ...init, headers, cache: 'no-store' });
   } catch {
-    const base = getApiBase();
-    throw new Error(
-      `სერვერთან კავშირი ვერ მოხერხდა (${base}). გაუშვით backend: cd backend && npm run dev`
-    );
+    throw new Error(formatNetworkError(getApiBase(), init));
   }
 
   if (!res.ok) {

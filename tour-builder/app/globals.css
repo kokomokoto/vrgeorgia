@@ -158,6 +158,51 @@ body {
   }
 }
 
+/* საჯარო ტური — სრული სიმაღლე iframe-შიც */
+html:has(.tour-shell),
+html:has(.tour-shell) body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.tour-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+}
+
+/* პანორამა სრულ ეკრანზე — ჩამონათვალი ზედა ფენა, არა გვერდით სვეტი */
+.tour-stage {
+  isolation: isolate;
+}
+
+.tour-panorama-layer {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.tour-panorama-layer > div,
+.tour-panorama-layer .psv-container,
+.tour-panorama-layer .psv-canvas-container,
+.tour-panorama-layer canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.tour-shell .psv-container {
+  background: transparent !important;
+}
+
+.tour-filmstrip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
 .tour-filmstrip::-webkit-scrollbar {
   width: 4px;
 }

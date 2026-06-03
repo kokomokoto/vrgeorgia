@@ -264,8 +264,21 @@ export function PanoramaViewer({
 
     markers.addEventListener("select-marker", onMarkerSelect);
 
+    const scheduleResize = () => {
+      if (!containerEl) return;
+      const { clientWidth: width, clientHeight: height } = containerEl;
+      if (width < 1 || height < 1) return;
+      try {
+        viewer.resize({ width: `${width}px`, height: `${height}px` });
+      } catch {
+        /* viewer mid-dispose */
+      }
+    };
+
     viewer.addEventListener("ready", () => {
       viewerReadyRef.current = true;
+      scheduleResize();
+      requestAnimationFrame(scheduleResize);
 
       const scene =
         scenesRef.current.find(
@@ -353,7 +366,16 @@ export function PanoramaViewer({
       }
     });
 
+    const ro =
+      typeof ResizeObserver !== "undefined" && containerEl
+        ? new ResizeObserver(() => scheduleResize())
+        : null;
+    ro?.observe(containerEl!);
+    window.addEventListener("resize", scheduleResize);
+
     return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", scheduleResize);
       viewerReadyRef.current = false;
       vtNodesKeyRef.current = null;
       clampCleanupRef.current?.();
@@ -473,7 +495,9 @@ export function PanoramaViewer({
   }
 
   return (
-    <div className={`relative h-full w-full bg-zinc-950 ${className}`}>
+    <div
+      className={`relative h-full w-full ${className || "bg-zinc-950"}`}
+    >
       <div
         ref={containerRef}
         className={`h-full w-full ${addHotspotMode ? "tour-viewer--placing" : ""} ${clickToAdvance && mode === "navigate" ? "tour-viewer--advance" : ""}`}

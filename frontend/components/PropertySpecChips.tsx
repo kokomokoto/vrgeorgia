@@ -9,10 +9,13 @@ export function PropertySpecChips({
   p,
   className = '',
   gapClass = 'gap-1.5',
+  compact = false,
 }: {
   p: Property;
   className?: string;
   gapClass?: string;
+  /** რუკის სია — უფრო დაბალი ჩიპები, სრული ხილვადობა */
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -23,6 +26,11 @@ export function PropertySpecChips({
   const hasSqm = p.sqm != null && p.sqm > 0;
   const hasHouseSqm = p.houseSqm != null && p.houseSqm > 0;
 
+  const iconClass = compact ? 'h-4 w-4 shrink-0 text-slate-500' : 'h-4 w-4 shrink-0 text-slate-500';
+  const chipClass = compact
+    ? 'inline-flex cursor-default items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold leading-normal text-slate-800 dark:bg-zinc-800 dark:text-zinc-100'
+    : 'inline-flex cursor-default items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:bg-zinc-800 dark:text-zinc-100';
+
   const chips: { key: string; label: string; value: string; icon: React.ReactNode }[] = [];
 
   if (hasSqm) {
@@ -31,7 +39,7 @@ export function PropertySpecChips({
       label: t('areaLabel'),
       value: `${formatSqmCompact(p.sqm!)} ${t('sqm_unit_short')}`,
       icon: (
-        <svg className="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
           <path strokeWidth={2} strokeLinecap="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
         </svg>
       ),
@@ -43,7 +51,7 @@ export function PropertySpecChips({
       label: t('house_area_detail'),
       value: `${formatSqmCompact(p.houseSqm!)} ${t('sqm_unit_short')}`,
       icon: (
-        <svg className="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
           <path
             strokeWidth={2}
             strokeLinecap="round"
@@ -60,7 +68,7 @@ export function PropertySpecChips({
       label: t('floor_detail'),
       value: totalFloors > 0 ? `${floor}/${totalFloors}` : String(floor),
       icon: (
-        <svg className="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
           <path strokeWidth={2} strokeLinecap="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-16 0H3m2-12h14" />
         </svg>
       ),
@@ -72,7 +80,7 @@ export function PropertySpecChips({
       label: t('filter_room'),
       value: String(rooms),
       icon: (
-        <svg className="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
           <path strokeWidth={2} strokeLinecap="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
         </svg>
       ),
@@ -84,7 +92,7 @@ export function PropertySpecChips({
       label: t('bedroom_word'),
       value: String(bedrooms),
       icon: (
-        <svg className="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
           <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M20 10V7a2 2 0 00-2-2H6a2 2 0 00-2 2v3m16 0v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8m16 0H4" />
         </svg>
       ),
@@ -96,11 +104,7 @@ export function PropertySpecChips({
   return (
     <div className={`flex flex-wrap ${gapClass} ${className}`}>
       {chips.map((chip) => (
-        <div
-          key={chip.key}
-          className="inline-flex cursor-default items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:bg-zinc-800 dark:text-zinc-100"
-          title={chip.label}
-        >
+        <div key={chip.key} className={chipClass} title={chip.label}>
           {chip.icon}
           <span>{chip.value}</span>
         </div>

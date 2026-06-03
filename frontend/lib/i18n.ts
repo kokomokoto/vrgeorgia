@@ -280,7 +280,9 @@ const resources = {
       map: 'რუკა',
       map_open_full_view: 'რუკაზე ძებნა',
       map_full_view_title: 'ძიება რუკაზე',
-      map_close_full: 'დახურვა',
+      map_close_full: 'რუკის დახურვა',
+      objects_on_map: 'რუკაზე',
+      no_objects_in_map_view: 'ამ რუკის ხედში განცხადება ვერ მოიძებნა. გადაიწიეთ ან გაადიდეთ რუკა.',
       found: 'ნაპოვნია',
       objects: 'ობიექტი',
       page_of: 'გვერდი',
@@ -614,6 +616,12 @@ const resources = {
       all_deals: 'ყველა გარიგება',
       confirm_delete: 'დარწმუნებული ხართ რომ გსურთ წაშლა?',
       empty_results: 'ძებნის შედეგი ცარიელია',
+      search_no_results_title: 'ობიექტი ვერ მოიძებნა',
+      search_no_results_query:
+        'საძიებო სიტყვით «{{query}}» შესაბამისი განცხადება ვერ მოიძებნა. სცადეთ სხვა ფორმულირება ან ნაკლები ზუსტი სიტყვა.',
+      search_no_results_filters:
+        'თქვენი არჩეული ფილტრებით განცხადება ვერ მოიძებნა. შეცვალეთ პარამეტრები ან გაასუფთავეთ ძიება.',
+      search_no_results_hint: 'შეგიძლიათ გაასუფთავოთ ფილტრები და თავიდან სცადოთ.',
       // Compare
       sort_by: 'დალაგება',
       // 3D/Links
@@ -635,7 +643,7 @@ const resources = {
       name_label: 'სახელი',
       your_name: 'თქვენი სახელი',
       full_name: 'სახელი და გვარი',
-      search_placeholder: 'ძებნა სათაურით, ქალაქით ან ID-ით...',
+      search_placeholder: 'სათაური, ID, ტელეფონი, აგენტის სახელი...',
       clear_filters: 'გასუფთავება',
       found_results: 'ნაპოვნია: {{count}} / {{total}}',
       empty_search_result: 'ძებნის შედეგი ცარიელია',
@@ -931,6 +939,8 @@ const resources = {
       map_open_full_view: 'Full map view',
       map_full_view_title: 'Search on map',
       map_close_full: 'Close',
+      objects_on_map: 'on map',
+      no_objects_in_map_view: 'No listings in this map area. Pan or zoom the map.',
       found: 'Found',
       objects: 'properties',
       page_of: 'page',
@@ -1264,6 +1274,12 @@ const resources = {
       all_deals: 'All deals',
       confirm_delete: 'Are you sure you want to delete?',
       empty_results: 'No results found',
+      search_no_results_title: 'No properties found',
+      search_no_results_query:
+        'No listings match your search for «{{query}}». Try different wording or a shorter keyword.',
+      search_no_results_filters:
+        'No listings match your filters. Change criteria or clear the search.',
+      search_no_results_hint: 'You can clear filters and try again.',
       // Compare
       sort_by: 'Sort by',
       // 3D/Links
@@ -1286,7 +1302,7 @@ const resources = {
       name_label: 'Name',
       your_name: 'Your name',
       full_name: 'Full name',
-      search_placeholder: 'Search by title, city or ID...',
+      search_placeholder: 'Title, ID, phone, agent name...',
       clear_filters: 'Clear',
       found_results: 'Found: {{count}} / {{total}}',
       empty_search_result: 'No results found',
@@ -1571,6 +1587,8 @@ const resources = {
       map_open_full_view: 'Полный вид',
       map_full_view_title: 'Поиск на карте',
       map_close_full: 'Закрыть',
+      objects_on_map: 'на карте',
+      no_objects_in_map_view: 'В этой области карты объявлений нет. Сдвиньте или увеличьте карту.',
       found: 'Найдено',
       objects: 'объектов',
       page_of: 'страница',
@@ -1904,6 +1922,12 @@ const resources = {
       all_deals: 'Все сделки',
       confirm_delete: 'Вы уверены, что хотите удалить?',
       empty_results: 'Ничего не найдено',
+      search_no_results_title: 'Объекты не найдены',
+      search_no_results_query:
+        'По запросу «{{query}}» объявления не найдены. Попробуйте другое слово или более короткий запрос.',
+      search_no_results_filters:
+        'По выбранным фильтрам объявления не найдены. Измените параметры или очистите поиск.',
+      search_no_results_hint: 'Можно сбросить фильтры и попробовать снова.',
       // Compare
       sort_by: 'Сортировка',
       // 3D/Links
@@ -1939,7 +1963,7 @@ const resources = {
       name_label: 'Имя',
       your_name: 'Ваше имя',
       full_name: 'Имя и фамилия',
-      search_placeholder: 'Поиск по названию, городу или ID...',
+      search_placeholder: 'Название, ID, телефон, имя агента...',
       clear_filters: 'Очистить',
       found_results: 'Найдено: {{count}} / {{total}}',
       empty_search_result: 'Результатов не найдено',

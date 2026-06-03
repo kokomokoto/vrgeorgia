@@ -211,7 +211,7 @@ function PropertyDetailInner() {
   const searchParams = useSearchParams();
   const shareTokenFromUrl = searchParams.get('t')?.trim() || undefined;
   const { i18n, t } = useTranslation();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, profileLoaded } = useAuth();
 
   const [property, setProperty] = useState<Property | null>(null);
   const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
@@ -343,8 +343,17 @@ function PropertyDetailInner() {
 
   // მომხმარებლის ინფორმაცია
   const owner = typeof property.userId === 'object' ? property.userId : null;
-
-  const isOwner = currentUser && owner?._id && (currentUser.id === owner._id || currentUser._id === owner._id);
+  const ownerId =
+    owner?._id ??
+    (typeof property.userId === 'string' ? property.userId : null);
+  const isOwner =
+    !!currentUser &&
+    !!ownerId &&
+    (currentUser.id === ownerId || currentUser._id === ownerId);
+  const showOwnerEditButton =
+    profileLoaded &&
+    isOwner &&
+    (currentUser?.role === 'agent' || currentUser?.role === 'admin');
 
   // ავტომატური აღწერის გენერაცია თარგმანებით
   const generateAutoDescription = () => {
@@ -496,7 +505,15 @@ function PropertyDetailInner() {
             </a>
           ) : null}
         </div>
-        <div className="flex shrink-0 gap-1.5 self-start">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-start">
+          {showOwnerEditButton && (
+            <Link
+              href={`/property/${property._id}/edit`}
+              className="inline-flex items-center gap-1 rounded-lg border-2 border-red-600 bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-red-700 hover:bg-red-700"
+            >
+              ✏️ {t('edit')}
+            </Link>
+          )}
           <CompareButton propertyId={property._id} size="md" />
           <FavoriteButton propertyId={property._id} size="md" />
         </div>
@@ -627,14 +644,6 @@ function PropertyDetailInner() {
                   loading="lazy"
                   style={{ border: 'none' }}
                 />
-                <a
-                  href={embedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow transition-colors hover:text-blue-600"
-                >
-                  🔗 {t('open_new_tab')}
-                </a>
                 <button
                   type="button"
                   aria-label="სრული ეკრანი"

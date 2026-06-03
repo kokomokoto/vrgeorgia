@@ -151,53 +151,40 @@ function FilterDropdown({
       }`
     : 'absolute top-full left-0 right-0 z-30 mt-1 min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40';
 
+  const triggerClass = `flex w-full items-center gap-1 rounded-xl border transition-all ${
+    spacious ? 'text-base' : 'text-sm'
+  } ${
+    isActive
+      ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
+      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600'
+  }`;
+
+  const triggerPad = spacious ? 'px-4 py-3.5' : 'px-3 py-2.5';
+
   return (
     <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`flex w-full items-center justify-between gap-3 rounded-xl border transition-all ${
-          spacious ? 'px-4 py-3.5 text-base' : 'px-3 py-2.5 text-sm'
-        } ${
-          isActive
-            ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
-            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600'
-        }`}
-      >
-        <div className="min-w-0 text-left">
-          <div
-            className={`font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500 ${
-              spacious ? 'text-xs' : 'text-[10px]'
-            }`}
-          >
-            {label}
-          </div>
-          <div
-            className={`truncate font-medium ${isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'} ${
-              spacious ? 'text-base' : ''
-            }`}
-          >
-            {summary}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {isActive && onClear ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onClear();
-                setOpen(false);
-              }}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:text-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
-              aria-label={t('clear_filters')}
+      <div className={triggerClass}>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className={`flex min-w-0 flex-1 items-center justify-between gap-3 ${triggerPad} text-left`}
+        >
+          <div className="min-w-0">
+            <div
+              className={`font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500 ${
+                spacious ? 'text-xs' : 'text-[10px]'
+              }`}
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          ) : null}
+              {label}
+            </div>
+            <div
+              className={`truncate font-medium ${isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'} ${
+                spacious ? 'text-base' : ''
+              }`}
+            >
+              {summary}
+            </div>
+          </div>
           <svg
             className={`h-4 w-4 flex-shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
             fill="none"
@@ -207,8 +194,25 @@ function FilterDropdown({
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
-        </div>
-      </button>
+        </button>
+        {isActive && onClear ? (
+          <button
+            type="button"
+            onClick={() => {
+              onClear();
+              setOpen(false);
+            }}
+            className={`mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:text-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 ${
+              spacious ? 'self-center' : ''
+            }`}
+            aria-label={t('clear_filters')}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        ) : null}
+      </div>
       {open && <div className={panelClass}>{children}</div>}
     </div>
   );
@@ -290,6 +294,9 @@ export function Filters({
   const labels = {
     filters: mounted ? t('filters') : 'ფილტრები',
     search: mounted ? t('search') : 'ძიება',
+    search_placeholder: mounted
+      ? t('search_placeholder')
+      : 'სათაური, ID, ტელეფონი, აგენტის სახელი...',
     city: mounted ? t('city') : 'ქალაქი',
     region: mounted ? t('region') : 'რეგიონი',
     any: mounted ? t('any') : 'ყველა',
@@ -513,13 +520,17 @@ export function Filters({
       </svg>
       <input
         className="w-full min-w-0 rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-        placeholder={`${labels.search} / ID...`}
+        placeholder={labels.search_placeholder}
         value={value.q || value.propertyId || ''}
         onChange={(e) => {
           const v = e.target.value;
-          const isNumericId = /^\d+$/.test(v.trim()) && Number(v.trim()) > 0;
-          if (isNumericId) {
-            onChange({ ...value, q: '', propertyId: v.trim() });
+          const trimmed = v.trim();
+          const num = Number(trimmed);
+          // მხოლოდ განცხადების ID (100000+), არა ტელეფონის ციფრები (მაგ. 33, 558)
+          const isListingNumericId =
+            /^\d+$/.test(trimmed) && !Number.isNaN(num) && num >= 100000;
+          if (isListingNumericId) {
+            onChange({ ...value, q: '', propertyId: trimmed });
           } else {
             onChange({ ...value, q: v, propertyId: '' });
           }

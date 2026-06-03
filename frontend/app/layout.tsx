@@ -1,9 +1,8 @@
 import './globals.css';
 
 import type { Metadata } from 'next';
-import { Header } from '@/components/Header';
-import { Footer } from '@/components/Footer';
 import { PageTracker } from '@/components/PageTracker';
+import { SiteChrome } from '@/components/SiteChrome';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
@@ -50,11 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <div className="relative flex min-h-screen flex-col">
             <PageTracker />
-            <Header />
-            <main className="relative z-0 mx-auto w-full min-h-[50vh] max-w-7xl flex-1 px-2 py-4 sm:px-4 sm:py-6">
-              {children}
-            </main>
-            <Footer />
+            <SiteChrome>{children}</SiteChrome>
           </div>
         </Providers>
       </body>

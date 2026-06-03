@@ -10,6 +10,7 @@ import { uploadPropertyPhotosMiddleware, deleteCloudinaryImage } from '../servic
 import { uploadPropertyPhotosFromFiles } from '../services/photoUpload.js';
 import { getJWTSecret } from '../config/jwt.js';
 import { normalizeTourLink } from '../utils/tourLink.js';
+import { buildPropertyTextSearchOr } from '../utils/propertySearch.js';
 
 const router = express.Router();
 
@@ -368,44 +369,10 @@ router.get(
       $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }],
     };
 
-    // ტექსტური ძიება - ეძებს ყველა ველში
+    // ტექსტური ძიება — სათაური, აღწერა, ტელეფონი, აგენტის სახელი, ID...
     if (req.query.q) {
-      const q = req.query.q.trim();
-      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = { $regex: escaped, $options: 'i' };
-      const textOr = [
-        { title: regex },
-        { desc: regex },
-        { city: regex },
-        { region: regex },
-        { tbilisiDistrict: regex },
-        { tbilisiSubdistricts: regex },
-        {
-          $and: [
-            { cadastralCode: regex },
-            { cadastralHidden: { $ne: true } },
-          ],
-        },
-        { type: regex },
-        { dealType: regex },
-        { buildingProject: regex },
-        { renovationStatus: regex },
-        { 'contact.phone': regex },
-        { 'contact.email': regex },
-        { privateNotes: regex },
-      ];
-      // რიცხვითი ძიება (ID, ფასი, ფართობი, ოთახები)
-      const num = Number(q);
-      if (!isNaN(num) && num > 0) {
-        textOr.push(
-          { numericId: num },
-          { price: num },
-          { sqm: num },
-          { rooms: num },
-          { bedrooms: num }
-        );
-      }
-      filter.$and.push({ $or: textOr });
+      const textOr = await buildPropertyTextSearchOr(req.query.q);
+      if (textOr.length) filter.$and.push({ $or: textOr });
     }
     // type შეიძლება იყოს მასივი (მრავალი კატეგორიის არჩევა)
     if (req.query.type) {

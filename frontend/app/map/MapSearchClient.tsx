@@ -1,15 +1,16 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { listProperties } from '@/lib/api';
 import type { Property } from '@/lib/types';
 import { Filters, type FiltersState } from '@/components/Filters';
+import { MapOverlaySearch } from '@/components/MapOverlaySearch';
 import { MapView } from '@/components/MapView';
 import { PropertyMapListRow } from '@/components/PropertyMapListRow';
+import { filterPropertiesByMapBounds, mapBoundsEqual, type MapBounds } from '@/lib/mapBounds';
 import { searchParamsToFiltersState } from '@/lib/mapQuery';
 
 export default function MapSearchClient() {
@@ -32,7 +33,34 @@ export default function MapSearchClient() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [hoveredId, setHoveredId] = React.useState<string | null>(null);
+  const [mapBounds, setMapBounds] = React.useState<MapBounds | null>(null);
   const rowRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+
+  const listInViewport = React.useMemo(() => {
+    const inView = filterPropertiesByMapBounds(properties, mapBounds);
+    if (selectedId && !inView.some((p) => p._id === selectedId)) {
+      const selected = properties.find((p) => p._id === selectedId);
+      if (selected) return [selected, ...inView];
+    }
+    return inView;
+  }, [properties, mapBounds, selectedId]);
+
+  const handleMapBoundsChange = React.useCallback((bounds: MapBounds) => {
+    setMapBounds((prev) => (mapBoundsEqual(prev, bounds) ? prev : bounds));
+  }, []);
+
+  const handleMarkerClick = React.useCallback((id: string | null) => {
+    setSelectedId(id);
+    setHoveredId(null);
+  }, []);
+
+  const handlePropertyNavigate = React.useCallback(
+    (id: string) => {
+      router.push(`/property/${id}`);
+    },
+    [router]
+  );
 
   React.useEffect(() => {
     const next = searchParamsToFiltersState(new URLSearchParams(spStr));
@@ -42,28 +70,34 @@ export default function MapSearchClient() {
 
   React.useEffect(() => {
     let alive = true;
-    setLoading(true);
-    setError(null);
-    listProperties({
-      ...filters,
-      sort: sortBy,
-      lang: i18n.language
-    })
-      .then((r) => {
-        if (!alive) return;
-        setProperties(r.properties);
-        setSelectedId(null);
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      listProperties({
+        ...filters,
+        sort: sortBy,
+        lang: i18n.language
       })
-      .catch((e) => {
-        if (!alive) return;
-        setError(e.message || 'Error');
-      })
-      .finally(() => {
-        if (!alive) return;
-        setLoading(false);
-      });
+        .then((r) => {
+          if (!alive) return;
+          setProperties(r.properties);
+          setSelectedId(null);
+          setHoveredId(null);
+          setMapBounds(null);
+        })
+        .catch((e) => {
+          if (!alive) return;
+          setError(e.message || 'Error');
+        })
+        .finally(() => {
+          if (!alive) return;
+          setLoading(false);
+        });
+    }, 350);
+
     return () => {
       alive = false;
+      window.clearTimeout(timer);
     };
   }, [filters, sortBy, i18n.language]);
 
@@ -74,26 +108,7 @@ export default function MapSearchClient() {
   }, [selectedId]);
 
   return (
-    <div className="fixed inset-0 z-[300] flex flex-col bg-slate-50 dark:bg-zinc-950">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-3 dark:border-zinc-800 dark:bg-zinc-950">
-        <Link
-          href="/"
-          className="text-sm font-medium text-slate-700 hover:text-blue-600 dark:text-zinc-200 dark:hover:text-amber-400"
-        >
-          ← {tr('browseProperties', 'განცხადებების ნახვა')}
-        </Link>
-        <span className="truncate px-2 text-center text-sm font-semibold text-slate-900 dark:text-amber-400">
-          {tr('map_full_view_title', 'ძიება რუკაზე')}
-        </span>
-        <Link
-          href="/"
-          className="text-sm text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-          aria-label={tr('map_close_full', 'დახურვა')}
-        >
-          ✕
-        </Link>
-      </header>
-
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50 dark:bg-zinc-950">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <aside className="max-h-[min(50vh,420px)] shrink-0 overflow-y-auto border-b border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:w-[min(26rem,92vw)] lg:max-w-md lg:shrink-0 lg:border-b-0 lg:border-r">
           <Filters variant="mapSidebar" value={filters} onChange={setFilters} />
@@ -102,7 +117,11 @@ export default function MapSearchClient() {
         <section className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 lg:flex-none lg:w-[min(26rem,36vw)] lg:max-w-md lg:border-b-0 lg:border-r">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
             <span className="text-xs text-slate-600 dark:text-zinc-400">
-              {loading ? '…' : `${properties.length} ${tr('objects', 'ობიექტი')}`}
+              {loading
+                ? '…'
+                : mapBounds
+                  ? `${listInViewport.length} / ${properties.length} ${tr('objects_on_map', 'რუკაზე')}`
+                  : `${properties.length} ${tr('objects', 'ობიექტი')}`}
             </span>
             <select
               className="max-w-[11rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
@@ -119,7 +138,7 @@ export default function MapSearchClient() {
               <option value="views_asc">{tr('sort_views_asc', '👁️ ნახვები ↑')}</option>
             </select>
           </div>
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
             {error && (
               <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
                 {error}
@@ -129,13 +148,22 @@ export default function MapSearchClient() {
             {!loading && properties.length === 0 && (
               <p className="text-sm text-slate-500 dark:text-zinc-400">{tr('noProperties', 'თქვენ ჯერ არ გაქვთ განცხადებები')}</p>
             )}
+            {!loading && properties.length > 0 && listInViewport.length === 0 && (
+              <p className="text-sm text-slate-500 dark:text-zinc-400">
+                {tr('no_objects_in_map_view', 'ამ რუკის ხედში განცხადება ვერ მოიძებნა. გადაიწიეთ ან გაადიდეთ რუკა.')}
+              </p>
+            )}
             {!loading &&
-              properties.map((p) => (
+              listInViewport.map((p) => (
                 <PropertyMapListRow
                   key={p._id}
                   p={p}
                   selected={selectedId === p._id}
-                  onSelect={() => setSelectedId(p._id)}
+                  highlighted={hoveredId === p._id}
+                  onHover={() => setHoveredId(p._id)}
+                  onHoverEnd={() => {
+                    setHoveredId((prev) => (prev === p._id ? null : prev));
+                  }}
                   rowRef={(el) => {
                     rowRefs.current[p._id] = el;
                   }}
@@ -144,13 +172,29 @@ export default function MapSearchClient() {
           </div>
         </section>
 
-        <div className="flex min-h-[min(42vh,320px)] min-w-0 flex-1 flex-col lg:min-h-0">
+        <div className="relative flex min-h-[min(42vh,320px)] min-w-0 flex-1 flex-col lg:min-h-0">
+          <div className="pointer-events-none absolute left-3 top-3 z-[500] sm:left-14">
+            <div className="pointer-events-auto">
+              <MapOverlaySearch filters={filters} onFiltersChange={setFilters} />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="absolute right-3 top-3 z-[500] flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-md ring-1 ring-slate-200 transition-colors hover:bg-slate-50 dark:bg-zinc-900 dark:text-amber-400 dark:ring-zinc-600 dark:hover:bg-zinc-800"
+            aria-label={tr('map_close_full', 'რუკის დახურვა')}
+          >
+            <span aria-hidden>✕</span>
+            <span className="hidden sm:inline">{tr('map_close_full', 'რუკის დახურვა')}</span>
+          </button>
           <MapView
             properties={properties}
             selectedPropertyId={selectedId}
-            onPropertyMarkerClick={(id) => setSelectedId(id)}
+            hoveredPropertyId={hoveredId}
+            onPropertyMarkerClick={handleMarkerClick}
             richHoverTooltips
-            onPropertyNavigate={(id) => router.push(`/property/${id}`)}
+            onPropertyNavigate={handlePropertyNavigate}
+            onVisibleBoundsChange={handleMapBoundsChange}
             heightClassName="h-full min-h-[min(42vh,320px)] lg:min-h-0"
             className="rounded-none border-0 lg:h-full"
           />

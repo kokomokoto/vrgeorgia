@@ -7,13 +7,16 @@ export function getTourBuilderPublicBase() {
   return base.replace(/\/$/, '');
 }
 
-/** tour-builder-ის /v/{uuid} ბმული — localhost-ის ნაცვლად production URL */
+/** tour-builder-ის /v/{uuid} ბმული — production-ზე ყოველთვის საჯარო API host */
 export function normalizeTourLink(link) {
   if (!link || typeof link !== 'string') return '';
   const trimmed = link.trim();
   if (!trimmed) return '';
   const match = trimmed.match(/\/v\/([0-9a-f-]{36})/i);
   if (!match) return trimmed;
+  if (process.env.NODE_ENV !== 'production') {
+    return trimmed;
+  }
   return `${getTourBuilderPublicBase()}/v/${match[1]}`;
 }
 

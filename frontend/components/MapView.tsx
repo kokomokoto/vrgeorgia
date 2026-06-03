@@ -3,6 +3,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import type { Property } from '@/lib/types';
+import type { MapBounds } from '@/lib/mapBounds';
 
 interface MapInnerProps {
   properties: Property[];
@@ -12,9 +13,12 @@ interface MapInnerProps {
   zoom?: number;
   markerStyle?: 'default' | 'price';
   selectedPropertyId?: string | null;
+  /** სიიდან hover — მხოლოდ ანიმაცია, ინფო ფანჯარა არა */
+  hoveredPropertyId?: string | null;
   onPropertyMarkerClick?: (id: string | null) => void;
   richHoverTooltips?: boolean;
   onPropertyNavigate?: (id: string) => void;
+  onVisibleBoundsChange?: (bounds: MapBounds) => void;
 }
 
 const MapInner = dynamic<MapInnerProps>(() => import('./MapInner'), {
@@ -40,9 +44,11 @@ export function MapView({
   zoom,
   markerStyle = 'default',
   selectedPropertyId,
+  hoveredPropertyId,
   onPropertyMarkerClick,
   richHoverTooltips,
   onPropertyNavigate,
+  onVisibleBoundsChange,
   className = '',
   heightClassName = 'h-[380px]'
 }: MapViewProps) {
@@ -58,9 +64,11 @@ export function MapView({
         zoom={zoom}
         markerStyle={markerStyle}
         selectedPropertyId={selectedPropertyId}
+        hoveredPropertyId={hoveredPropertyId}
         onPropertyMarkerClick={onPropertyMarkerClick}
         richHoverTooltips={richHoverTooltips}
         onPropertyNavigate={onPropertyNavigate}
+        onVisibleBoundsChange={onVisibleBoundsChange}
       />
     </div>
   );

@@ -43,7 +43,15 @@ export default function HomePage() {
   const [sortBy, setSortBy] = React.useState('date_desc');
   const [categoriesOpen, setCategoriesOpen] = React.useState(false);
   const [mapOpen, setMapOpen] = React.useState(false);
+  const [selectedMapPropertyId, setSelectedMapPropertyId] = React.useState<string | null>(null);
   const ITEMS_PER_PAGE = 40;
+
+  const homeMapProps = {
+    properties,
+    richHoverTooltips: true as const,
+    selectedPropertyId: selectedMapPropertyId,
+    onPropertyMarkerClick: setSelectedMapPropertyId
+  };
 
   React.useEffect(() => {
     setMounted(true);
@@ -87,30 +95,34 @@ export default function HomePage() {
     if (!filtersHydrated) return;
 
     let alive = true;
-    setLoading(true);
-    setError(null);
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
 
-    listProperties({
-      ...filters,
-      sort: sortBy,
-      lang: i18n.language
-    })
-      .then((r) => {
-        if (!alive) return;
-        setProperties(r.properties);
-        setCurrentPage(1);
+      listProperties({
+        ...filters,
+        sort: sortBy,
+        lang: i18n.language
       })
-      .catch((e) => {
-        if (!alive) return;
-        setError(e.message || 'Failed');
-      })
-      .finally(() => {
-        if (!alive) return;
-        setLoading(false);
-      });
+        .then((r) => {
+          if (!alive) return;
+          setProperties(r.properties);
+          setCurrentPage(1);
+          setSelectedMapPropertyId(null);
+        })
+        .catch((e) => {
+          if (!alive) return;
+          setError(e.message || 'Failed');
+        })
+        .finally(() => {
+          if (!alive) return;
+          setLoading(false);
+        });
+    }, 400);
 
     return () => {
       alive = false;
+      window.clearTimeout(timer);
     };
   }, [filters, sortBy, i18n.language, filtersHydrated]);
 
@@ -143,6 +155,9 @@ export default function HomePage() {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const searchQuery = filters.q.trim();
+  const showEmptyResults = !loading && !error && properties.length === 0;
 
   return (
     <div className="grid gap-4 text-slate-900">
@@ -266,7 +281,7 @@ export default function HomePage() {
         </div>
         {mapOpen && (
           <div className="mt-3 border-t border-slate-100 pt-3 dark:border-zinc-700">
-            <MapView properties={properties} richHoverTooltips />
+            <MapView {...homeMapProps} />
           </div>
         )}
       </div>
@@ -279,11 +294,47 @@ export default function HomePage() {
         >
           {tr('map_open_full_view', 'რუკაზე ძებნა')}
         </Link>
-        <MapView properties={properties} richHoverTooltips />
+        <MapView {...homeMapProps} />
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200">{error}</div>}
       {loading && <div className="text-sm text-slate-500 dark:text-zinc-400">Loading…</div>}
+
+      {showEmptyResults && (
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-3xl dark:bg-zinc-800">
+            🔍
+          </div>
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-zinc-100">
+            {tr('search_no_results_title', 'ობიექტი ვერ მოიძებნა')}
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-slate-600 dark:text-zinc-400">
+            {searchQuery
+              ? (mounted
+                  ? t('search_no_results_query', { query: searchQuery })
+                  : `საძიებო სიტყვით «${searchQuery}» შესაბამისი განცხადება ვერ მოიძებნა.`)
+              : tr(
+                  'search_no_results_filters',
+                  'თქვენი არჩეული ფილტრებით განცხადება ვერ მოიძებნა.'
+                )}
+          </p>
+          {searchQuery ? (
+            <p className="mt-2 font-medium text-slate-800 dark:text-amber-400/90">
+              «{searchQuery}»
+            </p>
+          ) : null}
+          <p className="mx-auto mt-4 max-w-md text-xs text-slate-500 dark:text-zinc-500">
+            {tr('search_no_results_hint', 'შეგიძლიათ გაასუფთავოთ ფილტრები და თავიდან სცადოთ.')}
+          </p>
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="mt-6 inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          >
+            ✕ {tr('clear_filters', 'გასუფთავება')}
+          </button>
+        </div>
+      )}
 
       {/* სორტირება და რაოდენობა */}
       {!loading && properties.length > 0 && (
@@ -316,11 +367,13 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {paginatedProperties.map((p) => (
-          <PropertyCard key={p._id} p={p} compactPhoto />
-        ))}
-      </div>
+      {!showEmptyResults && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {paginatedProperties.map((p) => (
+            <PropertyCard key={p._id} p={p} compactPhoto />
+          ))}
+        </div>
+      )}
 
       {/* პაგინაცია */}
       {totalPages > 1 && (

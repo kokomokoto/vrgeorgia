@@ -17,7 +17,7 @@ interface TourExperienceProps {
 
 export function TourExperience({
   tourId,
-  title,
+  title: _title,
   scenes,
   hotspots,
   variant,
@@ -49,40 +49,10 @@ export function TourExperience({
   }
 
   return (
-    <div className="tour-shell flex h-screen w-screen overflow-hidden bg-[#0a0a0c]">
-      <SceneFilmstrip
-        scenes={ordered}
-        activeSceneId={activeSceneId}
-        onSelect={goToScene}
-      />
-
-      <div className="relative min-h-0 min-w-0 flex-1">
-        <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-4">
-          <div className="pointer-events-auto max-w-md rounded-2xl border border-white/10 bg-black/45 px-4 py-3 shadow-2xl backdrop-blur-md">
-            <h1 className="text-lg font-semibold tracking-tight text-white">
-              {title}
-            </h1>
-            <p className="mt-1 text-xs text-white/65">
-              {clickToAdvance
-                ? "Pins open linked rooms · tap empty space for next scene"
-                : "Use pins or the scene list to move around"}
-            </p>
-          </div>
-          {/* მართვის ბმულები მხოლოდ რედაქტირების preview-ში; საჯარო (published)
-              ნახვაში დამთვალიერებელს მართვის გვერდები არ უნდა დაენახოს. */}
-          {variant === "draft" && (
-            <div className="pointer-events-auto flex shrink-0 gap-2">
-              <Link
-                href={`/tours/${tourId}/edit`}
-                className="rounded-full border border-white/15 bg-black/50 px-4 py-2 text-sm text-white backdrop-blur-md transition hover:bg-white/10"
-              >
-                Exit preview
-              </Link>
-            </div>
-          )}
-        </header>
-
+    <div className="tour-shell relative size-full min-h-[100dvh] overflow-hidden bg-[#0a0a0c]">
+      <div className="tour-stage relative size-full min-h-0 min-w-0">
         <PanoramaViewer
+          className="tour-panorama-layer absolute inset-0 z-0 size-full bg-transparent"
           scenes={ordered}
           hotspots={hotspots}
           activeSceneId={activeSceneId}
@@ -91,6 +61,23 @@ export function TourExperience({
           clickToAdvance={clickToAdvance}
           onSceneChange={setActiveSceneId}
         />
+
+        <SceneFilmstrip
+          scenes={ordered}
+          activeSceneId={activeSceneId}
+          onSelect={goToScene}
+        />
+
+        {variant === "draft" && (
+          <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end p-4">
+            <Link
+              href={`/tours/${tourId}/edit`}
+              className="pointer-events-auto rounded-full border border-white/15 bg-black/50 px-4 py-2 text-sm text-white backdrop-blur-md transition hover:bg-white/10"
+            >
+              Exit preview
+            </Link>
+          </header>
+        )}
 
         <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-4">
           <div className="rounded-full border border-white/10 bg-black/50 px-4 py-2 text-xs text-white/70 backdrop-blur-md">

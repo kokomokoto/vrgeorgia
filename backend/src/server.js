@@ -16,6 +16,10 @@ import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
 import tourApiRoutes from './routes/tourApi.js';
 import { attachTourUi } from './tourUiServer.js';
+import {
+  attachProductionTourProxy,
+  shouldUseProductionTourProxy,
+} from './tourProductionProxy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,10 +80,11 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
+// Rate limiting (ლოკალურ dev-ში გამორთული — HMR/Strict Mode არ აჯერებს 429-ს)
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 წუთი
-  max: 200, // 200 მოთხოვნა 15 წუთში
+  windowMs: 15 * 60 * 1000,
+  max: NODE_ENV === 'production' ? 400 : 10_000,
+  skip: () => NODE_ENV !== 'production',
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many requests, please try again later.' }
@@ -117,13 +122,20 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api', apiLimiter);
 
+// Dev: პროდაქშენის ტური (iframe) — proxy უნდა იყოს tourApi-ზე ადრე, რომ /api/tours/* production-ზე მივიდეს
+if (shouldUseProductionTourProxy()) {
+  attachProductionTourProxy(app);
+}
+
 app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api', tourApiRoutes);
+if (!shouldUseProductionTourProxy()) {
+  app.use('/api', tourApiRoutes);
+}
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });

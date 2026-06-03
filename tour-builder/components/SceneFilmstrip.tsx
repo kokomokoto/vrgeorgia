@@ -16,7 +16,7 @@ export function SceneFilmstrip({
 }: SceneFilmstripProps) {
   return (
     <nav
-      className="tour-filmstrip flex w-[88px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-white/10 bg-black/40 p-2 backdrop-blur-xl sm:w-[100px]"
+      className="tour-filmstrip pointer-events-none absolute inset-y-0 left-0 z-30 flex w-[88px] flex-col gap-2 overflow-y-auto bg-transparent p-2 sm:w-[100px]"
       aria-label="Tour scenes"
     >
       {scenes.map((scene, index) => {
@@ -26,10 +26,10 @@ export function SceneFilmstrip({
             key={scene.id}
             type="button"
             onClick={() => onSelect(scene.id)}
-            className={`group relative overflow-hidden rounded-xl transition-all duration-200 ${
+            className={`pointer-events-auto group relative overflow-hidden rounded-xl shadow-lg ring-1 ring-white/20 transition-all duration-200 ${
               active
-                ? "ring-2 ring-sky-400 ring-offset-2 ring-offset-black/80 scale-[1.02]"
-                : "opacity-75 hover:opacity-100 hover:ring-1 hover:ring-white/30"
+                ? "ring-2 ring-sky-400 ring-offset-2 ring-offset-transparent scale-[1.02] shadow-sky-900/40"
+                : "opacity-90 hover:opacity-100 hover:ring-white/40"
             }`}
             title={scene.name}
           >

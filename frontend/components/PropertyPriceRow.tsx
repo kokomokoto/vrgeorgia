@@ -11,7 +11,15 @@ import {
 import { useDisplayCurrency } from '@/components/DisplayCurrencyProvider';
 import { getPropertyPrices } from '@/lib/propertyDisplay';
 
-export function PropertyPriceRow({ p, className = '' }: { p: Property; className?: string }) {
+export function PropertyPriceRow({
+  p,
+  className = '',
+  compact = false,
+}: {
+  p: Property;
+  className?: string;
+  compact?: boolean;
+}) {
   const { t } = useTranslation();
   const { rate: usdToGel } = useCurrencyRate();
   const { displayCurrency, toggleDisplayCurrency } = useDisplayCurrency();
@@ -33,7 +41,11 @@ export function PropertyPriceRow({ p, className = '' }: { p: Property; className
   return (
     <div className={`flex min-w-0 flex-nowrap items-center gap-1.5 ${className}`}>
       {displayTotal != null && (
-        <span className="shrink-0 text-xl font-bold leading-none tracking-tight text-slate-900 dark:text-amber-400 sm:text-2xl">
+        <span
+          className={`shrink-0 font-bold leading-none tracking-tight text-slate-900 dark:text-amber-400 ${
+            compact ? 'text-base' : 'text-xl sm:text-2xl'
+          }`}
+        >
           {symbol}
           {displayTotal.toLocaleString()}
         </span>

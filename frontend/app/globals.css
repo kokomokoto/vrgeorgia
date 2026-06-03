@@ -384,24 +384,45 @@ svg:not([width]) {
 }
 
 .leaflet-popup.map-property-popup .leaflet-popup-content-wrapper {
-  padding: 0;
-  border-radius: 0.75rem;
+  padding: 8px !important;
+  border-radius: 10px !important;
   overflow: hidden;
-  background: transparent;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18) !important;
+  opacity: 1 !important;
 }
 
 .leaflet-popup.map-property-popup .leaflet-popup-content {
   margin: 0;
   width: auto !important;
+  background: #ffffff;
+}
+
+.leaflet-popup.map-property-popup .map-property-card {
+  background: #ffffff;
 }
 
 .leaflet-popup.map-property-popup .leaflet-popup-tip {
-  background: #fff;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+}
+
+.dark .leaflet-popup.map-property-popup .leaflet-popup-content-wrapper {
+  background: #18181b !important;
+  border-color: #3f3f46 !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important;
+}
+
+.dark .leaflet-popup.map-property-popup .leaflet-popup-content,
+.dark .leaflet-popup.map-property-popup .map-property-card {
+  background: #18181b;
 }
 
 .dark .leaflet-popup.map-property-popup .leaflet-popup-tip {
-  background: #18181b;
+  background: #18181b !important;
+  border-color: #3f3f46;
 }
 
 /* Leaflet-ის შიდა SVG-ები ზომის შეზღუდვას არ ექვემდებარება */

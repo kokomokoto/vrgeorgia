@@ -5,7 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
-import { addPropertyPhotos, getProperty, updateProperty, resolveImageUrl } from '@/lib/api';
+import { getProperty, updateProperty, resolveImageUrl } from '@/lib/api';
+import { uploadPropertyPhotosInBatches } from '@/lib/propertyPhotoUpload';
 import { detectPanoramaFromFile, isPanoramaPhoto, normalizePhotoUrl } from '@/lib/panorama';
 import {
   MAX_PROPERTY_PHOTOS,
@@ -146,6 +147,7 @@ export default function EditPropertyPage() {
   const [panoramaPhotos, setPanoramaPhotos] = useState<string[]>([]);
   const [mainPhotoIndex, setMainPhotoIndex] = useState(0);
   const [addingPhotos, setAddingPhotos] = useState(false);
+  const [photoUploadProgress, setPhotoUploadProgress] = useState({ done: 0, total: 0 });
   const addPhotosInputRef = useRef<HTMLInputElement | null>(null);
 
   // დეტალური ინფორმაცია
@@ -452,9 +454,12 @@ export default function EditPropertyPage() {
     const list = Array.from(files).slice(0, remaining);
     setAddingPhotos(true);
     setError(null);
+    setPhotoUploadProgress({ done: 0, total: list.length });
     try {
       const panoramaFlags = await Promise.all(list.map((f) => detectPanoramaFromFile(f)));
-      const res = await addPropertyPhotos(id, list, panoramaFlags);
+      const res = await uploadPropertyPhotosInBatches(id, list, panoramaFlags, (p) =>
+        setPhotoUploadProgress({ done: p.uploaded, total: p.total })
+      );
       setExistingPhotos(res.photos || []);
       setPanoramaPhotos(res.panoramaPhotos || []);
       setMainPhotoIndex((prev) => {
@@ -466,6 +471,7 @@ export default function EditPropertyPage() {
       setError(err.message || t('error_save_failed'));
     } finally {
       setAddingPhotos(false);
+      setPhotoUploadProgress({ done: 0, total: 0 });
     }
   };
 
@@ -1246,7 +1252,14 @@ export default function EditPropertyPage() {
                             : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                       >
-                        {addingPhotos ? t('saving') : `+ ${t('add_new_photos')}`}
+                        {addingPhotos
+                          ? photoUploadProgress.total > 0
+                            ? t('photos_upload_progress', {
+                                done: photoUploadProgress.done,
+                                total: photoUploadProgress.total,
+                              })
+                            : t('saving')
+                          : `+ ${t('add_new_photos')}`}
                       </button>
                       <div className="text-xs text-slate-500">
                         {t('choose_or_drop_photos')} ({existingPhotos.length}/{MAX_PROPERTY_PHOTOS})
@@ -1344,7 +1357,14 @@ export default function EditPropertyPage() {
                             : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                       >
-                        {addingPhotos ? t('saving') : t('add_photos')}
+                        {addingPhotos
+                          ? photoUploadProgress.total > 0
+                            ? t('photos_upload_progress', {
+                                done: photoUploadProgress.done,
+                                total: photoUploadProgress.total,
+                              })
+                            : t('saving')
+                          : t('add_photos')}
                       </button>
                     </div>
                   </div>

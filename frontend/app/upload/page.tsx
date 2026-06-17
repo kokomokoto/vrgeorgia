@@ -4,8 +4,9 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
-import { createProperty, getMe } from '@/lib/api';
+import { createProperty, getMe, updateProperty } from '@/lib/api';
 import { detectPanoramaFromFile } from '@/lib/panorama';
+import { uploadPropertyPhotosInBatches } from '@/lib/propertyPhotoUpload';
 import {
   MAX_PROPERTY_PHOTOS,
   adjustMainIndexAfterRemoval,
@@ -201,6 +202,8 @@ export default function UploadPage() {
 
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [uploadPhase, setUploadPhase] = React.useState<'idle' | 'saving' | 'photos'>('idle');
+  const [photoUploadProgress, setPhotoUploadProgress] = React.useState({ done: 0, total: 0 });
 
   React.useEffect(() => {
     if (photoItems.length === 0) {
@@ -487,18 +490,33 @@ export default function UploadPage() {
       };
       form.set('amenities', JSON.stringify(amenities));
       form.set('privateNotes', privateNotes);
-      
+
+      let panoramaFlags: boolean[] = [];
       if (photoItems.length > 0) {
-        form.set('mainPhoto', String(mainPhotoIndex));
-        const panoramaFlags = await Promise.all(
+        panoramaFlags = await Promise.all(
           photoItems.map((item) => detectPanoramaFromFile(item.file))
         );
-        form.set('panoramaFlags', JSON.stringify(panoramaFlags));
-        photoItems.forEach((item) => form.append('photos', item.file));
       }
 
+      setUploadPhase('saving');
       const res = await createProperty(form);
-      router.push(`/property/${res.property._id}`);
+      const propertyId = res.property._id;
+
+      if (photoItems.length > 0) {
+        setUploadPhase('photos');
+        setPhotoUploadProgress({ done: 0, total: photoItems.length });
+        await uploadPropertyPhotosInBatches(
+          propertyId,
+          photoItems.map((item) => item.file),
+          panoramaFlags,
+          (p) => setPhotoUploadProgress({ done: p.uploaded, total: p.total })
+        );
+        if (mainPhotoIndex > 0) {
+          await updateProperty(propertyId, { mainPhoto: mainPhotoIndex });
+        }
+      }
+
+      router.push(`/property/${propertyId}`);
     } catch (e: unknown) {
       const msg =
         e instanceof Error
@@ -509,6 +527,8 @@ export default function UploadPage() {
       setError(msg?.trim() ? msg.trim() : t('error'));
     } finally {
       setLoading(false);
+      setUploadPhase('idle');
+      setPhotoUploadProgress({ done: 0, total: 0 });
     }
   };
 
@@ -1496,7 +1516,14 @@ export default function UploadPage() {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                {t('loading')}
+                {uploadPhase === 'photos' && photoUploadProgress.total > 0
+                  ? t('photos_upload_progress', {
+                      done: photoUploadProgress.done,
+                      total: photoUploadProgress.total,
+                    })
+                  : uploadPhase === 'saving'
+                    ? t('photos_upload_saving')
+                    : t('loading')}
               </span>
             ) : (
               <span>🚀 {t('publish')}</span>

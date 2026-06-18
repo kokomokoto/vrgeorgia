@@ -47,13 +47,20 @@ export function getPropertyAddressLine(p: Property): string {
   return parts.join(', ');
 }
 
+/** ფასის გამოთვლისთვის — ჯერ მიწის/ზოგადი ფართობი, შემდეგ სახლის ფართობი */
+function getAreaForPrice(p: Property): number {
+  const sqm = p.sqm != null && p.sqm > 0 ? p.sqm : 0;
+  const houseSqm = p.houseSqm != null && p.houseSqm > 0 ? p.houseSqm : 0;
+  return sqm || houseSqm;
+}
+
 export function getPropertyPrices(p: Property): {
   currencySymbol: string;
   totalPrice: number | null;
   pricePerSqm: number | null;
 } {
   const currencySymbol = p.priceCurrency === 'GEL' ? '₾' : '$';
-  const sqm = p.sqm && p.sqm > 0 ? p.sqm : 0;
+  const areaSqm = getAreaForPrice(p);
   const isPerSqm = p.priceType === 'per_sqm';
 
   let totalPrice: number | null = null;
@@ -61,10 +68,10 @@ export function getPropertyPrices(p: Property): {
 
   if (isPerSqm) {
     pricePerSqm = p.price;
-    if (sqm > 0) totalPrice = Math.round(p.price * sqm);
+    if (areaSqm > 0) totalPrice = Math.round(p.price * areaSqm);
   } else {
     totalPrice = p.price;
-    if (sqm > 0) pricePerSqm = Math.round(p.price / sqm);
+    if (areaSqm > 0) pricePerSqm = Math.round(p.price / areaSqm);
   }
 
   return { currencySymbol, totalPrice, pricePerSqm };

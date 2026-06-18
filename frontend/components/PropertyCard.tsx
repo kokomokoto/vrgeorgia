@@ -38,12 +38,13 @@ export function PropertyCard({
     e.stopPropagation();
   };
 
-  /** მაუსის ჰორიზონტალური პოზიციით — ფოტოები თანმიმდევრობით */
+  /** მაუსის ჰორიზონტალური პოზიციით — ფოტოები თანმიმდევრობით (ბოლოში ისევ პირველი) */
   const handlePhotoMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (photos.length <= 1) return;
     const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const idx = Math.min(photos.length - 1, Math.floor((x / rect.width) * photos.length));
+    const idx = Math.floor((x / rect.width) * photos.length) % photos.length;
     setActiveIndex(idx);
   };
 

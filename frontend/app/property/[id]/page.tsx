@@ -18,6 +18,7 @@ import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
 import { BrokerContactChannels } from '@/components/BrokerContactChannels';
 import { PanoramaViewer } from '@/components/PanoramaViewer';
+import { PhotoThumbnailScrollStrip } from '@/components/PhotoThumbnailScrollStrip';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import { resolveTourPublicUrl } from '@/lib/tourBuilder';
 import { useAuth } from '@/components/AuthProvider';
@@ -64,15 +65,25 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
     }
   }, []);
 
+  const photoCount = photos.length;
+  const goPrev = React.useCallback(() => {
+    if (photoCount <= 1) return;
+    onChangeIndex((index - 1 + photoCount) % photoCount);
+  }, [index, photoCount, onChangeIndex]);
+  const goNext = React.useCallback(() => {
+    if (photoCount <= 1) return;
+    onChangeIndex((index + 1) % photoCount);
+  }, [index, photoCount, onChangeIndex]);
+
   React.useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft' && index > 0) onChangeIndex(index - 1);
-      if (e.key === 'ArrowRight' && index < photos.length - 1) onChangeIndex(index + 1);
+      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') goNext();
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [index, photos.length, onClose, onChangeIndex]);
+  }, [onClose, goPrev, goNext]);
 
   if (!portalReady) return null;
 
@@ -83,12 +94,12 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
       role="dialog"
       aria-modal="true"
     >
-      {index > 0 && (
+      {photoCount > 1 && (
         <button
           type="button"
           aria-label={t('previous_photo') || 'Previous photo'}
           className="absolute left-0 top-28 bottom-32 z-[10000] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
-          onClick={(e) => { e.stopPropagation(); onChangeIndex(index - 1); }}
+          onClick={(e) => { e.stopPropagation(); goPrev(); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
             ‹
@@ -146,12 +157,12 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         />
       )}
       
-      {index < photos.length - 1 && (
+      {photoCount > 1 && (
         <button
           type="button"
           aria-label={t('next_photo') || 'Next photo'}
           className="absolute right-0 top-28 bottom-32 z-[10000] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
-          onClick={(e) => { e.stopPropagation(); onChangeIndex(index + 1); }}
+          onClick={(e) => { e.stopPropagation(); goNext(); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
             ›
@@ -744,7 +755,7 @@ function PropertyDetailInner() {
               {t('photos')} ({photos.length})
             </div>
           )}
-          <div className="flex gap-1.5 sm:gap-2 overflow-x-auto py-0.5 scrollbar-thin">
+          <PhotoThumbnailScrollStrip className="flex gap-1.5 sm:gap-2 overflow-x-auto py-0.5 scrollbar-thin">
             {photos.map((p, idx) => {
               const is360Thumb = isPanoramaPhoto(p, property.panoramaPhotos);
               const isThumbActive = usePhotoHero
@@ -798,7 +809,7 @@ function PropertyDetailInner() {
               </div>
             );
             })}
-          </div>
+          </PhotoThumbnailScrollStrip>
         </div>
       )}
 

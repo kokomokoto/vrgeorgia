@@ -23,10 +23,44 @@ export function PropertyCard({
   const mainPhotoIndex = Math.min(p.mainPhoto ?? 0, Math.max(0, (p.photos?.length ?? 1) - 1));
   const photos = p.photos?.length ? p.photos : [];
   const [activeIndex, setActiveIndex] = React.useState(mainPhotoIndex);
+  const [loadedIndices, setLoadedIndices] = React.useState<Set<number>>(() => new Set([mainPhotoIndex]));
+  const loadedRef = React.useRef(new Set<number>([mainPhotoIndex]));
+  const loadingRef = React.useRef(new Set<number>());
+
+  const loadPhoto = React.useCallback(
+    (index: number) => {
+      if (index < 0 || index >= photos.length) return;
+      if (loadedRef.current.has(index) || loadingRef.current.has(index)) return;
+
+      loadingRef.current.add(index);
+      const img = new Image();
+      const finish = () => {
+        loadingRef.current.delete(index);
+        loadedRef.current.add(index);
+        setLoadedIndices(new Set(loadedRef.current));
+      };
+      img.onload = finish;
+      img.onerror = finish;
+      img.src = resolveImageUrl(photos[index]);
+    },
+    [photos]
+  );
 
   React.useEffect(() => {
+    loadedRef.current = new Set([mainPhotoIndex]);
+    loadingRef.current = new Set();
+    setLoadedIndices(new Set([mainPhotoIndex]));
     setActiveIndex(mainPhotoIndex);
   }, [mainPhotoIndex, p._id]);
+
+  /** მთავარი ფოტოები ჯერ, დანარჩენი ფონურად — hover-ზე უკვე ჩატვირთული იქნება */
+  React.useEffect(() => {
+    if (photos.length <= 1) return;
+    const timer = window.setTimeout(() => {
+      photos.forEach((_, i) => loadPhoto(i));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [photos, mainPhotoIndex, p._id, loadPhoto]);
 
   if (!p) return null;
 
@@ -45,12 +79,15 @@ export function PropertyCard({
     if (rect.width <= 0) return;
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
     const idx = Math.floor((x / rect.width) * photos.length) % photos.length;
+    loadPhoto(idx);
     setActiveIndex(idx);
   };
 
   const handlePhotoMouseLeave = () => {
     setActiveIndex(mainPhotoIndex);
   };
+
+  const shownIndex = loadedIndices.has(activeIndex) ? activeIndex : mainPhotoIndex;
 
   return (
     <div className="group overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-zinc-700/80 dark:bg-zinc-900 dark:hover:shadow-lg dark:hover:shadow-black/20">
@@ -63,18 +100,23 @@ export function PropertyCard({
           onMouseLeave={handlePhotoMouseLeave}
         >
           {photos.length > 0 ? (
-            photos.map((photo, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={`${photo}-${i}`}
-                src={resolveImageUrl(photo)}
-                alt={i === activeIndex ? p.title : ''}
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
-                  i === activeIndex ? 'opacity-100' : 'opacity-0'
-                }`}
-                draggable={false}
-              />
-            ))
+            photos.map((photo, i) => {
+              if (!loadedIndices.has(i)) return null;
+              return (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`${photo}-${i}`}
+                  src={resolveImageUrl(photo)}
+                  alt={i === shownIndex ? p.title : ''}
+                  loading={i === mainPhotoIndex ? 'lazy' : undefined}
+                  decoding="async"
+                  className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
+                    i === shownIndex ? 'opacity-100' : 'opacity-0'
+                  }`}
+                  draggable={false}
+                />
+              );
+            })
           ) : (
             <div className="flex h-full w-full items-center justify-center text-sm text-slate-400 dark:text-zinc-500">
               {t('no_photo')}

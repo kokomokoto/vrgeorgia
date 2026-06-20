@@ -19,7 +19,7 @@ import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
-import { reverseGeocodeLabel } from '@/lib/reverseGeocode';
+import { mergeParsedLocation, parseLocationFromNominatim, reverseGeocodeLocation } from '@/lib/mapLocationFromGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import {
   applyConstructionYearChange,
@@ -310,6 +310,15 @@ export default function EditPropertyPage() {
   const isStep1Complete = dealType !== '' && type !== '';
   const isStep2Complete = lat !== null && lng !== null;
   const isStep3Complete = city !== '' && (city.toLowerCase() !== 'თბილისი' ? region !== '' : true);
+
+  const applyParsedLocation = useCallback((parsed: ReturnType<typeof mergeParsedLocation>) => {
+    if (parsed.city) setCity(parsed.city);
+    if (parsed.region) setRegion(parsed.region);
+    if (parsed.street) setStreet(parsed.street);
+    setTbilisiDistrict(parsed.tbilisiDistrict);
+    setTbilisiSubdistricts(parsed.tbilisiSubdistricts);
+    if (parsed.label) setAddressMapFill((s) => ({ key: s.key + 1, text: parsed.label }));
+  }, []);
   const isStep4Complete = title !== '' && price !== '';
   const isStep5Filled =
     roomCount !== null ||
@@ -686,19 +695,23 @@ export default function EditPropertyPage() {
                   <AddressSearch
                     mapFillFromPick={addressMapFill}
                     placeholder={t('address_search_placeholder')}
-                    onSelect={(searchLat, searchLng, address) => {
+                    onSelect={(searchLat, searchLng, address, result) => {
                       setLat(searchLat);
                       setLng(searchLng);
-                      let nextCity = city;
-                      if (!city && address) {
+                      const parsed = mergeParsedLocation(
+                        parseLocationFromNominatim({
+                          display_name: result?.display_name || address,
+                          address: result?.address,
+                        }),
+                        CITY_TO_REGION,
+                      );
+                      if (!parsed.city && address) {
                         const parts = address.split(',').map((p) => p.trim());
-                        if (parts.length > 1) {
-                          nextCity = parts[parts.length - 1];
-                          setCity(nextCity);
-                        }
+                        if (parts.length > 1) parsed.city = parts[parts.length - 1];
+                        if (!parsed.street) parsed.street = splitStreetFromFullAddress(address, parsed.city);
+                        if (parsed.city) parsed.region = CITY_TO_REGION[parsed.city] || parsed.region;
                       }
-                      setStreet(splitStreetFromFullAddress(address, nextCity));
-                      setAddressMapFill((s) => ({ key: s.key + 1, text: address }));
+                      applyParsedLocation(parsed);
                     }}
                   />
                 </div>
@@ -711,10 +724,9 @@ export default function EditPropertyPage() {
                     onPick={async (a, b) => {
                       setLat(a);
                       setLng(b);
-                      const label = await reverseGeocodeLabel(a, b);
-                      if (label) {
-                        setStreet(splitStreetFromFullAddress(label, city));
-                        setAddressMapFill((s) => ({ key: s.key + 1, text: label }));
+                      const parsedRaw = await reverseGeocodeLocation(a, b);
+                      if (parsedRaw) {
+                        applyParsedLocation(mergeParsedLocation(parsedRaw, CITY_TO_REGION));
                       }
                     }}
                   />
@@ -792,6 +804,15 @@ export default function EditPropertyPage() {
                       </div>
                     </div>
                   )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">🛣️ {t('card_street')}</label>
+                  <input
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    placeholder={t('address_search_placeholder')}
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                  />
                 </div>
                 {CITIES_WITH_DISTRICTS.includes(city) && (
                   <TbilisiDistrictSelector

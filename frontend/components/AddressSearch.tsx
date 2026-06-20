@@ -21,7 +21,7 @@ interface SearchResult {
 }
 
 interface AddressSearchProps {
-  onSelect: (lat: number, lng: number, address: string) => void;
+  onSelect: (lat: number, lng: number, address: string, result?: SearchResult) => void;
   placeholder?: string;
   /** რუკაზე წერტილის შემდეგ რევერს-გეოკოდირებით ველის შევსება — key იზრდება ყოველ დასმაზე */
   mapFillFromPick?: { key: number; text: string };
@@ -107,7 +107,7 @@ export default function AddressSearch({ onSelect, placeholder, mapFillFromPick }
 
     setQuery(address);
     setShowResults(false);
-    onSelect(lat, lng, address);
+    onSelect(lat, lng, address, result);
   };
 
   const formatDisplayAddress = (result: SearchResult): string =>

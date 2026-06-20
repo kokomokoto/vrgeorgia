@@ -11,6 +11,9 @@ import { uploadPropertyPhotosFromFiles } from '../services/photoUpload.js';
 import { getJWTSecret } from '../config/jwt.js';
 import { normalizeTourLink } from '../utils/tourLink.js';
 import { buildPropertyTextSearchOr } from '../utils/propertySearch.js';
+import { getUsdToGelRate } from '../utils/currency.js';
+import { applyPriceRangeFilter } from '../utils/priceFilter.js';
+import { applySqmRangeFilter } from '../utils/areaFilter.js';
 
 const router = express.Router();
 
@@ -416,87 +419,26 @@ router.get(
       }
     }
 
-    // ვალუტა: USD არის default, ამიტომ ველის არარსებობაც USD-ად ითვლება
-    if (req.query.priceCurrency) {
-      if (req.query.priceCurrency === 'USD') {
-        filter.$and = filter.$and || [];
-        filter.$and.push({ $or: [{ priceCurrency: 'USD' }, { priceCurrency: { $exists: false } }] });
-      } else {
-        filter.priceCurrency = req.query.priceCurrency;
-      }
-    }
-
-    // ფასის ფილტრაცია priceType-ის გათვალისწინებით
-    // თუ მომხმარებელი ირჩევს "კვ.მ-ზე", სისტემა ითვლის price/sqm და ადარებს
-    // თუ "სრული" ან არაფერი - პირდაპირ price-ს ადარებს
-    const filterPriceType = req.query.priceType || '';
-    
-    if (filterPriceType === 'per_sqm' && (req.query.minPrice || req.query.maxPrice)) {
-      // კვ.მ-ზე ფილტრაცია: გამოვთვალოთ ეფექტური ფასი კვადრატულზე
-      // - სრული ფასის ობიექტები: price / sqm
-      // - კვ.მ-ზე ფასის ობიექტები: price პირდაპირ
-      filter.$and = filter.$and || [];
-      filter.$and.push({ sqm: { $gt: 0 } }); // sqm > 0 რომ გაყოფა შესაძლებელი იყოს
-      
-      const effectivePricePerSqm = {
-        $cond: [
-          { $eq: ['$priceType', 'per_sqm'] },
-          '$price',
-          { $divide: ['$price', '$sqm'] }
-        ]
-      };
-      
-      const priceConditions = [];
-      if (req.query.minPrice) {
-        priceConditions.push({ $gte: [effectivePricePerSqm, Number(req.query.minPrice)] });
-      }
-      if (req.query.maxPrice) {
-        priceConditions.push({ $lte: [effectivePricePerSqm, Number(req.query.maxPrice)] });
-      }
-      
-      if (priceConditions.length === 1) {
-        filter.$expr = priceConditions[0];
-      } else {
-        filter.$expr = { $and: priceConditions };
-      }
-    } else if (req.query.minPrice || req.query.maxPrice) {
-      // სრული ფასის ფილტრაცია (default): 
-      // - კვ.მ-ზე ფასის ობიექტები: price * sqm
-      // - სრული ფასის ობიექტები: price პირდაპირ
-      if (filterPriceType === 'total') {
-        const effectiveTotalPrice = {
-          $cond: [
-            { $eq: ['$priceType', 'per_sqm'] },
-            { $multiply: ['$price', { $ifNull: ['$sqm', 1] }] },
-            '$price'
-          ]
-        };
-        
-        const priceConditions = [];
-        if (req.query.minPrice) {
-          priceConditions.push({ $gte: [effectiveTotalPrice, Number(req.query.minPrice)] });
-        }
-        if (req.query.maxPrice) {
-          priceConditions.push({ $lte: [effectiveTotalPrice, Number(req.query.maxPrice)] });
-        }
-        
-        if (priceConditions.length === 1) {
-          filter.$expr = priceConditions[0];
-        } else {
-          filter.$expr = { $and: priceConditions };
-        }
-      } else {
-        // priceType არ არის მითითებული — პირდაპირი შედარება
-        filter.price = {};
-        if (req.query.minPrice) filter.price.$gte = Number(req.query.minPrice);
-        if (req.query.maxPrice) filter.price.$lte = Number(req.query.maxPrice);
-      }
+    // ფასის ფილტრი — ვალუტა = ერთეული (კურსით გადათვლა), არა ატვირთული priceCurrency
+    if (req.query.minPrice || req.query.maxPrice) {
+      const usdToGel = await getUsdToGelRate();
+      applyPriceRangeFilter(
+        filter,
+        {
+          minPrice: req.query.minPrice,
+          maxPrice: req.query.maxPrice,
+          priceType: req.query.priceType || '',
+          priceCurrency: req.query.priceCurrency || 'USD',
+        },
+        usdToGel
+      );
     }
 
     if (req.query.minSqm || req.query.maxSqm) {
-      filter.sqm = {};
-      if (req.query.minSqm) filter.sqm.$gte = Number(req.query.minSqm);
-      if (req.query.maxSqm) filter.sqm.$lte = Number(req.query.maxSqm);
+      applySqmRangeFilter(filter, {
+        minSqm: req.query.minSqm,
+        maxSqm: req.query.maxSqm,
+      });
     }
 
     if (req.query.minConstructionYear || req.query.maxConstructionYear) {

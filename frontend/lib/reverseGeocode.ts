@@ -9,10 +9,15 @@ type NominatimAddress = {
   city?: string;
   town?: string;
   village?: string;
+  municipality?: string;
+  county?: string;
   state?: string;
   country?: string;
   neighbourhood?: string;
   suburb?: string;
+  quarter?: string;
+  city_district?: string;
+  borough?: string;
 };
 
 type NominatimResult = {
@@ -20,6 +25,8 @@ type NominatimResult = {
   address?: NominatimAddress;
   error?: string;
 };
+
+export type { NominatimAddress, NominatimResult };
 
 export function formatNominatimResult(result: NominatimResult): string {
   if (result.address) {

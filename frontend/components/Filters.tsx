@@ -5,59 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { CityCombobox } from './CityCombobox';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from './TbilisiDistrictSelector';
 import { ExtendedSearchModal } from './ExtendedSearchModal';
-
-// საქართველოს რეგიონები
-const GEORGIAN_REGIONS = [
-  { value: 'tbilisi', key: 'region_tbilisi' },
-  { value: 'adjara', key: 'region_adjara' },
-  { value: 'imereti', key: 'region_imereti' },
-  { value: 'kakheti', key: 'region_kakheti' },
-  { value: 'shida_kartli', key: 'region_shida_kartli' },
-  { value: 'kvemo_kartli', key: 'region_kvemo_kartli' },
-  { value: 'samegrelo', key: 'region_samegrelo' },
-  { value: 'guria', key: 'region_guria' },
-  { value: 'racha', key: 'region_racha' },
-  { value: 'mtskheta', key: 'region_mtskheta' },
-  { value: 'samtskhe', key: 'region_samtskhe' },
-  { value: 'abkhazia', key: 'region_abkhazia' }
-];
-
-// ქალაქი → რეგიონი mapping
-const CITY_REGION_MAP: Record<string, string> = {
-  'თბილისი': 'tbilisi',
-  'ბათუმი': 'adjara',
-  'ქობულეთი': 'adjara',
-  'ქუთაისი': 'imereti',
-  'ზესტაფონი': 'imereti',
-  'სამტრედია': 'imereti',
-  'წყალტუბო': 'imereti',
-  'საჩხერე': 'imereti',
-  'ჭიათურა': 'imereti',
-  'ტყიბული': 'imereti',
-  'რუსთავი': 'kvemo_kartli',
-  'მარნეული': 'kvemo_kartli',
-  'ბოლნისი': 'kvemo_kartli',
-  'გარდაბანი': 'kvemo_kartli',
-  'თეთრიწყარო': 'kvemo_kartli',
-  'დმანისი': 'kvemo_kartli',
-  'წალკა': 'kvemo_kartli',
-  'გორი': 'shida_kartli',
-  'კასპი': 'shida_kartli',
-  'ხაშური': 'shida_kartli',
-  'ზუგდიდი': 'samegrelo',
-  'ფოთი': 'samegrelo',
-  'სენაკი': 'samegrelo',
-  'თელავი': 'kakheti',
-  'გურჯაანი': 'kakheti',
-  'საგარეჯო': 'kakheti',
-  'სიღნაღი': 'kakheti',
-  'დედოფლისწყარო': 'kakheti',
-  'ლაგოდეხი': 'kakheti',
-  'ახალციხე': 'samtskhe',
-  'ბორჯომი': 'samtskhe',
-  'მცხეთა': 'mtskheta',
-  'ოზურგეთი': 'guria',
-};
+import { LocationPickerModal } from './LocationPickerModal';
+import { CITY_REGION_MAP, GEORGIAN_REGIONS, TBILISI_SURROUNDINGS_LABEL } from '@/lib/georgiaLocations';
 
 // გარიგების ტიპები
 const DEAL_TYPES = [
@@ -218,6 +167,60 @@ function FilterDropdown({
   );
 }
 
+function LocationFilterTrigger({
+  label,
+  summary,
+  isActive,
+  onClear,
+  onOpen,
+}: {
+  label: string;
+  summary: string;
+  isActive: boolean;
+  onClear?: () => void;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div
+      className={`flex w-full items-center gap-1 rounded-xl border text-sm transition-all ${
+        isActive
+          ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
+          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left"
+      >
+        <div className="min-w-0">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">{label}</div>
+          <div className={`truncate font-medium ${isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'}`}>
+            {summary}
+          </div>
+        </div>
+        <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+      {isActive && onClear ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:text-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+          aria-label={t('clear_filters')}
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function Filters({
   value,
   onChange,
@@ -235,6 +238,7 @@ export function Filters({
   const [mounted, setMounted] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [extendedOpen, setExtendedOpen] = React.useState(false);
+  const [locationModalOpen, setLocationModalOpen] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
@@ -343,6 +347,7 @@ export function Filters({
     if (value.city) parts.push(value.city);
     if (value.tbilisiDistrict) parts.push(value.tbilisiDistrict);
     if (parts.length > 0) return parts.join(', ');
+    if (value.region === 'tbilisi' && !value.city) return TBILISI_SURROUNDINGS_LABEL;
     if (value.region) {
       const region = GEORGIAN_REGIONS.find((r) => r.value === value.region);
       return region ? t(region.key) : value.region;
@@ -830,10 +835,20 @@ export function Filters({
           </div>
         </FilterDropdown>
 
-        {/* ქალაქი dropdown */}
-        <FilterDropdown label={labels.city} summary={citySummary()} isActive={cityActive} onClear={clearCityFilter}>
-          {renderLocationFilters()}
-        </FilterDropdown>
+        {/* ქალაქი — მოდალი (მთავარი გვერდი) / dropdown (რუკა) */}
+        {mapSidebar ? (
+          <FilterDropdown label={labels.city} summary={citySummary()} isActive={cityActive} onClear={clearCityFilter}>
+            {renderLocationFilters()}
+          </FilterDropdown>
+        ) : (
+          <LocationFilterTrigger
+            label={labels.city}
+            summary={citySummary()}
+            isActive={cityActive}
+            onClear={clearCityFilter}
+            onOpen={() => setLocationModalOpen(true)}
+          />
+        )}
 
         {/* ოთახები dropdown */}
         <FilterDropdown label={t('filter_rooms')} summary={roomsSummary()} isActive={roomsActive || bedroomsActive || balconiesActive} onClear={clearRoomsFilter}>
@@ -1310,6 +1325,14 @@ export function Filters({
           </div>
         </FilterDropdownLayoutContext.Provider>
       </ExtendedSearchModal>
+      {!mapSidebar && (
+        <LocationPickerModal
+          open={locationModalOpen}
+          onClose={() => setLocationModalOpen(false)}
+          value={value}
+          onChange={onChange}
+        />
+      )}
       </div>
     </div>
     </FilterDropdownLayoutContext.Provider>

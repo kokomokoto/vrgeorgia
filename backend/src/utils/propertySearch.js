@@ -106,6 +106,7 @@ export async function buildPropertyTextSearchOr(q) {
       { title: textRx },
       { desc: textRx },
       { city: textRx },
+      { street: textRx },
       { region: textRx },
       { tbilisiDistrict: textRx },
       { tbilisiSubdistricts: textRx },

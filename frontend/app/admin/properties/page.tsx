@@ -25,7 +25,13 @@ interface Property {
     name: string;
     email: string;
   };
+  houseSqm?: number;
   createdAt: string;
+}
+
+function formatPropertySqm(property: Property): string {
+  const sqm = property.sqm || property.houseSqm || 0;
+  return sqm > 0 ? `${sqm} მ²` : '—';
 }
 
 export default function AdminPropertiesPage() {
@@ -238,7 +244,7 @@ function AdminProperties() {
       <AdminSidebar />
 
       {/* Main Content */}
-      <div className="ml-64 p-8">
+      <div className="ml-64 min-w-0 p-4 sm:p-6 lg:p-8">
         <div className="mb-8 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">განცხადებები</h1>
@@ -292,8 +298,17 @@ function AdminProperties() {
         )}
 
         {/* Properties Table */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full">
+        <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+          <table className="w-full min-w-[1080px] table-fixed">
+            <colgroup>
+              <col className="w-12" />
+              <col className="w-72" />
+              <col className="w-28" />
+              <col className="w-32" />
+              <col className="w-56" />
+              <col className="w-28" />
+              <col className="w-44" />
+            </colgroup>
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-4">
@@ -303,12 +318,14 @@ function AdminProperties() {
                     onChange={(e) => setSelectedIds(e.target.checked ? properties.map((p) => p._id) : [])}
                   />
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">განცხადება</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ტიპი</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ფასი</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">მფლობელი</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">სტატუსი</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">მოქმედებები</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">განცხადება</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">ტიპი</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">ფასი</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">მფლობელი</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">სტატუსი</th>
+                <th className="sticky right-0 z-10 bg-gray-50 px-4 py-4 text-right text-sm font-semibold text-gray-600 shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.12)]">
+                  მოქმედებები
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -326,7 +343,7 @@ function AdminProperties() {
                 </tr>
               ) : (
                 properties.map((property) => (
-                  <tr key={property._id} className="hover:bg-gray-50">
+                  <tr key={property._id} className="group hover:bg-gray-50">
                     <td className="px-4 py-4">
                       <input
                         type="checkbox"
@@ -337,8 +354,8 @@ function AdminProperties() {
                         }}
                       />
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
+                    <td className="px-4 py-4 align-top">
+                      <div className="flex items-start gap-3 min-w-0">
                         <div className="w-16 h-12 bg-gray-200 rounded-lg overflow-hidden relative flex-shrink-0">
                           {property.photos?.[0] ? (
                             <Image
@@ -351,36 +368,39 @@ function AdminProperties() {
                             <div className="w-full h-full flex items-center justify-center text-gray-400">🏠</div>
                           )}
                         </div>
-                        <div>
-                          <div className="font-medium text-gray-800 max-w-[200px] truncate flex items-center gap-1">
-                            {property.pinned && <span title="აპინულია" className="text-amber-500">📌</span>}
-                            {property.title}
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-800 line-clamp-2 flex items-start gap-1">
+                            {property.pinned && <span title="აპინულია" className="shrink-0 text-amber-500">📌</span>}
+                            <span className="min-w-0 break-words">{property.title}</span>
                           </div>
-                          <div className="text-sm text-gray-500">{property.city}, {property.tbilisiDistrict || '-'}</div>
+                          <div className="mt-1 text-sm text-gray-500 truncate">
+                            {property.city}
+                            {property.tbilisiDistrict ? `, ${property.tbilisiDistrict}` : ''}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-gray-800">{propertyTypeNames[property.type]}</div>
-                      <div className="text-sm text-gray-500">{dealTypeNames[property.dealType]}</div>
+                    <td className="px-4 py-4 align-top">
+                      <div className="text-gray-800">{propertyTypeNames[property.type] || property.type}</div>
+                      <div className="text-sm text-gray-500">{dealTypeNames[property.dealType] || property.dealType}</div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4 align-top whitespace-nowrap">
                       <div className="font-medium text-gray-800">
                         {property.price?.toLocaleString()} {property.priceCurrency}
                       </div>
-                      <div className="text-sm text-gray-500">{property.sqm} მ²</div>
+                      <div className="text-sm text-gray-500">{formatPropertySqm(property)}</div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-gray-800">{property.userId?.name || '-'}</div>
-                      <div className="text-sm text-gray-500">{property.userId?.email || '-'}</div>
+                    <td className="px-4 py-4 align-top min-w-0">
+                      <div className="text-gray-800 truncate">{property.userId?.name || '—'}</div>
+                      <div className="text-sm text-gray-500 truncate">{property.userId?.email || '—'}</div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[property.status] || 'bg-gray-100 text-gray-700'}`}>
+                    <td className="px-4 py-4 align-top">
+                      <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap ${statusColors[property.status] || 'bg-gray-100 text-gray-700'}`}>
                         {statusNames[property.status] || property.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="sticky right-0 z-10 bg-white px-4 py-4 text-right align-top shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.12)] group-hover:bg-gray-50">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
                         <Link
                           href={`/property/${property._id}`}
                           className="text-blue-600 hover:text-blue-800 text-sm"

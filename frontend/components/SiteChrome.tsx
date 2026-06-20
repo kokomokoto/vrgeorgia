@@ -10,9 +10,14 @@ export function isFullscreenMapRoute(pathname: string): boolean {
   return pathname === '/map' || pathname.startsWith('/map/');
 }
 
+function isAdminRoute(pathname: string): boolean {
+  return pathname === '/admin' || pathname.startsWith('/admin/');
+}
+
 export function SiteChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const mapFullscreen = isFullscreenMapRoute(pathname);
+  const adminPanel = isAdminRoute(pathname);
 
   if (mapFullscreen) {
     return <div className="fixed inset-0 z-[200] flex flex-col bg-slate-50 dark:bg-zinc-950">{children}</div>;
@@ -21,10 +26,16 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Header />
-      <main className="relative z-0 mx-auto w-full min-h-[50vh] max-w-7xl flex-1 px-2 py-4 sm:px-4 sm:py-6">
+      <main
+        className={
+          adminPanel
+            ? 'relative z-0 w-full min-h-[50vh] flex-1 p-0'
+            : 'relative z-0 mx-auto w-full min-h-[50vh] max-w-7xl flex-1 px-2 py-4 sm:px-4 sm:py-6'
+        }
+      >
         {children}
       </main>
-      <Footer />
+      {!adminPanel && <Footer />}
     </>
   );
 }

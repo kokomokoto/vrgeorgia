@@ -361,10 +361,10 @@ function PropertyDetailInner() {
     !!currentUser &&
     !!ownerId &&
     (currentUser.id === ownerId || currentUser._id === ownerId);
-  const showOwnerEditButton =
+  const showEditButton =
     profileLoaded &&
-    isOwner &&
-    (currentUser?.role === 'agent' || currentUser?.role === 'admin');
+    (currentUser?.role === 'admin' ||
+      (isOwner && currentUser?.role === 'agent'));
 
   // ავტომატური აღწერის გენერაცია თარგმანებით
   const generateAutoDescription = () => {
@@ -517,7 +517,7 @@ function PropertyDetailInner() {
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-start">
-          {showOwnerEditButton && (
+          {showEditButton && (
             <Link
               href={`/property/${property._id}/edit`}
               className="inline-flex items-center gap-1 rounded-lg border-2 border-red-600 bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-red-700 hover:bg-red-700"

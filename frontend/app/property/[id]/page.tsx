@@ -3,10 +3,10 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
-import { getProperty, listProperties, resolveImageUrl } from '@/lib/api';
+import { deleteProperty, getProperty, listProperties, resolveImageUrl } from '@/lib/api';
 import { getPropertyAddressLine } from '@/lib/propertyDisplay';
 import { useAutoTranslate } from '@/lib/translate';
 import { MapView } from '@/components/MapView';
@@ -219,12 +219,14 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
 
 function PropertyDetailInner() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const shareTokenFromUrl = searchParams.get('t')?.trim() || undefined;
   const { i18n, t } = useTranslation();
   const { user: currentUser, profileLoaded } = useAuth();
 
   const [property, setProperty] = useState<Property | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -361,10 +363,23 @@ function PropertyDetailInner() {
     !!currentUser &&
     !!ownerId &&
     (currentUser.id === ownerId || currentUser._id === ownerId);
+  const isAdmin = profileLoaded && currentUser?.role === 'admin';
   const showEditButton =
-    profileLoaded &&
-    (currentUser?.role === 'admin' ||
-      (isOwner && currentUser?.role === 'agent'));
+    isAdmin || (profileLoaded && isOwner && currentUser?.role === 'agent');
+
+  const handleDelete = async () => {
+    if (!property || deleting) return;
+    if (!confirm('ნამდვილად გსურთ განცხადების წაშლა?')) return;
+
+    setDeleting(true);
+    try {
+      await deleteProperty(property._id);
+      router.push('/admin/properties');
+    } catch {
+      alert(t('error_delete_failed'));
+      setDeleting(false);
+    }
+  };
 
   // ავტომატური აღწერის გენერაცია თარგმანებით
   const generateAutoDescription = () => {
@@ -524,6 +539,16 @@ function PropertyDetailInner() {
             >
               ✏️ {t('edit')}
             </Link>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="inline-flex items-center gap-1 rounded-lg border-2 border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-slate-800 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              🗑️ {deleting ? t('loading') : t('delete')}
+            </button>
           )}
           <CompareButton propertyId={property._id} size="md" />
           <FavoriteButton propertyId={property._id} size="md" />

@@ -448,8 +448,8 @@ export default function UploadPage() {
       form.set('region', region);
       form.set('tbilisiDistrict', tbilisiDistrict);
       form.set('tbilisiSubdistricts', JSON.stringify(tbilisiSubdistricts));
-      form.set('sqm', sqm);
-      form.set('houseSqm', houseSqm);
+      if (sqm.trim()) form.set('sqm', sqm);
+      if (houseSqm.trim()) form.set('houseSqm', houseSqm);
       form.set('rooms', String(roomCount || 0));
       form.set('bedrooms', String(bedroomCount || 0));
       form.set('type', type);
@@ -970,8 +970,7 @@ export default function UploadPage() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        🏠 {t('house_sqm_label')}{' '}
-                        <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                        🏠 {t('house_sqm_label')}
                       </label>
                       <FormattedNumberInput
                         className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"

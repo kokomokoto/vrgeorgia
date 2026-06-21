@@ -903,8 +903,7 @@ export default function EditPropertyPage() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        🏠 {t('house_sqm_label')}{' '}
-                        <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                        🏠 {t('house_sqm_label')}
                       </label>
                       <FormattedNumberInput
                         className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"

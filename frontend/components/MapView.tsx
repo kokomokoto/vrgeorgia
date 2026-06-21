@@ -120,7 +120,7 @@ export function MapView({
       className={`relative z-0 w-full overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 ${outerHeightClass} ${expandable ? 'map-view-fullscreen-host' : ''} ${className}`.trim()}
     >
       {hasDistrictZonesToggle && (
-        <label className="absolute left-3 top-3 z-[1000] flex max-w-[calc(100%-1.5rem)] cursor-pointer items-center gap-2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-sm font-medium text-slate-700 shadow-md backdrop-blur-sm dark:border-zinc-600 dark:bg-zinc-900/95 dark:text-zinc-200">
+        <label className="absolute right-3 top-3 z-[1000] flex max-w-[calc(100%-1.5rem)] cursor-pointer items-center gap-2 rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-sm font-medium text-slate-700 shadow-md backdrop-blur-sm dark:border-zinc-600 dark:bg-zinc-900/95 dark:text-zinc-200">
           <input
             type="checkbox"
             checked={zonesVisible}

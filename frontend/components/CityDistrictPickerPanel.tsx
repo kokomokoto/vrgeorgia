@@ -4,6 +4,11 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { CITY_DISTRICTS_MAP } from '@/components/TbilisiDistrictSelector';
 
+const FLAT_DISTRICT_CITY_KEYS: Record<string, string> = {
+  ბათუმი: 'batumi_districts',
+  ქუთაისი: 'kutaisi_districts',
+};
+
 const TBILISI_COLUMN_KEYS = [
   ['vake_saburtalo'],
   ['isani_samgori'],
@@ -157,6 +162,74 @@ function DistrictBlock({
   );
 }
 
+function FlatDistrictPanel({
+  city,
+  districtKey,
+  search,
+  selectedDistrict,
+  selectedSubdistricts,
+  onSelectionChange,
+}: {
+  city: string;
+  districtKey: string;
+  search: string;
+  selectedDistrict: string;
+  selectedSubdistricts: string[];
+  onSelectionChange: (district: string, subdistricts: string[]) => void;
+}) {
+  const { t } = useTranslation();
+  const districts = CITY_DISTRICTS_MAP[city];
+  const district = districts?.[districtKey];
+  if (!district) return null;
+
+  const translationPrefix =
+    city === 'ბათუმი' ? 'batumi' : city === 'ქუთაისი' ? 'kutaisi' : 'rustavi';
+
+  const sectionTitle = (() => {
+    const tr = t(`${translationPrefix}.title`);
+    return tr === `${translationPrefix}.title` ? district.labelKey.replace(/^district_/, '').replace(/_/g, ' ') : tr;
+  })();
+
+  const subLabel = (ka: string, key: string) => {
+    const tr = t(`${translationPrefix}.${key}`);
+    return tr === `${translationPrefix}.${key}` ? ka : tr;
+  };
+
+  const q = search.trim().toLowerCase();
+  const visibleSubs = district.subdistricts.filter((sub) => {
+    if (!q) return true;
+    const label = subLabel(sub.ka, sub.key).toLowerCase();
+    return label.includes(q) || sub.ka.toLowerCase().includes(q) || sectionTitle.toLowerCase().includes(q);
+  });
+
+  if (q && visibleSubs.length === 0) return null;
+
+  const toggleSub = (ka: string) => {
+    if (selectedSubdistricts.includes(ka)) {
+      const nextSubs = selectedSubdistricts.filter((s) => s !== ka);
+      onSelectionChange(nextSubs.length === 0 ? '' : districtKey, nextSubs);
+      return;
+    }
+    onSelectionChange(districtKey, [...selectedSubdistricts, ka]);
+  };
+
+  return (
+    <section>
+      <h3 className="mb-4 text-base font-semibold text-slate-800 dark:text-zinc-100">{sectionTitle}</h3>
+      <div className="grid grid-cols-1 gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
+        {visibleSubs.map((sub) => (
+          <CheckboxControl
+            key={sub.key}
+            checked={selectedSubdistricts.includes(sub.ka)}
+            onChange={() => toggleSub(sub.ka)}
+            label={subLabel(sub.ka, sub.key)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function CityDistrictPickerPanel({
   city,
   search,
@@ -194,6 +267,19 @@ export function CityDistrictPickerPanel({
           </div>
         ))}
       </div>
+    );
+  }
+
+  if (FLAT_DISTRICT_CITY_KEYS[city]) {
+    return (
+      <FlatDistrictPanel
+        city={city}
+        districtKey={FLAT_DISTRICT_CITY_KEYS[city]}
+        search={search}
+        selectedDistrict={selectedDistrict}
+        selectedSubdistricts={selectedSubdistricts}
+        onSelectionChange={onSelectionChange}
+      />
     );
   }
 

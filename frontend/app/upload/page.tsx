@@ -19,7 +19,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
-import { mergeParsedLocation, parseLocationFromNominatim, reverseGeocodeLocation } from '@/lib/mapLocationFromGeocode';
+import { mergeParsedLocation, parseLocationFromNominatim, resolveLocationFromCoords } from '@/lib/mapLocationFromGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import {
   applyConstructionYearChange,
@@ -717,22 +717,24 @@ export default function UploadPage() {
                   />
                 </div>
 
-                <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '350px' }}>
-                  <MapView 
-                    properties={previewProps} 
-                    selectedLocation={lat !== null && lng !== null ? { lat, lng } : null}
-                    center={lat !== null && lng !== null ? { lat, lng } : undefined}
-                    zoom={lat !== null && lng !== null ? 17 : undefined}
-                    onPick={async (a, b) => {
-                      setLat(a);
-                      setLng(b);
-                      const parsedRaw = await reverseGeocodeLocation(a, b);
-                      if (parsedRaw) {
-                        applyParsedLocation(mergeParsedLocation(parsedRaw, CITY_TO_REGION));
-                      }
-                    }}
-                  />
-                </div>
+                <MapView
+                  expandable
+                  heightClassName="h-[350px]"
+                  className="rounded-xl"
+                  properties={previewProps}
+                  selectedLocation={lat !== null && lng !== null ? { lat, lng } : null}
+                  center={lat !== null && lng !== null ? { lat, lng } : undefined}
+                  zoom={lat !== null && lng !== null ? 17 : undefined}
+                  districtZonesCity={city}
+                  kutaisiZonesAutoFit={lat === null || lng === null}
+                  tbilisiZonesAutoFit={lat === null || lng === null}
+                  onPick={async (a, b) => {
+                    setLat(a);
+                    setLng(b);
+                    const parsed = await resolveLocationFromCoords(a, b, CITY_TO_REGION);
+                    if (parsed) applyParsedLocation(parsed);
+                  }}
+                />
 
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
                   <span className="text-2xl">💡</span>

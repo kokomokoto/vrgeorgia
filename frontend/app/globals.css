@@ -430,3 +430,93 @@ svg:not([width]) {
   max-width: none;
   max-height: none;
 }
+
+/* ზონაზე/რუკაზე დაკლიკებისას არ ჩნდეს შავი focus ჩარჩო */
+.leaflet-container:focus,
+.leaflet-container:focus-visible {
+  outline: none;
+}
+
+.leaflet-container .leaflet-interactive:focus,
+.leaflet-container .leaflet-interactive:focus-visible,
+.leaflet-container svg path:focus,
+.leaflet-container svg path:focus-visible {
+  outline: none;
+}
+
+.leaflet-container .leaflet-div-icon {
+  border: none !important;
+  background: transparent !important;
+}
+
+/* ქუთაისის უბნების ზონები რუკაზე */
+.leaflet-container .kutaisi-zone-label {
+  background: transparent;
+  border: none;
+  pointer-events: none;
+}
+
+.leaflet-container .kutaisi-zone-label span {
+  display: inline-block;
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #0f172a;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.15);
+}
+
+.dark .leaflet-container .kutaisi-zone-label span {
+  color: #f8fafc;
+  background: rgba(24, 24, 27, 0.9);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.leaflet-tooltip.kutaisi-zone-tooltip {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  background: rgba(255, 255, 255, 0.96);
+  color: #1e3a8a;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.dark .leaflet-tooltip.kutaisi-zone-tooltip {
+  background: rgba(24, 24, 27, 0.95);
+  color: #93c5fd;
+  border-color: rgba(147, 197, 253, 0.25);
+}
+
+/* თბილისის რაიონული/საუბნო ზონები */
+.leaflet-container .tbilisi-raioni-label span {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 10px;
+}
+
+.leaflet-container .tbilisi-ubani-label span {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  opacity: 0.95;
+}
+
+.map-view-fullscreen-host:fullscreen {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border-radius: 0;
+  border: none;
+  background: #fff;
+}
+
+.dark .map-view-fullscreen-host:fullscreen {
+  background: #09090b;
+}

@@ -1,6 +1,7 @@
 import { CITY_REGION_MAP } from '@/lib/georgiaLocations';
 import { CITY_DISTRICTS_MAP, CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { formatNominatimResult, type NominatimAddress, type NominatimResult } from '@/lib/reverseGeocode';
+import { lookupTbilisiUbaniAtPoint, normalizeTbilisiSubdistrictKa } from '@/lib/tbilisiUbaniLookup';
 
 export type ParsedMapLocation = {
   label: string;
@@ -211,4 +212,51 @@ export async function reverseGeocodeLocation(lat: number, lng: number): Promise<
   } catch {
     return null;
   }
+}
+
+/** რუკაზე წერტილიდან — Nominatim + MSDA უბნის polygon lookup (თბილისი) */
+export async function resolveLocationFromCoords(
+  lat: number,
+  lng: number,
+  cityToRegion: Record<string, string> = CITY_REGION_MAP,
+): Promise<ReturnType<typeof mergeParsedLocation> | null> {
+  const [nominatimParsed, tbilisiZone] = await Promise.all([
+    reverseGeocodeLocation(lat, lng),
+    lookupTbilisiUbaniAtPoint(lat, lng).catch(() => null),
+  ]);
+
+  if (!nominatimParsed && !tbilisiZone) return null;
+
+  const base = nominatimParsed
+    ? mergeParsedLocation(nominatimParsed, cityToRegion)
+    : mergeParsedLocation(
+        {
+          label: '',
+          city: 'თბილისი',
+          region: 'tbilisi',
+          street: '',
+          tbilisiDistrict: '',
+          tbilisiSubdistricts: [],
+        },
+        cityToRegion,
+      );
+
+  if (tbilisiZone) {
+    return {
+      ...base,
+      city: 'თბილისი',
+      region: 'tbilisi',
+      tbilisiDistrict: tbilisiZone.districtKey,
+      tbilisiSubdistricts: [tbilisiZone.ka],
+    };
+  }
+
+  if (base.tbilisiSubdistricts?.length) {
+    return {
+      ...base,
+      tbilisiSubdistricts: base.tbilisiSubdistricts.map(normalizeTbilisiSubdistrictKa),
+    };
+  }
+
+  return base;
 }

@@ -6,6 +6,8 @@ import type { Property } from '@/lib/types';
 import { resolveImageUrl } from '@/lib/api';
 import type { MapBounds } from '@/lib/mapBounds';
 import { useTheme } from '@/components/ThemeProvider';
+import { useKutaisiZonesMapLayer } from '@/components/KutaisiZonesMapLayer';
+import { useTbilisiZonesMapLayer } from '@/components/TbilisiZonesMapLayer';
 
 const TILE_LIGHT = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
@@ -106,6 +108,14 @@ interface MapInnerProps {
   onPropertyNavigate?: (id: string) => void;
   /** რუკის ხილული ჩარჩო (სიის ფილტრაცია რუკაზე ძებნაში) */
   onVisibleBoundsChange?: (bounds: MapBounds) => void;
+  /** ქუთაისის უბნების საზღვრები და სახელები */
+  showKutaisiZones?: boolean;
+  /** ქუთაისის ზონებზე ავტომატური zoom (pin-ის არსებობისას გამორთეთ) */
+  kutaisiZonesAutoFit?: boolean;
+  /** თბილისის რაიონული/საუბნო საზღვრები და სახელები */
+  showTbilisiZones?: boolean;
+  /** თბილისის ზონებზე ავტომატური zoom */
+  tbilisiZonesAutoFit?: boolean;
 }
 
 export default function MapInner({
@@ -120,7 +130,11 @@ export default function MapInner({
   onPropertyMarkerClick,
   richHoverTooltips = false,
   onPropertyNavigate,
-  onVisibleBoundsChange
+  onVisibleBoundsChange,
+  showKutaisiZones = false,
+  kutaisiZonesAutoFit = true,
+  showTbilisiZones = false,
+  tbilisiZonesAutoFit = true
 }: MapInnerProps) {
   const { isDark } = useTheme();
   const mapRef = useRef<HTMLDivElement>(null);
@@ -138,6 +152,20 @@ export default function MapInner({
   const prevSelectedPropertyIdRef = useRef<string | null>(null);
   const boundsReportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ready, setReady] = useState(false);
+
+  useKutaisiZonesMapLayer(
+    mapInstanceRef.current,
+    showKutaisiZones,
+    ready,
+    kutaisiZonesAutoFit
+  );
+
+  useTbilisiZonesMapLayer(
+    mapInstanceRef.current,
+    showTbilisiZones,
+    ready,
+    tbilisiZonesAutoFit
+  );
 
   const propertyPath = (id: string) => `/property/${id}`;
 
@@ -210,6 +238,9 @@ export default function MapInner({
       tileLayerRef.current = tl;
 
       map.on('click', (e: any) => {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement) active.blur();
+        if (active instanceof SVGElement && 'blur' in active) (active as SVGElement & { blur: () => void }).blur();
         if (onPickRef.current) {
           onPickRef.current(e.latlng.lat, e.latlng.lng);
         } else if (onPropertyMarkerClickRef.current) {
@@ -594,6 +625,18 @@ export default function MapInner({
     if (!mapInstanceRef.current || !ready || !center) return;
     mapInstanceRef.current.setView([center.lat, center.lng], zoom || 17);
   }, [center, zoom, ready]);
+
+  useEffect(() => {
+    if (!mapRef.current || !ready) return;
+    const mapEl = mapRef.current;
+    const observer = new ResizeObserver(() => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+      map.invalidateSize();
+    });
+    observer.observe(mapEl);
+    return () => observer.disconnect();
+  }, [ready]);
 
   return <div ref={mapRef} className="h-full w-full" />;
 }

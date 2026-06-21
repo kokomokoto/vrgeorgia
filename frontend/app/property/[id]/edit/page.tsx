@@ -19,7 +19,7 @@ import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
-import { mergeParsedLocation, parseLocationFromNominatim, reverseGeocodeLocation } from '@/lib/mapLocationFromGeocode';
+import { mergeParsedLocation, parseLocationFromNominatim, resolveLocationFromCoords } from '@/lib/mapLocationFromGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import {
   applyConstructionYearChange,
@@ -721,13 +721,14 @@ export default function EditPropertyPage() {
                     selectedLocation={lat !== null && lng !== null ? { lat, lng } : null}
                     center={lat !== null && lng !== null ? { lat, lng } : undefined}
                     zoom={lat !== null && lng !== null ? 17 : undefined}
+                    districtZonesCity={city}
+                    kutaisiZonesAutoFit={lat === null || lng === null}
+                    tbilisiZonesAutoFit={lat === null || lng === null}
                     onPick={async (a, b) => {
                       setLat(a);
                       setLng(b);
-                      const parsedRaw = await reverseGeocodeLocation(a, b);
-                      if (parsedRaw) {
-                        applyParsedLocation(mergeParsedLocation(parsedRaw, CITY_TO_REGION));
-                      }
+                      const parsed = await resolveLocationFromCoords(a, b, CITY_TO_REGION);
+                      if (parsed) applyParsedLocation(parsed);
                     }}
                   />
                 </div>

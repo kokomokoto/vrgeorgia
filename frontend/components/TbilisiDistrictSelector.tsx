@@ -2,91 +2,19 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { KUTAISI_OFFICIAL_DISTRICTS } from '@/lib/kutaisiZonesGeoJson';
+import {
+  TBILISI_DISTRICTS as TBILISI_DISTRICTS_MSDA,
+  normalizeTbilisiSubdistrictKa,
+} from '@/lib/tbilisiOfficialDistricts';
 
 type DistrictData = Record<string, {
   labelKey: string;
   subdistricts: { key: string; ka: string }[];
 }>;
 
-// თბილისის რაიონები და უბნები - key-ებით თარგმანისთვის
-export const TBILISI_DISTRICTS: DistrictData = {
-  'vake_saburtalo': {
-    labelKey: 'district_vake_saburtalo',
-    subdistricts: [
-      { key: 'sub_nutsubidze', ka: 'ნუცუბიძის ფერდობი' },
-      { key: 'sub_saburtalo', ka: 'საბურთალო' },
-      { key: 'sub_dighomi_village', ka: 'სოფ. დიღომი' },
-      { key: 'sub_vazha_pshavela', ka: 'ვაჟა ფშაველას კვარტლები' },
-      { key: 'sub_lisi_lake', ka: 'ლისის ტბა' },
-      { key: 'sub_turtle_lake', ka: 'კუს ტბა' },
-      { key: 'sub_bagebi', ka: 'ბაგები' },
-      { key: 'sub_didi_dighomi', ka: 'დიდი დიღომი' },
-      { key: 'sub_dighomi_1_9', ka: 'დიღომი 1-9' },
-      { key: 'sub_vake', ka: 'ვაკე' },
-      { key: 'sub_vashlijvari', ka: 'ვაშლიჯვარი' },
-      { key: 'sub_vedzisi', ka: 'ვეძისი' },
-      { key: 'sub_tkhinvali', ka: 'თხინვალი' }
-    ]
-  },
-  'isani_samgori': {
-    labelKey: 'district_isani_samgori',
-    subdistricts: [
-      { key: 'sub_airport_settl', ka: 'აეროპორტის დას.' },
-      { key: 'sub_dampalos', ka: 'დამპალოს დას.' },
-      { key: 'sub_vazisubani', ka: 'ვაზისუბანი' },
-      { key: 'sub_varketili', ka: 'ვარკეთილი' },
-      { key: 'sub_isani', ka: 'ისანი' },
-      { key: 'sub_lilo', ka: 'ლილო' },
-      { key: 'sub_third_district', ka: 'მესამე მასივი' },
-      { key: 'sub_ortachala', ka: 'ორთაჭალა' },
-      { key: 'sub_orkhevi', ka: 'ორხევი' },
-      { key: 'sub_samgori', ka: 'სამგორი' },
-      { key: 'sub_ponichala', ka: 'ფონიჭალა' },
-      { key: 'sub_airport_highway', ka: 'აეროპორტის გზატ.' },
-      { key: 'sub_africa_settl', ka: 'აფრიკის დას.' },
-      { key: 'sub_navtlughi', ka: 'ნავთლუღი' }
-    ]
-  },
-  'gldani_nadzaladevi': {
-    labelKey: 'district_gldani_nadzaladevi',
-    subdistricts: [
-      { key: 'sub_avchala', ka: 'ავჭალა' },
-      { key: 'sub_gldani', ka: 'გლდანი' },
-      { key: 'sub_gldanula', ka: 'გლდანულა' },
-      { key: 'sub_zahesi', ka: 'ზაჰესი' },
-      { key: 'sub_tbilisi_sea', ka: 'თბილისის ზღვა' },
-      { key: 'sub_temqa', ka: 'თემქა' },
-      { key: 'sub_koniaki', ka: 'კონიაკის დას.' },
-      { key: 'sub_lotkini', ka: 'ლოტკინი' },
-      { key: 'sub_mukhiani', ka: 'მუხიანი' },
-      { key: 'sub_nadzaladevi', ka: 'ნაძალადევი' },
-      { key: 'sub_sanzona', ka: 'სანზონა' },
-      { key: 'sub_gldani_village', ka: 'სოფ. გლდანი' },
-      { key: 'sub_ivertubani', ka: 'ივერთუბანი' }
-    ]
-  },
-  'didube_chughureti': {
-    labelKey: 'district_didube_chughureti',
-    subdistricts: [
-      { key: 'sub_didube', ka: 'დიდუბე' },
-      { key: 'sub_dighmis_massive', ka: 'დიღმის მასივი' },
-      { key: 'sub_kukia', ka: 'კუკია' },
-      { key: 'sub_svaneti_district', ka: 'სვანეთის უბანი' },
-      { key: 'sub_chughureti', ka: 'ჩუღურეთი' }
-    ]
-  },
-  'old_tbilisi': {
-    labelKey: 'district_old_tbilisi',
-    subdistricts: [
-      { key: 'sub_abanotubani', ka: 'აბანოთუბანი' },
-      { key: 'sub_avlabari', ka: 'ავლაბარი' },
-      { key: 'sub_elia', ka: 'ელია' },
-      { key: 'sub_vera', ka: 'ვერა' },
-      { key: 'sub_mtatsminda', ka: 'მთაწმინდა' },
-      { key: 'sub_sololaki', ka: 'სოლოლაკი' }
-    ]
-  }
-};
+/** MSDA msm_z__gis_data_00171 — იგივე სახელები რაც რუკაზე */
+export const TBILISI_DISTRICTS: DistrictData = TBILISI_DISTRICTS_MSDA;
 
 // ბათუმის უბნები
 export const BATUMI_DISTRICTS: DistrictData = {
@@ -125,37 +53,12 @@ export const BATUMI_DISTRICTS: DistrictData = {
   }
 };
 
-// ქუთაისის უბნები
+// ქუთაისის უბნები — MSDA msm_z__gis_data_00175
 export const KUTAISI_DISTRICTS: DistrictData = {
-  'kutaisi_center': {
-    labelKey: 'district_kutaisi_center',
-    subdistricts: [
-      { key: 'sub_kutaisi_centri', ka: 'ცენტრი' },
-      { key: 'sub_tetri_khidi', ka: 'თეთრი ხიდი' },
-      { key: 'sub_balakhvani', ka: 'ბალახვანი' },
-      { key: 'sub_ukhimerioni', ka: 'უხიმერიონი' },
-      { key: 'sub_gaenati', ka: 'გაენათი' }
-    ]
+  kutaisi_districts: {
+    labelKey: 'district_kutaisi_districts',
+    subdistricts: [...KUTAISI_OFFICIAL_DISTRICTS],
   },
-  'kutaisi_west': {
-    labelKey: 'district_kutaisi_west',
-    subdistricts: [
-      { key: 'sub_nikea', ka: 'ნიკეა' },
-      { key: 'sub_saqvavile', ka: 'საქვავილე' },
-      { key: 'sub_gutis_gamziri', ka: 'გუთის გამზირი' },
-      { key: 'sub_jvaris_ubani', ka: 'ჯვარის უბანი' }
-    ]
-  },
-  'kutaisi_east': {
-    labelKey: 'district_kutaisi_east',
-    subdistricts: [
-      { key: 'sub_sulori', ka: 'სულორი' },
-      { key: 'sub_avtosadguri_kutaisi', ka: 'ავტოსადგური' },
-      { key: 'sub_rionhesi', ka: 'რიონჰესი' },
-      { key: 'sub_gumati', ka: 'გუმათი' },
-      { key: 'sub_sachkhere_gza', ka: 'საჩხერის გზა' }
-    ]
-  }
 };
 
 // რუსთავის უბნები
@@ -226,20 +129,26 @@ export default function TbilisiDistrictSelector({
   const DISTRICTS = CITY_DISTRICTS_MAP[city] || TBILISI_DISTRICTS;
   const translationPrefix = city === 'თბილისი' ? 'tbilisi' : city === 'ბათუმი' ? 'batumi' : city === 'ქუთაისი' ? 'kutaisi' : 'rustavi';
 
-  // უბნის key-დან ვიპოვოთ
+  useEffect(() => {
+    if (selectedDistrict) setExpandedDistrict(selectedDistrict);
+  }, [selectedDistrict]);
+
   const getSubdistrictKey = (kaName: string): string => {
+    const normalizedKa = city === 'თბილისი' ? normalizeTbilisiSubdistrictKa(kaName) : kaName;
     for (const district of Object.values(DISTRICTS)) {
-      const sub = district.subdistricts.find(s => s.ka === kaName);
+      const sub = district.subdistricts.find(
+        (item) => item.ka === normalizedKa || item.ka === kaName
+      );
       if (sub) return sub.key;
     }
     return kaName;
   };
 
-  // უბნის თარგმნა
   const translateSubdistrict = (kaName: string): string => {
-    const key = getSubdistrictKey(kaName);
+    const normalizedKa = city === 'თბილისი' ? normalizeTbilisiSubdistrictKa(kaName) : kaName;
+    const key = getSubdistrictKey(normalizedKa);
     const translated = t(`${translationPrefix}.${key}`);
-    return translated === `${translationPrefix}.${key}` ? kaName : translated;
+    return translated === `${translationPrefix}.${key}` ? normalizedKa : translated;
   };
 
   // რაიონის არჩევა (მთლიანი)
@@ -254,9 +163,20 @@ export default function TbilisiDistrictSelector({
   };
 
   // უბნის არჩევა/მოხსნა - ვინახავთ ქართულ key-ს
+  const isTbilisiSubdistrictSelected = (subKa: string) =>
+    selectedSubdistricts.some((s) =>
+      city === 'თბილისი' ? normalizeTbilisiSubdistrictKa(s) === subKa : s === subKa
+    );
+
   const handleSubdistrictToggle = (subdistrictKa: string) => {
-    if (selectedSubdistricts.includes(subdistrictKa)) {
-      onSubdistrictsChange(selectedSubdistricts.filter(s => s !== subdistrictKa));
+    if (isTbilisiSubdistrictSelected(subdistrictKa)) {
+      onSubdistrictsChange(
+        selectedSubdistricts.filter((s) =>
+          city === 'თბილისი'
+            ? normalizeTbilisiSubdistrictKa(s) !== subdistrictKa
+            : s !== subdistrictKa
+        )
+      );
     } else {
       onSubdistrictsChange([...selectedSubdistricts, subdistrictKa]);
     }
@@ -268,15 +188,19 @@ export default function TbilisiDistrictSelector({
     if (!district) return;
     
     const allKaNames = district.subdistricts.map(s => s.ka);
-    const allSelected = allKaNames.every(s => selectedSubdistricts.includes(s));
+    const allSelected = allKaNames.every((s) => isTbilisiSubdistrictSelected(s));
     if (allSelected) {
-      // წავშალოთ ყველა
-      onSubdistrictsChange(selectedSubdistricts.filter(s => !allKaNames.includes(s)));
+      onSubdistrictsChange(
+        selectedSubdistricts.filter((s) =>
+          city === 'თბილისი'
+            ? !allKaNames.some((ka) => normalizeTbilisiSubdistrictKa(s) === ka)
+            : !allKaNames.includes(s)
+        )
+      );
     } else {
-      // დავამატოთ ყველა
       const newSubs = [...selectedSubdistricts];
-      allKaNames.forEach(s => {
-        if (!newSubs.includes(s)) newSubs.push(s);
+      allKaNames.forEach((s) => {
+        if (!isTbilisiSubdistrictSelected(s)) newSubs.push(s);
       });
       onSubdistrictsChange(newSubs);
     }
@@ -293,8 +217,8 @@ export default function TbilisiDistrictSelector({
           const isExpanded = expandedDistrict === key;
           const isSelected = selectedDistrict === key;
           const allKaNames = district.subdistricts.map(s => s.ka);
-          const allSubsSelected = allKaNames.every(s => selectedSubdistricts.includes(s));
-          const someSubsSelected = allKaNames.some(s => selectedSubdistricts.includes(s));
+          const allSubsSelected = allKaNames.every((s) => isTbilisiSubdistrictSelected(s));
+          const someSubsSelected = allKaNames.some((s) => isTbilisiSubdistrictSelected(s));
           
           return (
             <div key={key} className="border-b border-slate-100 last:border-b-0">
@@ -346,7 +270,7 @@ export default function TbilisiDistrictSelector({
               {isExpanded && (
                 <div className="bg-slate-50 px-3 py-2 grid grid-cols-2 gap-1">
                   {district.subdistricts.map((sub) => {
-                    const isSubSelected = selectedSubdistricts.includes(sub.ka);
+                    const isSubSelected = isTbilisiSubdistrictSelected(sub.ka);
                     return (
                       <label 
                         key={sub.key} 

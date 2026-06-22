@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   
   // Register state
+  const [regName, setRegName] = React.useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regPhone, setRegPhone] = useState('');
@@ -37,6 +38,7 @@ export default function LoginPage() {
     register: mounted ? t('register') : 'Register',
     email: mounted ? t('email') : 'Email',
     phone: mounted ? t('phone') : 'Phone',
+    fullName: mounted ? t('full_name') : 'Full name',
     submit: mounted ? t('submit') : 'Submit',
     alreadyHaveAccount: mounted ? t('alreadyHaveAccount') : 'Already have an account?',
     noAccount: mounted ? t('noAccount') : 'No account?'
@@ -61,13 +63,19 @@ export default function LoginPage() {
     setError(null);
     setRegSuccess(null);
     try {
-      const res = await register({ email: regEmail, password: regPassword, phone: regPhone || undefined });
+      const res = await register({
+        email: regEmail,
+        password: regPassword,
+        phone: regPhone || undefined,
+        name: regName.trim() || undefined,
+      });
       // ახალი ნაკადი — ანგარიში ელოდება ადმინის დამტკიცებას
       if (res?.token && res?.user) {
         setAuth(res.token, res.user);
         router.push('/');
       } else {
         setRegSuccess(res?.message || t('register_pending_desc'));
+        setRegName('');
         setRegEmail('');
         setRegPassword('');
         setRegPhone('');
@@ -167,6 +175,17 @@ export default function LoginPage() {
         ) : (
           /* რეგისტრაციის ფორმა */
           <div className="grid gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{labels.fullName}</label>
+              <input
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                placeholder={t('your_name')}
+                type="text"
+                value={regName}
+                onChange={(e) => setRegName(e.target.value)}
+                autoComplete="name"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">{labels.email} *</label>
               <input

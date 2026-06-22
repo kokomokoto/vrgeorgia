@@ -7,6 +7,7 @@ import { PageView } from '../models/PageView.js';
 import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import { requireAuth } from '../middleware/auth.js';
 import { normalizeTourLink } from '../utils/tourLink.js';
+import { syncAgentProfileForUser, backfillMissingAgentProfiles } from '../services/agentProfile.js';
 
 const router = express.Router();
 
@@ -164,6 +165,8 @@ router.put('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
     }
+
+    await syncAgentProfileForUser(user);
     
     await writeAudit(req.user.id, 'user.updated', 'user', req.params.id, { role, email, phone, name });
     res.json(user);
@@ -182,9 +185,8 @@ router.put('/users/:id/approve', requireAuth, adminMiddleware, async (req, res) 
     ).select('-passwordHash');
     if (!user) return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
 
-    // აგენტის შემთხვევაში — გავააქტიუროთ პროფილი
     if (user.role === 'agent') {
-      await Agent.findOneAndUpdate({ user: user._id }, { active: true });
+      await syncAgentProfileForUser(user, { forceActive: true });
     }
 
     await writeAudit(req.user.id, 'user.approved', 'user', req.params.id);
@@ -243,6 +245,8 @@ router.delete('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
 // Get all agents with pagination
 router.get('/agents', requireAuth, adminMiddleware, async (req, res) => {
   try {
+    await backfillMissingAgentProfiles();
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const search = req.query.search || '';

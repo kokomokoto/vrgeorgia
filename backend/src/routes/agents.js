@@ -3,6 +3,7 @@ import Agent from '../models/Agent.js';
 import { Property } from '../models/Property.js';
 import { requireAuth } from '../middleware/auth.js';
 import { uploadAgentPhoto } from '../services/cloudinary.js';
+import { backfillMissingAgentProfiles } from '../services/agentProfile.js';
 
 const router = express.Router();
 
@@ -11,6 +12,8 @@ const upload = uploadAgentPhoto;
 // Get all agents (public)
 router.get('/', async (req, res) => {
   try {
+    await backfillMissingAgentProfiles();
+
     const { city, specialization, minRating, page = 1, limit = 20 } = req.query;
     
     const filter = { active: true };

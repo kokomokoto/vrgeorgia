@@ -73,12 +73,16 @@ export default function RegisterPage() {
       </div>
 
       <div className="mt-4 grid gap-2">
-        <input
-          className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-          placeholder={t('full_name')}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">{t('full_name')}{role === 'agent' ? ' *' : ''}</label>
+          <input
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+            placeholder={t('your_name')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+          />
+        </div>
         <input
           className="rounded-md border border-slate-200 px-3 py-2 text-sm"
           placeholder={t('email')}
@@ -134,6 +138,11 @@ export default function RegisterPage() {
           onClick={async () => {
             setLoading(true);
             setError(null);
+            if (role === 'agent' && !name.trim()) {
+              setError(t('error_name_required'));
+              setLoading(false);
+              return;
+            }
             try {
               const data: any = { email, password, phone, name, role };
               if (role === 'agent') {

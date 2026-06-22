@@ -149,12 +149,17 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
           </div>
         </div>
       ) : (
-        <img
-          src={currentUrl}
-          alt={`Photo ${index + 1}`}
-          className="max-h-[90vh] max-w-[90vw] object-contain"
+        <div
+          className="flex h-[min(78vh,calc(100dvh-14rem))] w-[min(92vw,1400px)] max-w-[calc(100vw-7rem)] items-center justify-center"
           onClick={(e) => e.stopPropagation()}
-        />
+        >
+          <img
+            src={currentUrl}
+            alt={`Photo ${index + 1}`}
+            className="h-full w-full object-contain select-none"
+            draggable={false}
+          />
+        </div>
       )}
       
       {photoCount > 1 && (
@@ -802,22 +807,16 @@ function PropertyDetailInner() {
                   if (usePhotoHero) setHoverPhotoIndex(null);
                 }}
                 onClick={() => {
-                  if (usePhotoHero) {
-                    setHoverPhotoIndex(null);
-                    setHeroPhotoIndex(idx);
-                  } else {
-                    setLightboxIndex(idx);
-                  }
+                  setHoverPhotoIndex(null);
+                  setHeroPhotoIndex(idx);
+                  setLightboxIndex(idx);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    if (usePhotoHero) {
-                      setHoverPhotoIndex(null);
-                      setHeroPhotoIndex(idx);
-                    } else {
-                      setLightboxIndex(idx);
-                    }
+                    setHoverPhotoIndex(null);
+                    setHeroPhotoIndex(idx);
+                    setLightboxIndex(idx);
                   }
                 }}
               >

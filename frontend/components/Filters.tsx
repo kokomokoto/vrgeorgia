@@ -1404,16 +1404,6 @@ export function Filters({
         <FilterDropdownLayoutContext.Provider value={{ inline: true, spacious: true }}>
           <div className="space-y-5">
             <div className={extendedGridClass}>
-              {/* რეგიონი / ქალაქი */}
-              <FilterDropdown
-                label={`${labels.region} / ${labels.city}`}
-                summary={citySummary()}
-                isActive={cityActive}
-                onClear={clearCityFilter}
-              >
-                {renderLocationFilters()}
-              </FilterDropdown>
-
               <FilterDropdown label="🏗️ აშენება/რემონტი" summary={yearSummary()} isActive={yearActive} onClear={clearYearFilter}>
                 <div className="space-y-4">
                   <div>
@@ -1428,85 +1418,6 @@ export function Filters({
                     <div className="grid grid-cols-2 gap-2">
                       <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="დან" value={value.minRenovationYear} onChange={(e) => set('minRenovationYear', e.target.value)} />
                       <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="მდე" value={value.maxRenovationYear} onChange={(e) => set('maxRenovationYear', e.target.value)} />
-                    </div>
-                  </div>
-                </div>
-              </FilterDropdown>
-
-              <FilterDropdown label={t('filter_rooms')} summary={roomsSummary()} isActive={roomsActive || bedroomsActive || balconiesActive} onClear={clearRoomsFilter}>
-                <div className="space-y-3">
-                  <div className="text-xs text-slate-500 mb-2">{t('filter_choose_rooms')}</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['1', '2', '3', '4', '5', '6'].map((r) => {
-                      const isSelected = value.rooms.includes(r);
-                      const displayLabel = r === '6' ? '6+' : r;
-                      return (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => {
-                            const nextRooms = isSelected ? value.rooms.filter((room) => room !== r) : [...value.rooms, r].sort((a, b) => Number(a) - Number(b));
-                            const nextRoomNums = nextRooms.map((room) => Number(room)).filter((n) => !Number.isNaN(n));
-                            const maxRoom = nextRoomNums.length > 0 ? Math.max(...nextRoomNums) : null;
-                            const openEnded = nextRooms.includes('6');
-                            const nextBedrooms = value.bedrooms.filter((b) => {
-                              if (openEnded) return true;
-                              if (maxRoom === null) return false;
-                              return Number(b) <= maxRoom;
-                            });
-                            onChange({ ...value, rooms: nextRooms, bedrooms: nextBedrooms });
-                          }}
-                          className={`min-w-[2.5rem] flex-1 py-2.5 rounded-lg text-sm font-medium ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}
-                        >
-                          {displayLabel}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="border-t border-slate-100 pt-3">
-                    <div className="text-xs text-slate-500 mb-2">{t('filter_choose_bedrooms')}</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {['1', '2', '3', '4', '5', '6'].map((r) => {
-                        const isSelected = value.bedrooms.includes(r);
-                        const roomNumber = Number(r);
-                        const isDisabled = !hasOpenEndedRooms && maxAllowedBedrooms !== null && roomNumber > maxAllowedBedrooms;
-                        const displayLabel = r === '6' ? '6+' : r;
-                        return (
-                          <button
-                            key={r}
-                            type="button"
-                            disabled={isDisabled}
-                            onClick={() => {
-                              const nextBedrooms = isSelected ? value.bedrooms.filter((bedroom) => bedroom !== r) : [...value.bedrooms, r].sort((a, b) => Number(a) - Number(b));
-                              onChange({ ...value, bedrooms: nextBedrooms });
-                            }}
-                            className={`min-w-[2.5rem] flex-1 py-2.5 rounded-lg text-sm font-medium ${isDisabled ? 'opacity-60 cursor-not-allowed' : isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}
-                          >
-                            {displayLabel}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="border-t border-slate-100 pt-3">
-                    <div className="text-xs text-slate-500 mb-2">{t('filter_balcony_count')}</div>
-                    <div className="flex gap-1.5">
-                      {['1', '2', '3'].map((b) => {
-                        const isSelected = value.balconies.includes(b);
-                        return (
-                          <button
-                            key={b}
-                            type="button"
-                            onClick={() => {
-                              const next = isSelected ? value.balconies.filter((x) => x !== b) : [...value.balconies, b].sort((a, c) => Number(a) - Number(c));
-                              onChange({ ...value, balconies: next });
-                            }}
-                            className={`flex-1 py-2.5 rounded-lg text-sm font-medium ${isSelected ? 'bg-orange-600 text-white' : 'bg-slate-100'}`}
-                          >
-                            {b}
-                          </button>
-                        );
-                      })}
                     </div>
                   </div>
                 </div>

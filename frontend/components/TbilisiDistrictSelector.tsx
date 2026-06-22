@@ -16,41 +16,25 @@ type DistrictData = Record<string, {
 /** MSDA msm_z__gis_data_00171 — იგივე სახელები რაც რუკაზე */
 export const TBILISI_DISTRICTS: DistrictData = TBILISI_DISTRICTS_MSDA;
 
-// ბათუმის უბნები
+// ბათუმის უბნები — ოფიციალური სია (ლოკაციის ფილტრი / ატვირთვა)
 export const BATUMI_DISTRICTS: DistrictData = {
-  'batumi_center': {
-    labelKey: 'district_batumi_center',
+  batumi_districts: {
+    labelKey: 'district_batumi_districts',
     subdistricts: [
-      { key: 'sub_old_batumi', ka: 'ძველი ბათუმი' },
-      { key: 'sub_new_boulevard', ka: 'ახალი ბულვარი' },
-      { key: 'sub_batumi_boulevard', ka: 'ბათუმის ბულვარი' },
-      { key: 'sub_parnavaz', ka: 'ფარნავაზ მეფე' },
-      { key: 'sub_hesi', ka: 'ჰესი' }
-    ]
+      { key: 'sub_airport', ka: 'აეროპორტის უბანი' },
+      { key: 'sub_agmashenebeli', ka: 'აღმაშენებლის უბანი' },
+      { key: 'sub_bagrationi', ka: 'ბაგრატიონის უბანი' },
+      { key: 'sub_boni_gorodoki', ka: 'ბონი-გოროდოკის უბანი' },
+      { key: 'sub_tamari', ka: 'თამარის დასახლება' },
+      { key: 'sub_kakhaberi', ka: 'კახაბრის უბანი' },
+      { key: 'sub_rustaveli', ka: 'რუსთაველის უბანი' },
+      { key: 'sub_old_batumi', ka: 'ძველი ბათუმის უბანი' },
+      { key: 'sub_khimshiashvili', ka: 'ხიმშიაშვილის უბანი' },
+      { key: 'sub_javakhishvili', ka: 'ჯავახიშვილის უბანი' },
+      { key: 'sub_makhinjauri', ka: 'მახინჯაური' },
+      { key: 'sub_pivzavodi', ka: 'პივზავოდის უბანი' },
+    ],
   },
-  'batumi_inner': {
-    labelKey: 'district_batumi_inner',
-    subdistricts: [
-      { key: 'sub_khimshiashvili', ka: 'ხიმშიაშვილი' },
-      { key: 'sub_gorgiladze', ka: 'გორგილაძე' },
-      { key: 'sub_javakhishvili', ka: 'ჯავახიშვილი' },
-      { key: 'sub_26_may', ka: '26 მაისი' },
-      { key: 'sub_bagrationi', ka: 'ბაგრატიონი' },
-      { key: 'sub_rustaveli_batumi', ka: 'რუსთაველი' },
-      { key: 'sub_inasaridze', ka: 'ინასარიძე' }
-    ]
-  },
-  'batumi_suburbs': {
-    labelKey: 'district_batumi_suburbs',
-    subdistricts: [
-      { key: 'sub_angisi', ka: 'ანგისი' },
-      { key: 'sub_feria', ka: 'ფერია' },
-      { key: 'sub_boni_gorodoki', ka: 'ბონი-გოროდოკი' },
-      { key: 'sub_airport_batumi', ka: 'აეროპორტი' },
-      { key: 'sub_kakhaberi', ka: 'კახაბერი' },
-      { key: 'sub_agresi', ka: 'აგრეში' }
-    ]
-  }
 };
 
 // ქუთაისის უბნები — MSDA msm_z__gis_data_00175

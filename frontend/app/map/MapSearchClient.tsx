@@ -11,7 +11,7 @@ import { MapOverlaySearch } from '@/components/MapOverlaySearch';
 import { MapView } from '@/components/MapView';
 import { PropertyMapListRow } from '@/components/PropertyMapListRow';
 import { filterPropertiesByMapBounds, mapBoundsEqual, type MapBounds } from '@/lib/mapBounds';
-import { searchParamsToFiltersState } from '@/lib/mapQuery';
+import { filtersToPropertyQuery, omitPriceAreaFilters, searchParamsToFiltersState } from '@/lib/mapQuery';
 
 export default function MapSearchClient() {
   const { t, i18n } = useTranslation();
@@ -35,6 +35,7 @@ export default function MapSearchClient() {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [hoveredId, setHoveredId] = React.useState<string | null>(null);
   const [mapBounds, setMapBounds] = React.useState<MapBounds | null>(null);
+  const [rangeProperties, setRangeProperties] = React.useState<Property[]>([]);
   const rowRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
   const listInViewport = React.useMemo(() => {
@@ -73,11 +74,7 @@ export default function MapSearchClient() {
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      listProperties({
-        ...filters,
-        sort: sortBy,
-        lang: i18n.language
-      })
+      listProperties(filtersToPropertyQuery(filters, sortBy, i18n.language))
         .then((r) => {
           if (!alive) return;
           setProperties(r.properties);
@@ -101,6 +98,26 @@ export default function MapSearchClient() {
     };
   }, [filters, sortBy, i18n.language]);
 
+  const rangeSourceKey = React.useMemo(
+    () => JSON.stringify(omitPriceAreaFilters(filters)),
+    [filters]
+  );
+
+  React.useEffect(() => {
+    let alive = true;
+    const rangeFilters = omitPriceAreaFilters(filters);
+    listProperties(filtersToPropertyQuery(rangeFilters, 'date_desc', i18n.language))
+      .then((r) => {
+        if (alive) setRangeProperties(r.properties);
+      })
+      .catch(() => {
+        if (alive) setRangeProperties([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [rangeSourceKey, i18n.language]);
+
   React.useEffect(() => {
     if (!selectedId) return;
     const el = rowRefs.current[selectedId];
@@ -111,7 +128,7 @@ export default function MapSearchClient() {
     <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50 dark:bg-zinc-950">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <aside className="max-h-[min(50vh,420px)] shrink-0 overflow-y-auto border-b border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:w-[min(26rem,92vw)] lg:max-w-md lg:shrink-0 lg:border-b-0 lg:border-r">
-          <Filters variant="mapSidebar" value={filters} onChange={setFilters} />
+          <Filters variant="mapSidebar" value={filters} onChange={setFilters} rangeProperties={rangeProperties} />
         </aside>
 
         <section className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-900 lg:flex-none lg:w-[min(26rem,36vw)] lg:max-w-md lg:border-b-0 lg:border-r">

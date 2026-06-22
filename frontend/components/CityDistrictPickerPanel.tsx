@@ -11,7 +11,7 @@ const FLAT_DISTRICT_CITY_KEYS: Record<string, string> = {
 
 const TBILISI_COLUMN_KEYS = [
   ['vake_saburtalo'],
-  ['isani_samgori'],
+  ['isani_samgori', 'krtsanisi'],
   ['gldani_nadzaladevi'],
   ['didube_chughureti', 'old_tbilisi'],
 ] as const;
@@ -204,6 +204,26 @@ function FlatDistrictPanel({
 
   if (q && visibleSubs.length === 0) return null;
 
+  const allKaNames = district.subdistricts.map((s) => s.ka);
+  const districtOnlySelected = selectedDistrict === districtKey && selectedSubdistricts.length === 0;
+  const allSelected = districtOnlySelected || allKaNames.every((s) => selectedSubdistricts.includes(s));
+  const someSelected = districtOnlySelected || allKaNames.some((s) => selectedSubdistricts.includes(s));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      onSelectionChange(
+        selectedDistrict === districtKey ? '' : selectedDistrict,
+        selectedSubdistricts.filter((s) => !allKaNames.includes(s)),
+      );
+      return;
+    }
+    const next = [...selectedSubdistricts];
+    allKaNames.forEach((s) => {
+      if (!next.includes(s)) next.push(s);
+    });
+    onSelectionChange(districtKey, next);
+  };
+
   const toggleSub = (ka: string) => {
     if (selectedSubdistricts.includes(ka)) {
       const nextSubs = selectedSubdistricts.filter((s) => s !== ka);
@@ -215,8 +235,8 @@ function FlatDistrictPanel({
 
   return (
     <section>
-      <h3 className="mb-4 text-base font-semibold text-slate-800 dark:text-zinc-100">{sectionTitle}</h3>
-      <div className="grid grid-cols-1 gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
+      <CheckboxControl checked={allSelected} indeterminate={someSelected && !allSelected} onChange={toggleAll} label={sectionTitle} bold />
+      <div className="mt-3 grid grid-cols-1 gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
         {visibleSubs.map((sub) => (
           <CheckboxControl
             key={sub.key}

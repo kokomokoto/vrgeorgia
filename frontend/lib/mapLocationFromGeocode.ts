@@ -260,3 +260,28 @@ export async function resolveLocationFromCoords(
 
   return base;
 }
+
+/** მისამართის ძებნიდან არჩევა — კოორდინატებით MSDA უბანი + Nominatim ტექსტი */
+export async function resolveLocationFromSearchPick(
+  lat: number,
+  lng: number,
+  searchResult: NominatimResult,
+  cityToRegion: Record<string, string> = CITY_REGION_MAP,
+): Promise<ReturnType<typeof mergeParsedLocation>> {
+  const fromSearch = mergeParsedLocation(parseLocationFromNominatim(searchResult), cityToRegion);
+  const fromCoords = await resolveLocationFromCoords(lat, lng, cityToRegion);
+
+  if (!fromCoords) return fromSearch;
+
+  return {
+    ...fromCoords,
+    label: fromSearch.label || fromCoords.label,
+    street: fromSearch.street || fromCoords.street,
+    city: fromCoords.city || fromSearch.city,
+    region: fromCoords.region || fromSearch.region,
+    tbilisiDistrict: fromCoords.tbilisiDistrict || fromSearch.tbilisiDistrict,
+    tbilisiSubdistricts: fromCoords.tbilisiSubdistricts.length
+      ? fromCoords.tbilisiSubdistricts
+      : fromSearch.tbilisiSubdistricts,
+  };
+}

@@ -1,11 +1,38 @@
+/** sqm ან houseSqm — ბარათზე ფასის გამოთვლის ლოგიკას ემთხვევა */
+function buildAreaSqmExpr() {
+  return {
+    $let: {
+      vars: {
+        sqm: { $ifNull: ['$sqm', 0] },
+        houseSqm: { $ifNull: ['$houseSqm', 0] },
+      },
+      in: {
+        $cond: [
+          { $gt: ['$$sqm', 0] },
+          '$$sqm',
+          { $cond: [{ $gt: ['$$houseSqm', 0] }, '$$houseSqm', 0] },
+        ],
+      },
+    },
+  };
+}
+
 /** ფასის ეფექტური მნიშვნელობა (სრული ან კვ.მ-ზე) MongoDB $expr-ისთვის */
 function buildBasePriceExpr(priceType) {
+  const areaSqm = buildAreaSqmExpr();
+
   if (priceType === 'per_sqm') {
     return {
       $cond: [
         { $eq: ['$priceType', 'per_sqm'] },
         '$price',
-        { $divide: ['$price', '$sqm'] },
+        {
+          $cond: [
+            { $gt: [areaSqm, 0] },
+            { $divide: ['$price', areaSqm] },
+            null,
+          ],
+        },
       ],
     };
   }
@@ -14,7 +41,13 @@ function buildBasePriceExpr(priceType) {
     return {
       $cond: [
         { $eq: ['$priceType', 'per_sqm'] },
-        { $multiply: ['$price', { $ifNull: ['$sqm', 1] }] },
+        {
+          $cond: [
+            { $gt: [areaSqm, 0] },
+            { $multiply: ['$price', areaSqm] },
+            null,
+          ],
+        },
         '$price',
       ],
     };
@@ -51,19 +84,25 @@ export function applyPriceRangeFilter(filter, { minPrice, maxPrice, priceType, p
   if (!minPrice && !maxPrice) return;
 
   const filterCurrency = priceCurrency === 'GEL' ? 'GEL' : 'USD';
+  const effectivePriceType = priceType === 'per_sqm' ? 'per_sqm' : 'total';
 
-  if (priceType === 'per_sqm') {
-    filter.$and.push({ sqm: { $gt: 0 } });
+  if (effectivePriceType === 'per_sqm') {
+    filter.$and.push({
+      $or: [{ sqm: { $gt: 0 } }, { houseSqm: { $gt: 0 } }],
+    });
   }
 
-  const baseExpr = buildBasePriceExpr(priceType);
+  const baseExpr = buildBasePriceExpr(effectivePriceType);
   const convertedExpr = buildConvertedPriceExpr(baseExpr, filterCurrency, usdToGelRate);
 
-  const priceConditions = [];
+  const priceConditions = [
+    { $ne: [convertedExpr, null] },
+    { $gt: [convertedExpr, 0] },
+  ];
   if (minPrice) priceConditions.push({ $gte: [convertedExpr, Number(minPrice)] });
   if (maxPrice) priceConditions.push({ $lte: [convertedExpr, Number(maxPrice)] });
 
-  const expr = priceConditions.length === 1 ? priceConditions[0] : { $and: priceConditions };
+  const expr = { $and: priceConditions };
 
   if (filter.$expr) {
     filter.$expr = { $and: [filter.$expr, expr] };

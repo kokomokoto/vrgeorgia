@@ -19,7 +19,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
-import { mergeParsedLocation, parseLocationFromNominatim, resolveLocationFromCoords } from '@/lib/mapLocationFromGeocode';
+import { mergeParsedLocation, resolveLocationFromCoords, resolveLocationFromSearchPick } from '@/lib/mapLocationFromGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import {
   applyConstructionYearChange,
@@ -46,6 +46,13 @@ import { PropertyVirtualTourFields } from '@/components/PropertyVirtualTourField
 import { FormattedNumberInput } from '@/components/FormattedNumberInput';
 import { formatNumberForDisplay } from '@/lib/formatNumberInput';
 import type { Property } from '@/lib/types';
+import {
+  clearUploadDraftStorage,
+  createEmptyUploadDraft,
+  loadUploadDraft,
+  saveUploadDraft,
+  type UploadDraft,
+} from '@/lib/uploadDraftStorage';
 
 // საქართველოს რეგიონები
 const GEORGIAN_REGIONS = [
@@ -113,12 +120,12 @@ export default function UploadPage() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const [hydrated, setHydrated] = React.useState(false);
-  React.useEffect(() => setHydrated(true), []);
+  const [draftHydrated, setDraftHydrated] = React.useState(false);
+  const [draftRestored, setDraftRestored] = React.useState(false);
 
   // მაკლერის პროფილი — დეფოლტად საკონტაქტო ტელ/ელფოსტა (რედაქტირებადი)
   React.useEffect(() => {
-    if (!hydrated || !user || user.role !== 'agent') return;
+    if (!draftHydrated || !user || user.role !== 'agent') return;
     let cancelled = false;
     const apply = (email: string, phone: string) => {
       if (cancelled) return;
@@ -131,7 +138,7 @@ export default function UploadPage() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, user]);
+  }, [draftHydrated, user]);
 
   // ეტაპი
   const [currentStep, setCurrentStep] = React.useState(1);
@@ -234,6 +241,207 @@ export default function UploadPage() {
   const photoInputRef = React.useRef<HTMLInputElement>(null);
   const [photoFileDropActive, setPhotoFileDropActive] = React.useState(false);
   const fileDropDepthRef = React.useRef(0);
+
+  const applyUploadDraft = React.useCallback((draft: UploadDraft) => {
+    setCurrentStep(draft.currentStep || 1);
+    setTitle(draft.title);
+    setDesc(draft.desc);
+    setPrice(draft.price);
+    setPriceCurrency(draft.priceCurrency);
+    setPriceType(draft.priceType);
+    setCity(draft.city);
+    setStreet(draft.street);
+    setRegion(draft.region);
+    setTbilisiDistrict(draft.tbilisiDistrict);
+    setTbilisiSubdistricts(draft.tbilisiSubdistricts);
+    setSqm(draft.sqm);
+    setHouseSqm(draft.houseSqm);
+    setType(draft.type);
+    setDealType(draft.dealType);
+    setExteriorLink(draft.exteriorLink);
+    setInteriorLink(draft.interiorLink);
+    setTourLink(draft.tourLink);
+    setContactPhone(draft.contactPhone);
+    setContactEmail(draft.contactEmail);
+    setLat(draft.lat);
+    setLng(draft.lng);
+    setAddressMapFill({ key: draft.addressMapFillKey, text: draft.addressMapFillText });
+    setCadastralCode(draft.cadastralCode);
+    setCadastralHidden(draft.cadastralHidden);
+    setRoomCount(draft.roomCount);
+    setBedroomCount(draft.bedroomCount);
+    setFloor(draft.floor);
+    setTotalFloors(draft.totalFloors);
+    setConstructionYear(draft.constructionYear);
+    setRenovationYear(draft.renovationYear);
+    setRenovationStatus(draft.renovationStatus);
+    setBuildingProject(draft.buildingProject);
+    setBalcony(draft.balcony);
+    setLoggia(draft.loggia);
+    setBathroom(draft.bathroom);
+    setBasement(draft.basement);
+    setElevator(draft.elevator);
+    setFurniture(draft.furniture);
+    setGarage(draft.garage);
+    setCentralHeating(draft.centralHeating);
+    setNaturalGas(draft.naturalGas);
+    setStorage(draft.storage);
+    setInternet(draft.internet);
+    setElectricity(draft.electricity);
+    setWater(draft.water);
+    setSecurity(draft.security);
+    setAirConditioner(draft.airConditioner);
+    setFireplace(draft.fireplace);
+    setPool(draft.pool);
+    setGarden(draft.garden);
+    setTerrace(draft.terrace);
+    setIsolatedKitchen(draft.isolatedKitchen);
+    setHeatingCooling(draft.heatingCooling);
+    setPrivateNotes(draft.privateNotes);
+  }, []);
+
+  React.useEffect(() => {
+    const draft = loadUploadDraft();
+    if (draft) {
+      applyUploadDraft(draft);
+      setDraftRestored(true);
+    }
+    setDraftHydrated(true);
+  }, [applyUploadDraft]);
+
+  React.useEffect(() => {
+    if (!draftHydrated) return;
+    const timer = window.setTimeout(() => {
+      saveUploadDraft({
+        version: 1,
+        savedAt: Date.now(),
+        currentStep,
+        title,
+        desc,
+        price,
+        priceCurrency,
+        priceType,
+        city,
+        street,
+        region,
+        tbilisiDistrict,
+        tbilisiSubdistricts,
+        sqm,
+        houseSqm,
+        type,
+        dealType,
+        exteriorLink,
+        interiorLink,
+        tourLink,
+        contactPhone,
+        contactEmail,
+        lat,
+        lng,
+        addressMapFillText: addressMapFill.text,
+        addressMapFillKey: addressMapFill.key,
+        cadastralCode,
+        cadastralHidden,
+        roomCount,
+        bedroomCount,
+        floor,
+        totalFloors,
+        constructionYear,
+        renovationYear,
+        renovationStatus,
+        buildingProject,
+        balcony,
+        loggia,
+        bathroom,
+        basement,
+        elevator,
+        furniture,
+        garage,
+        centralHeating,
+        naturalGas,
+        storage,
+        internet,
+        electricity,
+        water,
+        security,
+        airConditioner,
+        fireplace,
+        pool,
+        garden,
+        terrace,
+        isolatedKitchen,
+        heatingCooling,
+        privateNotes,
+      });
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [
+    draftHydrated,
+    currentStep,
+    title,
+    desc,
+    price,
+    priceCurrency,
+    priceType,
+    city,
+    street,
+    region,
+    tbilisiDistrict,
+    tbilisiSubdistricts,
+    sqm,
+    houseSqm,
+    type,
+    dealType,
+    exteriorLink,
+    interiorLink,
+    tourLink,
+    contactPhone,
+    contactEmail,
+    lat,
+    lng,
+    addressMapFill,
+    cadastralCode,
+    cadastralHidden,
+    roomCount,
+    bedroomCount,
+    floor,
+    totalFloors,
+    constructionYear,
+    renovationYear,
+    renovationStatus,
+    buildingProject,
+    balcony,
+    loggia,
+    bathroom,
+    basement,
+    elevator,
+    furniture,
+    garage,
+    centralHeating,
+    naturalGas,
+    storage,
+    internet,
+    electricity,
+    water,
+    security,
+    airConditioner,
+    fireplace,
+    pool,
+    garden,
+    terrace,
+    isolatedKitchen,
+    heatingCooling,
+    privateNotes,
+  ]);
+
+  const clearUploadDraft = React.useCallback(() => {
+    if (!window.confirm(t('upload_draft_clear_confirm'))) return;
+    clearUploadDraftStorage();
+    applyUploadDraft(createEmptyUploadDraft());
+    setPhotoItems([]);
+    setMainPhotoIndex(0);
+    setDraftRestored(false);
+    setError(null);
+  }, [applyUploadDraft, t]);
 
   const photoLayoutKey = photoItems.map((item) => item.id).join('|');
 
@@ -365,7 +573,7 @@ export default function UploadPage() {
     isStep7Complete,
   ].filter(Boolean).length;
 
-  if (!hydrated) {
+  if (!draftHydrated) {
     return <div className="flex items-center justify-center min-h-[400px] text-slate-500">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
     </div>;
@@ -525,6 +733,7 @@ export default function UploadPage() {
         }
       }
 
+      clearUploadDraftStorage();
       router.push(`/property/${propertyId}`);
     } catch (e: unknown) {
       const msg =
@@ -544,12 +753,27 @@ export default function UploadPage() {
   return (
     <div className="w-full min-w-0">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-          <span className="text-3xl">🏠</span>
-          {t('add_property')}
-        </h1>
-        <p className="text-slate-600 mt-1">{t('fill_info_desc')}</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+            <span className="text-3xl">🏠</span>
+            {t('add_property')}
+          </h1>
+          <p className="text-slate-600 mt-1">{t('fill_info_desc')}</p>
+          <p className="text-xs text-slate-500 mt-1">{t('upload_draft_autosave_hint')}</p>
+          {draftRestored && (
+            <p className="mt-2 inline-block rounded-lg bg-amber-50 px-3 py-1.5 text-sm text-amber-800 border border-amber-200">
+              {t('upload_draft_restored')}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={clearUploadDraft}
+          className="shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          ✕ {t('upload_draft_clear')}
+        </button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -696,21 +920,27 @@ export default function UploadPage() {
                   <AddressSearch
                     mapFillFromPick={addressMapFill}
                     placeholder={t('address_search_placeholder')}
-                    onSelect={(searchLat, searchLng, address, result) => {
+                    onSelect={async (searchLat, searchLng, address, result) => {
                       setLat(searchLat);
                       setLng(searchLng);
-                      const parsed = mergeParsedLocation(
-                        parseLocationFromNominatim({
+                      let parsed = await resolveLocationFromSearchPick(
+                        searchLat,
+                        searchLng,
+                        {
                           display_name: result?.display_name || address,
                           address: result?.address,
-                        }),
+                        },
                         CITY_TO_REGION,
                       );
                       if (!parsed.city && address) {
                         const parts = address.split(',').map((p) => p.trim());
-                        if (parts.length > 1) parsed.city = parts[parts.length - 1];
-                        if (!parsed.street) parsed.street = splitStreetFromFullAddress(address, parsed.city);
-                        if (parsed.city) parsed.region = CITY_TO_REGION[parsed.city] || parsed.region;
+                        if (parts.length > 1) parsed = { ...parsed, city: parts[parts.length - 1] };
+                        if (!parsed.street) {
+                          parsed = { ...parsed, street: splitStreetFromFullAddress(address, parsed.city) };
+                        }
+                        if (parsed.city) {
+                          parsed = { ...parsed, region: CITY_TO_REGION[parsed.city] || parsed.region };
+                        }
                       }
                       applyParsedLocation(parsed);
                     }}

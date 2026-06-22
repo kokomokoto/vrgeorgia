@@ -18,7 +18,7 @@ export const DEFAULT_MAP_FILTERS: FiltersState = {
   minPrice: '',
   maxPrice: '',
   priceCurrency: '',
-  priceType: '',
+  priceType: 'total',
   city: '',
   region: '',
   tbilisiDistrict: '',
@@ -62,7 +62,16 @@ export function filtersToPropertyQuery(
     minPrice: filters.minPrice || undefined,
     maxPrice: filters.maxPrice || undefined,
     priceCurrency: filters.priceCurrency || undefined,
-    priceType: filters.priceType || undefined,
+    priceType:
+      filters.minPrice || filters.maxPrice
+        ? filters.priceType === 'per_sqm'
+          ? 'per_sqm'
+          : 'total'
+        : filters.priceType === 'per_sqm'
+          ? 'per_sqm'
+          : filters.priceType === 'total'
+            ? 'total'
+            : undefined,
     city: filters.city || undefined,
     region: filters.region || undefined,
     tbilisiDistrict: filters.tbilisiDistrict || undefined,
@@ -110,7 +119,7 @@ export function searchParamsToFiltersState(sp: URLSearchParams): { filters: Filt
   filters.minPrice = sp.get('minPrice') || '';
   filters.maxPrice = sp.get('maxPrice') || '';
   filters.priceCurrency = sp.get('priceCurrency') || '';
-  filters.priceType = sp.get('priceType') || '';
+  filters.priceType = sp.get('priceType') || 'total';
   filters.city = sp.get('city') || '';
   filters.region = sp.get('region') || '';
   filters.tbilisiDistrict = sp.get('tbilisiDistrict') || '';
@@ -134,6 +143,17 @@ export function searchParamsToFiltersState(sp: URLSearchParams): { filters: Filt
   filters.propertyId = sp.get('propertyId') || '';
   const sort = sp.get('sort') || 'date_desc';
   return { filters, sort };
+}
+
+/** სლაიდერის/ჰისტოგრამის წყარო — ფასი/ფართობის გარეშე (facet-ის ლოგიკა) */
+export function omitPriceAreaFilters(filters: FiltersState): FiltersState {
+  return {
+    ...filters,
+    minPrice: '',
+    maxPrice: '',
+    minSqm: '',
+    maxSqm: '',
+  };
 }
 
 /** `lang` არ უნდა იყოს URL-ში მთავარი გვერდის ბმულზე — SSR vs კლიენტი სხვადასხვა `i18n.language`-ს იძლევა და hydration error-ს იწვევს. `/map` გვერდი ისევ იყენებს `useTranslation().language` API-ზე. */

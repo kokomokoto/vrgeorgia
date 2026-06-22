@@ -30,10 +30,10 @@ export const TBILISI_RAIONI_META: Record<
   string,
   { name: string; zoneKey: string; color: string }
 > = {
-  mtawminda: { name: '\u10DB\u10E2\u10D0\u10EC\u10DB\u10D8\u10DC\u10D3\u10D0', zoneKey: 'raion_mtatsminda', color: '#6366f1' },
+  mtawminda: { name: 'მთაწმინდა', zoneKey: 'raion_mtatsminda', color: '#6366f1' },
   vake: { name: '\u10D5\u10D0\u10D9\u10D4', zoneKey: 'raion_vake', color: '#3b82f6' },
   saburtalo: { name: '\u10E1\u10D0\u10D1\u10E3\u10E0\u10E2\u10D0\u10DA\u10DD', zoneKey: 'raion_saburtalo', color: '#0ea5e9' },
-  krwanisi: { name: '\u10E0\u10D9\u10D8\u10DC\u10D8\u10E1\u10D8', zoneKey: 'raion_krtsanisi', color: '#14b8a6' },
+  krwanisi: { name: 'კრწანისი', zoneKey: 'raion_krtsanisi', color: '#14b8a6' },
   isani: { name: '\u10D8\u10E1\u10D0\u10DC\u10D8', zoneKey: 'raion_isani', color: '#06b6d4' },
   samgori: { name: '\u10E1\u10D0\u10DB\u10D2\u10DD\u10E0\u10D8', zoneKey: 'raion_samgori', color: '#10b981' },
   curureti: { name: '\u10E9\u10E3\u10D2\u10E3\u10E0\u10D4\u10D7\u10D8', zoneKey: 'raion_chughureti', color: '#8b5cf6' },

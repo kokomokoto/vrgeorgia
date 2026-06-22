@@ -7,6 +7,19 @@ import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from './TbilisiDistric
 import { ExtendedSearchModal } from './ExtendedSearchModal';
 import { LocationPickerModal } from './LocationPickerModal';
 import { CITY_REGION_MAP, GEORGIAN_REGIONS, TBILISI_SURROUNDINGS_LABEL } from '@/lib/georgiaLocations';
+import { HistogramRangeSlider } from './HistogramRangeSlider';
+import { useCurrencyRate } from '@/lib/currency';
+import {
+  clampToStep,
+  collectPropertyAreas,
+  collectPropertyPrices,
+  computeHistogramBuckets,
+  computePropertyFilterRanges,
+  rangeStep,
+  resolvePriceFilterType,
+  snapRangeBounds,
+} from '@/lib/propertyFilterRanges';
+import type { Property } from '@/lib/types';
 
 // გარიგების ტიპები
 const DEAL_TYPES = [
@@ -226,6 +239,7 @@ export function Filters({
   onChange,
   variant = 'default',
   onClearAll,
+  rangeProperties,
 }: {
   value: FiltersState;
   onChange: (v: FiltersState) => void;
@@ -233,8 +247,11 @@ export function Filters({
   variant?: 'default' | 'mapSidebar';
   /** მთავარი გვერდი — ყველა ფილტრის გასუფთავება */
   onClearAll?: () => void;
+  /** მიმდინარე ძიების შედეგები (ფასი/ფართობის გარეშე) — სლაიდერის min/max და ჰისტოგრამა */
+  rangeProperties?: Property[];
 }) {
   const { t } = useTranslation();
+  const { rate: usdToGel } = useCurrencyRate();
   const [mounted, setMounted] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [extendedOpen, setExtendedOpen] = React.useState(false);
@@ -243,6 +260,126 @@ export function Filters({
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  const mapSidebar = variant === 'mapSidebar';
+
+  const filterRanges = React.useMemo(() => {
+    if (!mapSidebar || !rangeProperties?.length) return null;
+    return computePropertyFilterRanges(rangeProperties, {
+      priceCurrency: value.priceCurrency || 'USD',
+      priceType: resolvePriceFilterType(value.priceType),
+      usdToGel,
+    });
+  }, [mapSidebar, rangeProperties, value.priceCurrency, value.priceType, usdToGel]);
+
+  const priceSliderBounds = React.useMemo(() => {
+    if (!filterRanges?.price) return null;
+    const step = rangeStep(filterRanges.price.max - filterRanges.price.min, 'price');
+    return { ...snapRangeBounds(filterRanges.price.min, filterRanges.price.max, step), step };
+  }, [filterRanges?.price]);
+
+  const areaSliderBounds = React.useMemo(() => {
+    if (!filterRanges?.area) return null;
+    const step = rangeStep(filterRanges.area.max - filterRanges.area.min, 'area');
+    return { ...snapRangeBounds(filterRanges.area.min, filterRanges.area.max, step), step };
+  }, [filterRanges?.area]);
+
+  const priceSliderValues = React.useMemo(() => {
+    if (!priceSliderBounds) return null;
+    const { min, max, step } = priceSliderBounds;
+    const thumbMin = (raw: string) => {
+      if (!raw) return min;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return min;
+      return Math.min(max, Math.max(min, n));
+    };
+    const curMin = thumbMin(value.minPrice);
+    const curMax = thumbMin(value.maxPrice || String(max));
+    return {
+      min,
+      max,
+      step,
+      curMin: Math.min(curMin, curMax),
+      curMax: Math.max(curMin, curMax),
+    };
+  }, [priceSliderBounds, value.minPrice, value.maxPrice]);
+
+  const areaSliderValues = React.useMemo(() => {
+    if (!areaSliderBounds) return null;
+    const { min, max, step } = areaSliderBounds;
+    const curMin = value.minSqm ? clampToStep(Number(value.minSqm), min, max, step) : min;
+    const curMax = value.maxSqm ? clampToStep(Number(value.maxSqm), min, max, step) : max;
+    return {
+      min,
+      max,
+      step,
+      curMin: Math.min(curMin, curMax),
+      curMax: Math.max(curMin, curMax),
+    };
+  }, [areaSliderBounds, value.minSqm, value.maxSqm]);
+
+  const priceHistogram = React.useMemo(() => {
+    if (!priceSliderBounds || !rangeProperties?.length) return null;
+    const values = collectPropertyPrices(rangeProperties, {
+      priceCurrency: value.priceCurrency || 'USD',
+      priceType: value.priceType,
+      usdToGel,
+    });
+    return computeHistogramBuckets(values, priceSliderBounds.min, priceSliderBounds.max, 28);
+  }, [priceSliderBounds, rangeProperties, value.priceCurrency, value.priceType, usdToGel]);
+
+  const areaHistogram = React.useMemo(() => {
+    if (!areaSliderBounds || !rangeProperties?.length) return null;
+    const values = collectPropertyAreas(rangeProperties);
+    return computeHistogramBuckets(values, areaSliderBounds.min, areaSliderBounds.max, 28);
+  }, [areaSliderBounds, rangeProperties]);
+
+  // ძიების context-ის შეცვლისას — მხოლოდ საზღვრების შეცვლაზე (არა ყოველ keystroke-ზე)
+  const areaBoundsKey = areaSliderBounds
+    ? `${areaSliderBounds.min}:${areaSliderBounds.max}:${areaSliderBounds.step}`
+    : '';
+
+  React.useEffect(() => {
+    if (!mapSidebar || !mounted || !areaSliderBounds) return;
+
+    let nextMinSqm = value.minSqm;
+    let nextMaxSqm = value.maxSqm;
+    let changed = false;
+    const { min, max, step } = areaSliderBounds;
+
+    if (nextMinSqm) {
+      const n = Number(nextMinSqm);
+      if (!Number.isFinite(n) || n < min) {
+        nextMinSqm = '';
+        changed = true;
+      } else {
+        const clamped = clampToStep(n, min, max, step);
+        const normalized = clamped <= min ? '' : String(clamped);
+        if (normalized !== nextMinSqm) {
+          nextMinSqm = normalized;
+          changed = true;
+        }
+      }
+    }
+    if (nextMaxSqm) {
+      const n = Number(nextMaxSqm);
+      if (!Number.isFinite(n) || n > max) {
+        nextMaxSqm = '';
+        changed = true;
+      } else {
+        const clamped = clampToStep(n, min, max, step);
+        const normalized = clamped >= max ? '' : String(clamped);
+        if (normalized !== nextMaxSqm) {
+          nextMaxSqm = normalized;
+          changed = true;
+        }
+      }
+    }
+
+    if (!changed) return;
+    onChange({ ...value, minSqm: nextMinSqm, maxSqm: nextMaxSqm });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- მხოლოდ საზღვრის შეცვლაზე
+  }, [mapSidebar, mounted, areaBoundsKey]);
 
   // Prevent hydration mismatches from i18n keys during SSR.
   // Render a stable shell first, then render translated interactive UI after mount.
@@ -311,15 +448,6 @@ export function Filters({
 
   const set = (k: keyof FiltersState, v: string) => onChange({ ...value, [k]: v });
 
-  const priceSummary = () => {
-    const sym = value.priceCurrency === 'GEL' ? '₾' : '$';
-    const suffix = value.priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : '';
-    if (value.minPrice && value.maxPrice) return `${sym}${Number(value.minPrice).toLocaleString()} – ${sym}${Number(value.maxPrice).toLocaleString()}${suffix}`;
-    if (value.minPrice) return `${sym}${Number(value.minPrice).toLocaleString()}+${suffix}`;
-    if (value.maxPrice) return `${sym}${Number(value.maxPrice).toLocaleString()} ${t('filter_up_to')}${suffix}`;
-    return labels.any;
-  };
-
   const roomsSummary = () => {
     const parts: string[] = [];
     if (value.rooms.length) parts.push(`${value.rooms.join(', ')} ${t('filter_room')}`);
@@ -332,6 +460,17 @@ export function Filters({
     if (value.bedrooms.length) {
       return `${value.bedrooms.join(', ')} ${t('filter_bedroom')}`;
     }
+    return labels.any;
+  };
+
+  const priceSummary = () => {
+    const sym = activePriceCurrency === 'GEL' ? '₾' : '$';
+    const suffix = activePriceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : '';
+    if (value.minPrice && value.maxPrice) {
+      return `${sym}${Number(value.minPrice).toLocaleString()} – ${sym}${Number(value.maxPrice).toLocaleString()}${suffix}`;
+    }
+    if (value.minPrice) return `${sym}${Number(value.minPrice).toLocaleString()}+${suffix}`;
+    if (value.maxPrice) return `${sym}${Number(value.maxPrice).toLocaleString()} ${t('filter_up_to')}${suffix}`;
     return labels.any;
   };
 
@@ -445,7 +584,7 @@ export function Filters({
     return labels.any;
   };
 
-  const priceActive = !!(value.minPrice || value.maxPrice || value.priceCurrency || value.priceType);
+  const priceActive = !!(value.minPrice || value.maxPrice || value.priceType === 'per_sqm');
   const roomsActive = value.rooms.length > 0;
   const bedroomsActive = value.bedrooms.length > 0;
   const balconiesActive = value.balconies.length > 0;
@@ -469,7 +608,7 @@ export function Filters({
     (value.amenities?.length || 0) > 0 || value.has3d === 'true' || value.hasPhotos === 'true';
 
   const clearPriceFilter = () =>
-    onChange({ ...value, minPrice: '', maxPrice: '', priceCurrency: '', priceType: '' });
+    onChange({ ...value, minPrice: '', maxPrice: '', priceCurrency: 'USD', priceType: 'total' });
   const clearAreaFilter = () => onChange({ ...value, minSqm: '', maxSqm: '' });
   const clearCityFilter = () =>
     onChange({
@@ -494,7 +633,322 @@ export function Filters({
   const clearBuildingProjectFilter = () => onChange({ ...value, buildingProject: [] });
   const clearRenovationFilter = () => onChange({ ...value, renovationStatus: [] });
 
-  const mapSidebar = variant === 'mapSidebar';
+  const activePriceType = resolvePriceFilterType(value.priceType);
+  const priceCurrencySymbol = value.priceCurrency === 'GEL' ? '₾' : '$';
+  const activePriceCurrency = (value.priceCurrency === 'GEL' ? 'GEL' : 'USD') as 'USD' | 'GEL';
+  const formatPrice = (n: number) => `${priceCurrencySymbol}${Math.round(n).toLocaleString()}`;
+  const formatArea = (n: number) => `${Math.round(n).toLocaleString()} ${t('sqm_unit_short')}`;
+
+  const switchPriceCurrency = (next: 'USD' | 'GEL') => {
+    if (activePriceCurrency === next) return;
+    const convertVal = (v: string) => {
+      if (!v) return '';
+      const n = Number(v);
+      if (!Number.isFinite(n)) return '';
+      return next === 'GEL' ? String(Math.round(n * usdToGel)) : String(Math.round(n / usdToGel));
+    };
+    onChange({
+      ...value,
+      priceCurrency: next,
+      minPrice: convertVal(value.minPrice),
+      maxPrice: convertVal(value.maxPrice),
+    });
+  };
+
+  const handlePriceSlider = (minVal: number, maxVal: number) => {
+    if (!priceSliderBounds) return;
+    const { min: dataMin, max: dataMax } = priceSliderBounds;
+    onChange({
+      ...value,
+      priceType: activePriceType,
+      minPrice: minVal <= dataMin ? '' : String(minVal),
+      maxPrice: maxVal >= dataMax ? '' : String(maxVal),
+    });
+  };
+
+  const handleAreaSlider = (minVal: number, maxVal: number) => {
+    if (!areaSliderBounds) return;
+    const { min: dataMin, max: dataMax } = areaSliderBounds;
+    onChange({
+      ...value,
+      minSqm: minVal <= dataMin ? '' : String(minVal),
+      maxSqm: maxVal >= dataMax ? '' : String(maxVal),
+    });
+  };
+
+  const commitPriceField = (field: 'minPrice' | 'maxPrice', raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      onChange({ ...value, priceType: activePriceType, [field]: '' });
+      return;
+    }
+    const n = Math.round(Number(trimmed));
+    if (!Number.isFinite(n) || n < 0) {
+      onChange({ ...value, priceType: activePriceType, [field]: '' });
+      return;
+    }
+    let nextMin = field === 'minPrice' ? String(n) : value.minPrice;
+    let nextMax = field === 'maxPrice' ? String(n) : value.maxPrice;
+    if (nextMin && nextMax && Number(nextMin) > Number(nextMax)) {
+      if (field === 'minPrice') nextMax = nextMin;
+      else nextMin = nextMax;
+    }
+    onChange({ ...value, priceType: activePriceType, minPrice: nextMin, maxPrice: nextMax });
+  };
+
+  const commitAreaField = (field: 'minSqm' | 'maxSqm', raw: string) => {
+    if (!areaSliderBounds) return;
+    const { min, max, step } = areaSliderBounds;
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      onChange({ ...value, [field]: '' });
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n)) {
+      onChange({ ...value, [field]: '' });
+      return;
+    }
+    const clamped = clampToStep(n, min, max, step);
+    if (field === 'minSqm') {
+      onChange({ ...value, minSqm: clamped <= min ? '' : String(clamped) });
+    } else {
+      onChange({ ...value, maxSqm: clamped >= max ? '' : String(clamped) });
+    }
+  };
+
+  const rangeInputClass =
+    'w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100';
+
+  const dropdownInputClass =
+    'w-full rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100';
+
+  const renderPriceDropdownContent = () => (
+    <div className="space-y-3">
+      <div>
+        <div className="mb-1.5 text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_currency')}</div>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => switchPriceCurrency('USD')}
+            className={`flex-1 rounded-md border py-1.5 text-xs font-medium transition-colors ${
+              activePriceCurrency === 'USD'
+                ? 'border-blue-600 bg-blue-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-black'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+            }`}
+          >
+            $ USD
+          </button>
+          <button
+            type="button"
+            onClick={() => switchPriceCurrency('GEL')}
+            className={`flex-1 rounded-md border py-1.5 text-xs font-medium transition-colors ${
+              activePriceCurrency === 'GEL'
+                ? 'border-blue-600 bg-blue-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-black'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+            }`}
+          >
+            ₾ GEL
+          </button>
+        </div>
+      </div>
+      <div>
+        <div className="mb-1.5 text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_price_type')}</div>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => onChange({ ...value, priceType: 'total' })}
+            className={`flex-1 rounded-md border py-1.5 text-xs font-medium transition-colors ${
+              activePriceType === 'total'
+                ? 'border-blue-600 bg-blue-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-black'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+            }`}
+          >
+            {t('filter_total')}
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ ...value, priceType: 'per_sqm' })}
+            className={`flex-1 rounded-md border py-1.5 text-xs font-medium transition-colors ${
+              activePriceType === 'per_sqm'
+                ? 'border-blue-600 bg-blue-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-black'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+            }`}
+          >
+            {t('filter_per_sqm')}
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="mb-1 block text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_minimum')}</label>
+          <input
+            type="number"
+            className={dropdownInputClass}
+            placeholder="0"
+            value={value.minPrice}
+            onChange={(e) => onChange({ ...value, priceType: activePriceType, minPrice: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_maximum')}</label>
+          <input
+            type="number"
+            className={dropdownInputClass}
+            placeholder="∞"
+            value={value.maxPrice}
+            onChange={(e) => onChange({ ...value, priceType: activePriceType, maxPrice: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {[50000, 100000, 200000, 500000].map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onChange({ ...value, priceType: activePriceType, maxPrice: String(p) })}
+            className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-blue-100 hover:text-blue-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-amber-950/50 dark:hover:text-amber-300"
+          >
+            {p / 1000}K {t('filter_up_to')}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderAreaDropdownContent = () => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="mb-1 block text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_min_sqm')}</label>
+          <input
+            type="number"
+            className={dropdownInputClass}
+            placeholder="0"
+            value={value.minSqm}
+            onChange={(e) => set('minSqm', e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_max_sqm')}</label>
+          <input
+            type="number"
+            className={dropdownInputClass}
+            placeholder="∞"
+            value={value.maxSqm}
+            onChange={(e) => set('maxSqm', e.target.value)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPriceFilterPanel = () => (
+    <div className="flex flex-1 flex-col">
+      {priceSliderValues && priceHistogram ? (
+        <>
+          <div className="flex-1">
+            <HistogramRangeSlider
+              min={priceSliderValues.min}
+              max={priceSliderValues.max}
+              step={priceSliderValues.step}
+              valueMin={priceSliderValues.curMin}
+              valueMax={priceSliderValues.curMax}
+              histogram={priceHistogram}
+              onChange={handlePriceSlider}
+              formatValue={formatPrice}
+              showRangeLabel={false}
+            />
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-0.5 block text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_minimum')}</label>
+              <input
+                type="number"
+                className={rangeInputClass}
+                placeholder={String(priceSliderValues.min)}
+                value={value.minPrice}
+                onChange={(e) => onChange({ ...value, priceType: activePriceType, minPrice: e.target.value })}
+                onBlur={(e) => commitPriceField('minPrice', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-0.5 block text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_maximum')}</label>
+              <input
+                type="number"
+                className={rangeInputClass}
+                placeholder={String(priceSliderValues.max)}
+                value={value.maxPrice}
+                onChange={(e) => onChange({ ...value, priceType: activePriceType, maxPrice: e.target.value })}
+                onBlur={(e) => commitPriceField('maxPrice', e.target.value)}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-slate-500 dark:text-zinc-400">{labels.any}</p>
+      )}
+    </div>
+  );
+
+  const renderAreaFilterPanel = () => (
+    <div className="flex flex-1 flex-col">
+      {areaSliderValues && areaHistogram ? (
+        <>
+          <div className="flex-1">
+            <HistogramRangeSlider
+              min={areaSliderValues.min}
+              max={areaSliderValues.max}
+              step={areaSliderValues.step}
+              valueMin={areaSliderValues.curMin}
+              valueMax={areaSliderValues.curMax}
+              histogram={areaHistogram}
+              onChange={handleAreaSlider}
+              formatValue={formatArea}
+              showRangeLabel={false}
+            />
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-0.5 block text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_min_sqm')}</label>
+              <input
+                type="number"
+                className={rangeInputClass}
+                placeholder={String(areaSliderValues.min)}
+                value={value.minSqm}
+                onChange={(e) => set('minSqm', e.target.value)}
+                onBlur={(e) => commitAreaField('minSqm', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-0.5 block text-[10px] text-slate-500 dark:text-zinc-400">{t('filter_max_sqm')}</label>
+              <input
+                type="number"
+                className={rangeInputClass}
+                placeholder={String(areaSliderValues.max)}
+                value={value.maxSqm}
+                onChange={(e) => set('maxSqm', e.target.value)}
+                onBlur={(e) => commitAreaField('maxSqm', e.target.value)}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="text-xs text-slate-500 dark:text-zinc-400">{labels.any}</p>
+      )}
+    </div>
+  );
+
+  const inlineRangePanelClass =
+    'flex h-full min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-2.5 dark:border-zinc-700 dark:bg-zinc-900/80';
+  const inlineRangeHeaderClass = 'mb-2 flex min-h-[2.25rem] flex-wrap items-center gap-x-2 gap-y-1';
+  const compactGridClass = mapSidebar
+    ? 'mb-3 grid grid-cols-1 gap-2'
+    : 'mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5';
+  const mainFiltersRowClass = mapSidebar
+    ? 'mb-3 grid grid-cols-1 gap-2'
+    : compactGridClass;
+  const compactFilterItemClass = mapSidebar ? '' : '';
 
   const extendedOnlyActiveCount =
     (yearActive ? 1 : 0) +
@@ -503,10 +957,6 @@ export function Filters({
     (value.amenities?.length || 0) +
     value.buildingProject.length +
     value.renovationStatus.length;
-
-  const compactGridClass = mapSidebar
-    ? 'mb-3 grid grid-cols-1 gap-2'
-    : 'mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5';
 
   const extendedGridClass = mapSidebar
     ? 'mb-3 grid grid-cols-1 gap-2'
@@ -697,144 +1147,106 @@ export function Filters({
         </div>
       </div>
 
-      {/* მთავარი ფილტრები: ფასი, ფართობი, ქალაქი, ოთახები + გაფართოებული ძიება */}
-      <div className={compactGridClass}>
-        {/* ფასი dropdown */}
-        <FilterDropdown label={t('filter_price')} summary={priceSummary()} isActive={priceActive} onClear={clearPriceFilter}>
-          <div className="space-y-3">
-            {/* ვალუტა */}
-            <div>
-              <div className="text-[10px] text-slate-500 mb-1.5">{t('filter_currency')}</div>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, priceCurrency: value.priceCurrency === 'USD' ? '' : 'USD' })}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                    value.priceCurrency === 'USD'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  $ USD
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, priceCurrency: value.priceCurrency === 'GEL' ? '' : 'GEL' })}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                    value.priceCurrency === 'GEL'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  ₾ GEL
-                </button>
+      {/* მთავარი ფილტრები: ფასი, ფართობი, ქალაქი, ოთახები, გაფართოებული */}
+      <div className={mainFiltersRowClass}>
+        {mapSidebar ? (
+          <>
+            <div className={inlineRangePanelClass}>
+              <div className={inlineRangeHeaderClass}>
+                <span className="shrink-0 text-xs font-semibold text-slate-800 dark:text-zinc-100">{t('filter_price')}</span>
+                <div className="flex flex-wrap items-center gap-1">
+                  <div className="flex overflow-hidden rounded-lg border border-slate-200 dark:border-zinc-600">
+                    <button
+                      type="button"
+                      onClick={() => switchPriceCurrency('USD')}
+                      className={`px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                        activePriceCurrency === 'USD'
+                          ? 'bg-blue-600 text-white dark:bg-amber-500 dark:text-black'
+                          : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-zinc-900 dark:text-zinc-300'
+                      }`}
+                    >
+                      $
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchPriceCurrency('GEL')}
+                      className={`px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                        activePriceCurrency === 'GEL'
+                          ? 'bg-blue-600 text-white dark:bg-amber-500 dark:text-black'
+                          : 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-zinc-900 dark:text-zinc-300'
+                      }`}
+                    >
+                      ₾
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...value, priceType: 'total' })}
+                    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                      activePriceType === 'total'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-300'
+                        : 'border-slate-200 text-slate-600 dark:border-zinc-600 dark:text-zinc-400'
+                    }`}
+                  >
+                    {t('filter_total')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...value, priceType: 'per_sqm' })}
+                    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                      activePriceType === 'per_sqm'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-300'
+                        : 'border-slate-200 text-slate-600 dark:border-zinc-600 dark:text-zinc-400'
+                    }`}
+                  >
+                    {t('filter_per_sqm')}
+                  </button>
+                </div>
+                {priceActive ? (
+                  <button
+                    type="button"
+                    onClick={clearPriceFilter}
+                    className="ml-auto text-xs text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                    aria-label={t('clear_filters')}
+                  >
+                    ✕
+                  </button>
+                ) : null}
               </div>
+              {renderPriceFilterPanel()}
             </div>
-            {/* ფასის ტიპი */}
-            <div>
-              <div className="text-[10px] text-slate-500 mb-1.5">{t('filter_price_type')}</div>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, priceType: value.priceType === 'total' ? '' : 'total' })}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                    value.priceType === 'total'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {t('filter_total')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...value, priceType: value.priceType === 'per_sqm' ? '' : 'per_sqm' })}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                    value.priceType === 'per_sqm'
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {t('filter_per_sqm')}
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_minimum')}</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="0"
-                  value={value.minPrice}
-                  onChange={(e) => set('minPrice', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_maximum')}</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="∞"
-                  value={value.maxPrice}
-                  onChange={(e) => set('maxPrice', e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {[50000, 100000, 200000, 500000].map(p => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => onChange({ ...value, maxPrice: String(p) })}
-                  className="px-2 py-1 text-xs rounded-md bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600"
-                >
-                  {(p / 1000)}K {t('filter_up_to')}
-                </button>
-              ))}
-            </div>
-          </div>
-        </FilterDropdown>
 
-        {/* ფართობი dropdown */}
-        <FilterDropdown label={t('filter_area')} summary={areaSummary()} isActive={areaActive} onClear={clearAreaFilter}>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_min_sqm')}</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="0"
-                  value={value.minSqm}
-                  onChange={(e) => set('minSqm', e.target.value)}
-                />
+            <div className={inlineRangePanelClass}>
+              <div className={inlineRangeHeaderClass}>
+                <span className="shrink-0 text-xs font-semibold text-slate-800 dark:text-zinc-100">{t('filter_area')}</span>
+                <span className="flex-1" aria-hidden />
+                {areaActive ? (
+                  <button
+                    type="button"
+                    onClick={clearAreaFilter}
+                    className="text-xs text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+                    aria-label={t('clear_filters')}
+                  >
+                    ✕
+                  </button>
+                ) : null}
               </div>
-              <div>
-                <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_max_sqm')}</label>
-                <input
-                  type="number"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="∞"
-                  value={value.maxSqm}
-                  onChange={(e) => set('maxSqm', e.target.value)}
-                />
-              </div>
+              {renderAreaFilterPanel()}
             </div>
-            <div className="flex flex-wrap gap-1">
-              {[50, 100, 150, 200, 300].map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => onChange({ ...value, maxSqm: String(s) })}
-                  className="px-2 py-1 text-xs rounded-md bg-slate-100 hover:bg-blue-100 text-slate-600 hover:text-blue-600"
-                >
-                  {s} {t('filter_sqm_up_to')}
-                </button>
-              ))}
-            </div>
-          </div>
-        </FilterDropdown>
+          </>
+        ) : (
+          <>
+            <FilterDropdown label={t('filter_price')} summary={priceSummary()} isActive={priceActive} onClear={clearPriceFilter}>
+              {renderPriceDropdownContent()}
+            </FilterDropdown>
 
+            <FilterDropdown label={t('filter_area')} summary={areaSummary()} isActive={areaActive} onClear={clearAreaFilter}>
+              {renderAreaDropdownContent()}
+            </FilterDropdown>
+          </>
+        )}
+
+        <div className={compactFilterItemClass}>
         {/* ქალაქი — მოდალი (მთავარი გვერდი) / dropdown (რუკა) */}
         {mapSidebar ? (
           <FilterDropdown label={labels.city} summary={citySummary()} isActive={cityActive} onClear={clearCityFilter}>
@@ -849,7 +1261,9 @@ export function Filters({
             onOpen={() => setLocationModalOpen(true)}
           />
         )}
+        </div>
 
+        <div className={compactFilterItemClass}>
         {/* ოთახები dropdown */}
         <FilterDropdown label={t('filter_rooms')} summary={roomsSummary()} isActive={roomsActive || bedroomsActive || balconiesActive} onClear={clearRoomsFilter}>
           <div className="space-y-3">
@@ -951,7 +1365,9 @@ export function Filters({
             </div>
           </div>
         </FilterDropdown>
+        </div>
 
+        <div className={compactFilterItemClass}>
         <button
           type="button"
           onClick={() => setExtendedOpen(true)}
@@ -976,6 +1392,7 @@ export function Filters({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
+        </div>
       </div>
 
       <ExtendedSearchModal
@@ -995,83 +1412,6 @@ export function Filters({
                 onClear={clearCityFilter}
               >
                 {renderLocationFilters()}
-              </FilterDropdown>
-
-              {/* ფასი */}
-              <FilterDropdown label={t('filter_price')} summary={priceSummary()} isActive={priceActive} onClear={clearPriceFilter}>
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-[10px] text-slate-500 mb-1.5">{t('filter_currency')}</div>
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onChange({ ...value, priceCurrency: value.priceCurrency === 'USD' ? '' : 'USD' })}
-                        className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                          value.priceCurrency === 'USD' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        $ USD
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onChange({ ...value, priceCurrency: value.priceCurrency === 'GEL' ? '' : 'GEL' })}
-                        className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                          value.priceCurrency === 'GEL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        ₾ GEL
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-500 mb-1.5">{t('filter_price_type')}</div>
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onChange({ ...value, priceType: value.priceType === 'total' ? '' : 'total' })}
-                        className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                          value.priceType === 'total' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {t('filter_total')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onChange({ ...value, priceType: value.priceType === 'per_sqm' ? '' : 'per_sqm' })}
-                        className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-                          value.priceType === 'per_sqm' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {t('filter_per_sqm')}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_minimum')}</label>
-                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="0" value={value.minPrice} onChange={(e) => set('minPrice', e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_maximum')}</label>
-                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="∞" value={value.maxPrice} onChange={(e) => set('maxPrice', e.target.value)} />
-                    </div>
-                  </div>
-                </div>
-              </FilterDropdown>
-
-              <FilterDropdown label={t('filter_area')} summary={areaSummary()} isActive={areaActive} onClear={clearAreaFilter}>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_min_sqm')}</label>
-                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" value={value.minSqm} onChange={(e) => set('minSqm', e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 mb-1 block">{t('filter_max_sqm')}</label>
-                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" value={value.maxSqm} onChange={(e) => set('maxSqm', e.target.value)} />
-                    </div>
-                  </div>
-                </div>
               </FilterDropdown>
 
               <FilterDropdown label="🏗️ აშენება/რემონტი" summary={yearSummary()} isActive={yearActive} onClear={clearYearFilter}>

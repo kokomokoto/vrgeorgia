@@ -5,14 +5,12 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 
 import { listProperties } from '@/lib/api';
-import { buildMapHref } from '@/lib/mapQuery';
+import { buildMapHref, filtersToPropertyQuery } from '@/lib/mapQuery';
 import type { Property } from '@/lib/types';
 import { Filters, type FiltersState } from '@/components/Filters';
 import {
   clearHomeFiltersStorage,
   HOME_FILTERS_INITIAL,
-  loadHomeFilters,
-  saveHomeFilters,
 } from '@/lib/homeFiltersStorage';
 import { MapView } from '@/components/MapView';
 import { PropertyCard } from '@/components/PropertyCard';
@@ -55,15 +53,9 @@ export default function HomePage() {
 
   React.useEffect(() => {
     setMounted(true);
-    const saved = loadHomeFilters();
-    if (saved) setFilters(saved);
+    clearHomeFiltersStorage();
     setFiltersHydrated(true);
   }, []);
-
-  React.useEffect(() => {
-    if (!filtersHydrated) return;
-    saveHomeFilters(filters);
-  }, [filters, filtersHydrated]);
 
   const clearAllFilters = React.useCallback(() => {
     clearHomeFiltersStorage();
@@ -99,11 +91,7 @@ export default function HomePage() {
       setLoading(true);
       setError(null);
 
-      listProperties({
-        ...filters,
-        sort: sortBy,
-        lang: i18n.language
-      })
+      listProperties(filtersToPropertyQuery(filters, sortBy, i18n.language))
         .then((r) => {
           if (!alive) return;
           setProperties(r.properties);

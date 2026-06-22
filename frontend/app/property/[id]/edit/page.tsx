@@ -19,7 +19,7 @@ import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
 import { MapView } from '@/components/MapView';
 import { CityCombobox } from '@/components/CityCombobox';
 import AddressSearch from '@/components/AddressSearch';
-import { mergeParsedLocation, parseLocationFromNominatim, resolveLocationFromCoords } from '@/lib/mapLocationFromGeocode';
+import { mergeParsedLocation, resolveLocationFromCoords, resolveLocationFromSearchPick } from '@/lib/mapLocationFromGeocode';
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import {
   applyConstructionYearChange,
@@ -695,21 +695,27 @@ export default function EditPropertyPage() {
                   <AddressSearch
                     mapFillFromPick={addressMapFill}
                     placeholder={t('address_search_placeholder')}
-                    onSelect={(searchLat, searchLng, address, result) => {
+                    onSelect={async (searchLat, searchLng, address, result) => {
                       setLat(searchLat);
                       setLng(searchLng);
-                      const parsed = mergeParsedLocation(
-                        parseLocationFromNominatim({
+                      let parsed = await resolveLocationFromSearchPick(
+                        searchLat,
+                        searchLng,
+                        {
                           display_name: result?.display_name || address,
                           address: result?.address,
-                        }),
+                        },
                         CITY_TO_REGION,
                       );
                       if (!parsed.city && address) {
                         const parts = address.split(',').map((p) => p.trim());
-                        if (parts.length > 1) parsed.city = parts[parts.length - 1];
-                        if (!parsed.street) parsed.street = splitStreetFromFullAddress(address, parsed.city);
-                        if (parsed.city) parsed.region = CITY_TO_REGION[parsed.city] || parsed.region;
+                        if (parts.length > 1) parsed = { ...parsed, city: parts[parts.length - 1] };
+                        if (!parsed.street) {
+                          parsed = { ...parsed, street: splitStreetFromFullAddress(address, parsed.city) };
+                        }
+                        if (parsed.city) {
+                          parsed = { ...parsed, region: CITY_TO_REGION[parsed.city] || parsed.region };
+                        }
                       }
                       applyParsedLocation(parsed);
                     }}

@@ -127,7 +127,7 @@ export default function MapSearchClient() {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50 dark:bg-zinc-950">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-        <aside className="max-h-[min(50vh,420px)] shrink-0 overflow-y-auto border-b border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:w-[min(26rem,92vw)] lg:max-w-md lg:shrink-0 lg:border-b-0 lg:border-r">
+        <aside className="max-h-[min(50vh,420px)] shrink-0 overflow-y-auto border-b border-slate-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:w-[min(20.8rem,74vw)] lg:max-w-[20.8rem] lg:shrink-0 lg:border-b-0 lg:border-r">
           <Filters variant="mapSidebar" value={filters} onChange={setFilters} rangeProperties={rangeProperties} />
         </aside>
 

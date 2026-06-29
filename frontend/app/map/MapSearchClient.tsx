@@ -12,6 +12,7 @@ import { MapView } from '@/components/MapView';
 import { PropertyMapListRow } from '@/components/PropertyMapListRow';
 import { filterPropertiesByMapBounds, mapBoundsEqual, type MapBounds } from '@/lib/mapBounds';
 import { filtersToPropertyQuery, omitPriceAreaFilters, searchParamsToFiltersState } from '@/lib/mapQuery';
+import { trackSearchFilters } from '@/lib/searchAnalytics';
 
 export default function MapSearchClient() {
   const { t, i18n } = useTranslation();
@@ -81,6 +82,7 @@ export default function MapSearchClient() {
           setSelectedId(null);
           setHoveredId(null);
           setMapBounds(null);
+          trackSearchFilters('map', filters, { sort: sortBy, resultCount: r.properties.length });
         })
         .catch((e) => {
           if (!alive) return;

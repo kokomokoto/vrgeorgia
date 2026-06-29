@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { PageView } from '../models/PageView.js';
+import { SearchEvent } from '../models/SearchEvent.js';
 import { Analyst } from '../models/Analyst.js';
 import { getJWTSecret } from '../config/jwt.js';
 
@@ -135,6 +136,87 @@ router.post('/pageview', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('Analytics error:', err.message);
+    res.json({ ok: true });
+  }
+});
+
+// PUBLIC: Track property search / filter usage
+router.post('/search', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const source = ['home', 'map', 'agent', 'admin_tours'].includes(body.source) ? body.source : 'home';
+
+    const hasAnyFilter =
+      (body.q && String(body.q).trim()) ||
+      (Array.isArray(body.dealTypes) && body.dealTypes.length) ||
+      (Array.isArray(body.types) && body.types.length) ||
+      body.city ||
+      body.region ||
+      body.tbilisiDistrict ||
+      (Array.isArray(body.tbilisiSubdistricts) && body.tbilisiSubdistricts.length) ||
+      body.has3d ||
+      body.hasPhotos ||
+      body.minPrice ||
+      body.maxPrice ||
+      body.minSqm ||
+      body.maxSqm ||
+      body.minConstructionYear ||
+      body.maxConstructionYear ||
+      body.minRenovationYear ||
+      body.maxRenovationYear ||
+      (Array.isArray(body.rooms) && body.rooms.length) ||
+      (Array.isArray(body.bedrooms) && body.bedrooms.length) ||
+      (Array.isArray(body.balconies) && body.balconies.length) ||
+      (Array.isArray(body.amenities) && body.amenities.length) ||
+      (Array.isArray(body.buildingProject) && body.buildingProject.length) ||
+      (Array.isArray(body.renovationStatus) && body.renovationStatus.length) ||
+      (body.propertyId && String(body.propertyId).trim());
+
+    if (!hasAnyFilter) {
+      return res.json({ ok: true, skipped: true });
+    }
+
+    await SearchEvent.create({
+      source,
+      agentId: String(body.agentId || '').slice(0, 64),
+      sessionId: String(body.sessionId || '').slice(0, 128),
+      q: String(body.q || '').trim().slice(0, 120),
+      dealTypes: Array.isArray(body.dealTypes) ? body.dealTypes.map(String).slice(0, 5) : [],
+      types: Array.isArray(body.types) ? body.types.map(String).slice(0, 12) : [],
+      city: String(body.city || '').slice(0, 80),
+      region: String(body.region || '').slice(0, 80),
+      tbilisiDistrict: String(body.tbilisiDistrict || '').slice(0, 80),
+      tbilisiSubdistricts: Array.isArray(body.tbilisiSubdistricts)
+        ? body.tbilisiSubdistricts.map(String).slice(0, 30)
+        : [],
+      has3d: body.has3d === true,
+      hasPhotos: body.hasPhotos === true,
+      minPrice: String(body.minPrice || '').slice(0, 20),
+      maxPrice: String(body.maxPrice || '').slice(0, 20),
+      priceCurrency: String(body.priceCurrency || '').slice(0, 8),
+      priceType: String(body.priceType || '').slice(0, 16),
+      minSqm: String(body.minSqm || '').slice(0, 20),
+      maxSqm: String(body.maxSqm || '').slice(0, 20),
+      rooms: Array.isArray(body.rooms) ? body.rooms.map(String).slice(0, 8) : [],
+      bedrooms: Array.isArray(body.bedrooms) ? body.bedrooms.map(String).slice(0, 8) : [],
+      balconies: Array.isArray(body.balconies) ? body.balconies.map(String).slice(0, 8) : [],
+      amenities: Array.isArray(body.amenities) ? body.amenities.map(String).slice(0, 24) : [],
+      buildingProject: Array.isArray(body.buildingProject) ? body.buildingProject.map(String).slice(0, 8) : [],
+      renovationStatus: Array.isArray(body.renovationStatus)
+        ? body.renovationStatus.map(String).slice(0, 8)
+        : [],
+      minConstructionYear: String(body.minConstructionYear || '').slice(0, 6),
+      maxConstructionYear: String(body.maxConstructionYear || '').slice(0, 6),
+      minRenovationYear: String(body.minRenovationYear || '').slice(0, 6),
+      maxRenovationYear: String(body.maxRenovationYear || '').slice(0, 6),
+      propertyId: String(body.propertyId || '').slice(0, 32),
+      sort: String(body.sort || '').slice(0, 40),
+      resultCount: Number.isFinite(Number(body.resultCount)) ? Number(body.resultCount) : null,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Search analytics error:', err.message);
     res.json({ ok: true });
   }
 });

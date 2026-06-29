@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { useCompare } from '@/components/CompareProvider';
 import { resolveImageUrl } from '@/lib/api';
+import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
 
 export default function ComparePage() {
@@ -164,7 +165,9 @@ export default function ComparePage() {
                           <div className="w-[168px] h-[126px] mx-auto rounded-lg overflow-hidden mb-2">
                             {photo ? (
                               <img
-                                src={resolveImageUrl(photo)}
+                                src={resolveImageUrl(photo, 'thumb', {
+                                  isPanorama: isPanoramaPhoto(photo, property.panoramaPhotos),
+                                })}
                                 alt={property.title}
                                 className="w-full h-full object-cover"
                               />

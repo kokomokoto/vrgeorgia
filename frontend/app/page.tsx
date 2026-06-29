@@ -14,6 +14,7 @@ import {
 } from '@/lib/homeFiltersStorage';
 import { MapView } from '@/components/MapView';
 import { PropertyCard } from '@/components/PropertyCard';
+import { trackSearchFilters } from '@/lib/searchAnalytics';
 
 // კატეგორიები იკონებით
 const PROPERTY_CATEGORIES = [
@@ -97,6 +98,7 @@ export default function HomePage() {
           setProperties(r.properties);
           setCurrentPage(1);
           setSelectedMapPropertyId(null);
+          trackSearchFilters('home', filters, { sort: sortBy, resultCount: r.properties.length });
         })
         .catch((e) => {
           if (!alive) return;

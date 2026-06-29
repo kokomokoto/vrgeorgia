@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 
 import { Property } from '../models/Property.js';
 import { User } from '../models/User.js';
+import Agent from '../models/Agent.js';
 import { requireAuth } from '../middleware/auth.js';
 import { translateText } from '../services/translate.js';
 import { uploadPropertyPhotosMiddleware, deleteCloudinaryImage } from '../services/cloudinary.js';
@@ -204,16 +205,16 @@ router.post(
 
     let photos = [];
     let panoramaPhotos = [];
+    let panoramaFlags = [];
     try {
-      const uploaded = await uploadPropertyPhotosFromFiles(req.files || []);
+      panoramaFlags = req.body.panoramaFlags ? JSON.parse(req.body.panoramaFlags) : [];
+      if (!Array.isArray(panoramaFlags)) panoramaFlags = [];
+    } catch {
+      panoramaFlags = [];
+    }
+    try {
+      const uploaded = await uploadPropertyPhotosFromFiles(req.files || [], panoramaFlags);
       photos = uploaded.urls.slice(0, 30);
-      let panoramaFlags = [];
-      try {
-        panoramaFlags = req.body.panoramaFlags ? JSON.parse(req.body.panoramaFlags) : [];
-        if (!Array.isArray(panoramaFlags)) panoramaFlags = [];
-      } catch {
-        panoramaFlags = [];
-      }
       panoramaPhotos = photos.filter((_, i) => Boolean(panoramaFlags[i]));
     } catch (uploadErr) {
       return res.status(400).json({ message: uploadErr.message || 'ფოტოს ატვირთვა ვერ მოხერხდა' });
@@ -685,6 +686,13 @@ router.get(
       property.tourLink = normalizeTourLink(property.tourLink);
     }
 
+    if (ownerIdStr && property.userId?.role === 'agent') {
+      const agentDoc = await Agent.findOne({ user: ownerIdStr }).select('_id').lean();
+      if (agentDoc?._id) {
+        property.ownerAgentProfileId = String(agentDoc._id);
+      }
+    }
+
     res.json({ property: applyTranslation(property, lang) });
   }
 );
@@ -705,15 +713,6 @@ router.post(
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    let uploaded = [];
-    try {
-      const result = await uploadPropertyPhotosFromFiles(req.files || []);
-      uploaded = result.urls;
-    } catch (uploadErr) {
-      return res.status(400).json({ message: uploadErr.message || 'ფოტოს ატვირთვა ვერ მოხერხდა' });
-    }
-    if (uploaded.length === 0) return res.status(400).json({ message: 'ფოტო არ აიტვირთა' });
-
     let panoramaFlags = [];
     try {
       panoramaFlags = req.body.panoramaFlags ? JSON.parse(req.body.panoramaFlags) : [];
@@ -721,6 +720,16 @@ router.post(
     } catch {
       panoramaFlags = [];
     }
+
+    let uploaded = [];
+    try {
+      const result = await uploadPropertyPhotosFromFiles(req.files || [], panoramaFlags);
+      uploaded = result.urls;
+    } catch (uploadErr) {
+      return res.status(400).json({ message: uploadErr.message || 'ფოტოს ატვირთვა ვერ მოხერხდა' });
+    }
+    if (uploaded.length === 0) return res.status(400).json({ message: 'ფოტო არ აიტვირთა' });
+
     const newPanoramas = uploaded.filter((_, i) => Boolean(panoramaFlags[i]));
     const next = [...(existing.photos || []), ...uploaded].slice(0, 30);
     const nextPanorama = [...(existing.panoramaPhotos || []), ...newPanoramas].filter((u) => next.includes(u));

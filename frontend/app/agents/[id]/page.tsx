@@ -1,11 +1,73 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { getAgent, getAgentProperties, getAgentReviews, addAgentReview, Agent, AgentReview, Property, resolveImageUrl } from '@/lib/api';
 import { PropertyCard } from '@/components/PropertyCard';
+import { Filters, type FiltersState } from '@/components/Filters';
+import { DEFAULT_MAP_FILTERS, filtersToPropertyQuery } from '@/lib/mapQuery';
+import { trackSearchFilters } from '@/lib/searchAnalytics';
+function AgentPhotoLightbox({
+  src,
+  alt,
+  onClose,
+}: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(true);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  if (!ready) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute right-4 top-4 z-[10000] flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+      <img
+        src={src}
+        alt={alt}
+        className="max-h-[min(90vh,900px)] max-w-[min(92vw,900px)] rounded-lg object-contain shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+        draggable={false}
+      />
+    </div>,
+    document.body
+  );
+}
 
 export default function AgentProfilePage() {
   const { t, i18n } = useTranslation();
@@ -14,8 +76,14 @@ export default function AgentProfilePage() {
   
   const [agent, setAgent] = useState<Agent | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [propertiesTotal, setPropertiesTotal] = useState(0);
+  const [rangeProperties, setRangeProperties] = useState<Property[]>([]);
+  const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
+  const [sortBy, setSortBy] = useState('date_desc');
   const [reviews, setReviews] = useState<AgentReview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [propertiesLoading, setPropertiesLoading] = useState(true);
+  const [propertiesError, setPropertiesError] = useState('');
   const [error, setError] = useState('');
   
   // Review form
@@ -23,21 +91,64 @@ export default function AgentProfilePage() {
   const [reviewScore, setReviewScore] = useState(5);
   const [reviewText, setReviewText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
 
   useEffect(() => {
     loadAgentData();
   }, [agentId]);
+
+  useEffect(() => {
+    if (!agentId || loading) return;
+
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      setPropertiesLoading(true);
+      setPropertiesError('');
+
+      getAgentProperties(agentId, {
+        ...filtersToPropertyQuery(filters, sortBy, i18n.language),
+        limit: 200,
+      })
+        .then((r) => {
+          if (!alive) return;
+          setProperties(r.properties);
+          setPropertiesTotal(r.total);
+          trackSearchFilters('agent', filters, {
+            agentId,
+            sort: sortBy,
+            resultCount: r.properties.length,
+          });
+        })
+        .catch((err: Error) => {
+          if (!alive) return;
+          setPropertiesError(err.message);
+        })
+        .finally(() => {
+          if (!alive) return;
+          setPropertiesLoading(false);
+        });
+    }, 400);
+
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [agentId, filters, sortBy, i18n.language, loading]);
+
+  const clearAllFilters = useCallback(() => {
+    setFilters({ ...DEFAULT_MAP_FILTERS });
+  }, []);
 
   async function loadAgentData() {
     try {
       setLoading(true);
       const [agentData, propsData, reviewsData] = await Promise.all([
         getAgent(agentId),
-        getAgentProperties(agentId),
-        getAgentReviews(agentId)
+        getAgentProperties(agentId, { limit: 200 }),
+        getAgentReviews(agentId),
       ]);
       setAgent(agentData);
-      setProperties(propsData.properties);
+      setRangeProperties(propsData.properties);
       setReviews(reviewsData);
     } catch (err: any) {
       setError(err.message);
@@ -116,6 +227,7 @@ export default function AgentProfilePage() {
 
   const currentLang = i18n.language as keyof typeof agent.bio;
   const bio = agent.bio[currentLang] || agent.bio.en || agent.bio.ka;
+  const agentPhotoUrl = agent.photo ? resolveImageUrl(agent.photo) : '';
 
   return (
     <main className="min-h-screen bg-slate-50 py-8">
@@ -124,22 +236,28 @@ export default function AgentProfilePage() {
         <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
           <div className="flex flex-col md:flex-row gap-6">
             {/* Photo */}
-            <div className="w-32 h-32 rounded-full bg-slate-100 overflow-hidden flex-shrink-0 mx-auto md:mx-0">
-              {agent.photo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img 
-                  src={resolveImageUrl(agent.photo)} 
-                  alt={agent.name} 
-                  className="w-full h-full object-cover"
+            {agent.photo ? (
+              <button
+                type="button"
+                onClick={() => setPhotoLightboxOpen(true)}
+                className="mx-auto h-32 w-32 flex-shrink-0 overflow-hidden rounded-full bg-slate-100 md:mx-0 cursor-zoom-in transition-transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                aria-label={`${agent.name} — ${t('photos')}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={agentPhotoUrl}
+                  alt={agent.name}
+                  className="h-full w-full object-cover"
+                  draggable={false}
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-slate-400">
-                  <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-              )}
-            </div>
+              </button>
+            ) : (
+              <div className="mx-auto flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 md:mx-0">
+                <svg className="h-16 w-16 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+            )}
             
             {/* Info */}
             <div className="flex-1 text-center md:text-left">
@@ -227,12 +345,56 @@ export default function AgentProfilePage() {
         
         {/* Properties */}
         <div className="mb-8">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">{t('agentProperties')}</h2>
-          {properties.length === 0 ? (
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-xl font-bold text-slate-900">{t('agentProperties')}</h2>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+              <span>
+                {propertiesLoading
+                  ? t('loading', 'იტვირთება...')
+                  : `${propertiesTotal} ${t('results', 'შედეგი')}`}
+              </span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+              >
+                <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
+                <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
+                <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
+                <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
+                <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
+                <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
+                <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
+                <option value="views_asc">{t('sort_views_asc', 'ნახვები ↑')}</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+            <p className="mb-3 text-sm text-slate-500">
+              {t('agentPropertySearchHint', 'ძიება მხოლოდ ამ აგენტის განცხადებებში')}
+            </p>
+            <Filters
+              value={filters}
+              onChange={setFilters}
+              onClearAll={clearAllFilters}
+              rangeProperties={rangeProperties}
+            />
+          </div>
+
+          {propertiesError && (
+            <div className="mb-4 rounded-lg bg-red-50 p-3 text-red-700">{propertiesError}</div>
+          )}
+
+          {propertiesLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+            </div>
+          ) : properties.length === 0 ? (
             <p className="text-slate-500">{t('noProperties')}</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {properties.map(prop => (
+              {properties.map((prop) => (
                 <PropertyCard key={prop._id} p={prop} />
               ))}
             </div>
@@ -306,6 +468,14 @@ export default function AgentProfilePage() {
           )}
         </div>
       </div>
+
+      {photoLightboxOpen && agentPhotoUrl && (
+        <AgentPhotoLightbox
+          src={agentPhotoUrl}
+          alt={agent.name}
+          onClose={() => setPhotoLightboxOpen(false)}
+        />
+      )}
     </main>
   );
 }

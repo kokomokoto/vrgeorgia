@@ -1,20 +1,29 @@
 import type { Property, User } from './types';
 import { API_BASE, getApiBase } from './config';
+import {
+  resolvePropertyImageUrl,
+  type PropertyImageVariant,
+} from './imageUrl';
 
 export type { Property, User };
+export type { PropertyImageVariant } from './imageUrl';
+export { resolvePropertyImageUrl, applyCloudinaryTransform } from './imageUrl';
 
 /**
- * Resolve an image URL:
- * - Cloudinary URLs (https://res.cloudinary.com/...) → return as-is
- * - Old local paths (/uploads/...) → prepend API_BASE
- * - Empty/null → return empty string
+ * სურათის URL:
+ * - ავატარი/აგენტი: variant-ის გარეშე
+ * - ობიექტის ფოტო: variant 'thumb' | 'large' (Cloudinary f_auto → AVIF)
+ * - 360°: isPanorama: true → master URL უცვლელად
  */
-export function resolveImageUrl(path: string | null | undefined): string {
-  if (!path) return '';
-  // Already a full URL (Cloudinary or other CDN)
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  // Old-style local path like /uploads/xxx.jpg
-  return `${getApiBase()}${path}`;
+export function resolveImageUrl(
+  path: string | null | undefined,
+  variant?: PropertyImageVariant,
+  options?: { isPanorama?: boolean }
+): string {
+  if (variant) {
+    return resolvePropertyImageUrl(path, variant, options);
+  }
+  return resolvePropertyImageUrl(path, 'original', options);
 }
 
 export type RegisterBody = { 
@@ -343,9 +352,39 @@ export async function getAgent(id: string) {
   return request<Agent>(`/api/agents/${id}`);
 }
 
-export async function getAgentProperties(agentId: string, page = 1) {
+export type AgentPropertiesQuery = PropertyQuery & {
+  page?: number;
+  limit?: number;
+};
+
+export async function getAgentProperties(agentId: string, query: AgentPropertiesQuery = {}) {
+  const { page = 1, limit, ...rest } = query;
+  const params: Record<string, string> = { page: String(page) };
+  if (limit !== undefined) params.limit = String(limit);
+
+  for (const [k, v] of Object.entries(rest)) {
+    if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
+    if (
+      (k === 'tbilisiSubdistricts' ||
+        k === 'type' ||
+        k === 'dealType' ||
+        k === 'amenities' ||
+        k === 'buildingProject' ||
+        k === 'renovationStatus' ||
+        k === 'balconies' ||
+        k === 'rooms' ||
+        k === 'bedrooms') &&
+      Array.isArray(v)
+    ) {
+      params[k] = JSON.stringify(v);
+    } else {
+      params[k] = String(v);
+    }
+  }
+
+  const qs = new URLSearchParams(params).toString();
   return request<{ properties: Property[]; total: number; page: number; totalPages: number }>(
-    `/api/agents/${agentId}/properties?page=${page}`
+    `/api/agents/${agentId}/properties?${qs}`
   );
 }
 

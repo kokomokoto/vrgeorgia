@@ -8,6 +8,9 @@ import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import { requireAuth } from '../middleware/auth.js';
 import { normalizeTourLink } from '../utils/tourLink.js';
 import { syncAgentProfileForUser, backfillMissingAgentProfiles } from '../services/agentProfile.js';
+import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
+import { getSearchAnalyticsStats } from '../utils/searchAnalyticsAgg.js';
+import { getAgentPortfolioStats } from '../utils/agentPortfolioStats.js';
 
 const router = express.Router();
 
@@ -268,10 +271,27 @@ router.get('/agents', requireAuth, adminMiddleware, async (req, res) => {
     const agents = await Agent.find(query)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(limit);
-    
+      .limit(limit)
+      .lean();
+
+    const userIds = agents.map((a) => a.user).filter(Boolean);
+    const countRows = userIds.length
+      ? await Property.aggregate([
+          { $match: { userId: { $in: userIds } } },
+          { $group: { _id: '$userId', propertyCount: { $sum: 1 } } },
+        ])
+      : [];
+    const countByUser = new Map(
+      countRows.map((r) => [String(r._id), r.propertyCount])
+    );
+
+    const agentsWithCounts = agents.map((a) => ({
+      ...a,
+      propertyCount: a.user ? countByUser.get(String(a.user)) ?? 0 : 0,
+    }));
+
     res.json({
-      agents,
+      agents: agentsWithCounts,
       total,
       page,
       pages: Math.ceil(total / limit)
@@ -284,13 +304,25 @@ router.get('/agents', requireAuth, adminMiddleware, async (req, res) => {
 // Single agent (admin) + listing count
 router.get('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const agent = await Agent.findById(req.params.id).populate('user', 'name email role');
+    await backfillMissingAgentProfiles();
+
+    const agent = await Agent.findById(req.params.id).populate('user', 'name email role avatar phone');
     if (!agent) {
       return res.status(404).json({ message: 'აგენტი ვერ მოიძებნა' });
     }
-    const userId = agent.user?._id || agent.user;
+
+    const doc = agent.toObject();
+    const u = doc.user;
+    if (u && typeof u === 'object') {
+      if (!doc.photo && u.avatar) doc.photo = u.avatar;
+      const userName = String(u.name || '').trim();
+      if (userName) doc.name = userName;
+      doc.user = u._id;
+    }
+
+    const userId = u?._id || doc.user;
     const propertyCount = userId ? await Property.countDocuments({ userId }) : 0;
-    res.json({ agent, propertyCount, userId: userId || null });
+    res.json({ agent: doc, propertyCount, userId: userId || null });
   } catch (error) {
     res.status(500).json({ message: 'აგენტის მიღება ვერ მოხერხდა' });
   }
@@ -470,22 +502,27 @@ router.put('/properties/:id/pin', requireAuth, adminMiddleware, async (req, res)
 // Get all properties that have a 3D tour attached
 router.get('/tours', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const search = req.query.search || '';
+    const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
 
-    const query = { tourLink: { $exists: true, $ne: '' } };
-    if (search) {
-      query.title = { $regex: search, $options: 'i' };
-    }
+    const filter = { tourLink: { $exists: true, $ne: '' } };
+    const filterQuery = {
+      ...req.query,
+      q: req.query.q || req.query.search || undefined,
+    };
+    await applyPropertyQueryFilters(filter, filterQuery);
 
-    const total = await Property.countDocuments(query);
-    const properties = await Property.find(query)
-      .select('title city tbilisiDistrict type dealType price priceCurrency photos status tourLink exteriorLink interiorLink userId createdAt')
+    const finalSort = req.query.sort
+      ? parsePropertySortOption(req.query.sort)
+      : { updatedAt: -1 };
+
+    const total = await Property.countDocuments(filter);
+    const properties = await Property.find(filter)
+      .select('title city tbilisiDistrict type dealType price priceCurrency photos status tourLink exteriorLink interiorLink userId createdAt updatedAt')
       .populate('userId', 'name email')
-      .sort({ updatedAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
+      .sort(finalSort)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
       .lean();
 
     // ძველი localhost ბმულების ავტომატური გასწორება MongoDB-ში
@@ -501,8 +538,8 @@ router.get('/tours', requireAuth, adminMiddleware, async (req, res) => {
     res.json({
       properties,
       total,
-      page,
-      pages: Math.ceil(total / limit)
+      page: pageNum,
+      pages: Math.ceil(total / limitNum) || 1,
     });
   } catch (error) {
     res.status(500).json({ message: '3D ტურების მიღება ვერ მოხერხდა' });
@@ -673,6 +710,59 @@ router.get('/analytics', requireAuth, adminMiddleware, async (req, res) => {
       { $sort: { count: -1 } },
       { $limit: 10 }
     ]);
+
+    // 12. ვიზიტორების გეოგრაფია — ქვეყნები (IP-ით)
+    const countryStats = await PageView.aggregate([
+      { $match: { ...matchStage, country: { $nin: ['', 'Local'] } } },
+      {
+        $group: {
+          _id: '$country',
+          code: { $first: '$countryCode' },
+          count: { $sum: 1 },
+          uniqueSessions: { $addToSet: '$sessionId' },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          code: 1,
+          count: 1,
+          uniqueVisitors: { $size: '$uniqueSessions' },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 20 },
+    ]);
+
+    // 13. ვიზიტორების გეოგრაფია — ქალაქები (IP-ით)
+    const cityStats = await PageView.aggregate([
+      { $match: { ...matchStage, city: { $nin: ['', 'Localhost'] } } },
+      {
+        $group: {
+          _id: '$city',
+          country: { $first: '$country' },
+          countryCode: { $first: '$countryCode' },
+          region: { $first: '$region' },
+          count: { $sum: 1 },
+          uniqueSessions: { $addToSet: '$sessionId' },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          country: 1,
+          countryCode: 1,
+          region: 1,
+          count: 1,
+          uniqueVisitors: { $size: '$uniqueSessions' },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: 25 },
+    ]);
+
+    const searchStats = await getSearchAnalyticsStats(matchStage);
+    const agentPortfolioStats = await getAgentPortfolioStats(matchStage);
     
     res.json({
       period: periodDays,
@@ -686,7 +776,11 @@ router.get('/analytics', requireAuth, adminMiddleware, async (req, res) => {
       topAgents,
       dailyViews,
       hourlyToday,
-      referrerStats
+      referrerStats,
+      countryStats,
+      cityStats,
+      searchStats,
+      agentPortfolioStats,
     });
   } catch (error) {
     console.error('Analytics error:', error);

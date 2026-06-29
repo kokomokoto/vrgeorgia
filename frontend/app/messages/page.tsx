@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { getConversations, getMessages, sendMessage, Conversation, Message, resolveImageUrl } from '@/lib/api';
+import { isPanoramaPhoto } from '@/lib/panorama';
 import { useAuth } from '@/components/AuthProvider';
 
 export default function MessagesPage() {
@@ -239,7 +240,7 @@ function MessagesContent() {
                                   {msg.property.photos?.[0] && (
                                     // eslint-disable-next-line @next/next/no-img-element
                                     <img 
-                                      src={resolveImageUrl(msg.property.photos[0])} 
+                                      src={resolveImageUrl(msg.property.photos[0], 'thumb')}
                                       alt="" 
                                       className="w-10 h-10 rounded object-cover"
                                     />

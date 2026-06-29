@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import type { Property } from '@/lib/types';
 import { resolveImageUrl } from '@/lib/api';
+import { isPanoramaPhoto } from '@/lib/panorama';
 import { formatListedDate, getPropertyStreetLine } from '@/lib/propertyDisplay';
 import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
@@ -62,7 +63,13 @@ export function PropertyMapListRow({
         <div className="relative h-full w-28 shrink-0 overflow-hidden rounded-md bg-slate-100 dark:bg-zinc-800 sm:w-32">
           {img ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={resolveImageUrl(img)} alt="" className="h-full w-full object-cover" />
+            <img
+              src={resolveImageUrl(img, 'thumb', {
+                isPanorama: isPanoramaPhoto(img, p.panoramaPhotos),
+              })}
+              alt=""
+              className="h-full w-full object-cover"
+            />
           ) : (
             <div className="flex h-full items-center justify-center px-1 text-center text-[10px] text-slate-400">
               {t('no_photo')}

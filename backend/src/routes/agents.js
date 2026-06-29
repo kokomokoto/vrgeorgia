@@ -4,6 +4,12 @@ import { Property } from '../models/Property.js';
 import { requireAuth } from '../middleware/auth.js';
 import { uploadAgentPhoto } from '../services/cloudinary.js';
 import { backfillMissingAgentProfiles } from '../services/agentProfile.js';
+import {
+  applyPropertyQueryFilters,
+  parsePropertySortOption,
+  PUBLIC_LISTING_OR,
+  PUBLIC_STATUS_OR,
+} from '../utils/propertyQueryFilters.js';
 
 const router = express.Router();
 
@@ -48,11 +54,21 @@ router.get('/', async (req, res) => {
 // Get single agent by ID (public)
 router.get('/:id', async (req, res) => {
   try {
-    const agent = await Agent.findById(req.params.id);
+    const agent = await Agent.findById(req.params.id).populate('user', 'name avatar phone email');
     if (!agent) {
       return res.status(404).json({ error: 'Agent not found' });
     }
-    res.json(agent);
+    const doc = agent.toObject();
+    const u = doc.user;
+    if (u && typeof u === 'object') {
+      if (!doc.photo && u.avatar) doc.photo = u.avatar;
+      const userName = String(u.name || '').trim();
+      if (userName && (!doc.name || doc.name === String(u.email || '').split('@')[0])) {
+        doc.name = userName;
+      }
+      doc.user = u._id;
+    }
+    res.json(doc);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -61,35 +77,40 @@ router.get('/:id', async (req, res) => {
 // Get agent's properties (public)
 router.get('/:id/properties', async (req, res) => {
   try {
-    const { page = 1, limit = 12 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+    const agent = await Agent.findById(req.params.id).select('user').lean();
+    if (!agent?.user) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    const { page = 1, limit = 200 } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 200));
+    const skip = (pageNum - 1) * limitNum;
+
     const publicAgentFilter = {
-      agentId: req.params.id,
-      $and: [
-        {
-          $or: [
-            { status: 'active' },
-            { status: 'pending' },
-            { status: { $exists: false } },
-          ],
-        },
-        {
-          $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
-        },
-      ],
+      userId: agent.user,
+      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }],
     };
+
+    await applyPropertyQueryFilters(publicAgentFilter, req.query);
+
+    const finalSort = parsePropertySortOption(req.query.sort);
 
     const [properties, total] = await Promise.all([
       Property.find(publicAgentFilter)
         .select('-privateNotes -shareToken')
-        .sort({ createdAt: -1 })
+        .sort(finalSort)
         .skip(skip)
-        .limit(parseInt(limit)),
+        .limit(limitNum),
       Property.countDocuments(publicAgentFilter),
     ]);
-    
-    res.json({ properties, total, page: parseInt(page), totalPages: Math.ceil(total / limit) });
+
+    res.json({
+      properties,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

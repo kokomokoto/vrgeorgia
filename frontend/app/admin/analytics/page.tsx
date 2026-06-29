@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import { AdminSearchAnalytics, type SearchAnalyticsData } from '@/components/AdminSearchAnalytics';
+import { AdminAgentPortfolioStats, type AgentPortfolioStats } from '@/components/AdminAgentPortfolioStats';
 
 interface AnalyticsData {
   period: number;
@@ -19,10 +21,20 @@ interface AnalyticsData {
   dailyViews: { _id: string; views: number; uniqueVisitors: number }[];
   hourlyToday: { _id: number; count: number }[];
   referrerStats: { _id: string; count: number }[];
+  countryStats: { _id: string; code?: string; count: number; uniqueVisitors: number }[];
+  cityStats: { _id: string; country?: string; countryCode?: string; region?: string; count: number; uniqueVisitors: number }[];
+  searchStats: SearchAnalyticsData;
+  agentPortfolioStats: AgentPortfolioStats;
 }
 
 const DEVICE_ICONS: Record<string, string> = { desktop: '🖥️', mobile: '📱', tablet: '📋', unknown: '❓' };
 const DEVICE_NAMES: Record<string, string> = { desktop: 'კომპიუტერი', mobile: 'ტელეფონი', tablet: 'ტაბლეტი', unknown: 'უცნობი' };
+
+function countryFlag(code?: string) {
+  if (!code || code.length !== 2 || code === 'LO') return '🌍';
+  const offset = 127397;
+  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => c.charCodeAt(0) + offset));
+}
 
 export default function AdminAnalytics() {
   const router = useRouter();
@@ -46,7 +58,41 @@ export default function AdminAnalytics() {
       });
       if (res.status === 403) { setError('წვდომა აკრძალულია'); return; }
       if (!res.ok) throw new Error('Failed');
-      setData(await res.json());
+      const json = await res.json();
+      setData({
+        countryStats: [],
+        cityStats: [],
+        searchStats: {
+          totalSearches: 0,
+          uniqueSearchers: 0,
+          sourceStats: [],
+          dealTypeStats: [],
+          typeStats: [],
+          searchCityStats: [],
+          regionStats: [],
+          textQueryStats: [],
+          roomsStats: [],
+          bedroomsStats: [],
+          amenitiesStats: [],
+          tbilisiDistrictStats: [],
+          tbilisiSubdistrictStats: [],
+          buildingProjectStats: [],
+          renovationStatusStats: [],
+          balconiesStats: [],
+          dailySearches: [],
+          featureStats: {
+            has3d: 0,
+            hasPhotos: 0,
+            priceFilter: 0,
+            sqmFilter: 0,
+            constructionYearFilter: 0,
+            renovationYearFilter: 0,
+            propertyIdSearch: 0,
+          },
+        },
+        agentPortfolioStats: { agents: [], typeTotals: [] },
+        ...json,
+      });
     } catch {
       setError('მონაცემების ჩატვირთვა ვერ მოხერხდა');
     } finally {
@@ -66,11 +112,19 @@ export default function AdminAnalytics() {
     );
   }
 
-  function ProgressBar({ value, max, color = 'blue' }: { value: number; max: number; color?: string }) {
+  function ProgressBar({
+    value,
+    max,
+    barClassName = 'bg-blue-500',
+  }: {
+    value: number;
+    max: number;
+    barClassName?: string;
+  }) {
     const pct = max > 0 ? (value / max) * 100 : 0;
     return (
       <div className="w-full bg-gray-200 rounded-full h-2">
-        <div className={`bg-${color}-500 h-2 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+        <div className={`${barClassName} h-2 rounded-full transition-all`} style={{ width: `${pct}%` }} />
       </div>
     );
   }
@@ -168,6 +222,107 @@ export default function AdminAnalytics() {
               </div>
             </div>
 
+            {data.searchStats && <AdminSearchAnalytics data={data.searchStats} />}
+
+            {data.agentPortfolioStats && (
+              <AdminAgentPortfolioStats data={data.agentPortfolioStats} periodDays={data.period} />
+            )}
+
+            {/* Visitor Geography */}
+            <div className="mb-8">
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-gray-800">🌍 ვიზიტორების გეოგრაფია</h2>
+                <p className="text-sm text-gray-500">IP მისამართის მიხედვით (საიდან შემოდიან მომხმარებლები)</p>
+              </div>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="rounded-xl bg-white p-6 shadow-sm">
+                  <h3 className="mb-4 text-lg font-semibold text-gray-800">ქვეყნები</h3>
+                  {data.countryStats.length === 0 ? (
+                    <p className="text-gray-400">მონაცემები არ არის</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-gray-500">
+                            <th className="py-2 pr-3">#</th>
+                            <th className="py-2 pr-3">ქვეყანა</th>
+                            <th className="py-2 pr-3 text-right">ნახვები</th>
+                            <th className="py-2 text-right">უნიკალური</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.countryStats.map((item, i) => {
+                            const maxCount = data.countryStats[0]?.count || 1;
+                            return (
+                              <tr key={item._id} className="border-b border-gray-50">
+                                <td className="py-2.5 pr-3 text-gray-400">{i + 1}</td>
+                                <td className="py-2.5 pr-3">
+                                  <div className="flex items-center gap-2">
+                                    <span>{countryFlag(item.code)}</span>
+                                    <span className="font-medium text-gray-800">{item._id}</span>
+                                  </div>
+                                  <div className="mt-1 w-full max-w-[220px]">
+                                    <ProgressBar value={item.count} max={maxCount} barClassName="bg-green-500" />
+                                  </div>
+                                </td>
+                                <td className="py-2.5 pr-3 text-right font-medium text-blue-600">{item.count}</td>
+                                <td className="py-2.5 text-right text-green-600">{item.uniqueVisitors}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl bg-white p-6 shadow-sm">
+                  <h3 className="mb-4 text-lg font-semibold text-gray-800">ქალაქები</h3>
+                  {data.cityStats.length === 0 ? (
+                    <p className="text-gray-400">მონაცემები არ არის</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-gray-500">
+                            <th className="py-2 pr-3">#</th>
+                            <th className="py-2 pr-3">ქალაქი</th>
+                            <th className="py-2 pr-3 text-right">ნახვები</th>
+                            <th className="py-2 text-right">უნიკალური</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.cityStats.map((item, i) => {
+                            const maxCount = data.cityStats[0]?.count || 1;
+                            const locationLabel = [item._id, item.region, item.country].filter(Boolean).join(', ');
+                            return (
+                              <tr key={`${item._id}-${item.country}-${i}`} className="border-b border-gray-50">
+                                <td className="py-2.5 pr-3 text-gray-400">{i + 1}</td>
+                                <td className="py-2.5 pr-3">
+                                  <div className="flex items-center gap-2">
+                                    <span>{countryFlag(item.countryCode)}</span>
+                                    <div>
+                                      <div className="font-medium text-gray-800">{item._id}</div>
+                                      <div className="text-xs text-gray-500">{locationLabel}</div>
+                                    </div>
+                                  </div>
+                                  <div className="mt-1 w-full max-w-[220px]">
+                                    <ProgressBar value={item.count} max={maxCount} barClassName="bg-purple-500" />
+                                  </div>
+                                </td>
+                                <td className="py-2.5 pr-3 text-right font-medium text-blue-600">{item.count}</td>
+                                <td className="py-2.5 text-right text-green-600">{item.uniqueVisitors}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               {/* Device Stats */}
               <div className="bg-white rounded-xl shadow-sm p-6">
@@ -229,7 +384,8 @@ export default function AdminAnalytics() {
 
               {/* Referrers */}
               <div className="bg-white rounded-xl shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">საიდან მოვიდნენ</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-1">წინა საიტი (referrer)</h3>
+                <p className="mb-4 text-xs text-gray-500">რომელი ბმულიდან გადმოვიდნენ საიტზე</p>
                 <div className="space-y-3">
                   {data.referrerStats.map(item => (
                     <div key={item._id} className="flex items-center justify-between">

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import CompareButton from '@/components/CompareButton';
 import FavoriteButton from '@/components/FavoriteButton';
 import { getProperty, resolveImageUrl } from '@/lib/api';
+import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
 
 // localStorage-ში ფავორიტების წაკითხვა
@@ -100,7 +101,9 @@ export default function FavoritesPage() {
                   <div className="aspect-[4/3] relative">
                     {photo ? (
                       <img
-                        src={resolveImageUrl(photo)}
+                        src={resolveImageUrl(photo, 'thumb', {
+                          isPanorama: isPanoramaPhoto(photo, property.panoramaPhotos),
+                        })}
                         alt={property.title}
                         className="w-full h-full object-cover"
                       />

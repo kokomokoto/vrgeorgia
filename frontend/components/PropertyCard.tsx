@@ -5,6 +5,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Property } from '@/lib/types';
 import { resolveImageUrl } from '@/lib/api';
+import { isPanoramaPhoto } from '@/lib/panorama';
 import { formatListedDate, getPropertyStreetLine } from '@/lib/propertyDisplay';
 import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
@@ -41,7 +42,9 @@ export function PropertyCard({
       };
       img.onload = finish;
       img.onerror = finish;
-      img.src = resolveImageUrl(photos[index]);
+      img.src = resolveImageUrl(photos[index], 'thumb', {
+        isPanorama: isPanoramaPhoto(photos[index], p.panoramaPhotos),
+      });
     },
     [photos]
   );
@@ -106,7 +109,9 @@ export function PropertyCard({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={`${photo}-${i}`}
-                  src={resolveImageUrl(photo)}
+                  src={resolveImageUrl(photo, 'thumb', {
+                    isPanorama: isPanoramaPhoto(photo, p.panoramaPhotos),
+                  })}
                   alt={i === shownIndex ? p.title : ''}
                   loading={i === mainPhotoIndex ? 'lazy' : undefined}
                   decoding="async"

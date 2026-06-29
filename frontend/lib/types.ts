@@ -82,6 +82,8 @@ export type Property = {
   contact?: { phone?: string; email?: string };
   privateNotes?: string;
   userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string; role?: 'user' | 'agent' | 'admin' };
+  /** Agent პროფილის ID (owner agent-ისთვის) */
+  ownerAgentProfileId?: string;
   views?: number;
   createdAt?: string;
   status?: 'pending' | 'active' | 'rejected' | 'sold';

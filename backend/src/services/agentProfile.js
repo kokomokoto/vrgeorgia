@@ -15,16 +15,21 @@ export async function syncAgentProfileForUser(user, { forceActive } = {}) {
 
   const displayName = String(user.name || '').trim() || String(user.email || '').split('@')[0] || 'აგენტი';
 
+  const profileUpdate = {
+    name: displayName,
+    phone: user.phone || '',
+    email: user.email,
+    personalId: user.personalId || '',
+    active,
+  };
+  if (user.avatar) {
+    profileUpdate.photo = user.avatar;
+  }
+
   return Agent.findOneAndUpdate(
     { user: user._id },
     {
-      $set: {
-        name: displayName,
-        phone: user.phone || '',
-        email: user.email,
-        personalId: user.personalId || '',
-        active,
-      },
+      $set: profileUpdate,
       $setOnInsert: {
         user: user._id,
         verified: false,
@@ -34,11 +39,16 @@ export async function syncAgentProfileForUser(user, { forceActive } = {}) {
   );
 }
 
-/** agent-role მომხმარებლები Agent ჩანაწერის გარეშე + დამტკიცებული inactive პროფილები. */
+/** agent-role მომხმარებლები Agent ჩანაწერის გარეშე + User→Agent სინქრონიზაცია. */
 export async function backfillMissingAgentProfiles() {
   const linkedUserIds = await Agent.distinct('user');
   const missing = await User.find({ role: 'agent', _id: { $nin: linkedUserIds } });
   for (const user of missing) {
+    await syncAgentProfileForUser(user);
+  }
+
+  const agentUsers = await User.find({ role: 'agent' });
+  for (const user of agentUsers) {
     await syncAgentProfileForUser(user);
   }
 

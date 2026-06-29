@@ -1325,7 +1325,9 @@ export default function EditPropertyPage() {
                             ⋮⋮
                           </span>
                           <img
-                            src={resolveImageUrl(photo)}
+                            src={resolveImageUrl(photo, 'thumb', {
+                              isPanorama: isPanoramaPhoto(photo, panoramaPhotos),
+                            })}
                             alt={`${t('photo')} ${index + 1}`}
                             className={`pointer-events-none h-full w-full rounded-lg border border-slate-200 ${
                               is360 ? 'object-contain bg-slate-900' : 'object-cover'

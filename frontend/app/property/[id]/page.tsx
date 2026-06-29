@@ -33,8 +33,12 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
   onChangeIndex: (i: number) => void;
   t: (key: string) => string;
 }) {
-  const currentUrl = resolveImageUrl(photos[index]);
-  const is360 = isPanoramaPhoto(photos[index], panoramaPhotos);
+  const photoUrl = photos[index];
+  const is360 = isPanoramaPhoto(photoUrl, panoramaPhotos);
+  const displayUrl = is360
+    ? resolveImageUrl(photoUrl)
+    : resolveImageUrl(photoUrl, 'large', { isPanorama: false });
+  const viewerUrl = resolveImageUrl(photoUrl);
   const viewerWrapRef = React.useRef<HTMLDivElement>(null);
   const [show360Ui, setShow360Ui] = React.useState(true);
   const hide360Overlay = React.useCallback(() => {
@@ -117,8 +121,8 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
             className="relative h-[min(94vh,1040px)] w-full min-h-[560px]"
           >
           <PanoramaViewer
-            key={currentUrl}
-            src={currentUrl}
+            key={viewerUrl}
+            src={viewerUrl}
             showNavbar={false}
             onContainerClick={hide360Overlay}
             className="h-full w-full rounded-lg"
@@ -154,7 +158,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
           onClick={(e) => e.stopPropagation()}
         >
           <img
-            src={currentUrl}
+            src={displayUrl}
             alt={`Photo ${index + 1}`}
             className="h-full w-full object-contain select-none"
             draggable={false}
@@ -191,7 +195,13 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
               i === index ? 'scale-110 border-white' : 'border-transparent opacity-60 hover:opacity-100'
             }`}
           >
-            <img src={resolveImageUrl(p)} alt="" className="h-full w-full object-cover" />
+            <img
+              src={resolveImageUrl(p, 'thumb', {
+                isPanorama: isPanoramaPhoto(p, panoramaPhotos),
+              })}
+              alt=""
+              className="h-full w-full object-cover"
+            />
           </button>
         ))}
       </div>
@@ -438,6 +448,12 @@ function PropertyDetailInner() {
   const ownerRoleLabel =
     owner && typeof owner === 'object' && owner.role === 'agent' ? t('agent_role') : t('broker');
 
+  const agentProfileHref = property.ownerAgentProfileId
+    ? `/agents/${property.ownerAgentProfileId}`
+    : owner?.role === 'agent' && ownerId
+      ? `/agent/${ownerId}`
+      : null;
+
   const listedDateLabel = property.createdAt
     ? new Date(property.createdAt).toLocaleDateString('ka-GE', {
         day: '2-digit',
@@ -460,34 +476,59 @@ function PropertyDetailInner() {
       </div>
 
       <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
-        <div className="flex items-center gap-3">
-          {owner?.avatar ? (
-            <img
-              src={resolveImageUrl(owner.avatar)}
-              alt=""
-              className="h-14 w-14 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xl text-slate-400">
-              {owner?.email?.[0]?.toUpperCase() || '?'}
+        {agentProfileHref ? (
+          <Link
+            href={agentProfileHref}
+            className="flex items-center gap-3 rounded-md transition-colors hover:bg-slate-50"
+          >
+            {owner?.avatar ? (
+              <img
+                src={resolveImageUrl(owner.avatar)}
+                alt=""
+                className="h-14 w-14 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xl text-slate-400">
+                {owner?.email?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-slate-900">
+                {owner?.name || owner?.email || t('unknown')}
+              </div>
+              <div className="text-sm text-slate-500">{ownerRoleLabel}</div>
             </div>
-          )}
-          <div className="min-w-0">
-            <div className="truncate font-semibold text-slate-900">
-              {owner?.name || owner?.email || t('unknown')}
+          </Link>
+        ) : (
+          <div className="flex items-center gap-3">
+            {owner?.avatar ? (
+              <img
+                src={resolveImageUrl(owner.avatar)}
+                alt=""
+                className="h-14 w-14 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xl text-slate-400">
+                {owner?.email?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-slate-900">
+                {owner?.name || owner?.email || t('unknown')}
+              </div>
+              <div className="text-sm text-slate-500">{ownerRoleLabel}</div>
             </div>
-            <div className="text-sm text-slate-500">{ownerRoleLabel}</div>
           </div>
-        </div>
+        )}
 
         <BrokerContactChannels
           phone={property.contact?.phone || owner?.phone}
           email={property.contact?.email || owner?.email}
         />
 
-        {owner?._id && (
+        {agentProfileHref && (
           <Link
-            href={`/agent/${owner._id}`}
+            href={agentProfileHref}
             className="block w-full rounded-md bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             {t('otherListings')}
@@ -743,7 +784,9 @@ function PropertyDetailInner() {
                 >
                   <img
                     key={displayPhotoUrl}
-                    src={resolveImageUrl(displayPhotoUrl)}
+                    src={resolveImageUrl(displayPhotoUrl, displayIs360 ? undefined : 'large', {
+                      isPanorama: displayIs360,
+                    })}
                     alt=""
                     className={`h-full w-full transition-opacity group-hover:opacity-95 ${
                       displayIs360 ? 'object-contain bg-slate-900' : 'object-cover'
@@ -821,7 +864,9 @@ function PropertyDetailInner() {
                 }}
               >
                 <img 
-                  src={resolveImageUrl(p)} 
+                  src={resolveImageUrl(p, is360Thumb ? undefined : 'thumb', {
+                    isPanorama: is360Thumb,
+                  })}
                   alt={`Photo ${idx + 1}`} 
                   className={`h-[140px] sm:h-[180px] w-auto rounded-lg ${is360Thumb ? 'object-contain bg-slate-900 min-w-[200px]' : 'object-cover'}`}
                 />

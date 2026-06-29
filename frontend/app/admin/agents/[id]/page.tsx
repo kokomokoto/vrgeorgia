@@ -14,6 +14,7 @@ interface AgentDetail {
   email: string;
   phone: string;
   company: string;
+  photo?: string;
   verified: boolean;
   avgRating: number;
   totalReviews: number;
@@ -231,16 +232,31 @@ export default function AdminAgentDetailPage() {
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center text-2xl">
-                👤
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">{agent.name}</h1>
-                <p className="text-gray-500">{agent.company || 'დამოუკიდებელი'}</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  📧 {agent.email} · 📞 {agent.phone || '—'}
-                </p>
-              </div>
+              <Link
+                href={`/agents/${agent._id}`}
+                target="_blank"
+                className="flex items-center gap-4 rounded-lg transition-colors hover:bg-gray-50"
+              >
+                {agent.photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={resolveImageUrl(agent.photo)}
+                    alt=""
+                    className="h-14 w-14 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-2xl">
+                    👤
+                  </div>
+                )}
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800">{agent.name}</h1>
+                  <p className="text-gray-500">{agent.company || 'დამოუკიდებელი'}</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    📧 {agent.email} · 📞 {agent.phone || '—'}
+                  </p>
+                </div>
+              </Link>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {agent.verified ? (
@@ -259,7 +275,7 @@ export default function AdminAgentDetailPage() {
                 🏘️ {propertyCount} განცხადება
               </span>
               <Link
-                href={`/agent/${agent._id}`}
+                href={`/agents/${agent._id}`}
                 target="_blank"
                 className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200"
               >
@@ -324,7 +340,7 @@ export default function AdminAgentDetailPage() {
                           <div className="w-16 h-12 bg-gray-200 rounded-lg overflow-hidden relative flex-shrink-0">
                             {property.photos?.[0] ? (
                               <Image
-                                src={resolveImageUrl(property.photos[0])}
+                                src={resolveImageUrl(property.photos[0], 'thumb')}
                                 alt={property.title}
                                 fill
                                 className="object-cover"

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
 import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty } from '@/lib/api';
+import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
 
 type BrokerListingMode = 'public' | 'unlisted' | 'private' | 'sold';
@@ -396,7 +397,9 @@ export default function ProfilePage() {
                 <div className="h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-slate-100">
                   {mainImg ? (
                     <img
-                      src={resolveImageUrl(mainImg)}
+                      src={resolveImageUrl(mainImg, 'thumb', {
+                        isPanorama: isPanoramaPhoto(mainImg, property.panoramaPhotos),
+                      })}
                       alt={property.title}
                       className="h-full w-full object-cover"
                     />

@@ -359,7 +359,7 @@ function AdminProperties() {
                         <div className="w-16 h-12 bg-gray-200 rounded-lg overflow-hidden relative flex-shrink-0">
                           {property.photos?.[0] ? (
                             <Image
-                              src={resolveImageUrl(property.photos[0])}
+                              src={resolveImageUrl(property.photos[0], 'thumb')}
                               alt={property.title}
                               fill
                               className="object-cover"

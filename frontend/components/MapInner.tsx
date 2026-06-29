@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import React, { useEffect, useRef, useState } from 'react';
 import type { Property } from '@/lib/types';
 import { resolveImageUrl } from '@/lib/api';
+import { isPanoramaPhoto } from '@/lib/panorama';
 import type { MapBounds } from '@/lib/mapBounds';
 import { useTheme } from '@/components/ThemeProvider';
 import { useKutaisiZonesMapLayer } from '@/components/KutaisiZonesMapLayer';
@@ -40,7 +41,11 @@ function formatMapArea(p: Property): string {
 function buildHoverTooltipHtml(p: Property): string {
   const mainPhotoIndex = p.mainPhoto ?? 0;
   const rawImg = p.photos?.[mainPhotoIndex] || p.photos?.[0];
-  const imgUrl = rawImg ? resolveImageUrl(rawImg) : '';
+  const imgUrl = rawImg
+    ? resolveImageUrl(rawImg, 'thumb', {
+        isPanorama: isPanoramaPhoto(rawImg, p.panoramaPhotos),
+      })
+    : '';
   const safeImg =
     imgUrl && (/^https?:\/\//i.test(imgUrl) || imgUrl.startsWith('data:image/'))
       ? escapeHtml(imgUrl)

@@ -36,6 +36,7 @@ const SOURCE_LABELS: Record<string, string> = {
   map: 'რუკა',
   agent: 'აგენტის პროფილი',
   admin_tours: '3D ტურები (ადმინ)',
+  admin_properties: 'განცხადებები (ადმინ)',
 };
 
 const DEAL_LABELS: Record<string, string> = {
@@ -151,13 +152,6 @@ export function AdminSearchAnalytics({ data }: { data: SearchAnalyticsData }) {
 
   return (
     <div className="mb-8">
-      <div className="mb-4">
-        <h2 className="text-xl font-bold text-gray-800">🔍 სერჩის ანალიტიკა</h2>
-        <p className="text-sm text-gray-500">
-          რას ეძებენ მომხმარებლები ყველაზე ხშირად — ფილტრებისა და ძიების სტატისტიკა
-        </p>
-      </div>
-
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">სულ ძიება</p>

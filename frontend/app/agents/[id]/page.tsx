@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import { getAgent, getAgentProperties, getAgentReviews, addAgentReview, Agent, AgentReview, Property, resolveImageUrl } from '@/lib/api';
 import { PropertyCard } from '@/components/PropertyCard';
 import { Filters, type FiltersState } from '@/components/Filters';
-import { DEFAULT_MAP_FILTERS, filtersToPropertyQuery } from '@/lib/mapQuery';
+import { DEFAULT_MAP_FILTERS, filtersAreActive, filtersToPropertyQuery } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 function AgentPhotoLightbox({
   src,
@@ -77,6 +77,7 @@ export default function AgentProfilePage() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertiesTotal, setPropertiesTotal] = useState(0);
+  const [allPropertiesCount, setAllPropertiesCount] = useState(0);
   const [rangeProperties, setRangeProperties] = useState<Property[]>([]);
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
   const [sortBy, setSortBy] = useState('date_desc');
@@ -113,6 +114,9 @@ export default function AgentProfilePage() {
           if (!alive) return;
           setProperties(r.properties);
           setPropertiesTotal(r.total);
+          if (!filtersAreActive(filters)) {
+            setAllPropertiesCount(r.total);
+          }
           trackSearchFilters('agent', filters, {
             agentId,
             sort: sortBy,
@@ -149,6 +153,7 @@ export default function AgentProfilePage() {
       ]);
       setAgent(agentData);
       setRangeProperties(propsData.properties);
+      setAllPropertiesCount(propsData.total ?? propsData.properties.length);
       setReviews(reviewsData);
     } catch (err: any) {
       setError(err.message);
@@ -347,27 +352,20 @@ export default function AgentProfilePage() {
         <div className="mb-8">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-bold text-slate-900">{t('agentProperties')}</h2>
-            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-              <span>
-                {propertiesLoading
-                  ? t('loading', 'იტვირთება...')
-                  : `${propertiesTotal} ${t('results', 'შედეგი')}`}
-              </span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
-              >
-                <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
-                <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
-                <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
-                <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
-                <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
-                <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
-                <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
-                <option value="views_asc">{t('sort_views_asc', 'ნახვები ↑')}</option>
-              </select>
-            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+            >
+              <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
+              <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
+              <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
+              <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
+              <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
+              <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
+              <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
+              <option value="views_asc">{t('sort_views_asc', 'ნახვები ↑')}</option>
+            </select>
           </div>
 
           <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
@@ -379,7 +377,21 @@ export default function AgentProfilePage() {
               onChange={setFilters}
               onClearAll={clearAllFilters}
               rangeProperties={rangeProperties}
+              showCategories
             />
+          </div>
+
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-sm font-medium text-slate-800">
+              {propertiesLoading
+                ? t('loading', 'იტვირთება...')
+                : filtersAreActive(filters) && allPropertiesCount > 0
+                  ? t('agentListingsFoundFiltered', {
+                      count: propertiesTotal,
+                      total: allPropertiesCount,
+                    })
+                  : t('agentListingsFound', { count: propertiesTotal })}
+            </p>
           </div>
 
           {propertiesError && (

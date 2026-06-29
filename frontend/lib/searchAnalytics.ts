@@ -85,7 +85,7 @@ const lastSent = new Map<string, string>();
 
 /** სერჩის/ფილტრის გამოყენების აღრიცხვა (იგივე ფილტრის დუბლიკატი არ იგზავნება) */
 export function trackSearchFilters(
-  source: 'home' | 'map' | 'agent' | 'admin_tours',
+  source: 'home' | 'map' | 'agent' | 'admin_tours' | 'admin_properties',
   filters: FiltersState,
   opts?: { agentId?: string; sort?: string; resultCount?: number }
 ) {

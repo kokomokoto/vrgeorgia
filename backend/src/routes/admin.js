@@ -35,6 +35,19 @@ const adminMiddleware = async (req, res, next) => {
   }
 };
 
+// Lightweight counts for admin sidebar badges
+router.get('/counts', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const [pendingRegistrations, pendingProperties] = await Promise.all([
+      User.countDocuments({ status: 'pending' }),
+      Property.countDocuments({ status: 'pending' }),
+    ]);
+    res.json({ pendingRegistrations, pendingProperties });
+  } catch (_error) {
+    res.status(500).json({ message: 'მონაცემების მიღება ვერ მოხერხდა' });
+  }
+});
+
 // Get dashboard statistics
 router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
   try {
@@ -301,6 +314,23 @@ router.get('/agents', requireAuth, adminMiddleware, async (req, res) => {
   }
 });
 
+// აგენტების ანალიტიკა (განცხადებები, კატეგორიები, ნახვები)
+router.get('/agents/stats', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    await backfillMissingAgentProfiles();
+    const { period = '30d' } = req.query;
+    const periodDays = period === '90d' ? 90 : period === '7d' ? 7 : 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - periodDays);
+    startDate.setHours(0, 0, 0, 0);
+    const matchStage = { createdAt: { $gte: startDate } };
+    const stats = await getAgentPortfolioStats(matchStage);
+    res.json({ ...stats, period: periodDays });
+  } catch (error) {
+    res.status(500).json({ message: 'აგენტების სტატისტიკის მიღება ვერ მოხერხდა' });
+  }
+});
+
 // Single agent (admin) + listing count
 router.get('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
   try {
@@ -384,35 +414,37 @@ router.delete('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
 // Get all properties with pagination (admin view)
 router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const status = req.query.status || '';
-    const type = req.query.type || req.query.propertyType || '';
-    const userId = req.query.userId || '';
-    
-    const query = {};
-    if (status) {
-      query.status = status;
+    const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    const filter = {};
+    if (req.query.status) {
+      filter.status = req.query.status;
     }
-    if (type) {
-      query.type = type;
+    if (req.query.userId) {
+      filter.userId = req.query.userId;
     }
-    if (userId) {
-      query.userId = userId;
-    }
-    
-    const total = await Property.countDocuments(query);
-    const properties = await Property.find(query)
+
+    const filterQuery = {
+      ...req.query,
+      q: req.query.q || req.query.search || undefined,
+    };
+    await applyPropertyQueryFilters(filter, filterQuery);
+
+    const finalSort = parsePropertySortOption(req.query.sort);
+
+    const total = await Property.countDocuments(filter);
+    const properties = await Property.find(filter)
       .populate('userId', 'name email')
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
-    
+      .sort(finalSort)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
+
     res.json({
       properties,
       total,
-      page,
-      pages: Math.ceil(total / limit)
+      page: pageNum,
+      pages: Math.ceil(total / limitNum) || 1,
     });
   } catch (error) {
     res.status(500).json({ message: 'განცხადებების მიღება ვერ მოხერხდა' });
@@ -590,13 +622,31 @@ router.get('/messages', requireAuth, adminMiddleware, async (req, res) => {
 
 router.get('/audit-logs', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const logs = await AdminAuditLog.find()
-      .populate('adminId', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
-    res.json({ logs });
+    const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const action = (req.query.action || '').trim();
+    const targetType = (req.query.targetType || '').trim();
+
+    const filter = {};
+    if (action) filter.action = action;
+    if (targetType) filter.targetType = targetType;
+
+    const [total, logs] = await Promise.all([
+      AdminAuditLog.countDocuments(filter),
+      AdminAuditLog.find(filter)
+        .populate('adminId', 'name email')
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean(),
+    ]);
+
+    res.json({
+      logs,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum) || 1,
+    });
   } catch (_error) {
     res.status(500).json({ message: 'ლოგების მიღება ვერ მოხერხდა' });
   }
@@ -761,7 +811,6 @@ router.get('/analytics', requireAuth, adminMiddleware, async (req, res) => {
       { $limit: 25 },
     ]);
 
-    const searchStats = await getSearchAnalyticsStats(matchStage);
     const agentPortfolioStats = await getAgentPortfolioStats(matchStage);
     
     res.json({
@@ -779,12 +828,30 @@ router.get('/analytics', requireAuth, adminMiddleware, async (req, res) => {
       referrerStats,
       countryStats,
       cityStats,
-      searchStats,
       agentPortfolioStats,
     });
   } catch (error) {
     console.error('Analytics error:', error);
     res.status(500).json({ message: 'ანალიტიკის მიღება ვერ მოხერხდა' });
+  }
+});
+
+// სერჩის ანალიტიკა — ცალკე endpoint
+router.get('/analytics/search', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const { period = '7d' } = req.query;
+    const periodDays = period === '30d' ? 30 : period === '90d' ? 90 : 7;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - periodDays);
+    startDate.setHours(0, 0, 0, 0);
+
+    const matchStage = { createdAt: { $gte: startDate } };
+    const searchStats = await getSearchAnalyticsStats(matchStage);
+
+    res.json({ period: periodDays, searchStats });
+  } catch (error) {
+    console.error('Search analytics error:', error);
+    res.status(500).json({ message: 'სერჩის ანალიტიკის მიღება ვერ მოხერხდა' });
   }
 });
 

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
-import { AdminSearchAnalytics, type SearchAnalyticsData } from '@/components/AdminSearchAnalytics';
 import { AdminAgentPortfolioStats, type AgentPortfolioStats } from '@/components/AdminAgentPortfolioStats';
 
 interface AnalyticsData {
@@ -23,7 +22,6 @@ interface AnalyticsData {
   referrerStats: { _id: string; count: number }[];
   countryStats: { _id: string; code?: string; count: number; uniqueVisitors: number }[];
   cityStats: { _id: string; country?: string; countryCode?: string; region?: string; count: number; uniqueVisitors: number }[];
-  searchStats: SearchAnalyticsData;
   agentPortfolioStats: AgentPortfolioStats;
 }
 
@@ -62,34 +60,6 @@ export default function AdminAnalytics() {
       setData({
         countryStats: [],
         cityStats: [],
-        searchStats: {
-          totalSearches: 0,
-          uniqueSearchers: 0,
-          sourceStats: [],
-          dealTypeStats: [],
-          typeStats: [],
-          searchCityStats: [],
-          regionStats: [],
-          textQueryStats: [],
-          roomsStats: [],
-          bedroomsStats: [],
-          amenitiesStats: [],
-          tbilisiDistrictStats: [],
-          tbilisiSubdistrictStats: [],
-          buildingProjectStats: [],
-          renovationStatusStats: [],
-          balconiesStats: [],
-          dailySearches: [],
-          featureStats: {
-            has3d: 0,
-            hasPhotos: 0,
-            priceFilter: 0,
-            sqmFilter: 0,
-            constructionYearFilter: 0,
-            renovationYearFilter: 0,
-            propertyIdSearch: 0,
-          },
-        },
         agentPortfolioStats: { agents: [], typeTotals: [] },
         ...json,
       });
@@ -221,8 +191,6 @@ export default function AdminAnalytics() {
                 <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-400 rounded" /><span className="text-sm text-gray-600">უნიკალური</span></div>
               </div>
             </div>
-
-            {data.searchStats && <AdminSearchAnalytics data={data.searchStats} />}
 
             {data.agentPortfolioStats && (
               <AdminAgentPortfolioStats data={data.agentPortfolioStats} periodDays={data.period} />

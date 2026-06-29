@@ -240,6 +240,7 @@ export function Filters({
   variant = 'default',
   onClearAll,
   rangeProperties,
+  showCategories = false,
 }: {
   value: FiltersState;
   onChange: (v: FiltersState) => void;
@@ -249,6 +250,8 @@ export function Filters({
   onClearAll?: () => void;
   /** მიმდინარე ძიების შედეგები (ფასი/ფართობის გარეშე) — სლაიდერის min/max და ჰისტოგრამა */
   rangeProperties?: Property[];
+  /** კატეგორიის ჩიპები (ბინა, სახლი...) — აგენტის პროფილზე და სხვა */
+  showCategories?: boolean;
 }) {
   const { t } = useTranslation();
   const { rate: usdToGel } = useCurrencyRate();
@@ -1055,7 +1058,7 @@ export function Filters({
             : `${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`
         }
       >
-      {mapSidebar && (
+      {(mapSidebar || showCategories) && (
         <div className="mb-4">
           <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
             {t('categories')}

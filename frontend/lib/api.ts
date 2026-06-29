@@ -185,6 +185,8 @@ export type PropertyQuery = {
   sort?: string;
   propertyId?: string;
   lang?: string;
+  page?: number;
+  limit?: number;
 };
 
 export async function listProperties(query: PropertyQuery) {

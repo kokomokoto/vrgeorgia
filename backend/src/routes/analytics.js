@@ -144,7 +144,7 @@ router.post('/pageview', async (req, res) => {
 router.post('/search', async (req, res) => {
   try {
     const body = req.body || {};
-    const source = ['home', 'map', 'agent', 'admin_tours'].includes(body.source) ? body.source : 'home';
+    const source = ['home', 'map', 'agent', 'admin_tours', 'admin_properties'].includes(body.source) ? body.source : 'home';
 
     const hasAnyFilter =
       (body.q && String(body.q).trim()) ||

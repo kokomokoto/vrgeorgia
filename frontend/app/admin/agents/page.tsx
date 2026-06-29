@@ -6,6 +6,10 @@ import Link from 'next/link';
 import { getApiBase } from '@/lib/config';
 import { resolveImageUrl } from '@/lib/api';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import {
+  AdminAgentPortfolioStats,
+  type AgentPortfolioStats,
+} from '@/components/AdminAgentPortfolioStats';
 
 interface Agent {
   _id: string;
@@ -31,10 +35,41 @@ export default function AdminAgents() {
   const [search, setSearch] = useState('');
   const [verifiedFilter, setVerifiedFilter] = useState('');
   const [error, setError] = useState('');
+  const [view, setView] = useState<'list' | 'analytics'>('list');
+  const [agentStats, setAgentStats] = useState<(AgentPortfolioStats & { period?: number }) | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => {
     fetchAgents();
   }, [page, verifiedFilter]);
+
+  useEffect(() => {
+    if (view !== 'analytics') return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    let alive = true;
+    (async () => {
+      try {
+        setStatsLoading(true);
+        const res = await fetch(`${getApiBase()}/api/admin/agents/stats?period=30d`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (alive) setAgentStats(data);
+      } catch {
+        /* ignore */
+      } finally {
+        if (alive) setStatsLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [view]);
 
   const fetchAgents = async () => {
     const token = localStorage.getItem('token');
@@ -137,11 +172,45 @@ export default function AdminAgents() {
       <div className="ml-64 p-8">
         <div className="mb-8 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">აგენტები</h1>
-            <p className="text-gray-600">სულ: {total} აგენტი</p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold text-gray-800">
+                {view === 'list' ? 'აგენტები' : 'აგენტების ანალიტიკა'}
+              </h1>
+              {view === 'list' ? (
+                <button
+                  type="button"
+                  onClick={() => setView('analytics')}
+                  className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-700"
+                >
+                  📊 ანალიტიკა
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setView('list')}
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                >
+                  ← აგენტები
+                </button>
+              )}
+            </div>
+            {view === 'list' && <p className="text-gray-600 mt-1">სულ: {total} აგენტი</p>}
           </div>
         </div>
 
+        {view === 'analytics' ? (
+          statsLoading || !agentStats ? (
+            <div className="rounded-xl bg-white py-16 text-center text-gray-500 shadow-sm">
+              იტვირთება...
+            </div>
+          ) : (
+            <AdminAgentPortfolioStats
+              data={agentStats}
+              periodDays={agentStats.period ?? 30}
+            />
+          )
+        ) : (
+          <>
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
           <form onSubmit={handleSearch} className="flex gap-4">
@@ -298,6 +367,8 @@ export default function AdminAgents() {
               შემდეგი →
             </button>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

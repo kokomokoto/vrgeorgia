@@ -42,6 +42,10 @@ export const DEFAULT_MAP_FILTERS: FiltersState = {
   propertyId: ''
 };
 
+export function filtersAreActive(filters: FiltersState): boolean {
+  return JSON.stringify(filters) !== JSON.stringify(DEFAULT_MAP_FILTERS);
+}
+
 function parseJsonStringArray(raw: string | null): string[] {
   if (!raw || !raw.trim()) return [];
   try {

@@ -96,7 +96,7 @@ export default function AdminRegistrationsPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <AdminSidebar pendingCount={users.length} />
+      <AdminSidebar pendingRegistrations={users.length} />
 
       <div className="ml-64 p-8">
         <div className="mb-8">

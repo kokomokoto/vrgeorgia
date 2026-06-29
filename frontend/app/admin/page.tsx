@@ -138,7 +138,10 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <AdminSidebar pendingCount={stats?.pendingRegistrations || 0} />
+      <AdminSidebar
+        pendingRegistrations={stats?.pendingRegistrations || 0}
+        pendingProperties={stats?.pendingProperties || 0}
+      />
 
       {/* Main Content */}
       <div className="ml-64 p-8">
@@ -338,7 +341,12 @@ export default function AdminDashboard() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm p-6 mt-8">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">ადმინისტრატორის ქმედებების ჟურნალი</h3>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-800">ადმინისტრატორის ქმედებების ჟურნალი</h3>
+            <Link href="/admin/audit-logs" className="text-sm text-blue-600 hover:underline">
+              სრულად →
+            </Link>
+          </div>
           {auditLogs.length === 0 ? (
             <p className="text-sm text-gray-500">ჩანაწერები ჯერ არ არის</p>
           ) : (

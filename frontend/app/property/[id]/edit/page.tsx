@@ -422,6 +422,13 @@ export default function EditPropertyPage() {
     setMainPhotoIndex((prev) => adjustMainIndexAfterRemoval(prev, index));
   };
 
+  const handleDeleteAllPhotos = () => {
+    if (existingPhotos.length === 0) return;
+    setExistingPhotos([]);
+    setPanoramaPhotos([]);
+    setMainPhotoIndex(0);
+  };
+
   const cleanPanoramaList = (list: string[], photos: string[]) =>
     list.filter((u) => photos.some((p) => p === u || normalizePhotoUrl(p) === normalizePhotoUrl(u)));
 
@@ -1258,8 +1265,17 @@ export default function EditPropertyPage() {
               <div className="space-y-4 mt-4">
                 {existingPhotos.length > 0 ? (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-sm font-medium text-slate-700">📸 {existingPhotos.length} {t('photos_count')}</span>
+                      {existingPhotos.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleDeleteAllPhotos}
+                          className="text-sm text-red-600 hover:text-red-700"
+                        >
+                          {t('delete_all')}
+                        </button>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <input

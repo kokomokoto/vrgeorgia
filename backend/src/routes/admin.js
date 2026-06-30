@@ -11,7 +11,17 @@ import { syncAgentProfileForUser, backfillMissingAgentProfiles } from '../servic
 import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
 import { getSearchAnalyticsStats } from '../utils/searchAnalyticsAgg.js';
 import { getAgentPortfolioStats } from '../utils/agentPortfolioStats.js';
+import { parseAnalyticsPeriodDays, analyticsPeriodStartDate } from '../utils/analyticsPeriod.js';
 import { isAdminRole, isAgentRole, USER_ROLES } from '../utils/userRoles.js';
+import { buildPropertyTextSearchOr } from '../utils/propertySearch.js';
+import {
+  PROPERTY_DELETED,
+  PROPERTY_NOT_DELETED,
+  withNotDeleted,
+  softDeletePropertyDoc,
+  softDeletePropertiesByUserId,
+  restorePropertyById,
+} from '../utils/propertySoftDelete.js';
 
 const router = express.Router();
 
@@ -39,11 +49,12 @@ const adminMiddleware = async (req, res, next) => {
 // Lightweight counts for admin sidebar badges
 router.get('/counts', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const [pendingRegistrations, pendingProperties] = await Promise.all([
+    const [pendingRegistrations, pendingProperties, trashCount] = await Promise.all([
       User.countDocuments({ status: 'pending' }),
-      Property.countDocuments({ status: 'pending' }),
+      Property.countDocuments(withNotDeleted({ status: 'pending' })),
+      Property.countDocuments(PROPERTY_DELETED),
     ]);
-    res.json({ pendingRegistrations, pendingProperties });
+    res.json({ pendingRegistrations, pendingProperties, trashCount });
   } catch (_error) {
     res.status(500).json({ message: 'მონაცემების მიღება ვერ მოხერხდა' });
   }
@@ -56,9 +67,9 @@ router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
     const pendingRegistrations = await User.countDocuments({ status: 'pending' });
     const totalAgents = await Agent.countDocuments();
     const unverifiedAgents = await Agent.countDocuments({ verified: false });
-    const totalProperties = await Property.countDocuments();
-    const pendingProperties = await Property.countDocuments({ status: 'pending' });
-    const activeProperties = await Property.countDocuments({ status: 'active' });
+    const totalProperties = await Property.countDocuments(PROPERTY_NOT_DELETED);
+    const pendingProperties = await Property.countDocuments(withNotDeleted({ status: 'pending' }));
+    const activeProperties = await Property.countDocuments(withNotDeleted({ status: 'active' }));
     const totalMessages = await Message.countDocuments();
     
     // Get registrations by date (last 30 days)
@@ -66,15 +77,19 @@ router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
     const recentUsers = await User.countDocuments({ createdAt: { $gte: thirtyDaysAgo } });
-    const recentProperties = await Property.countDocuments({ createdAt: { $gte: thirtyDaysAgo } });
+    const recentProperties = await Property.countDocuments(
+      withNotDeleted({ createdAt: { $gte: thirtyDaysAgo } })
+    );
     
     // Get properties by type
     const propertiesByType = await Property.aggregate([
+      { $match: PROPERTY_NOT_DELETED },
       { $group: { _id: '$type', count: { $sum: 1 } } }
     ]);
     
     // Get properties by deal type
     const propertiesByDealType = await Property.aggregate([
+      { $match: PROPERTY_NOT_DELETED },
       { $group: { _id: '$dealType', count: { $sum: 1 } } }
     ]);
     
@@ -95,9 +110,9 @@ router.get('/stats', requireAuth, adminMiddleware, async (req, res) => {
       const usersCount = await User.countDocuments({
         createdAt: { $gte: date, $lt: nextDate }
       });
-      const propertiesCount = await Property.countDocuments({
-        createdAt: { $gte: date, $lt: nextDate }
-      });
+      const propertiesCount = await Property.countDocuments(
+        withNotDeleted({ createdAt: { $gte: date, $lt: nextDate } })
+      );
       
       dailyStats.push({
         date: date.toISOString().split('T')[0],
@@ -251,8 +266,7 @@ router.delete('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
 
     let deletedProperties = 0;
     if (!keepProperties) {
-      const result = await Property.deleteMany({ userId: req.params.id });
-      deletedProperties = result.deletedCount || 0;
+      deletedProperties = await softDeletePropertiesByUserId(req.params.id, req.user.id);
     }
 
     await writeAudit(req.user.id, 'user.deleted', 'user', req.params.id, { keepProperties, deletedProperties });
@@ -294,7 +308,7 @@ router.get('/agents', requireAuth, adminMiddleware, async (req, res) => {
     const userIds = agents.map((a) => a.user).filter(Boolean);
     const countRows = userIds.length
       ? await Property.aggregate([
-          { $match: { userId: { $in: userIds } } },
+          { $match: { userId: { $in: userIds }, ...PROPERTY_NOT_DELETED } },
           { $group: { _id: '$userId', propertyCount: { $sum: 1 } } },
         ])
       : [];
@@ -323,13 +337,11 @@ router.get('/agents/stats', requireAuth, adminMiddleware, async (req, res) => {
   try {
     await backfillMissingAgentProfiles();
     const { period = '30d' } = req.query;
-    const periodDays = period === '90d' ? 90 : period === '7d' ? 7 : 30;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - periodDays);
-    startDate.setHours(0, 0, 0, 0);
+    const periodDays = parseAnalyticsPeriodDays(period, 30);
+    const startDate = analyticsPeriodStartDate(periodDays);
     const matchStage = { createdAt: { $gte: startDate } };
     const stats = await getAgentPortfolioStats(matchStage);
-    res.json({ ...stats, period: periodDays });
+    res.json({ ...stats, period: periodDays, periodKey: period });
   } catch (error) {
     res.status(500).json({ message: 'აგენტების სტატისტიკის მიღება ვერ მოხერხდა' });
   }
@@ -355,7 +367,9 @@ router.get('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
     }
 
     const userId = u?._id || doc.user;
-    const propertyCount = userId ? await Property.countDocuments({ userId }) : 0;
+    const propertyCount = userId
+      ? await Property.countDocuments(withNotDeleted({ userId }))
+      : 0;
     res.json({ agent: doc, propertyCount, userId: userId || null });
   } catch (error) {
     res.status(500).json({ message: 'აგენტის მიღება ვერ მოხერხდა' });
@@ -397,8 +411,7 @@ router.delete('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
     let deletedProperties = 0;
     if (agent.user) {
       if (deleteProperties) {
-        const result = await Property.deleteMany({ userId: agent.user });
-        deletedProperties = result.deletedCount || 0;
+        deletedProperties = await softDeletePropertiesByUserId(agent.user, req.user.id);
       }
       if (deleteUser) {
         await User.findByIdAndDelete(agent.user);
@@ -408,7 +421,12 @@ router.delete('/agents/:id', requireAuth, adminMiddleware, async (req, res) => {
       }
     }
 
-    await writeAudit(req.user.id, 'agent.deleted', 'agent', req.params.id, { deleteProperties, deleteUser, deletedProperties });
+    await writeAudit(req.user.id, 'agent.deleted', 'agent', req.params.id, {
+      deleteProperties,
+      deleteUser,
+      deletedProperties,
+      ownerUserId: agent.user ? String(agent.user) : undefined,
+    });
     res.json({ message: 'აგენტი წაიშალა', deletedProperties });
   } catch (error) {
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
@@ -434,11 +452,12 @@ router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
       q: req.query.q || req.query.search || undefined,
     };
     await applyPropertyQueryFilters(filter, filterQuery);
+    const activeFilter = withNotDeleted(filter);
 
     const finalSort = parsePropertySortOption(req.query.sort);
 
-    const total = await Property.countDocuments(filter);
-    const properties = await Property.find(filter)
+    const total = await Property.countDocuments(activeFilter);
+    const properties = await Property.find(activeFilter)
       .populate('userId', 'name email')
       .sort(finalSort)
       .skip((pageNum - 1) * limitNum)
@@ -498,18 +517,147 @@ router.put('/properties/bulk-status', requireAuth, adminMiddleware, async (req, 
   }
 });
 
-// Delete property
-router.delete('/properties/:id', requireAuth, adminMiddleware, async (req, res) => {
+// Transfer property to another agent
+router.put('/properties/:id/transfer', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const property = await Property.findByIdAndDelete(req.params.id);
+    const targetAgentId = String(req.body.agentId || req.body.targetAgentId || '').trim();
+    if (!targetAgentId) {
+      return res.status(400).json({ message: 'მიუთითეთ ახალი აგენტი' });
+    }
+
+    const property = await Property.findOne({ _id: req.params.id, ...PROPERTY_NOT_DELETED });
     if (!property) {
       return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა' });
     }
-    
-    await writeAudit(req.user.id, 'property.deleted', 'property', req.params.id);
-    res.json({ message: 'განცხადება წაიშალა' });
+
+    const agent = await Agent.findById(targetAgentId).populate('user', 'name email phone status role');
+    if (!agent?.user) {
+      return res.status(404).json({ message: 'აგენტი ვერ მოიძებნა' });
+    }
+
+    const newUserId = agent.user._id || agent.user;
+    const oldUserId = property.userId;
+    if (String(oldUserId) === String(newUserId)) {
+      return res.status(400).json({ message: 'განცხადება უკვე ამ აგენტის საკუთრებაა' });
+    }
+
+    const fromAgent = await Agent.findOne({ user: oldUserId }).select('name _id').lean();
+
+    property.userId = newUserId;
+    property.agentId = agent._id;
+    property.contact = {
+      phone: agent.phone || property.contact?.phone || '',
+      email: agent.email || property.contact?.email || '',
+    };
+    property.editDraft = undefined;
+    await property.save();
+
+    await writeAudit(req.user.id, 'property.transferred', 'property', property._id, {
+      fromUserId: String(oldUserId),
+      fromAgentId: fromAgent?._id ? String(fromAgent._id) : undefined,
+      fromAgentName: fromAgent?.name || undefined,
+      toUserId: String(newUserId),
+      toAgentId: String(agent._id),
+      toAgentName: agent.name,
+    });
+
+    const updated = await Property.findById(property._id)
+      .populate('userId', 'name email phone')
+      .lean();
+
+    res.json({
+      message: `განცხადება გადაეცა აგენტს: ${agent.name}`,
+      property: updated,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'გადაცემა ვერ მოხერხდა' });
+  }
+});
+
+// Delete property (move to trash)
+router.delete('/properties/:id', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const property = await Property.findOne({ _id: req.params.id, ...PROPERTY_NOT_DELETED });
+    if (!property) {
+      return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა' });
+    }
+
+    await softDeletePropertyDoc(property, req.user.id);
+    await writeAudit(req.user.id, 'property.deleted', 'property', req.params.id, {
+      ownerUserId: String(property.userId),
+      softDelete: true,
+    });
+    res.json({ message: 'განცხადება გადატანილია ნაგვის ყუთში' });
   } catch (error) {
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
+  }
+});
+
+// ═══════════════════════════════════════
+// ნაგვის ყუთი
+// ═══════════════════════════════════════
+
+router.get('/trash', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    const filter = { ...PROPERTY_DELETED };
+    if (req.query.q) {
+      const textOr = await buildPropertyTextSearchOr(String(req.query.q));
+      if (textOr.length) {
+        filter.$and = [{ $or: textOr }];
+      }
+    }
+
+    const total = await Property.countDocuments(filter);
+    const properties = await Property.find(filter)
+      .select('title type dealType price priceCurrency city status photos numericId userId deletedAt deletedBy createdAt')
+      .populate('userId', 'name email')
+      .populate('deletedBy', 'name email')
+      .sort({ deletedAt: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
+      .lean();
+
+    res.json({
+      properties,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum) || 1,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'ნაგვის ყუთის მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.post('/trash/:id/restore', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const property = await restorePropertyById(req.params.id);
+    if (!property) {
+      return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა ნაგვის ყუთში' });
+    }
+    await writeAudit(req.user.id, 'property.restored', 'property', req.params.id, {
+      ownerUserId: String(property.userId),
+    });
+    res.json({ message: 'განცხადება აღდგა', property });
+  } catch (error) {
+    res.status(500).json({ message: 'აღდგენა ვერ მოხერხდა' });
+  }
+});
+
+router.delete('/trash/:id', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const property = await Property.findOneAndDelete({ _id: req.params.id, ...PROPERTY_DELETED });
+    if (!property) {
+      return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა ნაგვის ყუთში' });
+    }
+    await writeAudit(req.user.id, 'property.permanently_deleted', 'property', req.params.id, {
+      ownerUserId: String(property.userId),
+    });
+    res.json({ message: 'განცხადება სამუდამოდ წაიშალა' });
+  } catch (error) {
+    res.status(500).json({ message: 'სამუდამო წაშლა ვერ მოხერხდა' });
   }
 });
 
@@ -541,7 +689,7 @@ router.get('/tours', requireAuth, adminMiddleware, async (req, res) => {
     const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
 
-    const filter = { tourLink: { $exists: true, $ne: '' } };
+    const filter = withNotDeleted({ tourLink: { $exists: true, $ne: '' } });
     const filterQuery = {
       ...req.query,
       q: req.query.q || req.query.search || undefined,
@@ -665,11 +813,8 @@ router.get('/analytics', requireAuth, adminMiddleware, async (req, res) => {
   try {
     const { period = '7d' } = req.query;
     
-    // პერიოდის გამოთვლა
-    const periodDays = period === '30d' ? 30 : period === '90d' ? 90 : 7;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - periodDays);
-    startDate.setHours(0, 0, 0, 0);
+    const periodDays = parseAnalyticsPeriodDays(period, 7);
+    const startDate = analyticsPeriodStartDate(periodDays);
     
     const matchStage = { createdAt: { $gte: startDate } };
     

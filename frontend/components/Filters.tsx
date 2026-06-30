@@ -290,14 +290,8 @@ export function Filters({
   const priceSliderValues = React.useMemo(() => {
     if (!priceSliderBounds) return null;
     const { min, max, step } = priceSliderBounds;
-    const thumbMin = (raw: string) => {
-      if (!raw) return min;
-      const n = Number(raw);
-      if (!Number.isFinite(n)) return min;
-      return Math.min(max, Math.max(min, n));
-    };
-    const curMin = thumbMin(value.minPrice);
-    const curMax = thumbMin(value.maxPrice || String(max));
+    const curMin = value.minPrice ? clampToStep(Number(value.minPrice), min, max, step) : min;
+    const curMax = value.maxPrice ? clampToStep(Number(value.maxPrice), min, max, step) : max;
     return {
       min,
       max,

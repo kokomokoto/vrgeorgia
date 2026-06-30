@@ -26,7 +26,11 @@ const ACTION_LABELS: Record<string, string> = {
   'agent.deleted': 'აგენტი წაიშალა',
   'property.status_changed': 'განცხადების სტატუსი შეიცვალა',
   'property.bulk_status_changed': 'მასიური სტატუსის ცვლილება',
-  'property.deleted': 'განცხადება წაიშალა',
+  'property.deleted': 'განცხადება ნაგვის ყუთში',
+  'property.deleted_by_owner': 'მფლობელმა წაშალა (ნაგვის ყუთი)',
+  'property.transferred': 'განცხადება სხვა აგენტზე გადაეცა',
+  'property.restored': 'განცხადება აღდგა',
+  'property.permanently_deleted': 'განცხადება სამუდამოდ წაიშალა',
   'property.pinned': 'განცხადება აპინდა',
   'property.unpinned': 'აპინვა მოხსნილია',
   'tour.removed': '3D ტური მოხსნილია',
@@ -62,6 +66,11 @@ function metaSummary(meta?: Record<string, unknown>): string {
   if (typeof meta.reason === 'string' && meta.reason) parts.push(`მიზეზი: ${meta.reason}`);
   if (typeof meta.role === 'string') parts.push(`როლი: ${meta.role}`);
   if (typeof meta.deletedProperties === 'number') parts.push(`წაშლ. განც.: ${meta.deletedProperties}`);
+  if (typeof meta.fromAgentName === 'string' && typeof meta.toAgentName === 'string') {
+    parts.push(`${meta.fromAgentName} → ${meta.toAgentName}`);
+  } else if (typeof meta.toAgentName === 'string') {
+    parts.push(`→ ${meta.toAgentName}`);
+  }
   return parts.join(' · ');
 }
 

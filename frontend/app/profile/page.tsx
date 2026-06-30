@@ -1,13 +1,20 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
+import { Filters, type FiltersState } from '@/components/Filters';
 import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty } from '@/lib/api';
+import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { isPanoramaPhoto } from '@/lib/panorama';
+import {
+  DEFAULT_MAP_FILTERS,
+  filtersAreActive,
+  filtersToPropertyQuery,
+} from '@/lib/mapQuery';
+import { trackSearchFilters } from '@/lib/searchAnalytics';
 import type { Property } from '@/lib/types';
 import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 
@@ -19,27 +26,26 @@ function brokerListingModeFromProperty(p: Property): BrokerListingMode {
 }
 
 export default function ProfilePage() {
-  const { t } = useTranslation();
-  const router = useRouter();
+  const { t, i18n } = useTranslation();
   const { user, logout, setAuth } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [hydrated, setHydrated] = useState(false);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rangeProperties, setRangeProperties] = useState<Property[]>([]);
+  const [allPropertiesCount, setAllPropertiesCount] = useState(0);
+  const [propertiesTotal, setPropertiesTotal] = useState(0);
+  const [initLoading, setInitLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [visibilitySavingId, setVisibilitySavingId] = useState<string | null>(null);
   const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
-  
-  // ძებნა / ფილტრაცია
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [filterDealType, setFilterDealType] = useState('');
-  /** აგენტი/ადმინი: საჯარო / პირადი / ლინკით / გაყიდული */
+
+  const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
+  const [sortBy, setSortBy] = useState('date_desc');
   const [filterVisibility, setFilterVisibility] = useState<'' | BrokerListingMode>('');
-  
-  // Profile editing
+
   const [editMode, setEditMode] = useState(false);
   const [editPhone, setEditPhone] = useState('');
   const [editName, setEditName] = useState('');
@@ -47,19 +53,85 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
+  const canSetListingVisibility = user ? isAgentRole(user.role) || isAdminRole(user.role) : false;
+
+  const clearAllFilters = useCallback(() => {
+    setFilters({ ...DEFAULT_MAP_FILTERS });
+    setFilterVisibility('');
+  }, []);
+
+  const loadInitial = useCallback(async () => {
+    try {
+      const res = await getMyProperties({ limit: 200, sort: 'date_desc' });
+      setRangeProperties(res.properties);
+      setAllPropertiesCount(res.totalAll ?? res.properties.length);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('error_load_failed'));
+    } finally {
+      setInitLoading(false);
+    }
+  }, [t]);
+
   useEffect(() => setHydrated(true), []);
 
   useEffect(() => {
     if (!hydrated || !user) return;
     setEditPhone(user.phone || '');
-    setEditName((user as any).name || '');
+    setEditName((user as { name?: string }).name || '');
     setEditEmail(user.email || '');
-    
-    getMyProperties()
-      .then((res) => setProperties(res.properties))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [hydrated, user]);
+    setInitLoading(true);
+    void loadInitial();
+  }, [hydrated, user, loadInitial]);
+
+  useEffect(() => {
+    if (!hydrated || !user || initLoading) return;
+
+    let alive = true;
+    const timer = window.setTimeout(async () => {
+      setListLoading(true);
+      setError(null);
+      try {
+        const res = await getMyProperties({
+          ...filtersToPropertyQuery(filters, sortBy, i18n.language),
+          ...(filterVisibility ? { brokerListingMode: filterVisibility } : {}),
+          limit: 200,
+        });
+        if (!alive) return;
+        setProperties(res.properties);
+        setPropertiesTotal(res.total);
+        if (!filtersAreActive(filters) && !filterVisibility) {
+          setAllPropertiesCount(res.totalAll ?? res.total);
+        }
+        trackSearchFilters('profile', filters, {
+          sort: sortBy,
+          resultCount: res.properties.length,
+        });
+      } catch (err: unknown) {
+        if (!alive) return;
+        setError(err instanceof Error ? err.message : t('error_load_failed'));
+      } finally {
+        if (alive) setListLoading(false);
+      }
+    }, 400);
+
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [hydrated, user, initLoading, filters, sortBy, filterVisibility, i18n.language, t]);
+
+  const refreshList = useCallback(async () => {
+    const res = await getMyProperties({
+      ...filtersToPropertyQuery(filters, sortBy, i18n.language),
+      ...(filterVisibility ? { brokerListingMode: filterVisibility } : {}),
+      limit: 200,
+    });
+    setProperties(res.properties);
+    setPropertiesTotal(res.total);
+    const allRes = await getMyProperties({ limit: 200, sort: 'date_desc' });
+    setRangeProperties(allRes.properties);
+    setAllPropertiesCount(allRes.totalAll ?? allRes.properties.length);
+  }, [filters, sortBy, filterVisibility, i18n.language]);
 
   if (!hydrated) {
     return <div className="text-sm text-slate-500">Loading…</div>;
@@ -76,15 +148,14 @@ export default function ProfilePage() {
     );
   }
 
-  const canSetListingVisibility = isAgentRole(user.role) || isAdminRole(user.role);
-
   const setBrokerListingMode = async (property: Property, mode: BrokerListingMode) => {
     setVisibilitySavingId(property._id);
     try {
       const res = await updateProperty(property._id, { brokerListingMode: mode });
       setProperties((prev) => prev.map((x) => (x._id === res.property._id ? res.property : x)));
-    } catch (err: any) {
-      alert(err.message || t('error_save_failed'));
+      setRangeProperties((prev) => prev.map((x) => (x._id === res.property._id ? res.property : x)));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : t('error_save_failed'));
     } finally {
       setVisibilitySavingId(null);
     }
@@ -101,13 +172,13 @@ export default function ProfilePage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm(t('confirm_delete'))) return;
-    
+
     setDeleting(id);
     try {
       await deleteProperty(id);
-      setProperties((prev) => prev.filter((p) => p._id !== id));
-    } catch (err: any) {
-      alert(err.message || t('error_delete_failed'));
+      await refreshList();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : t('error_delete_failed'));
     } finally {
       setDeleting(null);
     }
@@ -120,8 +191,8 @@ export default function ProfilePage() {
       const token = localStorage.getItem('token');
       if (token) setAuth(token, res.user);
       setEditMode(false);
-    } catch (err: any) {
-      alert(err.message || t('error_save_failed'));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : t('error_save_failed'));
     } finally {
       setSaving(false);
     }
@@ -130,48 +201,33 @@ export default function ProfilePage() {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setUploadingAvatar(true);
     try {
       const res = await uploadAvatar(file);
       const token = localStorage.getItem('token');
       if (token) setAuth(token, res.user);
-    } catch (err: any) {
-      alert(err.message || t('error_upload_failed'));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : t('error_upload_failed'));
     } finally {
       setUploadingAvatar(false);
     }
   };
 
-  // ფილტრაცია
-  const filteredProperties = properties.filter((p) => {
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = p.title?.toLowerCase().includes(q);
-      const matchCity = p.city?.toLowerCase().includes(q);
-      const matchId = p._id?.toLowerCase().includes(q);
-      if (!matchTitle && !matchCity && !matchId) return false;
-    }
-    if (filterType && p.type !== filterType) return false;
-    if (filterDealType && p.dealType !== filterDealType) return false;
-    if (filterVisibility && brokerListingModeFromProperty(p) !== filterVisibility) return false;
-    return true;
-  });
+  const filtersActive = filtersAreActive(filters) || Boolean(filterVisibility);
 
   return (
     <div className="space-y-6">
-      {/* პროფილის ინფორმაცია */}
       <div className="rounded-lg border border-slate-200 bg-white p-6">
         <div className="flex items-start gap-6">
-          {/* ავატარი */}
           <div className="flex-shrink-0">
-            <div 
+            <div
               className="relative h-24 w-24 rounded-full bg-slate-200 overflow-hidden cursor-pointer group"
               onClick={() => fileInputRef.current?.click()}
             >
-              {(user as any).avatar ? (
+              {(user as { avatar?: string }).avatar ? (
                 <img
-                  src={resolveImageUrl((user as any).avatar)}
+                  src={resolveImageUrl((user as { avatar?: string }).avatar)}
                   alt="Avatar"
                   className="h-full w-full object-cover"
                 />
@@ -193,10 +249,9 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* ინფორმაცია */}
           <div className="flex-1">
             <h1 className="text-xl font-bold text-slate-800 mb-4">{t('profile')}</h1>
-            
+
             {editMode ? (
               <div className="space-y-3">
                 <div>
@@ -246,12 +301,21 @@ export default function ProfilePage() {
             ) : (
               <>
                 <div className="space-y-2 text-sm">
-                  {(user as any).name && (
-                    <p><span className="text-slate-500">{t('name_label')}:</span> <span className="font-medium">{(user as any).name}</span></p>
+                  {(user as { name?: string }).name && (
+                    <p>
+                      <span className="text-slate-500">{t('name_label')}:</span>{' '}
+                      <span className="font-medium">{(user as { name?: string }).name}</span>
+                    </p>
                   )}
-                  <p><span className="text-slate-500">{t('email')}:</span> <span className="font-medium">{user.email}</span></p>
+                  <p>
+                    <span className="text-slate-500">{t('email')}:</span>{' '}
+                    <span className="font-medium">{user.email}</span>
+                  </p>
                   {user.phone && (
-                    <p><span className="text-slate-500">{t('phone')}:</span> <span className="font-medium">{user.phone}</span></p>
+                    <p>
+                      <span className="text-slate-500">{t('phone')}:</span>{' '}
+                      <span className="font-medium">{user.phone}</span>
+                    </p>
                   )}
                 </div>
 
@@ -281,219 +345,201 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ჩემი განცხადებები */}
       <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">
-          {t('myProperties')} ({properties.length})
-        </h2>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold text-slate-800">
+            {t('myProperties')} ({allPropertiesCount})
+          </h2>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+          >
+            <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
+            <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
+            <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
+            <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
+            <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
+            <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
+            <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
+          </select>
+        </div>
 
-        {/* ძებნა და ფილტრაცია */}
-        {properties.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[200px]">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('search_placeholder')}
-                className="w-full rounded-md border border-slate-200 pl-9 pr-3 py-2 text-sm focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
-              />
-            </div>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">{t('all_types')}</option>
-              <option value="apartment">🏢 {t('apartment')}</option>
-              <option value="house">🏠 {t('house')}</option>
-              <option value="commercial">🏪 {t('commercial')}</option>
-              <option value="land">🌍 {t('land')}</option>
-              <option value="cottage">🏡 {t('cottage')}</option>
-              <option value="hotel">🏨 {t('hotel')}</option>
-              <option value="building">🏗️ {t('building')}</option>
-              <option value="warehouse">📦 {t('warehouse')}</option>
-              <option value="parking">🚗 {t('parking')}</option>
-              <option value="business">💼 {t('business')}</option>
-            </select>
-            <select
-              value={filterDealType}
-              onChange={(e) => setFilterDealType(e.target.value)}
-              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">{t('all_deals')}</option>
-              <option value="sale">💰 {t('deal_sale')}</option>
-              <option value="rent">🔑 {t('deal_rent')}</option>
-              <option value="mortgage">🏦 {t('deal_mortgage')}</option>
-            </select>
+        {allPropertiesCount > 0 && (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+            <p className="mb-3 text-sm text-slate-500">
+              {t('profilePropertySearchHint', 'ძიება მხოლოდ თქვენს განცხადებებში')}
+            </p>
+            <Filters
+              value={filters}
+              onChange={setFilters}
+              onClearAll={clearAllFilters}
+              rangeProperties={rangeProperties}
+              showCategories
+            />
             {canSetListingVisibility && (
-              <select
-                value={filterVisibility}
-                onChange={(e) => setFilterVisibility((e.target.value || '') as '' | BrokerListingMode)}
-                title={t('listingVisibilityLabel')}
-                className="min-w-[10rem] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">{t('all_visibilities')}</option>
-                <option value="public">{t('listingMode_public')}</option>
-                <option value="unlisted">{t('listingMode_unlisted')}</option>
-                <option value="private">{t('listingMode_private')}</option>
-                <option value="sold">{t('listingMode_sold')}</option>
-              </select>
-            )}
-            {(searchQuery || filterType || filterDealType || filterVisibility) && (
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setFilterType('');
-                  setFilterDealType('');
-                  setFilterVisibility('');
-                }}
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
-              >
-                ✕ {t('clear_filters')}
-              </button>
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                <label className="text-sm text-slate-600" htmlFor="profile-visibility-filter">
+                  {t('listingVisibilityLabel')}:
+                </label>
+                <select
+                  id="profile-visibility-filter"
+                  value={filterVisibility}
+                  onChange={(e) =>
+                    setFilterVisibility((e.target.value || '') as '' | BrokerListingMode)
+                  }
+                  className="min-w-[10rem] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">{t('all_visibilities')}</option>
+                  <option value="public">{t('listingMode_public')}</option>
+                  <option value="unlisted">{t('listingMode_unlisted')}</option>
+                  <option value="private">{t('listingMode_private')}</option>
+                  <option value="sold">{t('listingMode_sold')}</option>
+                </select>
+              </div>
             )}
           </div>
         )}
 
-        {/* ფილტრის შედეგი */}
-        {properties.length > 0 && (searchQuery || filterType || filterDealType || filterVisibility) && (
-          <p className="text-xs text-slate-500 mb-3">
-            {t('found_results', { count: filteredProperties.length, total: properties.length })}
-          </p>
+        {allPropertiesCount > 0 && (
+          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-sm font-medium text-slate-800">
+              {initLoading || listLoading
+                ? t('loading')
+                : filtersActive && allPropertiesCount > 0
+                  ? t('found_results', { count: propertiesTotal, total: allPropertiesCount })
+                  : t('agentListingsFound', { count: propertiesTotal })}
+            </p>
+          </div>
         )}
 
-        {loading ? (
-          <p className="text-sm text-slate-500">{t('loading')}</p>
-        ) : error ? (
-          <p className="text-sm text-red-600">{error}</p>
-        ) : properties.length === 0 ? (
+        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+        {initLoading || listLoading ? (
+          <PropertyCardGridSkeleton count={4} gridClassName="grid-cols-1" />
+        ) : allPropertiesCount === 0 ? (
           <div className="text-center py-8">
             <p className="text-slate-500 mb-4">{t('noProperties')}</p>
-            <Link
-              href="/upload"
-              className="text-blue-600 hover:underline"
-            >
+            <Link href="/upload" className="text-blue-600 hover:underline">
               {t('addFirst')}
             </Link>
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredProperties.length === 0 ? (
+            {properties.length === 0 ? (
               <p className="text-sm text-slate-500 text-center py-4">{t('empty_search_result')}</p>
-            ) : filteredProperties.map((property) => {
-              // მთავარი ფოტო
-              const mainPhotoIndex = property.mainPhoto || 0;
-              const mainImg = property.photos?.[mainPhotoIndex] || property.photos?.[0];
-              
-              return (
-              <div
-                key={property._id}
-                className="flex items-start gap-4 rounded-lg border border-slate-200 p-4 hover:bg-slate-50"
-              >
-                {/* ფოტო */}
-                <div className="h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-slate-100">
-                  {mainImg ? (
-                    <img
-                      src={resolveImageUrl(mainImg, 'thumb', {
-                        isPanorama: isPanoramaPhoto(mainImg, property.panoramaPhotos),
-                      })}
-                      alt={property.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-slate-400 text-xs">
-                      {t('no_photo')}
-                    </div>
-                  )}
-                </div>
+            ) : (
+              properties.map((property) => {
+                const mainPhotoIndex = property.mainPhoto || 0;
+                const mainImg = property.photos?.[mainPhotoIndex] || property.photos?.[0];
 
-                {/* ინფორმაცია */}
-                <div className="flex-1 min-w-0">
-                  <Link
-                    href={`/property/${property._id}`}
-                    className="font-medium text-slate-800 hover:text-blue-600 line-clamp-1"
+                return (
+                  <div
+                    key={property._id}
+                    className="flex items-start gap-4 rounded-lg border border-slate-200 p-4 hover:bg-slate-50"
                   >
-                    {property.title}
-                  </Link>
-                  <p className="text-sm text-slate-500 mt-1">
-                    {property.city}{property.region ? `, ${property.region}` : ''}
-                  </p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <p className="text-sm font-semibold text-blue-600">
-                      {property.priceCurrency === 'GEL' ? '₾' : '$'}{property.price.toLocaleString()}
-                    </p>
-                    {property.views !== undefined && (
-                      <span className="text-xs text-slate-400">👁 {property.views}</span>
-                    )}
-                    <span className="text-xs text-slate-400 font-mono">ID: {property.numericId || property._id.slice(-6)}</span>
-                  </div>
-
-                  {canSetListingVisibility && (
-                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                      <p className="text-xs font-medium text-slate-600">{t('listingVisibilityLabel')}</p>
-                      <div className="flex flex-wrap gap-1">
-                        {(
-                          [
-                            ['public', t('listingMode_public')],
-                            ['unlisted', t('listingMode_unlisted')],
-                            ['private', t('listingMode_private')],
-                            ['sold', t('listingMode_sold')],
-                          ] as const
-                        ).map(([mode, label]) => {
-                          const active = brokerListingModeFromProperty(property) === mode;
-                          return (
-                            <button
-                              key={mode}
-                              type="button"
-                              disabled={visibilitySavingId === property._id}
-                              onClick={() => setBrokerListingMode(property, mode)}
-                              className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                                active
-                                  ? 'bg-blue-600 text-white'
-                                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                              } disabled:opacity-50`}
-                            >
-                              {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {brokerListingModeFromProperty(property) === 'unlisted' && property.shareToken && (
-                        <button
-                          type="button"
-                          onClick={() => copyUnlistedLink(property)}
-                          className="text-xs font-medium text-blue-600 hover:underline"
-                        >
-                          {linkCopiedId === property._id ? t('linkCopied') : t('copyPrivateLink')}
-                        </button>
+                    <div className="h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-slate-100">
+                      {mainImg ? (
+                        <img
+                          src={resolveImageUrl(mainImg, 'thumb', {
+                            isPanorama: isPanoramaPhoto(mainImg, property.panoramaPhotos),
+                          })}
+                          alt={property.title}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-slate-400 text-xs">
+                          {t('no_photo')}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
 
-                {/* მოქმედებები */}
-                <div className="flex flex-col gap-2">
-                  <Link
-                    href={`/property/${property._id}/edit`}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                  >
-                    {t('edit')}
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(property._id)}
-                    disabled={deleting === property._id}
-                    className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    {deleting === property._id ? '...' : t('delete')}
-                  </button>
-                </div>
-              </div>
-            );
-            })}
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        href={`/property/${property._id}`}
+                        className="font-medium text-slate-800 hover:text-blue-600 line-clamp-1"
+                      >
+                        {property.title}
+                      </Link>
+                      <p className="text-sm text-slate-500 mt-1">
+                        {property.city}
+                        {property.region ? `, ${property.region}` : ''}
+                      </p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-sm font-semibold text-blue-600">
+                          {property.priceCurrency === 'GEL' ? '₾' : '$'}
+                          {property.price.toLocaleString()}
+                        </p>
+                        {property.views !== undefined && (
+                          <span className="text-xs text-slate-400">👁 {property.views}</span>
+                        )}
+                        <span className="text-xs text-slate-400 font-mono">
+                          ID: {property.numericId || property._id.slice(-6)}
+                        </span>
+                      </div>
+
+                      {canSetListingVisibility && (
+                        <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                          <p className="text-xs font-medium text-slate-600">{t('listingVisibilityLabel')}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {(
+                              [
+                                ['public', t('listingMode_public')],
+                                ['unlisted', t('listingMode_unlisted')],
+                                ['private', t('listingMode_private')],
+                                ['sold', t('listingMode_sold')],
+                              ] as const
+                            ).map(([mode, label]) => {
+                              const active = brokerListingModeFromProperty(property) === mode;
+                              return (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  disabled={visibilitySavingId === property._id}
+                                  onClick={() => setBrokerListingMode(property, mode)}
+                                  className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                                    active
+                                      ? 'bg-blue-600 text-white'
+                                      : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                  } disabled:opacity-50`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {brokerListingModeFromProperty(property) === 'unlisted' && property.shareToken && (
+                            <button
+                              type="button"
+                              onClick={() => copyUnlistedLink(property)}
+                              className="text-xs font-medium text-blue-600 hover:underline"
+                            >
+                              {linkCopiedId === property._id ? t('linkCopied') : t('copyPrivateLink')}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <Link
+                        href={`/property/${property._id}/edit`}
+                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                      >
+                        {t('edit')}
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(property._id)}
+                        disabled={deleting === property._id}
+                        className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deleting === property._id ? '...' : t('delete')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
       </div>

@@ -4,9 +4,19 @@ import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { resolveImageUrl } from '@/lib/api';
+import { useTranslation } from 'react-i18next';
+import { resolveImageUrl, type PropertyQuery } from '@/lib/api';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import { AdminTransferPropertyModal } from '@/components/AdminTransferPropertyModal';
+import { Filters, type FiltersState } from '@/components/Filters';
+import {
+  DEFAULT_MAP_FILTERS,
+  filtersAreActive,
+  filtersToPropertyQuery,
+} from '@/lib/mapQuery';
+import { trackSearchFilters } from '@/lib/searchAnalytics';
+import type { Property } from '@/lib/types';
 
 interface AgentDetail {
   _id: string;
@@ -71,21 +81,71 @@ const statusColors: Record<string, string> = {
   sold: 'bg-gray-100 text-gray-700',
 };
 
+function buildAgentPropertiesQueryString(
+  filters: FiltersState,
+  sortBy: string,
+  page: number,
+  statusFilter: string,
+  userId: string
+): string {
+  const query: PropertyQuery = {
+    ...filtersToPropertyQuery(filters, sortBy),
+    limit: 20,
+    page,
+    userId,
+  };
+
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
+    if (
+      (k === 'tbilisiSubdistricts' ||
+        k === 'type' ||
+        k === 'dealType' ||
+        k === 'amenities' ||
+        k === 'buildingProject' ||
+        k === 'renovationStatus' ||
+        k === 'balconies' ||
+        k === 'rooms' ||
+        k === 'bedrooms') &&
+      Array.isArray(v)
+    ) {
+      params.set(k, JSON.stringify(v));
+    } else {
+      params.set(k, String(v));
+    }
+  }
+  if (statusFilter) params.set('status', statusFilter);
+  return params.toString();
+}
+
 export default function AdminAgentDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { t, i18n } = useTranslation();
   const agentId = params.id;
 
   const [loading, setLoading] = useState(true);
+  const [initPropsLoading, setInitPropsLoading] = useState(true);
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [propertyCount, setPropertyCount] = useState(0);
+  const [allPropertiesCount, setAllPropertiesCount] = useState(0);
+  const [propertiesTotal, setPropertiesTotal] = useState(0);
   const [properties, setProperties] = useState<PropertyRow[]>([]);
+  const [rangeProperties, setRangeProperties] = useState<Property[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
+  const [sortBy, setSortBy] = useState('date_desc');
   const [propsLoading, setPropsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [transferTarget, setTransferTarget] = useState<{ id: string; title: string } | null>(null);
+
+  const clearAllFilters = useCallback(() => {
+    setFilters({ ...DEFAULT_MAP_FILTERS });
+    setStatusFilter('');
+  }, []);
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -110,7 +170,7 @@ export default function AdminAgentDetailPage() {
     const data = await res.json();
     setAgent(data.agent);
     setUserId(data.userId || null);
-    setPropertyCount(data.propertyCount ?? 0);
+    setAllPropertiesCount(data.propertyCount ?? 0);
   }, [agentId, authHeaders, router]);
 
   const fetchProperties = useCallback(async () => {
@@ -123,22 +183,25 @@ export default function AdminAgentDetailPage() {
 
     setPropsLoading(true);
     try {
-      const qs = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
-        userId,
-        ...(statusFilter && { status: statusFilter }),
-      });
+      const qs = buildAgentPropertiesQueryString(filters, sortBy, page, statusFilter, userId);
       const res = await fetch(`${getApiBase()}/api/admin/properties?${qs}`, { headers });
       if (!res.ok) return;
       const data = await res.json();
       setProperties(data.properties || []);
       setPages(data.pages || 1);
-      if (typeof data.total === 'number') setPropertyCount(data.total);
+      setPropertiesTotal(data.total ?? 0);
+      if (!filtersAreActive(filters) && !statusFilter) {
+        setAllPropertiesCount(data.total ?? 0);
+      }
+      trackSearchFilters('admin_agent_detail', filters, {
+        agentId,
+        sort: sortBy,
+        resultCount: data.properties?.length ?? 0,
+      });
     } finally {
       setPropsLoading(false);
     }
-  }, [userId, page, statusFilter, authHeaders]);
+  }, [userId, page, statusFilter, filters, sortBy, authHeaders, agentId]);
 
   useEffect(() => {
     (async () => {
@@ -149,8 +212,49 @@ export default function AdminAgentDetailPage() {
   }, [fetchAgent]);
 
   useEffect(() => {
-    if (!loading && userId) fetchProperties();
-  }, [loading, userId, fetchProperties]);
+    if (!userId) {
+      setInitPropsLoading(false);
+      return;
+    }
+    const headers = authHeaders();
+    if (!headers) return;
+
+    let alive = true;
+    (async () => {
+      try {
+        const qs = new URLSearchParams({ userId, limit: '200', page: '1', sort: 'date_desc' });
+        const res = await fetch(`${getApiBase()}/api/admin/properties?${qs}`, { headers });
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        setRangeProperties((data.properties || []) as Property[]);
+        setAllPropertiesCount(data.total ?? data.properties?.length ?? 0);
+      } finally {
+        if (alive) setInitPropsLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [userId, authHeaders]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, filters, sortBy]);
+
+  useEffect(() => {
+    if (loading || initPropsLoading || !userId) return;
+
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      if (alive) void fetchProperties();
+    }, 400);
+
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [loading, initPropsLoading, userId, fetchProperties, page]);
 
   const handleStatusChange = async (propertyId: string, status: string) => {
     const reason = status === 'rejected' ? (prompt('მიუთითეთ უარყოფის მიზეზი') || '').trim() : '';
@@ -170,7 +274,7 @@ export default function AdminAgentDetailPage() {
   };
 
   const handleDelete = async (propertyId: string) => {
-    if (!confirm('ნამდვილად გსურთ განცხადების წაშლა?')) return;
+    if (!confirm('განცხადება გადავა ნაგვის ყუთში. გავაგრძელოთ?')) return;
     const headers = authHeaders();
     if (!headers) return;
     const res = await fetch(`${getApiBase()}/api/admin/properties/${propertyId}`, {
@@ -272,7 +376,7 @@ export default function AdminAgentDetailPage() {
                 </span>
               )}
               <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm">
-                🏘️ {propertyCount} განცხადება
+                🏘️ {allPropertiesCount} განცხადება
               </span>
               <Link
                 href={`/agents/${agent._id}`}
@@ -285,22 +389,66 @@ export default function AdminAgentDetailPage() {
           </div>
         </div>
 
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold text-gray-800">განცხადებები</h2>
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm"
-          >
-            <option value="">ყველა სტატუსი</option>
-            <option value="pending">მოლოდინში</option>
-            <option value="active">აქტიური</option>
-            <option value="rejected">უარყოფილი</option>
-            <option value="sold">გაყიდული</option>
-          </select>
+        <div className="mb-4 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-xl font-semibold text-gray-800">განცხადებები</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+              >
+                <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
+                <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
+                <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
+                <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
+                <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
+                <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
+                <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">ყველა სტატუსი</option>
+                <option value="pending">მოლოდინში</option>
+                <option value="active">აქტიური</option>
+                <option value="rejected">უარყოფილი</option>
+                <option value="sold">გაყიდული</option>
+              </select>
+            </div>
+          </div>
+
+          {userId && allPropertiesCount > 0 && (
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="mb-3 text-sm text-gray-500">
+                {t('adminAgentPropertySearchHint', 'ძიება მხოლოდ ამ აგენტის განცხადებებში')}
+              </p>
+              <Filters
+                value={filters}
+                onChange={setFilters}
+                onClearAll={clearAllFilters}
+                rangeProperties={rangeProperties}
+                showCategories
+              />
+            </div>
+          )}
+
+          {userId && allPropertiesCount > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-sm font-medium text-gray-800">
+                {propsLoading
+                  ? t('loading', 'იტვირთება...')
+                  : filtersAreActive(filters) || statusFilter
+                    ? t('found_results', {
+                        count: propertiesTotal,
+                        total: allPropertiesCount,
+                      })
+                    : t('agentListingsFound', { count: propertiesTotal })}
+              </p>
+            </div>
+          )}
         </div>
 
         {!userId ? (
@@ -454,6 +602,16 @@ export default function AdminAgentDetailPage() {
                           )}
                           <button
                             type="button"
+                            onClick={() =>
+                              setTransferTarget({ id: property._id, title: property.title })
+                            }
+                            className="text-indigo-600 hover:text-indigo-800 text-sm"
+                            title="აგენტზე გადაცემა"
+                          >
+                            🔀
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleDelete(property._id)}
                             className="text-red-600 hover:text-red-800 text-sm"
                             title="წაშლა"
@@ -494,6 +652,19 @@ export default function AdminAgentDetailPage() {
           </div>
         )}
       </div>
+
+      <AdminTransferPropertyModal
+        open={!!transferTarget}
+        propertyId={transferTarget?.id || ''}
+        propertyTitle={transferTarget?.title || ''}
+        excludeAgentId={agentId}
+        excludeUserId={userId || undefined}
+        onClose={() => setTransferTarget(null)}
+        onTransferred={() => {
+          fetchProperties();
+          fetchAgent();
+        }}
+      />
     </div>
   );
 }

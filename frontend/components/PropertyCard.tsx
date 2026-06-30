@@ -11,6 +11,7 @@ import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
 import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
+import { Shimmer } from './Skeleton';
 
 export function PropertyCard({
   p,
@@ -103,25 +104,30 @@ export function PropertyCard({
           onMouseLeave={handlePhotoMouseLeave}
         >
           {photos.length > 0 ? (
-            photos.map((photo, i) => {
-              if (!loadedIndices.has(i)) return null;
-              return (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={`${photo}-${i}`}
-                  src={resolveImageUrl(photo, 'thumb', {
-                    isPanorama: isPanoramaPhoto(photo, p.panoramaPhotos),
-                  })}
-                  alt={i === shownIndex ? p.title : ''}
-                  loading={i === mainPhotoIndex ? 'lazy' : undefined}
-                  decoding="async"
-                  className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
-                    i === shownIndex ? 'opacity-100' : 'opacity-0'
-                  }`}
-                  draggable={false}
-                />
-              );
-            })
+            <>
+              {!loadedIndices.has(shownIndex) && (
+                <Shimmer className="absolute inset-0 h-full w-full" />
+              )}
+              {photos.map((photo, i) => {
+                if (!loadedIndices.has(i)) return null;
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={`${photo}-${i}`}
+                    src={resolveImageUrl(photo, 'thumb', {
+                      isPanorama: isPanoramaPhoto(photo, p.panoramaPhotos),
+                    })}
+                    alt={i === shownIndex ? p.title : ''}
+                    loading={i === mainPhotoIndex ? 'lazy' : undefined}
+                    decoding="async"
+                    className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
+                      i === shownIndex ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    draggable={false}
+                  />
+                );
+              })}
+            </>
           ) : (
             <div className="flex h-full w-full items-center justify-center text-sm text-slate-400 dark:text-zinc-500">
               {t('no_photo')}

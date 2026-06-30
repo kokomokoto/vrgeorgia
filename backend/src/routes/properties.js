@@ -16,12 +16,13 @@ import { getUsdToGelRate } from '../utils/currency.js';
 import { applyPriceRangeFilter } from '../utils/priceFilter.js';
 import { applySqmRangeFilter } from '../utils/areaFilter.js';
 import { isAdminRole, isAgentRole } from '../utils/userRoles.js';
+import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import {
-  ensureEditDraft,
-  mergePatchIntoDraft,
-  propertyForEdit,
-  discardEditDraft,
-} from '../services/propertyEditDraft.js';
+  PROPERTY_NOT_DELETED,
+  withNotDeleted,
+  softDeletePropertyDoc,
+} from '../utils/propertySoftDelete.js';
+import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
 
 const router = express.Router();
 
@@ -200,7 +201,9 @@ router.post(
 
     // საკადასტრო კოდის უნიკალურობის შემოწმება (თუ მითითებულია)
     if (req.body.cadastralCode && req.body.cadastralCode.trim()) {
-      const existingByCadastral = await Property.findOne({ cadastralCode: req.body.cadastralCode.trim() });
+      const existingByCadastral = await Property.findOne(
+        withNotDeleted({ cadastralCode: req.body.cadastralCode.trim() })
+      );
       if (existingByCadastral) {
         return res.status(400).json({ errors: [{ msg: 'ამ საკადასტრო კოდით ობიექტი უკვე არსებობს', path: 'cadastralCode' }] });
       }
@@ -255,6 +258,7 @@ router.post(
     if (detailErr) return res.status(400).json({ errors: [detailErr] });
 
     try {
+      const agentProfile = await Agent.findOne({ user: req.user.id }).select('_id phone email').lean();
       const property = await Property.create({
         title: req.body.title,
         desc: req.body.desc,
@@ -298,12 +302,13 @@ router.post(
         tourLink: normalizeTourLink(req.body.tourLink || ''),
         mediaLinks,
         status: 'pending',
-        contact: {
-          phone: req.body.contactPhone || '',
-          email: req.body.contactEmail || ''
-        },
         userId: req.user.id,
-        privateNotes: req.body.privateNotes || ''
+        agentId: agentProfile?._id || null,
+        privateNotes: req.body.privateNotes || '',
+        contact: {
+          phone: req.body.contactPhone || agentProfile?.phone || '',
+          email: req.body.contactEmail || agentProfile?.email || '',
+        },
       });
 
       res.status(201).json({ property });
@@ -323,17 +328,48 @@ router.post(
   }
 );
 
+function applyBrokerListingModeFilter(filter, mode) {
+  const m = String(mode || '').trim();
+  if (!m) return;
+  if (m === 'sold') {
+    filter.status = 'sold';
+    return;
+  }
+  filter.status = { $ne: 'sold' };
+  if (m === 'public') {
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
+    });
+  } else if (m === 'unlisted') {
+    filter.listingVisibility = 'unlisted';
+  } else if (m === 'private') {
+    filter.listingVisibility = 'private';
+  }
+}
+
 // GET user's own properties (for profile page)
 router.get(
   '/user/my',
   requireAuth,
   async (req, res) => {
-    const properties = await Property.find({ userId: req.user.id }).sort({ createdAt: -1 }).lean();
-    const safe = properties.map((p) => {
+    const baseFilter = withNotDeleted({ userId: req.user.id });
+    const filter = withNotDeleted({ userId: req.user.id });
+    applyBrokerListingModeFilter(filter, req.query.brokerListingMode || req.query.listingVisibility);
+    await applyPropertyQueryFilters(filter, req.query);
+    const sort = parsePropertySortOption(req.query.sort);
+
+    const [totalAll, total, rows] = await Promise.all([
+      Property.countDocuments(baseFilter),
+      Property.countDocuments(filter),
+      Property.find(filter).sort(sort).lean(),
+    ]);
+
+    const properties = rows.map((p) => {
       const { editDraft, ...rest } = p;
       return { ...rest, hasEditDraft: Boolean(editDraft) };
     });
-    res.json({ properties: safe });
+    res.json({ properties, total, totalAll });
   }
 );
 
@@ -381,7 +417,7 @@ router.get(
 
     // საჯარო სია: სტატუსი + listingVisibility (არ ჩანს private/unlisted/gsold)
     const filter = {
-      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }],
+      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }, PROPERTY_NOT_DELETED],
     };
 
     // ტექსტური ძიება — სათაური, აღწერა, ტელეფონი, აგენტის სახელი, ID...
@@ -613,7 +649,7 @@ router.get(
     const lang = pickLanguage(req);
     const properties = await Property.find({
       userId: req.params.userId,
-      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }],
+      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }, PROPERTY_NOT_DELETED],
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -639,6 +675,7 @@ router.get(
       .populate('userId', 'email name phone avatar role')
       .lean();
     if (!property) return res.status(404).json({ message: 'Not found' });
+    if (property.deletedAt) return res.status(404).json({ message: 'Not found' });
     if (!(await userCanManageProperty(req.user.id, property))) {
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -662,6 +699,7 @@ router.delete(
 
     const existing = await Property.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Not found' });
+    if (existing.deletedAt) return res.status(404).json({ message: 'Not found' });
     if (!(await userCanManageProperty(req.user.id, existing))) {
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -693,6 +731,7 @@ router.get(
       .populate('userId', 'email name phone avatar role')
       .lean();
     if (!property) return res.status(404).json({ message: 'Not found' });
+    if (property.deletedAt) return res.status(404).json({ message: 'Not found' });
 
     // privateNotes მხოლოდ მფლობელისთვის / ადმინისთვის ხილული
     const { userId: requestUserId, isAdmin: requestIsAdmin } = await getRequestUserContext(req);
@@ -768,6 +807,7 @@ router.post(
 
     const existing = await Property.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Not found' });
+    if (existing.deletedAt) return res.status(404).json({ message: 'Not found' });
     if (!(await userCanManageProperty(req.user.id, existing))) {
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -850,6 +890,7 @@ router.put(
 
     const existing = await Property.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Not found' });
+    if (existing.deletedAt) return res.status(404).json({ message: 'Not found' });
     if (!(await userCanManageProperty(req.user.id, existing))) {
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -863,7 +904,9 @@ router.put(
     }
     // საკადასტრო კოდის უნიკალურობის შემოწმება რედაქტირებისას (თუ მითითებულია)
     if (req.body.cadastralCode && req.body.cadastralCode.trim()) {
-      const dup = await Property.findOne({ cadastralCode: req.body.cadastralCode.trim(), _id: { $ne: existing._id } });
+      const dup = await Property.findOne(
+        withNotDeleted({ cadastralCode: req.body.cadastralCode.trim(), _id: { $ne: existing._id } })
+      );
       if (dup) {
         return res.status(400).json({ errors: [{ msg: 'ამ საკადასტრო კოდით ობიექტი უკვე არსებობს', path: 'cadastralCode' }] });
       }
@@ -990,11 +1033,23 @@ router.put(
 router.delete('/:id', requireAuth, async (req, res) => {
   const existing = await Property.findById(req.params.id);
   if (!existing) return res.status(404).json({ message: 'Not found' });
+  if (existing.deletedAt) return res.status(404).json({ message: 'Not found' });
   if (!(await userCanManageProperty(req.user.id, existing))) {
     return res.status(403).json({ message: 'Forbidden' });
   }
 
-  await Property.deleteOne({ _id: existing._id });
+  await softDeletePropertyDoc(existing, req.user.id);
+  try {
+    await AdminAuditLog.create({
+      adminId: req.user.id,
+      action: 'property.deleted_by_owner',
+      targetType: 'property',
+      targetId: String(existing._id),
+      meta: { ownerUserId: String(existing.userId) },
+    });
+  } catch {
+    /* audit failure should not block delete */
+  }
   res.json({ ok: true });
 });
 

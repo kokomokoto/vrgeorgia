@@ -14,6 +14,7 @@ import {
 } from '@/lib/homeFiltersStorage';
 import { MapView } from '@/components/MapView';
 import { PropertyCard } from '@/components/PropertyCard';
+import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 
 // კატეგორიები იკონებით
@@ -36,7 +37,8 @@ export default function HomePage() {
   const [filters, setFilters] = React.useState<FiltersState>(HOME_FILTERS_INITIAL);
   const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const [properties, setProperties] = React.useState<Property[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [sortBy, setSortBy] = React.useState('date_desc');
@@ -107,6 +109,7 @@ export default function HomePage() {
         .finally(() => {
           if (!alive) return;
           setLoading(false);
+          setHasLoadedOnce(true);
         });
     }, 400);
 
@@ -147,7 +150,8 @@ export default function HomePage() {
   };
 
   const searchQuery = filters.q.trim();
-  const showEmptyResults = !loading && !error && properties.length === 0;
+  const showSkeleton = loading || !filtersHydrated;
+  const showEmptyResults = filtersHydrated && hasLoadedOnce && !loading && !error && properties.length === 0;
 
   return (
     <div className="grid gap-4 text-slate-900">
@@ -288,9 +292,10 @@ export default function HomePage() {
       </div>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200">{error}</div>}
-      {loading && <div className="text-sm text-slate-500 dark:text-zinc-400">Loading…</div>}
 
-      {showEmptyResults && (
+      {showSkeleton && <PropertyCardGridSkeleton count={8} compactPhoto />}
+
+      {showEmptyResults ? (
         <div className="rounded-xl border border-slate-200 bg-white px-6 py-14 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-3xl dark:bg-zinc-800">
             🔍
@@ -324,10 +329,10 @@ export default function HomePage() {
             ✕ {tr('clear_filters', 'გასუფთავება')}
           </button>
         </div>
-      )}
+      ) : null}
 
       {/* სორტირება და რაოდენობა */}
-      {!loading && properties.length > 0 && (
+      {!showSkeleton && properties.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-slate-600 dark:text-zinc-300">
             {tr('found', 'ნაპოვნია')}: <span className="font-semibold text-slate-900 dark:text-amber-400">{properties.length}</span> {tr('objects', 'ობიექტი')}
@@ -357,7 +362,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {!showEmptyResults && (
+      {!showSkeleton && !showEmptyResults && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {paginatedProperties.map((p) => (
             <PropertyCard key={p._id} p={p} compactPhoto />

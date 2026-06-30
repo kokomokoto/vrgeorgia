@@ -25,6 +25,9 @@ const EMPTY_SEARCH_STATS: SearchAnalyticsData = {
   renovationStatusStats: [],
   balconiesStats: [],
   dailySearches: [],
+  priceScaleStats: [],
+  pricePerSqmScaleStats: [],
+  sqmScaleStats: [],
   featureStats: {
     has3d: 0,
     hasPhotos: 0,

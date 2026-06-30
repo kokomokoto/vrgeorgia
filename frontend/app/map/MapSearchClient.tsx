@@ -10,6 +10,7 @@ import { Filters, type FiltersState } from '@/components/Filters';
 import { MapOverlaySearch } from '@/components/MapOverlaySearch';
 import { MapView } from '@/components/MapView';
 import { PropertyMapListRow } from '@/components/PropertyMapListRow';
+import { PropertyMapListSkeleton } from '@/components/Skeleton';
 import { filterPropertiesByMapBounds, mapBoundsEqual, type MapBounds } from '@/lib/mapBounds';
 import { filtersToPropertyQuery, omitPriceAreaFilters, searchParamsToFiltersState } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
@@ -163,16 +164,15 @@ export default function MapSearchClient() {
                 {error}
               </div>
             )}
-            {loading && <p className="text-sm text-slate-500 dark:text-zinc-400">{tr('loading', 'იტვირთება...')}</p>}
-            {!loading && properties.length === 0 && (
-              <p className="text-sm text-slate-500 dark:text-zinc-400">{tr('noProperties', 'თქვენ ჯერ არ გაქვთ განცხადებები')}</p>
-            )}
-            {!loading && properties.length > 0 && listInViewport.length === 0 && (
+            {loading ? (
+              <PropertyMapListSkeleton count={6} />
+            ) : properties.length === 0 ? (
+              <p className="text-sm text-slate-500 dark:text-zinc-400">{tr('noProperties', 'განცხადებები ვერ მოიძებნა')}</p>
+            ) : listInViewport.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-zinc-400">
                 {tr('no_objects_in_map_view', 'ამ რუკის ხედში განცხადება ვერ მოიძებნა. გადაიწიეთ ან გაადიდეთ რუკა.')}
               </p>
-            )}
-            {!loading &&
+            ) : (
               listInViewport.map((p) => (
                 <PropertyMapListRow
                   key={p._id}
@@ -187,7 +187,8 @@ export default function MapSearchClient() {
                     rowRefs.current[p._id] = el;
                   }}
                 />
-              ))}
+              ))
+            )}
           </div>
         </section>
 

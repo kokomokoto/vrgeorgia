@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { resolveImageUrl, type PropertyQuery } from '@/lib/api';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import { AdminTransferPropertyModal } from '@/components/AdminTransferPropertyModal';
 import { Filters, type FiltersState } from '@/components/Filters';
 import { DEFAULT_MAP_FILTERS, filtersToPropertyQuery } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
@@ -106,6 +107,11 @@ function AdminProperties() {
   const [sortBy, setSortBy] = useState('date_desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [error, setError] = useState('');
+  const [transferTarget, setTransferTarget] = useState<{
+    id: string;
+    title: string;
+    userId?: string;
+  } | null>(null);
 
   const clearAllFilters = useCallback(() => {
     setFilters({ ...DEFAULT_MAP_FILTERS });
@@ -278,7 +284,7 @@ function AdminProperties() {
   };
 
   const handleDelete = async (propertyId: string) => {
-    if (!confirm('ნამდვილად გსურთ განცხადების წაშლა?')) return;
+    if (!confirm('განცხადება გადავა ნაგვის ყუთში. გავაგრძელოთ?')) return;
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`${getApiBase()}/api/admin/properties/${propertyId}`, {
@@ -582,6 +588,21 @@ function AdminProperties() {
                           </button>
                         )}
                         <button
+                          onClick={() =>
+                            setTransferTarget({
+                              id: property._id,
+                              title: property.title,
+                              userId:
+                                (property.userId as { _id?: string } | undefined)?._id ||
+                                (typeof property.userId === 'string' ? property.userId : undefined),
+                            })
+                          }
+                          className="text-sm text-indigo-600 hover:text-indigo-800"
+                          title="აგენტზე გადაცემა"
+                        >
+                          🔀
+                        </button>
+                        <button
                           onClick={() => handleDelete(property._id)}
                           className="text-sm text-red-600 hover:text-red-800"
                           title="წაშლა"
@@ -619,6 +640,15 @@ function AdminProperties() {
           )}
         </div>
       </div>
+
+      <AdminTransferPropertyModal
+        open={!!transferTarget}
+        propertyId={transferTarget?.id || ''}
+        propertyTitle={transferTarget?.title || ''}
+        excludeUserId={transferTarget?.userId}
+        onClose={() => setTransferTarget(null)}
+        onTransferred={refreshList}
+      />
     </div>
   );
 }

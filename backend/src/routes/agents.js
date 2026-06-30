@@ -10,6 +10,7 @@ import {
   PUBLIC_LISTING_OR,
   PUBLIC_STATUS_OR,
 } from '../utils/propertyQueryFilters.js';
+import { PROPERTY_NOT_DELETED } from '../utils/propertySoftDelete.js';
 
 const router = express.Router();
 
@@ -89,7 +90,7 @@ router.get('/:id/properties', async (req, res) => {
 
     const publicAgentFilter = {
       userId: agent.user,
-      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }],
+      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }, PROPERTY_NOT_DELETED],
     };
 
     await applyPropertyQueryFilters(publicAgentFilter, req.query);

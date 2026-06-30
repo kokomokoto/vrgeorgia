@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { AdminAgentPortfolioStats, type AgentPortfolioStats } from '@/components/AdminAgentPortfolioStats';
+import { ANALYTICS_PERIOD_OPTIONS, type AnalyticsPeriodValue } from '@/lib/analyticsPeriod';
 
 interface AnalyticsData {
   period: number;
@@ -38,7 +39,7 @@ export default function AdminAnalytics() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AnalyticsData | null>(null);
-  const [period, setPeriod] = useState('7d');
+  const [period, setPeriod] = useState<AnalyticsPeriodValue>('7d');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -110,16 +111,16 @@ export default function AdminAnalytics() {
             <h1 className="text-3xl font-bold text-gray-800">📈 ანალიტიკა</h1>
             <p className="text-gray-600">საიტის ვიზიტორების მონიტორინგი</p>
           </div>
-          <div className="flex gap-2">
-            {['7d', '30d', '90d'].map(p => (
+          <div className="flex flex-wrap gap-2">
+            {ANALYTICS_PERIOD_OPTIONS.map((p) => (
               <button
-                key={p}
-                onClick={() => setPeriod(p)}
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  period === p.value ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                {p === '7d' ? '7 დღე' : p === '30d' ? '30 დღე' : '90 დღე'}
+                {p.label}
               </button>
             ))}
           </div>

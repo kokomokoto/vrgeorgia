@@ -187,6 +187,8 @@ export type PropertyQuery = {
   lang?: string;
   page?: number;
   limit?: number;
+  brokerListingMode?: string;
+  userId?: string;
 };
 
 export async function listProperties(query: PropertyQuery) {
@@ -230,8 +232,33 @@ export async function discardPropertyEditDraft(id: string) {
   return request<{ ok: boolean }>(`/api/properties/${id}/draft`, { method: 'DELETE' });
 }
 
-export async function getMyProperties() {
-  return request<{ properties: Property[] }>('/api/properties/user/my');
+export async function getMyProperties(query?: PropertyQuery) {
+  const params = new URLSearchParams();
+  if (query) {
+    for (const [k, v] of Object.entries(query)) {
+      if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
+      const arrayKeys = new Set([
+        'tbilisiSubdistricts',
+        'type',
+        'dealType',
+        'amenities',
+        'buildingProject',
+        'renovationStatus',
+        'balconies',
+        'rooms',
+        'bedrooms',
+      ]);
+      if (arrayKeys.has(k) && Array.isArray(v)) {
+        params.set(k, JSON.stringify(v));
+      } else {
+        params.set(k, String(v));
+      }
+    }
+  }
+  const qs = params.toString();
+  return request<{ properties: Property[]; total: number; totalAll: number }>(
+    `/api/properties/user/my${qs ? `?${qs}` : ''}`
+  );
 }
 
 export async function updateProperty(

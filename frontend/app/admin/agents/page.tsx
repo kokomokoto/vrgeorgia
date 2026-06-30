@@ -10,6 +10,7 @@ import {
   AdminAgentPortfolioStats,
   type AgentPortfolioStats,
 } from '@/components/AdminAgentPortfolioStats';
+import type { AnalyticsPeriodValue } from '@/lib/analyticsPeriod';
 
 interface Agent {
   _id: string;
@@ -38,6 +39,7 @@ export default function AdminAgents() {
   const [view, setView] = useState<'list' | 'analytics'>('list');
   const [agentStats, setAgentStats] = useState<(AgentPortfolioStats & { period?: number }) | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [statsPeriod, setStatsPeriod] = useState<AnalyticsPeriodValue>('30d');
 
   useEffect(() => {
     fetchAgents();
@@ -53,7 +55,7 @@ export default function AdminAgents() {
     (async () => {
       try {
         setStatsLoading(true);
-        const res = await fetch(`${getApiBase()}/api/admin/agents/stats?period=30d`, {
+        const res = await fetch(`${getApiBase()}/api/admin/agents/stats?period=${statsPeriod}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
@@ -69,7 +71,7 @@ export default function AdminAgents() {
     return () => {
       alive = false;
     };
-  }, [view]);
+  }, [view, statsPeriod]);
 
   const fetchAgents = async () => {
     const token = localStorage.getItem('token');
@@ -199,16 +201,19 @@ export default function AdminAgents() {
         </div>
 
         {view === 'analytics' ? (
-          statsLoading || !agentStats ? (
+          statsLoading && !agentStats ? (
             <div className="rounded-xl bg-white py-16 text-center text-gray-500 shadow-sm">
               იტვირთება...
             </div>
-          ) : (
+          ) : agentStats ? (
             <AdminAgentPortfolioStats
               data={agentStats}
               periodDays={agentStats.period ?? 30}
+              period={statsPeriod}
+              onPeriodChange={setStatsPeriod}
+              periodLoading={statsLoading}
             />
-          )
+          ) : null
         ) : (
           <>
         {/* Filters */}

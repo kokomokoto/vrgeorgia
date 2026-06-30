@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getApiBase } from '@/lib/config';
+import { resolveImageUrl } from '@/lib/api';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { ROLE_BADGE_COLORS, roleLabel } from '@/lib/userRoles';
 
@@ -13,6 +14,7 @@ interface User {
   name: string;
   phone: string;
   role: string;
+  avatar?: string;
   status?: string;
   createdAt: string;
 }
@@ -204,9 +206,23 @@ export default function AdminUsers() {
                 users.map((user) => (
                   <tr key={user._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
-                      <div>
-                        <div className="font-medium text-gray-800">{user.name || '(უსახელო)'}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
+                      <div className="flex items-center gap-3">
+                        {user.avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={resolveImageUrl(user.avatar)}
+                            alt=""
+                            className="h-10 w-10 shrink-0 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-200 text-sm font-semibold text-gray-600">
+                            {(user.name?.[0] || user.email?.[0] || '?').toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-800">{user.name || '(უსახელო)'}</div>
+                          <div className="text-sm text-gray-500">{user.email}</div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-gray-600">

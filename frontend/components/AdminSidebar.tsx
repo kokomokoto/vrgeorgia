@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getApiBase } from '@/lib/config';
 
-type Item = { href: string; icon: string; label: string; exact?: boolean; badgeKey?: 'registrations' | 'properties' };
+type Item = { href: string; icon: string; label: string; exact?: boolean; badgeKey?: 'registrations' | 'properties' | 'trash' };
 
 const ITEMS: Item[] = [
   { href: '/admin', icon: '📊', label: 'მიმოხილვა', exact: true },
@@ -13,6 +13,7 @@ const ITEMS: Item[] = [
   { href: '/admin/users', icon: '👥', label: 'მომხმარებლები' },
   { href: '/admin/agents', icon: '🏢', label: 'აგენტები' },
   { href: '/admin/properties', icon: '🏘️', label: 'განცხადებები', badgeKey: 'properties' },
+  { href: '/admin/trash', icon: '🗑️', label: 'ნაგვის ყუთი', badgeKey: 'trash' },
   { href: '/admin/tours', icon: '🌐', label: '3D ტურები' },
   { href: '/admin/messages', icon: '💬', label: 'შეტყობინებები' },
   { href: '/admin/audit-logs', icon: '📋', label: 'ჟურნალი' },
@@ -33,6 +34,7 @@ export function AdminSidebar({
   const pathname = usePathname();
   const [pendingRegistrations, setPendingRegistrations] = useState(pendingRegistrationsProp ?? 0);
   const [pendingProperties, setPendingProperties] = useState(pendingPropertiesProp ?? 0);
+  const [trashCount, setTrashCount] = useState(0);
 
   useEffect(() => {
     if (pendingRegistrationsProp !== undefined) setPendingRegistrations(pendingRegistrationsProp);
@@ -56,6 +58,7 @@ export function AdminSidebar({
         const data = await res.json();
         setPendingRegistrations(data.pendingRegistrations ?? 0);
         setPendingProperties(data.pendingProperties ?? 0);
+        setTrashCount(data.trashCount ?? 0);
       } catch {
         /* ignore */
       }
@@ -77,6 +80,7 @@ export function AdminSidebar({
   const badgeFor = (key?: Item['badgeKey']) => {
     if (key === 'registrations' && pendingRegistrations > 0) return pendingRegistrations;
     if (key === 'properties' && pendingProperties > 0) return pendingProperties;
+    if (key === 'trash' && trashCount > 0) return trashCount;
     return 0;
   };
 
@@ -104,7 +108,11 @@ export function AdminSidebar({
               {badge > 0 && (
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-bold text-white ${
-                    item.badgeKey === 'properties' ? 'bg-orange-500' : 'bg-rose-500'
+                    item.badgeKey === 'properties'
+                      ? 'bg-orange-500'
+                      : item.badgeKey === 'trash'
+                        ? 'bg-gray-500'
+                        : 'bg-rose-500'
                   }`}
                 >
                   {badge}

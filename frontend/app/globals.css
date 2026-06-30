@@ -202,6 +202,38 @@ a {
   z-index: 4;
 }
 
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(226 232 240 / 0.85) 0%,
+    rgb(241 245 249 / 1) 40%,
+    rgb(203 213 225 / 0.9) 80%,
+    rgb(226 232 240 / 0.85) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(39 39 42 / 0.95) 0%,
+    rgb(63 63 70 / 1) 40%,
+    rgb(82 82 91 / 0.95) 80%,
+    rgb(39 39 42 / 0.95) 100%
+  );
+  background-size: 200% 100%;
+}
+
 /* CSS-ის გარეშე SVG-ები არ გაიზარდოს სრულ ეკრანზე */
 svg:not([width]) {
   max-width: 1.5rem;

@@ -123,14 +123,21 @@ export function rangeStep(span: number, kind: 'price' | 'area'): number {
   return 10000;
 }
 
+export function snapToStep(value: number, min: number, step: number): number {
+  if (step <= 0) return value;
+  const steps = Math.round((value - min) / step);
+  return min + steps * step;
+}
+
 export function snapRangeBounds(rawMin: number, rawMax: number, step: number): FilterRange {
   if (rawMin >= rawMax) return { min: rawMin, max: rawMin + step };
-  let hi = Math.ceil(rawMax / step) * step;
-  if (hi <= rawMin) hi = rawMin + step;
-  return { min: rawMin, max: hi };
+  const min = rawMin;
+  let max = min + Math.ceil((rawMax - min) / step) * step;
+  if (max <= min) max = min + step;
+  return { min, max };
 }
 
 export function clampToStep(value: number, min: number, max: number, step: number): number {
-  const snapped = Math.round(value / step) * step;
+  const snapped = snapToStep(value, min, step);
   return Math.min(max, Math.max(min, snapped));
 }

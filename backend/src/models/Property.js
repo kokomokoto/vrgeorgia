@@ -123,6 +123,10 @@ const propertySchema = new mongoose.Schema(
     pinned: { type: Boolean, default: false },
     pinnedAt: { type: Date, default: null },
 
+    /** ნაგვის ყუთი — soft delete */
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
     /** რედაქტირების დრაფტი — საიტზე არ ჩანს, სანამ არ დაიპუბლიკება */
     editDraft: { type: mongoose.Schema.Types.Mixed, default: undefined },
 
@@ -145,6 +149,7 @@ const propertySchema = new mongoose.Schema(
 
 propertySchema.index({ title: 'text', desc: 'text', city: 'text', region: 'text' });
 propertySchema.index({ shareToken: 1 }, { unique: true, sparse: true });
+propertySchema.index({ deletedAt: 1 });
 
 // კატეგორიის მიხედვით ID-ის დიაპაზონები (100 000 თითოეულისთვის)
 const TYPE_RANGES = {

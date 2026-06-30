@@ -20,6 +20,9 @@ export type SearchAnalyticsData = {
   renovationStatusStats: StatRow[];
   balconiesStats: StatRow[];
   dailySearches: { _id: string; count: number }[];
+  priceScaleStats: StatRow[];
+  pricePerSqmScaleStats: StatRow[];
+  sqmScaleStats: StatRow[];
   featureStats: {
     has3d: number;
     hasPhotos: number;
@@ -95,11 +98,13 @@ function StatTable({
   items,
   category,
   emptyText = 'მონაცემები არ არის',
+  preserveOrder = false,
 }: {
   title: string;
   items: StatRow[];
   category?: string;
   emptyText?: string;
+  preserveOrder?: boolean;
 }) {
   if (!items.length) {
     return (
@@ -110,13 +115,16 @@ function StatTable({
     );
   }
 
-  const max = items[0]?.count || 1;
+  const displayItems = preserveOrder
+    ? items
+    : [...items].sort((a, b) => b.count - a.count);
+  const max = Math.max(...displayItems.map((i) => i.count), 1);
 
   return (
     <div className="rounded-xl bg-white p-5 shadow-sm">
       <h3 className="mb-3 text-base font-semibold text-gray-800">{title}</h3>
       <div className="space-y-2.5">
-        {items.map((item, i) => (
+        {displayItems.map((item, i) => (
           <div key={`${title}-${item._id}-${i}`}>
             <div className="mb-1 flex items-center justify-between gap-2 text-sm">
               <span className="truncate font-medium text-gray-800">
@@ -188,6 +196,22 @@ export function AdminSearchAnalytics({ data }: { data: SearchAnalyticsData }) {
                 <span className="text-xs text-gray-500">{day._id.slice(5)}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {(data.priceScaleStats.length > 0 ||
+        data.pricePerSqmScaleStats.length > 0 ||
+        data.sqmScaleStats.length > 0) && (
+        <div className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-800">💵 ფასი და 📐 ფართობი — რას ეძებენ</h3>
+          <p className="mt-1 mb-4 text-sm text-gray-500">
+            min/max ფილტრის საშუალო მნიშვნელობით ჯგუფდება დიაპაზონში. GEL ფასები USD-ში გადაყვანილია (~2.75).
+          </p>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <StatTable title="საერთო ფასი (USD)" items={data.priceScaleStats} preserveOrder />
+            <StatTable title="ფასი მ²-ზე (USD)" items={data.pricePerSqmScaleStats} preserveOrder />
+            <StatTable title="ფართობი (მ²)" items={data.sqmScaleStats} preserveOrder />
           </div>
         </div>
       )}

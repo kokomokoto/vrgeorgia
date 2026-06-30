@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'next/navigation';
 import { getAgent, getAgentProperties, getAgentReviews, addAgentReview, Agent, AgentReview, Property, resolveImageUrl } from '@/lib/api';
 import { PropertyCard } from '@/components/PropertyCard';
+import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { Filters, type FiltersState } from '@/components/Filters';
 import { DEFAULT_MAP_FILTERS, filtersAreActive, filtersToPropertyQuery } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
@@ -399,9 +400,7 @@ export default function AgentProfilePage() {
           )}
 
           {propertiesLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-            </div>
+            <PropertyCardGridSkeleton count={6} gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" />
           ) : properties.length === 0 ? (
             <p className="text-slate-500">{t('noProperties')}</p>
           ) : (

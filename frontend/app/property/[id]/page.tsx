@@ -20,7 +20,12 @@ import { BrokerContactChannels } from '@/components/BrokerContactChannels';
 import { PanoramaViewer } from '@/components/PanoramaViewer';
 import { PhotoThumbnailScrollStrip } from '@/components/PhotoThumbnailScrollStrip';
 import { isPanoramaPhoto } from '@/lib/panorama';
+import {
+  resolveGalleryPhotoUrl,
+  startPropertyGalleryPreload,
+} from '@/lib/preloadPropertyPhotos';
 import { resolveTourPublicUrl } from '@/lib/tourBuilder';
+import { Shimmer } from '@/components/Skeleton';
 import { useAuth } from '@/components/AuthProvider';
 import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 import type { Property } from '@/lib/types';
@@ -248,6 +253,10 @@ function PropertyDetailInner() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [heroPhotoIndex, setHeroPhotoIndex] = useState(0);
   const [hoverPhotoIndex, setHoverPhotoIndex] = useState<number | null>(null);
+  const loadedGalleryPhotosRef = React.useRef(new Set<string>());
+  const [loadedGalleryPhotos, setLoadedGalleryPhotos] = useState<Set<string>>(
+    () => new Set()
+  );
   const [view3dMode, setView3dMode] = useState<'exterior' | 'interior' | 'tour'>('exterior');
   const propertyMapSectionRef = React.useRef<HTMLDivElement>(null);
 
@@ -359,6 +368,31 @@ function PropertyDetailInner() {
       Math.min(Math.max(0, property.mainPhoto ?? 0), ph.length - 1)
     );
   }, [property?._id, property?.photos?.length, property?.mainPhoto]);
+
+  useEffect(() => {
+    if (!property?.photos?.length) return;
+
+    const ph = property.photos;
+    const mainIdx = Math.min(
+      Math.max(0, property.mainPhoto ?? 0),
+      ph.length - 1
+    );
+
+    loadedGalleryPhotosRef.current = new Set();
+    setLoadedGalleryPhotos(new Set());
+
+    const cancel = startPropertyGalleryPreload(
+      ph,
+      property.panoramaPhotos,
+      mainIdx,
+      (photo) => {
+        loadedGalleryPhotosRef.current.add(photo);
+        setLoadedGalleryPhotos(new Set(loadedGalleryPhotosRef.current));
+      }
+    );
+
+    return cancel;
+  }, [property?._id, property?.photos, property?.panoramaPhotos, property?.mainPhoto]);
 
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!property) return <div className="text-sm text-slate-500">Loading…</div>;
@@ -783,18 +817,26 @@ function PropertyDetailInner() {
                   onClick={() => setLightboxIndex(displayPhotoIndex)}
                   aria-label={t('photos')}
                 >
-                  <img
-                    key={displayPhotoUrl}
-                    src={resolveImageUrl(displayPhotoUrl, displayIs360 ? undefined : 'large', {
-                      isPanorama: displayIs360,
-                    })}
-                    alt=""
-                    className={`h-full w-full transition-opacity group-hover:opacity-95 ${
-                      displayIs360 ? 'object-contain bg-slate-900' : 'object-cover'
-                    }`}
-                  />
+                  {photos.map((photo, idx) => {
+                    if (!loadedGalleryPhotos.has(photo)) return null;
+                    const is360 = isPanoramaPhoto(photo, property.panoramaPhotos);
+                    const active = idx === displayPhotoIndex;
+                    return (
+                      <img
+                        key={photo}
+                        src={resolveGalleryPhotoUrl(photo, property.panoramaPhotos)}
+                        alt=""
+                        className={`absolute inset-0 h-full w-full transition-opacity duration-150 ${
+                          active ? 'z-[1] opacity-100 group-hover:opacity-95' : 'z-0 opacity-0'
+                        } ${is360 ? 'bg-slate-900 object-contain' : 'object-cover'}`}
+                      />
+                    );
+                  })}
+                  {displayPhotoUrl && !loadedGalleryPhotos.has(displayPhotoUrl) && (
+                    <Shimmer className="absolute inset-0 rounded-none" />
+                  )}
                   {displayIs360 && (
-                    <span className="absolute left-2 top-2 rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow">
+                    <span className="absolute left-2 top-2 z-[2] rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow">
                       {t('photo_360')}
                     </span>
                   )}

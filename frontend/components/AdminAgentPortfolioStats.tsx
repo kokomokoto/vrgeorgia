@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { resolveImageUrl } from '@/lib/api';
+import { ANALYTICS_PERIOD_OPTIONS, type AnalyticsPeriodValue } from '@/lib/analyticsPeriod';
 
 export type AgentPortfolioRow = {
   agentId: string;
@@ -13,6 +14,10 @@ export type AgentPortfolioRow = {
   avgRating: number;
   totalReviews: number;
   propertyCount: number;
+  activeCount: number;
+  hiddenCount: number;
+  soldCount: number;
+  deletedCount: number;
   totalViews: number;
   periodViews: number;
   typeBreakdown: { type: string; count: number }[];
@@ -44,35 +49,72 @@ function typeLabel(type: string) {
 export function AdminAgentPortfolioStats({
   data,
   periodDays,
+  period,
+  onPeriodChange,
+  periodLoading = false,
 }: {
   data: AgentPortfolioStats;
   periodDays: number;
+  period?: AnalyticsPeriodValue;
+  onPeriodChange?: (period: AnalyticsPeriodValue) => void;
+  periodLoading?: boolean;
 }) {
   const withListings = data.agents.filter((a) => a.propertyCount > 0);
   const totalListings = withListings.reduce((s, a) => s + a.propertyCount, 0);
+  const totalActive = withListings.reduce((s, a) => s + (a.activeCount ?? 0), 0);
+  const totalHidden = withListings.reduce((s, a) => s + (a.hiddenCount ?? 0), 0);
   const totalViews = withListings.reduce((s, a) => s + a.totalViews, 0);
   const maxTypes = Math.max(...data.typeTotals.map((t) => t.count), 1);
 
   return (
     <div className="mb-8">
-      <div className="mb-4">
-        <h2 className="text-xl font-bold text-gray-800">👤 აგენტების სტატისტიკა</h2>
-        <p className="text-sm text-gray-500">
-          განცხადებები, კატეგორიები და ნახვები აგენტების მიხედვით
-        </p>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">👤 აგენტების სტატისტიკა</h2>
+          <p className="text-sm text-gray-500">
+            ატვირთული, აქტიური, დამალული, გაყიდული/წაშლილი და ნახვები აგენტების მიხედვით
+          </p>
+        </div>
+        {onPeriodChange && (
+          <div className="flex flex-wrap gap-2">
+            {ANALYTICS_PERIOD_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={periodLoading}
+                onClick={() => onPeriodChange(opt.value)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  period === opt.value
+                    ? 'bg-teal-600 text-white'
+                    : 'bg-white text-gray-700 shadow-sm hover:bg-gray-50'
+                } ${periodLoading ? 'opacity-60' : ''}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">აქტიური აგენტი (განცხადებით)</p>
           <p className="text-3xl font-bold text-gray-800">{withListings.length}</p>
         </div>
         <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">სულ განცხადება</p>
+          <p className="text-sm text-gray-500">სულ ატვირთული</p>
           <p className="text-3xl font-bold text-gray-800">{totalListings.toLocaleString()}</p>
         </div>
         <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">სულ ნახვა (ყველა განცხადება)</p>
+          <p className="text-sm text-gray-500">აქტიური განცხადება</p>
+          <p className="text-3xl font-bold text-blue-600">{totalActive.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">დამალული</p>
+          <p className="text-3xl font-bold text-amber-600">{totalHidden.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">სულ ნახვა</p>
           <p className="text-3xl font-bold text-gray-800">{totalViews.toLocaleString()}</p>
         </div>
       </div>
@@ -101,12 +143,22 @@ export function AdminAgentPortfolioStats({
 
       <div className="overflow-hidden rounded-xl bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead className="bg-gray-50">
               <tr className="text-left text-gray-500">
                 <th className="px-4 py-3 font-semibold">#</th>
                 <th className="px-4 py-3 font-semibold">აგენტი</th>
-                <th className="px-4 py-3 font-semibold text-right">განცხადებები</th>
+                <th className="px-4 py-3 font-semibold text-right" title="ბაზაში არსებული ყველა განცხადება">
+                  სულ ატვირთული
+                </th>
+                <th className="px-4 py-3 font-semibold text-right" title="საჯარო ხილვადობა, აქტიური/მოდერაციაში">
+                  აქტიური
+                </th>
+                <th className="px-4 py-3 font-semibold text-right" title="პირადი ან მხოლოდ ლინკით">
+                  დამალული
+                </th>
+                <th className="px-4 py-3 font-semibold text-right">გაყიდული</th>
+                <th className="px-4 py-3 font-semibold text-right">წაშლილი</th>
                 <th className="px-4 py-3 font-semibold text-right">ნახვები (სულ)</th>
                 <th className="px-4 py-3 font-semibold text-right">ნახვები ({periodDays} დღე)</th>
                 <th className="px-4 py-3 font-semibold">კატეგორიები</th>
@@ -115,7 +167,7 @@ export function AdminAgentPortfolioStats({
             <tbody className="divide-y divide-gray-100">
               {data.agents.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
                     აგენტები ვერ მოიძებნა
                   </td>
                 </tr>
@@ -163,6 +215,18 @@ export function AdminAgentPortfolioStats({
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-800">
                       {agent.propertyCount}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-blue-600">
+                      {agent.activeCount ?? 0}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-amber-600">
+                      {agent.hiddenCount ?? 0}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-emerald-600">
+                      {agent.soldCount ?? 0}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-red-600">
+                      {agent.deletedCount ?? 0}
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-blue-600">
                       {agent.totalViews.toLocaleString()}

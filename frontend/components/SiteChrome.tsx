@@ -25,7 +25,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Header />
+      {!adminPanel && <Header />}
       <main
         className={
           adminPanel

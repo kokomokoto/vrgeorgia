@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const searchEventSchema = new mongoose.Schema({
   source: {
     type: String,
-    enum: ['home', 'map', 'agent', 'admin_tours', 'admin_properties'],
+    enum: ['home', 'map', 'agent', 'profile', 'admin_tours', 'admin_properties', 'admin_agent_detail'],
     default: 'home',
     index: true,
   },

@@ -84,8 +84,17 @@ export function filtersToSearchPayload(
 const lastSent = new Map<string, string>();
 
 /** სერჩის/ფილტრის გამოყენების აღრიცხვა (იგივე ფილტრის დუბლიკატი არ იგზავნება) */
+export type SearchAnalyticsSource =
+  | 'home'
+  | 'map'
+  | 'agent'
+  | 'profile'
+  | 'admin_tours'
+  | 'admin_properties'
+  | 'admin_agent_detail';
+
 export function trackSearchFilters(
-  source: 'home' | 'map' | 'agent' | 'admin_tours' | 'admin_properties',
+  source: SearchAnalyticsSource,
   filters: FiltersState,
   opts?: { agentId?: string; sort?: string; resultCount?: number }
 ) {

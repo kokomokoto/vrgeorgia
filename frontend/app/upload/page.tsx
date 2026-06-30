@@ -12,6 +12,7 @@ import {
   adjustMainIndexAfterRemoval,
   reorderArray,
 } from '@/lib/propertyPhotos';
+import { isAgentRole } from '@/lib/userRoles';
 import { captureFlipPositions } from '@/lib/flipAnimation';
 import { PhotoSortableGrid } from '@/components/PhotoSortableGrid';
 import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
@@ -125,7 +126,7 @@ export default function UploadPage() {
 
   // მაკლერის პროფილი — დეფოლტად საკონტაქტო ტელ/ელფოსტა (რედაქტირებადი)
   React.useEffect(() => {
-    if (!draftHydrated || !user || user.role !== 'agent') return;
+    if (!draftHydrated || !user || !isAgentRole(user.role)) return;
     let cancelled = false;
     const apply = (email: string, phone: string) => {
       if (cancelled) return;

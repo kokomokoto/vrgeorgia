@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty } from '@/lib/api';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
+import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 
 type BrokerListingMode = 'public' | 'unlisted' | 'private' | 'sold';
 
@@ -75,7 +76,7 @@ export default function ProfilePage() {
     );
   }
 
-  const canSetListingVisibility = user.role === 'agent' || user.role === 'admin';
+  const canSetListingVisibility = isAgentRole(user.role) || isAdminRole(user.role);
 
   const setBrokerListingMode = async (property: Property, mode: BrokerListingMode) => {
     setVisibilitySavingId(property._id);

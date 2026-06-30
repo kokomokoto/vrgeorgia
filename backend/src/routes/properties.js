@@ -15,6 +15,13 @@ import { buildPropertyTextSearchOr } from '../utils/propertySearch.js';
 import { getUsdToGelRate } from '../utils/currency.js';
 import { applyPriceRangeFilter } from '../utils/priceFilter.js';
 import { applySqmRangeFilter } from '../utils/areaFilter.js';
+import { isAdminRole, isAgentRole } from '../utils/userRoles.js';
+import {
+  ensureEditDraft,
+  mergePatchIntoDraft,
+  propertyForEdit,
+  discardEditDraft,
+} from '../services/propertyEditDraft.js';
 
 const router = express.Router();
 
@@ -48,7 +55,7 @@ async function getRequestUserContext(req) {
     const decoded = jwt.default.verify(token, getJWTSecret());
     const userId = decoded.sub;
     const me = await User.findById(userId).select('role').lean();
-    return { userId, isAdmin: me?.role === 'admin' };
+    return { userId, isAdmin: isAdminRole(me?.role) };
   } catch {
     return { userId: null, isAdmin: false };
   }
@@ -61,7 +68,7 @@ async function userCanManageProperty(requestUserId, property) {
     property.userId?._id?.toString?.() || property.userId?.toString?.() || String(property.userId);
   if (requestUserId === ownerId) return true;
   const me = await User.findById(requestUserId).select('role').lean();
-  return me?.role === 'admin';
+  return isAdminRole(me?.role);
 }
 
 function pickLanguage(req) {
@@ -322,7 +329,11 @@ router.get(
   requireAuth,
   async (req, res) => {
     const properties = await Property.find({ userId: req.user.id }).sort({ createdAt: -1 }).lean();
-    res.json({ properties });
+    const safe = properties.map((p) => {
+      const { editDraft, ...rest } = p;
+      return { ...rest, hasEditDraft: Boolean(editDraft) };
+    });
+    res.json({ properties: safe });
   }
 );
 
@@ -615,6 +626,52 @@ router.get(
   }
 );
 
+// GET for edit form (draft overlay; does not increment views)
+router.get(
+  '/:id/for-edit',
+  requireAuth,
+  [param('id').isString().trim().isLength({ min: 5 })],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const property = await Property.findById(req.params.id)
+      .populate('userId', 'email name phone avatar role')
+      .lean();
+    if (!property) return res.status(404).json({ message: 'Not found' });
+    if (!(await userCanManageProperty(req.user.id, property))) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    if (property.tourLink) {
+      property.tourLink = normalizeTourLink(property.tourLink);
+    }
+
+    res.json({ property: propertyForEdit(property) });
+  }
+);
+
+// Discard staged edit draft (cancel without save)
+router.delete(
+  '/:id/draft',
+  requireAuth,
+  [param('id').isString().trim().isLength({ min: 5 })],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const existing = await Property.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Not found' });
+    if (!(await userCanManageProperty(req.user.id, existing))) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    await discardEditDraft(existing);
+    await existing.save();
+    res.json({ ok: true });
+  }
+);
+
 // GET by id (and optionally translate)
 router.get(
   '/:id',
@@ -686,12 +743,14 @@ router.get(
       property.tourLink = normalizeTourLink(property.tourLink);
     }
 
-    if (ownerIdStr && property.userId?.role === 'agent') {
+    if (ownerIdStr && isAgentRole(property.userId?.role)) {
       const agentDoc = await Agent.findOne({ user: ownerIdStr }).select('_id').lean();
       if (agentDoc?._id) {
         property.ownerAgentProfileId = String(agentDoc._id);
       }
     }
+
+    delete property.editDraft;
 
     res.json({ property: applyTranslation(property, lang) });
   }
@@ -730,7 +789,21 @@ router.post(
     }
     if (uploaded.length === 0) return res.status(400).json({ message: 'ფოტო არ აიტვირთა' });
 
+    const useDraft = req.query.draft === '1' || req.query.draft === 'true';
     const newPanoramas = uploaded.filter((_, i) => Boolean(panoramaFlags[i]));
+
+    if (useDraft) {
+      ensureEditDraft(existing);
+      const draft = existing.editDraft;
+      const next = [...(draft.photos || []), ...uploaded].slice(0, 30);
+      const nextPanorama = [...(draft.panoramaPhotos || []), ...newPanoramas].filter((u) => next.includes(u));
+      draft.photos = next;
+      draft.panoramaPhotos = [...new Set(nextPanorama)];
+      existing.markModified('editDraft');
+      await existing.save();
+      return res.json({ photos: draft.photos, panoramaPhotos: draft.panoramaPhotos });
+    }
+
     const next = [...(existing.photos || []), ...uploaded].slice(0, 30);
     const nextPanorama = [...(existing.panoramaPhotos || []), ...newPanoramas].filter((u) => next.includes(u));
     existing.photos = next;
@@ -804,9 +877,15 @@ router.put(
     if (req.body.rooms !== undefined) patch.rooms = Number(req.body.rooms);
     if (req.body.bedrooms !== undefined) patch.bedrooms = Number(req.body.bedrooms);
     if (req.body.photos !== undefined) patch.photos = req.body.photos;
+    const isDraftSave = req.body.draft === true;
     if (req.body.panoramaPhotos !== undefined) {
       const list = Array.isArray(req.body.panoramaPhotos) ? req.body.panoramaPhotos : [];
-      const photoList = req.body.photos !== undefined ? req.body.photos : existing.photos;
+      const photoList =
+        req.body.photos !== undefined
+          ? req.body.photos
+          : isDraftSave && existing.editDraft?.photos
+            ? existing.editDraft.photos
+            : existing.photos;
       patch.panoramaPhotos = list.filter(
         (u) => typeof u === 'string' && u.trim() && photoUrlInList(u, photoList)
       );
@@ -863,16 +942,46 @@ router.put(
     }
 
     if (unsetShareToken) delete patch.shareToken;
+
+    if (isDraftSave) {
+      if (req.body.brokerListingMode !== undefined) {
+        return res.status(400).json({ message: 'brokerListingMode cannot be staged' });
+      }
+      mergePatchIntoDraft(existing, patch);
+      await existing.save();
+      return res.json({ property: propertyForEdit(existing.toObject()) });
+    }
+
+    const oldLivePhotos = [...(existing.photos || [])];
+    const draftPhotos = existing.editDraft?.photos ? [...existing.editDraft.photos] : [];
+
     const mongoUpdate = {};
     if (Object.keys(patch).length > 0) mongoUpdate.$set = patch;
     if (unsetShareToken) mongoUpdate.$unset = { shareToken: '' };
+    mongoUpdate.$unset = { ...(mongoUpdate.$unset || {}), editDraft: '' };
 
-    if (Object.keys(mongoUpdate).length === 0) {
+    if (Object.keys(mongoUpdate.$set || {}).length === 0 && !mongoUpdate.$unset?.editDraft) {
       const fresh = await Property.findById(req.params.id).lean();
+      delete fresh.editDraft;
       return res.json({ property: fresh });
     }
 
     const updated = await Property.findByIdAndUpdate(req.params.id, mongoUpdate, { new: true }).lean();
+    delete updated.editDraft;
+
+    const publishedPhotos = updated.photos || [];
+    const publishedKeys = new Set(publishedPhotos.map((u) => normalizePhotoUrl(u)));
+    const photoCandidates = [...oldLivePhotos, ...draftPhotos];
+    const seen = new Set();
+    for (const url of photoCandidates) {
+      const key = normalizePhotoUrl(url);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (!publishedKeys.has(key)) {
+        await deleteCloudinaryImage(url);
+      }
+    }
+
     res.json({ property: updated });
   }
 );

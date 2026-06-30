@@ -26,7 +26,8 @@ export async function uploadPropertyPhotosInBatches(
   propertyId: string,
   files: File[],
   panoramaFlags: boolean[],
-  onProgress?: (progress: PhotoUploadProgress) => void
+  onProgress?: (progress: PhotoUploadProgress) => void,
+  opts?: { draft?: boolean }
 ): Promise<{ photos: string[]; panoramaPhotos?: string[] }> {
   if (files.length === 0) {
     return { photos: [], panoramaPhotos: [] };
@@ -67,7 +68,7 @@ export async function uploadPropertyPhotosInBatches(
       phase: 'uploading',
     });
 
-    last = await addPropertyPhotos(propertyId, batchFiles, batchFlags);
+    last = await addPropertyPhotos(propertyId, batchFiles, batchFlags, opts);
 
     if (start + PROPERTY_PHOTO_BATCH_SIZE < preparedFiles.length) {
       await pause(BATCH_PAUSE_MS);

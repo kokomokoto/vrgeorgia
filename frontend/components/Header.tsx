@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from './AuthProvider';
+import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 
 export function Header() {
   const { t } = useTranslation();
@@ -37,8 +38,8 @@ export function Header() {
   const servicesNavText = mounted ? t('services_nav') : 'მომსახურება';
   const messagesText = mounted ? t('messages') : 'შეტყობინებები';
   const adminText = mounted ? t('admin_panel') : 'ადმინ პანელი';
-  const isAdmin = profileLoaded && user?.role === 'admin';
-  const isAgent = profileLoaded && user?.role === 'agent';
+  const isAdmin = profileLoaded && isAdminRole(user?.role);
+  const isAgent = profileLoaded && isAgentRole(user?.role);
   const uploadLinkClass =
     isAgent || isAdmin
       ? 'text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300'

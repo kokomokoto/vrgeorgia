@@ -1,11 +1,12 @@
 import Agent from '../models/Agent.js';
 import { User } from '../models/User.js';
+import { isAgentRole } from '../utils/userRoles.js';
 
-/** User.role === 'agent' ↔ Agent პროფილის სინქრონიზაცია. */
+/** აგენტის როლი ↔ Agent პროფილის სინქრონიზაცია (agent, agent_admin). */
 export async function syncAgentProfileForUser(user, { forceActive } = {}) {
   if (!user) return null;
 
-  if (user.role !== 'agent') {
+  if (!isAgentRole(user.role)) {
     await Agent.findOneAndUpdate({ user: user._id }, { active: false });
     return null;
   }
@@ -42,18 +43,21 @@ export async function syncAgentProfileForUser(user, { forceActive } = {}) {
 /** agent-role მომხმარებლები Agent ჩანაწერის გარეშე + User→Agent სინქრონიზაცია. */
 export async function backfillMissingAgentProfiles() {
   const linkedUserIds = await Agent.distinct('user');
-  const missing = await User.find({ role: 'agent', _id: { $nin: linkedUserIds } });
+  const missing = await User.find({
+    role: { $in: ['agent', 'agent_admin'] },
+    _id: { $nin: linkedUserIds },
+  });
   for (const user of missing) {
     await syncAgentProfileForUser(user);
   }
 
-  const agentUsers = await User.find({ role: 'agent' });
+  const agentUsers = await User.find({ role: { $in: ['agent', 'agent_admin'] } });
   for (const user of agentUsers) {
     await syncAgentProfileForUser(user);
   }
 
   const approvedAgents = await User.find({
-    role: 'agent',
+    role: { $in: ['agent', 'agent_admin'] },
     $or: [{ status: 'approved' }, { status: { $exists: false } }],
   }).select('_id');
   const approvedIds = approvedAgents.map((u) => u._id);

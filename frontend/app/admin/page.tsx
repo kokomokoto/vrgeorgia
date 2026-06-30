@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getMe } from '@/lib/api';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import { isAdminRole, roleLabel } from '@/lib/userRoles';
 
 interface Stats {
   totalUsers: number;
@@ -52,12 +53,11 @@ export default function AdminDashboard() {
 
     try {
       const { user } = await getMe();
-      if (user.role !== 'admin') {
-        const roleLabel =
-          user.role === 'agent' ? 'აგენტი' : user.role === 'user' ? 'მომხმარებელი' : String(user.role ?? '—');
+      if (!isAdminRole(user.role)) {
+        const roleLabelText = roleLabel(user.role ?? '');
         setError(
-          `თქვენი ანგარიში (${user.email}) არ არის ადმინისტრატორი — მიმდინარე როლი: ${roleLabel}. ` +
-            'ადმინის უფლება უნდა დაენიჭოს ბაზაში (role: admin), შემდეგ გამოდით და ხელახლა შედით.'
+          `თქვენი ანგარიში (${user.email}) არ არის ადმინისტრატორი — მიმდინარე როლი: ${roleLabelText}. ` +
+            'ადმინის უფლება უნდა დაენიჭოს ბაზაში (role: admin ან agent_admin), შემდეგ გამოდით და ხელახლა შედით.'
         );
         setLoading(false);
         return;

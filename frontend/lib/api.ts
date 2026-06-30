@@ -31,7 +31,7 @@ export type RegisterBody = {
   password: string; 
   phone?: string;
   name?: string;
-  role?: 'user' | 'agent';
+  role?: 'user' | 'agent' | 'admin' | 'agent_admin';
   company?: string;
   experience?: number;
   specializations?: string[];
@@ -222,6 +222,14 @@ export async function createProperty(form: FormData) {
   });
 }
 
+export async function getPropertyForEdit(id: string) {
+  return request<{ property: Property & { hasEditDraft?: boolean } }>(`/api/properties/${id}/for-edit`);
+}
+
+export async function discardPropertyEditDraft(id: string) {
+  return request<{ ok: boolean }>(`/api/properties/${id}/draft`, { method: 'DELETE' });
+}
+
 export async function getMyProperties() {
   return request<{ properties: Property[] }>('/api/properties/user/my');
 }
@@ -230,21 +238,30 @@ export async function updateProperty(
   id: string,
   data: Partial<Property> & {
     brokerListingMode?: 'public' | 'unlisted' | 'private' | 'sold';
-  }
+    draft?: boolean;
+  },
+  opts?: { draft?: boolean }
 ) {
+  const payload = opts?.draft ? { ...data, draft: true } : data;
   return request<{ property: Property }>(`/api/properties/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(data)
+    body: JSON.stringify(payload)
   });
 }
 
-export async function addPropertyPhotos(id: string, files: File[], panoramaFlags?: boolean[]) {
+export async function addPropertyPhotos(
+  id: string,
+  files: File[],
+  panoramaFlags?: boolean[],
+  opts?: { draft?: boolean }
+) {
   const form = new FormData();
   for (const f of files) form.append('photos', f);
   if (panoramaFlags?.length) {
     form.append('panoramaFlags', JSON.stringify(panoramaFlags));
   }
-  return request<{ photos: string[]; panoramaPhotos?: string[] }>(`/api/properties/${id}/photos`, {
+  const q = opts?.draft ? '?draft=1' : '';
+  return request<{ photos: string[]; panoramaPhotos?: string[] }>(`/api/properties/${id}/photos${q}`, {
     method: 'POST',
     body: form,
   });

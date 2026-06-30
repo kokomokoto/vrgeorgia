@@ -81,7 +81,7 @@ export type Property = {
   }>;
   contact?: { phone?: string; email?: string };
   privateNotes?: string;
-  userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string; role?: 'user' | 'agent' | 'admin' };
+  userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string; role?: 'user' | 'agent' | 'admin' | 'agent_admin' };
   /** Agent პროფილის ID (owner agent-ისთვის) */
   ownerAgentProfileId?: string;
   views?: number;
@@ -96,4 +96,4 @@ export type Property = {
   shareToken?: string;
 };
 
-export type User = { id: string; _id?: string; email: string; phone?: string; avatar?: string; name?: string; role?: 'user' | 'agent' | 'admin'; status?: 'pending' | 'approved' | 'rejected' };
+export type User = { id: string; _id?: string; email: string; phone?: string; avatar?: string; name?: string; role?: 'user' | 'agent' | 'admin' | 'agent_admin'; status?: 'pending' | 'approved' | 'rejected' };

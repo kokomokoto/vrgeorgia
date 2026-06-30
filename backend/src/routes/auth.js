@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { uploadAvatar } from '../services/cloudinary.js';
 import { getJWTExpiresIn, getJWTSecret } from '../config/jwt.js';
 import { syncAgentProfileForUser } from '../services/agentProfile.js';
+import { isAgentRole } from '../utils/userRoles.js';
 
 const router = express.Router();
 
@@ -139,7 +140,7 @@ router.put(
     const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (user.role === 'agent') {
+    if (isAgentRole(user.role)) {
       await syncAgentProfileForUser(user);
     }
 
@@ -155,7 +156,7 @@ router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) =>
   const user = await User.findByIdAndUpdate(req.user.id, { avatar: avatarPath }, { new: true });
   if (!user) return res.status(404).json({ message: 'User not found' });
 
-  if (user.role === 'agent') {
+  if (isAgentRole(user.role)) {
     await syncAgentProfileForUser(user);
   }
 

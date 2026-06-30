@@ -21,6 +21,7 @@ const roleNames: Record<string, string> = {
   user: 'მომხმარებელი',
   agent: 'აგენტი',
   admin: 'ადმინი',
+  agent_admin: 'აგენტი-ადმინი',
 };
 
 export default function AdminRegistrationsPage() {

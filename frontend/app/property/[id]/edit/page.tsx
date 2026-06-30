@@ -5,7 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
-import { getProperty, updateProperty, resolveImageUrl } from '@/lib/api';
+import { isAdminRole } from '@/lib/userRoles';
+import { getPropertyForEdit, updateProperty, discardPropertyEditDraft, resolveImageUrl } from '@/lib/api';
 import { uploadPropertyPhotosInBatches } from '@/lib/propertyPhotoUpload';
 import { detectPanoramaFromFile, isPanoramaPhoto, normalizePhotoUrl } from '@/lib/panorama';
 import {
@@ -104,7 +105,7 @@ export default function EditPropertyPage() {
   const router = useRouter();
   const params = useParams();
   const { user, profileLoaded } = useAuth();
-  const isAdmin = profileLoaded && user?.role === 'admin';
+  const isAdmin = profileLoaded && isAdminRole(user?.role);
   const id = params.id as string;
 
   const [hydrated, setHydrated] = useState(false);
@@ -191,7 +192,7 @@ export default function EditPropertyPage() {
   // მონაცემების ჩატვირთვა
   useEffect(() => {
     if (!hydrated || !id) return;
-    getProperty(id)
+    getPropertyForEdit(id)
       .then((res) => {
         const p = res.property;
         const ownerRaw = p.userId as { _id?: string } | string | undefined;
@@ -431,7 +432,7 @@ export default function EditPropertyPage() {
       const res = await updateProperty(id, {
         photos: existingPhotos,
         panoramaPhotos: clean,
-      } as any);
+      } as any, { draft: true });
       setPanoramaPhotos((res.property as Property).panoramaPhotos || clean);
     } finally {
       setPanoramaSaving(false);
@@ -468,7 +469,7 @@ export default function EditPropertyPage() {
       const panoramaFlags = await Promise.all(list.map((f) => detectPanoramaFromFile(f)));
       const res = await uploadPropertyPhotosInBatches(id, list, panoramaFlags, (p) =>
         setPhotoUploadProgress({ done: p.uploaded, total: p.total })
-      );
+      , { draft: true });
       setExistingPhotos(res.photos || []);
       setPanoramaPhotos(res.panoramaPhotos || []);
       setMainPhotoIndex((prev) => {
@@ -1464,7 +1465,14 @@ export default function EditPropertyPage() {
             </button>
             <button
               className="px-6 py-4 rounded-xl text-lg font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
-              onClick={() => router.push(`/property/${id}`)}
+              onClick={async () => {
+                try {
+                  await discardPropertyEditDraft(id);
+                } catch {
+                  // draft discard failed — still navigate away
+                }
+                router.push(`/property/${id}`);
+              }}
             >
               {t('cancel')}
             </button>

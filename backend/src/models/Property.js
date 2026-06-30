@@ -123,6 +123,9 @@ const propertySchema = new mongoose.Schema(
     pinned: { type: Boolean, default: false },
     pinnedAt: { type: Date, default: null },
 
+    /** რედაქტირების დრაფტი — საიტზე არ ჩანს, სანამ არ დაიპუბლიკება */
+    editDraft: { type: mongoose.Schema.Types.Mixed, default: undefined },
+
     // Optional translated fields cache, keyed by language code.
     // Example: { en: { title: '...', desc: '...' }, ru: { ... } }
     translations: {

@@ -11,6 +11,7 @@ import { syncAgentProfileForUser, backfillMissingAgentProfiles } from '../servic
 import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
 import { getSearchAnalyticsStats } from '../utils/searchAnalyticsAgg.js';
 import { getAgentPortfolioStats } from '../utils/agentPortfolioStats.js';
+import { isAdminRole, isAgentRole, USER_ROLES } from '../utils/userRoles.js';
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ async function writeAudit(adminId, action, targetType, targetId, meta = {}) {
 const adminMiddleware = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
-    if (!user || user.role !== 'admin') {
+    if (!user || !isAdminRole(user.role)) {
       return res.status(403).json({ message: 'წვდომა აკრძალულია. მხოლოდ ადმინისტრატორისთვის.' });
     }
     next();
@@ -172,6 +173,9 @@ router.get('/users', requireAuth, adminMiddleware, async (req, res) => {
 router.put('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
   try {
     const { role, name, email, phone } = req.body;
+    if (role && !USER_ROLES.includes(role)) {
+      return res.status(400).json({ message: 'არასწორი როლი' });
+    }
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { role, name, email, phone },
@@ -201,7 +205,7 @@ router.put('/users/:id/approve', requireAuth, adminMiddleware, async (req, res) 
     ).select('-passwordHash');
     if (!user) return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
 
-    if (user.role === 'agent') {
+    if (isAgentRole(user.role)) {
       await syncAgentProfileForUser(user, { forceActive: true });
     }
 
@@ -222,7 +226,7 @@ router.put('/users/:id/reject', requireAuth, adminMiddleware, async (req, res) =
     ).select('-passwordHash');
     if (!user) return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
 
-    if (user.role === 'agent') {
+    if (isAgentRole(user.role)) {
       await Agent.findOneAndUpdate({ user: user._id }, { active: false });
     }
 

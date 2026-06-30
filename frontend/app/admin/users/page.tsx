@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import { ROLE_BADGE_COLORS, roleLabel } from '@/lib/userRoles';
 
 interface User {
   _id: string;
@@ -117,17 +118,7 @@ export default function AdminUsers() {
     }
   };
 
-  const roleNames: Record<string, string> = {
-    user: 'მომხმარებელი',
-    agent: 'აგენტი',
-    admin: 'ადმინი'
-  };
-
-  const roleBadgeColors: Record<string, string> = {
-    user: 'bg-gray-100 text-gray-700',
-    agent: 'bg-blue-100 text-blue-700',
-    admin: 'bg-red-100 text-red-700'
-  };
+  const roleBadgeColors = ROLE_BADGE_COLORS;
 
   if (error) {
     return (
@@ -172,6 +163,7 @@ export default function AdminUsers() {
               <option value="">ყველა როლი</option>
               <option value="user">მომხმარებელი</option>
               <option value="agent">აგენტი</option>
+              <option value="agent_admin">აგენტი-ადმინი</option>
               <option value="admin">ადმინი</option>
             </select>
             <button
@@ -221,8 +213,8 @@ export default function AdminUsers() {
                       {user.phone || '-'}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${roleBadgeColors[user.role]}`}>
-                        {roleNames[user.role]}
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${roleBadgeColors[user.role as keyof typeof roleBadgeColors] || 'bg-gray-100 text-gray-700'}`}>
+                        {roleLabel(user.role)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-gray-600">
@@ -315,6 +307,7 @@ export default function AdminUsers() {
                   >
                     <option value="user">მომხმარებელი</option>
                     <option value="agent">აგენტი</option>
+                    <option value="agent_admin">აგენტი-ადმინი</option>
                     <option value="admin">ადმინი</option>
                   </select>
                 </div>

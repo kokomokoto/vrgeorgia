@@ -22,6 +22,7 @@ import { PhotoThumbnailScrollStrip } from '@/components/PhotoThumbnailScrollStri
 import { isPanoramaPhoto } from '@/lib/panorama';
 import { resolveTourPublicUrl } from '@/lib/tourBuilder';
 import { useAuth } from '@/components/AuthProvider';
+import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 import type { Property } from '@/lib/types';
 
 // Lightbox — ჩვეულებრივი ფოტო ან 360° პანორამა
@@ -378,9 +379,9 @@ function PropertyDetailInner() {
     !!currentUser &&
     !!ownerId &&
     (currentUser.id === ownerId || currentUser._id === ownerId);
-  const isAdmin = profileLoaded && currentUser?.role === 'admin';
+  const isAdmin = profileLoaded && isAdminRole(currentUser?.role);
   const showEditButton =
-    isAdmin || (profileLoaded && isOwner && currentUser?.role === 'agent');
+    isAdmin || (profileLoaded && isOwner && isAgentRole(currentUser?.role));
 
   const handleDelete = async () => {
     if (!property || deleting) return;
@@ -446,11 +447,11 @@ function PropertyDetailInner() {
   const showing3dExterior = !showing3dTour && !showing3dInterior && has3dExterior;
 
   const ownerRoleLabel =
-    owner && typeof owner === 'object' && owner.role === 'agent' ? t('agent_role') : t('broker');
+    owner && typeof owner === 'object' && isAgentRole(owner.role) ? t('agent_role') : t('broker');
 
   const agentProfileHref = property.ownerAgentProfileId
     ? `/agents/${property.ownerAgentProfileId}`
-    : owner?.role === 'agent' && ownerId
+    : isAgentRole(owner?.role) && ownerId
       ? `/agent/${ownerId}`
       : null;
 

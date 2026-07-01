@@ -23,6 +23,12 @@ import {
   softDeletePropertyDoc,
 } from '../utils/propertySoftDelete.js';
 import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
+import {
+  discardEditDraft,
+  ensureEditDraft,
+  mergePatchIntoDraft,
+  propertyForEdit,
+} from '../services/propertyEditDraft.js';
 
 const router = express.Router();
 

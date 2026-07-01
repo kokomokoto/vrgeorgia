@@ -104,10 +104,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   let res: Response;
+  const controller = new AbortController();
+  const timeoutMs = init.body instanceof FormData ? 120_000 : 45_000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    res = await fetch(`${getApiBase()}${path}`, { ...init, headers, cache: 'no-store' });
-  } catch {
+    res = await fetch(`${getApiBase()}${path}`, {
+      ...init,
+      headers,
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(
+        `${formatNetworkError(getApiBase(), init)} (დრო ამოიწურა — სცადეთ ხელახლა 1–2 წუთში)`
+      );
+    }
     throw new Error(formatNetworkError(getApiBase(), init));
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (!res.ok) {

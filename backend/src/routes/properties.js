@@ -690,7 +690,12 @@ router.get(
       property.tourLink = normalizeTourLink(property.tourLink);
     }
 
-    res.json({ property: propertyForEdit(property) });
+    try {
+      res.json({ property: propertyForEdit(property) });
+    } catch (err) {
+      console.error('for-edit failed:', err);
+      res.status(500).json({ message: 'რედაქტირების მონაცემების ჩატვირთვა ვერ მოხერხდა' });
+    }
   }
 );
 

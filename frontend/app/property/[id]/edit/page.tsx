@@ -191,9 +191,24 @@ export default function EditPropertyPage() {
 
   // მონაცემების ჩატვირთვა
   useEffect(() => {
-    if (!hydrated || !id) return;
+    if (!hydrated || !profileLoaded) return;
+    if (!id) {
+      setDataLoading(false);
+      setError('განცხადების ID ვერ მოიძებნა');
+      return;
+    }
+    if (!user) {
+      setDataLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setDataLoading(true);
+    setError(null);
+
     getPropertyForEdit(id)
       .then((res) => {
+        if (cancelled) return;
         const p = res.property;
         const ownerRaw = p.userId as { _id?: string } | string | undefined;
         const ownerId =
@@ -228,8 +243,9 @@ export default function EditPropertyPage() {
         setTourLink(p.tourLink || '');
         setContactPhone(p.contact?.phone || '');
         setContactEmail(p.contact?.email || '');
-        setLat(p.location.lat);
-        setLng(p.location.lng);
+        const loc = p.location;
+        setLat(loc?.lat ?? null);
+        setLng(loc?.lng ?? null);
         setExistingPhotos(p.photos || []);
         setPanoramaPhotos((p as Property).panoramaPhotos || []);
         setMainPhotoIndex((p as any).mainPhoto || 0);
@@ -276,9 +292,17 @@ export default function EditPropertyPage() {
         // პირადი ჩანაწერი
         setPrivateNotes((p as any).privateNotes || '');
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setDataLoading(false));
-  }, [hydrated, id]);
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setDataLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, profileLoaded, id, user]);
 
   const photoGridRef = useRef<HTMLDivElement>(null);
   const pendingFlipRef = useRef<Map<string, DOMRect> | null>(null);
@@ -355,7 +379,7 @@ export default function EditPropertyPage() {
     isStep7Complete,
   ].filter(Boolean).length;
 
-  if (!hydrated) {
+  if (!hydrated || !profileLoaded) {
     return <div className="flex items-center justify-center min-h-[400px] text-slate-500">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
     </div>;

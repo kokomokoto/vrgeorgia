@@ -1,0 +1,9 @@
+{
+  "name": "vrgeorgia",
+  "private": true,
+  "scripts": {
+    "dev": "npx concurrently -k -n api,web -c blue,green \"npm run dev --prefix backend\" \"npm run dev:clean --prefix frontend\"",
+    "dev:api": "npm run dev --prefix backend",
+    "dev:web": "npm run dev:clean --prefix frontend"
+  }
+}

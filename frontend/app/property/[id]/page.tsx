@@ -24,6 +24,7 @@ import {
   resolveGalleryPhotoUrl,
   startPropertyGalleryPreload,
 } from '@/lib/preloadPropertyPhotos';
+import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { resolveTourPublicUrl } from '@/lib/tourBuilder';
 import { Shimmer } from '@/components/Skeleton';
 import { useAuth } from '@/components/AuthProvider';
@@ -85,6 +86,11 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
     onChangeIndex((index + 1) % photoCount);
   }, [index, photoCount, onChangeIndex]);
 
+  const lightboxSwipe = useHorizontalSwipe({
+    onSwipeLeft: photoCount > 1 ? goNext : undefined,
+    onSwipeRight: photoCount > 1 ? goPrev : undefined,
+  });
+
   React.useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -119,8 +125,11 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
       
       {is360 ? (
         <div
-          className="mx-auto flex w-[min(96vw,1600px)] flex-col items-center"
+          className="mx-auto flex w-[min(96vw,1600px)] flex-col items-center touch-pan-y"
           onClick={(e) => e.stopPropagation()}
+          onTouchStart={lightboxSwipe.onTouchStart}
+          onTouchMove={lightboxSwipe.onTouchMove}
+          onTouchEnd={lightboxSwipe.onTouchEnd}
         >
           <div
             ref={viewerWrapRef}
@@ -160,8 +169,11 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         </div>
       ) : (
         <div
-          className="flex h-[min(78vh,calc(100dvh-14rem))] w-[min(92vw,1400px)] max-w-[calc(100vw-7rem)] items-center justify-center"
+          className="flex h-[min(78vh,calc(100dvh-14rem))] w-[min(92vw,1400px)] max-w-[calc(100vw-7rem)] items-center justify-center touch-pan-y"
           onClick={(e) => e.stopPropagation()}
+          onTouchStart={lightboxSwipe.onTouchStart}
+          onTouchMove={lightboxSwipe.onTouchMove}
+          onTouchEnd={lightboxSwipe.onTouchEnd}
         >
           <img
             src={displayUrl}
@@ -394,6 +406,29 @@ function PropertyDetailInner() {
     return cancel;
   }, [property?._id, property?.photos, property?.panoramaPhotos, property?.mainPhoto]);
 
+  const galleryPhotoCount = property?.photos?.length ?? 0;
+  const swipePhotoIndex =
+    hoverPhotoIndex !== null ? hoverPhotoIndex : heroPhotoIndex;
+
+  const goHeroPrev = React.useCallback(() => {
+    setHoverPhotoIndex(null);
+    setHeroPhotoIndex((i) => Math.max(0, i - 1));
+  }, []);
+
+  const goHeroNext = React.useCallback(() => {
+    setHoverPhotoIndex(null);
+    setHeroPhotoIndex((i) => Math.min(galleryPhotoCount - 1, i + 1));
+  }, [galleryPhotoCount]);
+
+  const heroSwipe = useHorizontalSwipe({
+    onSwipeLeft:
+      galleryPhotoCount > 1 && swipePhotoIndex < galleryPhotoCount - 1
+        ? goHeroNext
+        : undefined,
+    onSwipeRight:
+      galleryPhotoCount > 1 && swipePhotoIndex > 0 ? goHeroPrev : undefined,
+  });
+
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!property) return <div className="text-sm text-slate-500">Loading…</div>;
 
@@ -585,7 +620,7 @@ function PropertyDetailInner() {
   return (
     <div className="grid w-full min-w-0 gap-2 sm:gap-2.5 lg:grid-cols-[1fr_minmax(280px,320px)] lg:items-start">
       {/* სათაური + მისამართი — მარცხე სვეტი (3D-ის სიგანე) */}
-      <div className="flex min-w-0 gap-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:gap-2.5 sm:p-3 lg:col-start-1 lg:row-start-1">
+      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:flex-row sm:items-start sm:gap-2.5 sm:p-3 lg:col-start-1 lg:row-start-1">
         <div className="min-w-0 flex-1">
           <h1 className="break-words text-base font-semibold text-slate-900 sm:text-xl">
             {displayTitle}
@@ -612,7 +647,7 @@ function PropertyDetailInner() {
             </a>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 self-start">
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-1.5 sm:w-auto">
           {showEditButton && (
             <Link
               href={`/property/${property._id}/edit`}
@@ -784,7 +819,12 @@ function PropertyDetailInner() {
               <div className="mb-2 text-sm font-semibold">
                 {t('photos')} ({photos.length})
               </div>
-              <div className="relative mx-auto aspect-video w-full max-h-[85vh] overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+              <div
+                className="relative mx-auto aspect-video w-full max-h-[85vh] touch-pan-y overflow-hidden rounded-md border border-slate-200 bg-slate-100"
+                onTouchStart={heroSwipe.onTouchStart}
+                onTouchMove={heroSwipe.onTouchMove}
+                onTouchEnd={heroSwipe.onTouchEnd}
+              >
                 {photos.length > 1 && displayPhotoIndex > 0 && (
                   <button
                     type="button"
@@ -814,7 +854,10 @@ function PropertyDetailInner() {
                 <button
                   type="button"
                   className="group relative block h-full w-full cursor-pointer text-left"
-                  onClick={() => setLightboxIndex(displayPhotoIndex)}
+                  onClick={() => {
+                    if (heroSwipe.consumeSwipe()) return;
+                    setLightboxIndex(displayPhotoIndex);
+                  }}
                   aria-label={t('photos')}
                 >
                   {photos.map((photo, idx) => {

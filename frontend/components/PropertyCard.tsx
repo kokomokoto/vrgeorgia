@@ -12,6 +12,7 @@ import { PropertySpecChips } from '@/components/PropertySpecChips';
 import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
 import { Shimmer } from './Skeleton';
+import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 
 export function PropertyCard({
   p,
@@ -93,15 +94,45 @@ export function PropertyCard({
 
   const shownIndex = loadedIndices.has(activeIndex) ? activeIndex : mainPhotoIndex;
 
+  const goPhotoPrev = React.useCallback(() => {
+    setActiveIndex((i) => {
+      const next = Math.max(0, i - 1);
+      loadPhoto(next);
+      return next;
+    });
+  }, [loadPhoto]);
+
+  const goPhotoNext = React.useCallback(() => {
+    setActiveIndex((i) => {
+      const next = Math.min(photos.length - 1, i + 1);
+      loadPhoto(next);
+      return next;
+    });
+  }, [loadPhoto, photos.length]);
+
+  const photoSwipe = useHorizontalSwipe({
+    onSwipeLeft: photos.length > 1 && activeIndex < photos.length - 1 ? goPhotoNext : undefined,
+    onSwipeRight: photos.length > 1 && activeIndex > 0 ? goPhotoPrev : undefined,
+  });
+
   return (
     <div className="group overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-zinc-700/80 dark:bg-zinc-900 dark:hover:shadow-lg dark:hover:shadow-black/20">
       <Link href={`/property/${p._id}`} className="block">
         <div
           className={`relative bg-slate-100 dark:bg-zinc-800 ${
             compactPhoto ? 'aspect-[3/2]' : 'aspect-[4/3]'
-          }`}
+          } touch-pan-y`}
           onMouseMove={handlePhotoMouseMove}
           onMouseLeave={handlePhotoMouseLeave}
+          onTouchStart={photoSwipe.onTouchStart}
+          onTouchMove={photoSwipe.onTouchMove}
+          onTouchEnd={photoSwipe.onTouchEnd}
+          onClick={(e) => {
+            if (photoSwipe.consumeSwipe()) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
         >
           {photos.length > 0 ? (
             <>

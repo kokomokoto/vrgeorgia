@@ -400,14 +400,12 @@ export function Filters({
     );
   }
 
-  // აქტიური ფილტრების რაოდენობა (badge-სთვის)
+  // აქტიური ფილტრების რაოდენობა (badge-სთვის) — default priceType/currency არ ითვლება
   const activeFilterCount = [
     value.q,
     value.propertyId,
     value.minPrice,
     value.maxPrice,
-    value.priceCurrency,
-    value.priceType,
     value.city,
     value.region,
     value.tbilisiDistrict,
@@ -420,6 +418,8 @@ export function Filters({
     value.minRenovationYear,
     value.maxRenovationYear,
   ].filter(Boolean).length
+    + (value.priceCurrency === 'GEL' ? 1 : 0)
+    + (resolvePriceFilterType(value.priceType) === 'per_sqm' ? 1 : 0)
     + value.dealType.length
     + value.type.length
     + value.rooms.length

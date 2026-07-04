@@ -234,7 +234,16 @@ a {
   background-size: 200% 100%;
 }
 
-/* CSS-ის გარეშე SVG-ები არ გაიზარდოს სრულ ეკრანზე */
+/* ნავიგაციის SVG-ები — CSS/Tailwind ჩატვირთვის გარეშეც ზომა არ გაიზარდოს */
+header[data-site-header] svg:not([width]) {
+  width: 1rem;
+  height: 1rem;
+  max-width: 1rem;
+  max-height: 1rem;
+  flex-shrink: 0;
+}
+
+/* სხვა SVG-ები (CSS-ის გარეშე) — ზოგადი ჭრილი */
 svg:not([width]) {
   max-width: 1.5rem;
   max-height: 1.5rem;

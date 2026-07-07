@@ -1,6 +1,6 @@
 // Next.js default html-limited bots + Facebot/Messenger/Telegram (OG must be in <head>, not streamed to body)
 const HTML_LIMITED_BOTS =
-  /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Facebot|Messenger|Meta-ExternalAgent|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|TelegramBot|SkypeUriPreview|Viber|Pinterestbot|Yeti|googleweblight/i;
+  /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Facebot|Messenger|meta-external|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|TelegramBot|SkypeUriPreview|Viber|Pinterestbot|Yeti|googleweblight/i;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

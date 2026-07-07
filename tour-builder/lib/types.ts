@@ -6,6 +6,7 @@ export interface Tour {
   updated_at: string;
   published_at: string | null;
   published_snapshot: string | null;
+  created_by_user_id?: string | null;
 }
 
 export interface Scene {

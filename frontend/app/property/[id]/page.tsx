@@ -25,6 +25,7 @@ import {
   startPropertyGalleryPreload,
 } from '@/lib/preloadPropertyPhotos';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
+import { toYouTubeEmbedUrl } from '@/lib/youtubeEmbed';
 import { resolveTourPublicUrl } from '@/lib/tourBuilder';
 import { Shimmer } from '@/components/Skeleton';
 import { useAuth } from '@/components/AuthProvider';
@@ -752,16 +753,8 @@ function PropertyDetailInner() {
               if (url.includes('superspl.at/view?id=')) {
                 url = url.replace('superspl.at/view?id=', 'superspl.at/s?id=');
               }
-              if (url.includes('youtube.com/watch')) {
-                try {
-                  const videoId = new URL(url).searchParams.get('v');
-                  if (videoId) return `https://www.youtube.com/embed/${videoId}`;
-                } catch {}
-              }
-              if (url.includes('youtu.be/')) {
-                const videoId = url.split('youtu.be/')[1]?.split('?')[0];
-                if (videoId) return `https://www.youtube.com/embed/${videoId}`;
-              }
+              const youtubeEmbed = toYouTubeEmbedUrl(url);
+              if (youtubeEmbed) return youtubeEmbed;
               return url;
             };
             

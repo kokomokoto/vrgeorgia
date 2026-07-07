@@ -16,6 +16,7 @@ const tourSchema = new Schema(
     updated_at: { type: String, required: true },
     published_at: { type: String, default: null },
     published_snapshot: { type: String, default: null },
+    created_by_user_id: { type: String, default: null, index: true },
   },
   { collection: "tb_tours" }
 );
@@ -82,6 +83,7 @@ export function toTour(d: any): Tour {
     updated_at: d.updated_at,
     published_at: d.published_at ?? null,
     published_snapshot: d.published_snapshot ?? null,
+    created_by_user_id: d.created_by_user_id ?? null,
   };
 }
 

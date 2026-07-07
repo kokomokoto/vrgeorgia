@@ -108,7 +108,11 @@ router.post('/tours', async (req, res, next) => {
       typeof req.body?.title === 'string' && req.body.title.trim()
         ? req.body.title.trim()
         : 'Untitled tour';
-    const tour = await createTour(title);
+    const createdByUserId =
+      typeof req.body?.created_by_user_id === 'string'
+        ? req.body.created_by_user_id.trim()
+        : null;
+    const tour = await createTour(title, createdByUserId);
     res.status(201).json(tour);
   } catch (err) {
     next(err);

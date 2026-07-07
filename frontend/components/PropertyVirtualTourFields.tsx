@@ -10,6 +10,7 @@ import {
   isTourPublishedMessage,
   resolveTourPublicUrl,
 } from '@/lib/tourBuilder';
+import { useAuth } from '@/components/AuthProvider';
 
 type Props = {
   exteriorLink: string;
@@ -29,6 +30,7 @@ export function PropertyVirtualTourFields({
   onTourChange,
 }: Props) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const tourWindowRef = React.useRef<Window | null>(null);
   const [manualOpen, setManualOpen] = React.useState(false);
   const [manualValue, setManualValue] = React.useState('');
@@ -50,7 +52,10 @@ export function PropertyVirtualTourFields({
   const openTourBuilder = () => {
     setOpenError(null);
     const existingId = extractTourId(tourLink);
-    const url = existingId ? getTourEditUrl(existingId) : getTourBuilderEmbedUrl();
+    const creatorId = user?.id || user?._id;
+    const url = existingId
+      ? getTourEditUrl(existingId)
+      : getTourBuilderEmbedUrl(creatorId);
     const w = window.open(url, 'vrgeorgia-tour-builder');
     if (w) {
       tourWindowRef.current = w;

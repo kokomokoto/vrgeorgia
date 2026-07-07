@@ -6,7 +6,9 @@ import Message from '../models/Message.js';
 import { PageView } from '../models/PageView.js';
 import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import { requireAuth } from '../middleware/auth.js';
-import { normalizeTourLink } from '../utils/tourLink.js';
+import { getTourBuilderPublicBase, normalizeTourLink } from '../utils/tourLink.js';
+import { TourModel, SceneModel } from '../models/tourModels.js';
+import { deleteTour } from '../services/tour/tourDb.js';
 import { syncAgentProfileForUser, backfillMissingAgentProfiles } from '../services/agentProfile.js';
 import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
 import { getSearchAnalyticsStats } from '../utils/searchAnalyticsAgg.js';
@@ -683,6 +685,143 @@ router.put('/properties/:id/pin', requireAuth, adminMiddleware, async (req, res)
 // 3D ტურები — სრული სია, რედაქტირება, წაშლა
 // ═══════════════════════════════════════
 
+const TOUR_UUID_RE = /\/v\/([0-9a-f-]{36})/i;
+
+function extractTourUuid(link) {
+  if (!link || typeof link !== 'string') return null;
+  const match = link.match(TOUR_UUID_RE);
+  return match ? match[1].toLowerCase() : null;
+}
+
+async function getLinkedTourIdSet() {
+  const linkedProps = await Property.find(
+    withNotDeleted({ tourLink: { $exists: true, $ne: '' } })
+  )
+    .select('tourLink')
+    .lean();
+
+  const linkedIds = new Set();
+  for (const row of linkedProps) {
+    const id = extractTourUuid(row.tourLink);
+    if (id) linkedIds.add(id);
+  }
+  return linkedIds;
+}
+
+// Published tours in tb_tours that are not linked to any property listing
+router.get('/tours/standalone', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const q = String(req.query.q || req.query.search || '').trim();
+    const publishedOnly = req.query.published_only !== 'false';
+    const sortDir = req.query.sort === 'date_asc' ? 1 : -1;
+
+    const linkedIds = await getLinkedTourIdSet();
+
+    const tourFilter = {};
+    if (q) {
+      tourFilter.title = {
+        $regex: q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        $options: 'i',
+      };
+    }
+    if (publishedOnly) {
+      tourFilter.published_at = { $nin: [null, ''] };
+    }
+
+    const allTours = await TourModel.find(tourFilter)
+      .sort({ updated_at: sortDir })
+      .lean();
+
+    const standalone = allTours.filter(
+      (tour) => !linkedIds.has(String(tour.id || '').toLowerCase())
+    );
+
+    const tourIds = standalone.map((tour) => tour.id);
+    const sceneCounts = tourIds.length
+      ? await SceneModel.aggregate([
+          { $match: { tour_id: { $in: tourIds } } },
+          { $group: { _id: '$tour_id', count: { $sum: 1 } } },
+        ])
+      : [];
+
+    const countMap = Object.fromEntries(
+      sceneCounts.map((row) => [row._id, row.count])
+    );
+
+    const creatorIds = [
+      ...new Set(
+        standalone
+          .map((tour) => tour.created_by_user_id)
+          .filter((id) => typeof id === 'string' && id.trim())
+      ),
+    ];
+
+    const creators = creatorIds.length
+      ? await User.find({ _id: { $in: creatorIds } }).select('name email').lean()
+      : [];
+    const creatorMap = Object.fromEntries(
+      creators.map((user) => [String(user._id), user])
+    );
+
+    const publicBase = getTourBuilderPublicBase();
+    const tours = standalone.map((tour) => {
+      const creatorId = tour.created_by_user_id || null;
+      const creator = creatorId ? creatorMap[String(creatorId)] : null;
+      return {
+        id: tour.id,
+        title: tour.title,
+        slug: tour.slug,
+        createdAt: tour.created_at,
+        updatedAt: tour.updated_at,
+        publishedAt: tour.published_at,
+        isPublished: Boolean(tour.published_at),
+        sceneCount: countMap[tour.id] || 0,
+        tourLink: `${publicBase}/v/${tour.id}`,
+        createdBy: creator
+          ? {
+              id: String(creator._id),
+              name: creator.name || null,
+              email: creator.email || null,
+            }
+          : null,
+      };
+    });
+
+    res.json({ tours, total: tours.length });
+  } catch (error) {
+    console.error('admin tours standalone:', error);
+    res.status(500).json({ message: 'დამოუკიდებელი ტურების მიღება ვერ მოხერხდა' });
+  }
+});
+
+// Delete a tour record from tb_tours (only when not linked to a listing)
+router.delete('/tours/records/:tourId', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const tourId = String(req.params.tourId || '').trim();
+    if (!tourId) return res.status(400).json({ message: 'ტურის ID არასწორია' });
+
+    const linked = await Property.findOne(
+      withNotDeleted({
+        tourLink: { $regex: new RegExp(`/v/${tourId}`, 'i') },
+      })
+    ).lean();
+    if (linked) {
+      return res.status(400).json({
+        message: 'ტური მიბმულია განცხადებაზე — ჯერ მოხსენი ბმული განცხადებიდან',
+      });
+    }
+
+    const ok = await deleteTour(tourId);
+    if (!ok) return res.status(404).json({ message: 'ტური ვერ მოიძებნა' });
+
+    await writeAudit(req.user.id, 'tour.deleted', 'tour', tourId);
+    res.json({ message: '3D ტური წაიშალა' });
+  } catch (error) {
+    console.error('admin tour record delete:', error);
+    res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
+  }
+});
+
 // Get all properties that have a 3D tour attached
 router.get('/tours', requireAuth, adminMiddleware, async (req, res) => {
   try {
@@ -733,12 +872,22 @@ router.get('/tours', requireAuth, adminMiddleware, async (req, res) => {
 // Remove a 3D tour link from a property (does not delete the property)
 router.delete('/tours/:id', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const property = await Property.findByIdAndUpdate(
-      req.params.id,
-      { tourLink: '' },
-      { new: true }
-    );
+    const property = await Property.findById(req.params.id);
     if (!property) return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა' });
+
+    const tourUuid = extractTourUuid(property.tourLink);
+    if (tourUuid && property.userId) {
+      await TourModel.updateOne(
+        {
+          id: tourUuid,
+          $or: [{ created_by_user_id: null }, { created_by_user_id: '' }],
+        },
+        { $set: { created_by_user_id: String(property.userId) } }
+      );
+    }
+
+    property.tourLink = '';
+    await property.save();
 
     await writeAudit(req.user.id, 'tour.removed', 'property', req.params.id);
     res.json({ message: '3D ტური წაიშალა განცხადებიდან' });

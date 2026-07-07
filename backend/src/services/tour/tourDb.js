@@ -38,10 +38,14 @@ export async function getTour(id) {
   return row ? toTour(row) : undefined;
 }
 
-export async function createTour(title) {
+export async function createTour(title, createdByUserId = null) {
   const id = randomUUID();
   const now = new Date().toISOString();
   const slug = await uniqueSlug(title);
+  const creatorId =
+    typeof createdByUserId === 'string' && createdByUserId.trim()
+      ? createdByUserId.trim()
+      : null;
   await TourModel.create({
     id,
     title,
@@ -50,6 +54,7 @@ export async function createTour(title) {
     updated_at: now,
     published_at: null,
     published_snapshot: null,
+    created_by_user_id: creatorId,
   });
   const tour = await getTour(id);
   if (!tour) throw new Error('Failed to create tour');

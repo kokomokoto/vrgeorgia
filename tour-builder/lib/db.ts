@@ -49,11 +49,18 @@ export async function getTour(id: string): Promise<Tour | undefined> {
   return row ? toTour(row) : undefined;
 }
 
-export async function createTour(title: string): Promise<Tour> {
+export async function createTour(
+  title: string,
+  createdByUserId?: string | null
+): Promise<Tour> {
   await connectMongo();
   const id = uuidv4();
   const now = new Date().toISOString();
   const slug = await uniqueSlug(title);
+  const creatorId =
+    typeof createdByUserId === "string" && createdByUserId.trim()
+      ? createdByUserId.trim()
+      : null;
   await TourModel.create({
     id,
     title,
@@ -62,6 +69,7 @@ export async function createTour(title: string): Promise<Tour> {
     updated_at: now,
     published_at: null,
     published_snapshot: null,
+    created_by_user_id: creatorId,
   });
   return (await getTour(id))!;
 }

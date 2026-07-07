@@ -76,8 +76,10 @@ export function getTourBuilderOrigin(): string {
 }
 
 /** ახალი ტაბში იხსნება — ტური იქმნება და რედაქტორში გადადის */
-export function getTourBuilderEmbedUrl(): string {
-  return `${getTourBuilderOrigin()}/embed`;
+export function getTourBuilderEmbedUrl(userId?: string | null): string {
+  const base = `${getTourBuilderOrigin()}/embed`;
+  if (!userId) return base;
+  return `${base}?userId=${encodeURIComponent(userId)}`;
 }
 
 export const VRGEORGIA_TOUR_STORAGE_KEY = 'vrgeorgia_pending_tour_link';

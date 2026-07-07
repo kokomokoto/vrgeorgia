@@ -17,7 +17,8 @@ type PanoramaViewerProps = {
   className?: string;
   /** false = ჩვენი custom fullscreen ღილაკი lightbox-ში */
   showNavbar?: boolean;
-  onContainerClick?: () => void;
+  /** პირველი ინტერაქცია — დაწკაპუნება ან პანორამის დატრიალება */
+  onInteract?: () => void;
 };
 
 const LOAD_TIMEOUT_MS = 25000;
@@ -53,18 +54,18 @@ export function PanoramaViewer({
   src,
   className = 'h-[60vh] w-full min-h-[320px]',
   showNavbar = false,
-  onContainerClick,
+  onInteract,
 }: PanoramaViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<ViewerInstance | null>(null);
-  const onContainerClickRef = useRef<(() => void) | undefined>(onContainerClick);
+  const onInteractRef = useRef<(() => void) | undefined>(onInteract);
   const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const urls = useMemo(() => getPanoramaViewerUrls(src), [src]);
 
   useEffect(() => {
-    onContainerClickRef.current = onContainerClick;
-  }, [onContainerClick]);
+    onInteractRef.current = onInteract;
+  }, [onInteract]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -124,12 +125,19 @@ export function PanoramaViewer({
               /* ignore */
             }
 
-            if (onContainerClickRef.current) {
-              viewer.addEventListener(
-                'click',
-                () => onContainerClickRef.current?.(),
-                { once: true }
-              );
+            if (onInteractRef.current) {
+              let notified = false;
+              const notifyInteract = () => {
+                if (notified) return;
+                notified = true;
+                onInteractRef.current?.();
+              };
+              const once = { once: true } as AddEventListenerOptions;
+              viewer.addEventListener('click', notifyInteract, once);
+              viewer.addEventListener('before-rotate', notifyInteract, once);
+              viewer.addEventListener('position-updated', notifyInteract, once);
+              container.addEventListener('pointerdown', notifyInteract, { ...once, passive: true });
+              container.addEventListener('touchstart', notifyInteract, { ...once, passive: true });
             }
 
             viewerRef.current = viewer;

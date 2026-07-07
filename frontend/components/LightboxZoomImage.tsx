@@ -44,6 +44,7 @@ export function LightboxZoomImage({
   } | null>(null);
   const panRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const applyTransform = useCallback((nextScale: number, nextX: number, nextY: number) => {
     const s = clamp(nextScale, MIN_SCALE, MAX_SCALE);
@@ -51,6 +52,32 @@ export function LightboxZoomImage({
     setScale(s);
     setOffset({ x: nextX, y: nextY });
   }, []);
+
+  const zoomAtPoint = useCallback(
+    (clientX: number, clientY: number, zoomIn: boolean) => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const zoomFactor = zoomIn ? 1.12 : 1 / 1.12;
+      const { scale: s, x, y } = transformRef.current;
+      const nextScale = clamp(s * zoomFactor, MIN_SCALE, MAX_SCALE);
+      if (Math.abs(nextScale - s) < 0.001) return;
+
+      const rect = container.getBoundingClientRect();
+      const cx = clientX - rect.left - rect.width / 2;
+      const cy = clientY - rect.top - rect.height / 2;
+      const scaleDelta = nextScale / s;
+      const nextX = x - cx * (scaleDelta - 1);
+      const nextY = y - cy * (scaleDelta - 1);
+
+      if (nextScale <= 1.05) {
+        applyTransform(1, 0, 0);
+      } else {
+        applyTransform(nextScale, nextX, nextY);
+      }
+    },
+    [applyTransform]
+  );
 
   const resetTransform = useCallback(() => {
     applyTransform(1, 0, 0);
@@ -62,6 +89,20 @@ export function LightboxZoomImage({
   useEffect(() => {
     resetTransform();
   }, [src, resetTransform]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zoomAtPoint(e.clientX, e.clientY, e.deltaY < 0);
+    };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, [zoomAtPoint]);
 
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
@@ -174,13 +215,50 @@ export function LightboxZoomImage({
     [applyTransform, resetTransform]
   );
 
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0 || transformRef.current.scale <= 1.02) return;
+    e.preventDefault();
+    panRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      originX: transformRef.current.x,
+      originY: transformRef.current.y,
+    };
+  }, []);
+
+  const onMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!panRef.current) return;
+      e.preventDefault();
+      const dx = e.clientX - panRef.current.x;
+      const dy = e.clientY - panRef.current.y;
+      applyTransform(
+        transformRef.current.scale,
+        panRef.current.originX + dx,
+        panRef.current.originY + dy
+      );
+    },
+    [applyTransform]
+  );
+
+  const endMousePan = useCallback(() => {
+    panRef.current = null;
+  }, []);
+
   return (
     <div
-      className="flex h-full w-full touch-none items-center justify-center overflow-hidden"
+      ref={containerRef}
+      className={`flex h-full w-full touch-none items-center justify-center overflow-hidden ${
+        scale > 1.02 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'
+      }`}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onDoubleClick={onDoubleClick}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={endMousePan}
+      onMouseLeave={endMousePan}
     >
       <img
         src={src}

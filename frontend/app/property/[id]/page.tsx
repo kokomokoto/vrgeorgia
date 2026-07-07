@@ -136,7 +136,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
             key={viewerUrl}
             src={viewerUrl}
             showNavbar={false}
-            onContainerClick={hide360Overlay}
+            onInteract={hide360Overlay}
             className="h-full w-full rounded-lg"
           />
 

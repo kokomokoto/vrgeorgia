@@ -13,11 +13,13 @@ const MIN_SCALE = 1;
 const MAX_SCALE = 4;
 const SWIPE_MIN_DISTANCE = 48;
 
-function touchDistance(a: Touch, b: Touch): number {
+type TouchPoint = { clientX: number; clientY: number };
+
+function touchDistance(a: TouchPoint, b: TouchPoint): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-function touchCenter(a: Touch, b: Touch): { x: number; y: number } {
+function touchCenter(a: TouchPoint, b: TouchPoint): { x: number; y: number } {
   return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
 }
 

@@ -24,6 +24,7 @@ import {
   resolveGalleryPhotoUrl,
   startPropertyGalleryPreload,
 } from '@/lib/preloadPropertyPhotos';
+import { LightboxZoomImage } from '@/components/LightboxZoomImage';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { toYouTubeEmbedUrl } from '@/lib/youtubeEmbed';
 import { resolveTourPublicUrl } from '@/lib/tourBuilder';
@@ -87,10 +88,8 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
     onChangeIndex((index + 1) % photoCount);
   }, [index, photoCount, onChangeIndex]);
 
-  const lightboxSwipe = useHorizontalSwipe({
-    onSwipeLeft: photoCount > 1 ? goNext : undefined,
-    onSwipeRight: photoCount > 1 ? goPrev : undefined,
-  });
+  const lightboxGoNext = photoCount > 1 ? goNext : undefined;
+  const lightboxGoPrev = photoCount > 1 ? goPrev : undefined;
 
   React.useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -115,7 +114,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         <button
           type="button"
           aria-label={t('previous_photo') || 'Previous photo'}
-          className="absolute left-0 top-28 bottom-32 z-[10000] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
+          className="absolute left-0 top-16 z-[10000] flex h-[calc(100%-9rem)] w-10 cursor-pointer items-center justify-center bg-gradient-to-r from-black/35 to-transparent transition-colors hover:from-black/50 md:top-28 md:w-20"
           onClick={(e) => { e.stopPropagation(); goPrev(); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
@@ -167,17 +166,15 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         </div>
       ) : (
         <div
-          className="flex h-[min(78vh,calc(100dvh-14rem))] w-[min(92vw,1400px)] max-w-[calc(100vw-7rem)] items-center justify-center touch-pan-y"
+          className="absolute inset-x-0 top-14 flex h-[calc(100dvh-9.5rem)] w-full items-center justify-center md:relative md:top-auto md:h-[min(78vh,calc(100dvh-14rem))] md:w-[min(92vw,1400px)] md:max-w-[calc(100vw-7rem)]"
           onClick={(e) => e.stopPropagation()}
-          onTouchStart={lightboxSwipe.onTouchStart}
-          onTouchMove={lightboxSwipe.onTouchMove}
-          onTouchEnd={lightboxSwipe.onTouchEnd}
         >
-          <img
+          <LightboxZoomImage
+            key={displayUrl}
             src={displayUrl}
             alt={`Photo ${index + 1}`}
-            className="h-full w-full object-contain select-none"
-            draggable={false}
+            onSwipeLeft={lightboxGoNext}
+            onSwipeRight={lightboxGoPrev}
           />
         </div>
       )}
@@ -186,7 +183,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         <button
           type="button"
           aria-label={t('next_photo') || 'Next photo'}
-          className="absolute right-0 top-28 bottom-32 z-[10000] flex w-14 cursor-pointer items-center justify-center transition-colors hover:bg-white/10 md:w-20"
+          className="absolute right-0 top-16 z-[10000] flex h-[calc(100%-9rem)] w-10 cursor-pointer items-center justify-center bg-gradient-to-l from-black/35 to-transparent transition-colors hover:from-black/50 md:top-28 md:w-20"
           onClick={(e) => { e.stopPropagation(); goNext(); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">

@@ -459,7 +459,11 @@ export default function AdminToursPage() {
                   properties.map((p) => (
                     <tr key={p._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                        <Link
+                          href={`/property/${p._id}`}
+                          className="flex items-center gap-3 transition-opacity hover:opacity-80"
+                          title="განცხადების ნახვა"
+                        >
                           <div className="relative h-12 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200">
                             {p.photos?.[0] ? (
                               <Image
@@ -480,7 +484,7 @@ export default function AdminToursPage() {
                                 განცხადებზე
                               </span>
                             </div>
-                            <div className="max-w-[220px] truncate font-medium text-gray-800">
+                            <div className="max-w-[220px] truncate font-medium text-blue-700 hover:underline">
                               {p.title}
                             </div>
                             <div className="text-sm text-gray-500">
@@ -488,7 +492,7 @@ export default function AdminToursPage() {
                               {p.tbilisiDistrict ? `, ${p.tbilisiDistrict}` : ''}
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-gray-800">{p.userId?.name || '-'}</div>
@@ -506,12 +510,19 @@ export default function AdminToursPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/property/${p._id}`}
+                            className="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-700"
+                            title="განცხადების ნახვა"
+                          >
+                            📄 განცხადება
+                          </Link>
                           <a
                             href={publicTourUrl(p.tourLink)}
                             target="_blank"
                             rel="noreferrer"
                             className="rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200"
-                            title="ნახვა"
+                            title="3D ტურის ნახვა"
                           >
                             👁️
                           </a>
@@ -520,14 +531,14 @@ export default function AdminToursPage() {
                             target="_blank"
                             rel="noreferrer"
                             className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
-                            title="რედაქტირება"
+                            title="3D ტურის რედაქტირება"
                           >
-                            ✏️ რედაქტირება
+                            ✏️ ტური
                           </a>
                           <Link
                             href={`/property/${p._id}/edit`}
                             className="rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-700 hover:bg-amber-200"
-                            title="ობიექტის რედაქტირება"
+                            title="განცხადების რედაქტირება"
                           >
                             🏠
                           </Link>

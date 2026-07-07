@@ -71,18 +71,6 @@ export function getPropertyShareImageUrl(property: Property): string | undefined
   return absolute;
 }
 
-/** კვადრატული preview — iMessage, Slack, ზოგი მესენჯერი */
-function getPropertyShareSquareImageUrl(property: Property): string | undefined {
-  const photo = getMainPhoto(property);
-  if (!photo) return undefined;
-
-  const absolute = resolveAbsoluteImageUrl(photo);
-  if (absolute.includes('res.cloudinary.com')) {
-    return applyCloudinaryTransform(absolute, 'w_600,h_600,c_fill,f_jpg,q_auto');
-  }
-  return absolute;
-}
-
 function getOwnerName(property: Property): string | undefined {
   const owner = property.userId;
   if (!owner || typeof owner === 'string') return undefined;
@@ -135,34 +123,18 @@ type OgImage = {
   type?: string;
 };
 
-function buildOgImages(title: string, property: Property): OgImage[] {
-  const images: OgImage[] = [];
+function buildOgImage(title: string, property: Property): OgImage | undefined {
   const primary = getPropertyShareImageUrl(property);
-  const square = getPropertyShareSquareImageUrl(property);
+  if (!primary) return undefined;
 
-  if (primary) {
-    images.push({
-      url: primary,
-      secureUrl: primary.startsWith('https://') ? primary : undefined,
-      width: 1200,
-      height: 630,
-      alt: title,
-      type: 'image/jpeg',
-    });
-  }
-
-  if (square && square !== primary) {
-    images.push({
-      url: square,
-      secureUrl: square.startsWith('https://') ? square : undefined,
-      width: 600,
-      height: 600,
-      alt: title,
-      type: 'image/jpeg',
-    });
-  }
-
-  return images;
+  return {
+    url: primary,
+    secureUrl: primary.startsWith('https://') ? primary : undefined,
+    width: 1200,
+    height: 630,
+    alt: title,
+    type: 'image/jpeg',
+  };
 }
 
 /**
@@ -176,8 +148,8 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
   const pageUrl = `${SITE_URL}/property/${id}`;
   const ownerName = getOwnerName(property);
   const keywords = buildKeywords(property);
-  const ogImages = buildOgImages(title, property);
-  const primaryImage = ogImages[0]?.url;
+  const ogImage = buildOgImage(title, property);
+  const primaryImage = ogImage?.url;
 
   return {
     title,
@@ -202,20 +174,14 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
       },
     },
     openGraph: {
-      type: 'article',
+      type: 'website',
       url: pageUrl,
       title,
       description,
       siteName: SITE_NAME,
       locale: 'ka_GE',
       alternateLocale: ['en_US', 'ru_RU'],
-      publishedTime: property.createdAt,
-      modifiedTime: property.createdAt,
-      authors: ownerName ? [ownerName] : [SITE_NAME],
-      section: 'Real Estate',
-      tags: keywords.slice(0, 8),
-      determiner: 'auto',
-      images: ogImages.length ? ogImages : undefined,
+      images: ogImage ? [ogImage] : undefined,
     },
     twitter: {
       card: 'summary_large_image',

@@ -126,11 +126,8 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
       
       {is360 ? (
         <div
-          className="mx-auto flex w-[min(96vw,1600px)] flex-col items-center touch-pan-y"
+          className="mx-auto flex w-[min(96vw,1600px)] flex-col items-center touch-none"
           onClick={(e) => e.stopPropagation()}
-          onTouchStart={lightboxSwipe.onTouchStart}
-          onTouchMove={lightboxSwipe.onTouchMove}
-          onTouchEnd={lightboxSwipe.onTouchEnd}
         >
           <div
             ref={viewerWrapRef}

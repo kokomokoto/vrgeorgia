@@ -33,6 +33,7 @@ export function getPanoramaViewerUrls(src: string): string[] {
   if (!src) return [];
   const out: string[] = [];
   if (src.includes('res.cloudinary.com') && src.includes('/upload/')) {
+    out.push(src.replace('/upload/', '/upload/w_2048,h_1024,c_limit,f_jpg,q_auto:good/'));
     out.push(src.replace('/upload/', '/upload/w_4096,h_2048,c_limit,f_jpg,q_auto:good/'));
     out.push(src.replace('/upload/', '/upload/w_3072,h_1536,c_limit,f_jpg,q_auto:good/'));
     out.push(src.replace('/upload/', '/upload/f_jpg,q_auto:good/'));

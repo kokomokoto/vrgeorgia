@@ -95,15 +95,21 @@ export function PanoramaViewer({
           let viewer: ViewerInstance | null = null;
           try {
             container.replaceChildren();
+            const isTouchDevice =
+              typeof window !== 'undefined' &&
+              ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
             viewer = new Viewer({
               container,
               panorama,
               // მხოლოდ სრული ეკრანი — ბრუნვა მაუსით/თითით (zoom/ისრები არ გვჭირდება)
               navbar: showNavbar ? ['fullscreen'] : false,
               defaultZoomLvl: 0,
-              mousewheel: true,
+              mousewheel: !isTouchDevice,
               mousemove: true,
-              touchmoveTwoFingers: true,
+              // ერთი თითით ბრუნვა მობილურზე; true = მხოლოდ 2 თითით (გვერდის scroll-ისთვის)
+              touchmoveTwoFingers: false,
+              moveInertia: true,
             }) as unknown as ViewerInstance;
 
             await waitForPanorama(viewer);
@@ -119,11 +125,11 @@ export function PanoramaViewer({
             }
 
             if (onContainerClickRef.current) {
-              const hideOverlay = () => onContainerClickRef.current?.();
-              const once = { once: true } as AddEventListenerOptions;
-              viewer.addEventListener('click', hideOverlay, once);
-              container.addEventListener('pointerdown', hideOverlay, once);
-              container.addEventListener('touchstart', hideOverlay, once);
+              viewer.addEventListener(
+                'click',
+                () => onContainerClickRef.current?.(),
+                { once: true }
+              );
             }
 
             viewerRef.current = viewer;
@@ -189,7 +195,7 @@ export function PanoramaViewer({
           360° იტვირთება…
         </div>
       )}
-      <div ref={containerRef} className="h-full w-full min-h-[inherit]" />
+      <div ref={containerRef} className="h-full w-full min-h-[inherit] touch-none" />
     </div>
   );
 }

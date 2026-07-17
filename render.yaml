@@ -1,7 +1,15 @@
 # VR Georgia — Render.com Deployment
 # https://render.com/docs/yaml-spec
 #
-# 2 Web Service: API (+ 3D tour UI) + Frontend
+# Production (ქვემოთ): vrgeorgia-api + vrgeorgia-web
+# Staging (ხელით Render Dashboard-ზე, Free):
+#   - vrgeorgia-api-staging  (rootDir: backend, Free, sleep OK)
+#   - vrgeorgia-web-staging  (rootDir: frontend, Free)
+#   - დომენი: staging.vrgeorgia.ge → web-staging
+#   - ცალკე MONGODB_URI (არა production DB!)
+#   - ALLOWED_ORIGINS=https://staging.vrgeorgia.ge
+#   - NEXT_PUBLIC_API_BASE → api-staging URL
+#
 # 3D ტურის რედაქტორი/ნახვა: https://vrgeorgia-api.onrender.com/v/{id}
 #
 # მეხსიერება: Starter (512MB) შეიძლება არ ეყოთ API+Next.js ერთად.

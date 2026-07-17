@@ -22,7 +22,7 @@ export function PropertyCard({
   /** უფრო დაბალი ფოტო (მთავარი გვერდი) */
   compactPhoto?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const mainPhotoIndex = Math.min(p.mainPhoto ?? 0, Math.max(0, (p.photos?.length ?? 1) - 1));
   const photos = p.photos?.length ? p.photos : [];
   const [activeIndex, setActiveIndex] = React.useState(mainPhotoIndex);
@@ -69,8 +69,13 @@ export function PropertyCard({
 
   if (!p) return null;
 
-  const street = getPropertyStreetLine(p);
-  const listedAt = formatListedDate(p.createdAt);
+  // ტექსტი უკვე ნათარგმნია სერვერზე (?lang=) და ქეშირებულია ბაზაში —
+  // client-ზე თითო იუზერისთვის თავიდან თარგმნა აღარ ხდება.
+  const currentLang = i18n.language || 'ka';
+  const displayTitle = p.title;
+  const displayStreet = getPropertyStreetLine(p);
+  const displayCity = p.city || '';
+  const listedAt = formatListedDate(p.createdAt, currentLang);
 
   const stopNav = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -148,7 +153,7 @@ export function PropertyCard({
                     src={resolveImageUrl(photo, 'thumb', {
                       isPanorama: isPanoramaPhoto(photo, p.panoramaPhotos),
                     })}
-                    alt={i === shownIndex ? p.title : ''}
+                    alt={i === shownIndex ? displayTitle : ''}
                     loading={i === mainPhotoIndex ? 'lazy' : undefined}
                     decoding="async"
                     className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
@@ -198,19 +203,19 @@ export function PropertyCard({
             className={`line-clamp-1 break-words font-bold text-slate-900 dark:text-amber-400 ${
               compactPhoto ? 'text-[15px] leading-[1.3]' : 'text-[15px] leading-snug'
             }`}
-            title={p.title}
+            title={displayTitle}
           >
-            {p.title}
+            {displayTitle}
           </h3>
 
-          {(street || p.city) && (
+          {(displayStreet || displayCity) && (
             <div className="flex min-w-0 items-start gap-1.5 text-sm text-slate-600 dark:text-zinc-400">
               <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="line-clamp-1 min-w-0 break-words" title={street || p.city}>
-                {street || p.city}
+              <span className="line-clamp-1 min-w-0 break-words" title={displayStreet || displayCity}>
+                {displayStreet || displayCity}
               </span>
             </div>
           )}
@@ -225,7 +230,7 @@ export function PropertyCard({
               compactPhoto ? 'mt-1 pt-1' : 'mt-1.5 pt-1.5'
             }`}
           >
-            <span className="truncate">{p.city || '—'}</span>
+            <span className="truncate">{displayCity || '—'}</span>
             {listedAt ? (
               <span className="inline-flex shrink-0 items-center gap-1">
                 <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>

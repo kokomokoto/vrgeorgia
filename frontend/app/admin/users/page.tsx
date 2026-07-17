@@ -29,6 +29,11 @@ export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [passwordUser, setPasswordUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -117,6 +122,54 @@ export default function AdminUsers() {
       }
     } catch (err) {
       alert('წაშლა ვერ მოხერხდა');
+    }
+  };
+
+  const openPasswordReset = (user: User) => {
+    setPasswordUser(user);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordFeedback(null);
+  };
+
+  const handleResetPassword = async () => {
+    if (!passwordUser) return;
+    if (newPassword.length < 6) {
+      setPasswordFeedback('ახალი პაროლი მინიმუმ 6 სიმბოლო უნდა იყოს');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordFeedback('პაროლები არ ემთხვევა');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    setResettingPassword(true);
+    setPasswordFeedback(null);
+    try {
+      const res = await fetch(`${getApiBase()}/api/admin/users/${passwordUser._id}/password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPasswordFeedback(data.message || 'პაროლის აღდგენა ვერ მოხერხდა');
+        return;
+      }
+      alert(
+        `პაროლი განახლდა მომხმარებლისთვის: ${passwordUser.email}\n\nშეატყობინეთ აგენტს ახალი პაროლი (დროებითი) და ურჩიეთ პროფილიდან შეცვალოს.`
+      );
+      setPasswordUser(null);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch {
+      setPasswordFeedback('პაროლის აღდგენა ვერ მოხერხდა');
+    } finally {
+      setResettingPassword(false);
     }
   };
 
@@ -244,6 +297,12 @@ export default function AdminUsers() {
                         ✏️ რედაქტირება
                       </button>
                       <button
+                        onClick={() => openPasswordReset(user)}
+                        className="text-amber-700 hover:text-amber-900 mr-3"
+                      >
+                        🔑 პაროლი
+                      </button>
+                      <button
                         onClick={() => handleDeleteUser(user._id)}
                         className="text-red-600 hover:text-red-800"
                       >
@@ -341,6 +400,71 @@ export default function AdminUsers() {
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
                   შენახვა
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Password reset modal */}
+        {passwordUser && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-1">პაროლის აღდგენა</h2>
+              <p className="mb-4 text-sm text-gray-600">
+                {passwordUser.name || '(უსახელო)'} · {passwordUser.email}
+              </p>
+              <p className="mb-4 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                დააყენეთ დროებითი პაროლი და გადაეცით აგენტს. შემდეგ აგენტმა პროფილიდან უნდა შეცვალოს საკუთარი პაროლი.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">ახალი პაროლი</label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="მინ. 6 სიმბოლო"
+                    className="w-full px-4 py-2 border rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">გაიმეორეთ პაროლი</label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg"
+                  />
+                </div>
+                {passwordFeedback && (
+                  <p className="text-sm text-red-600">{passwordFeedback}</p>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPasswordUser(null);
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setPasswordFeedback(null);
+                  }}
+                  className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                  გაუქმება
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={resettingPassword || !newPassword || !confirmPassword}
+                  className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {resettingPassword ? '...' : 'პაროლის დაყენება'}
                 </button>
               </div>
             </div>

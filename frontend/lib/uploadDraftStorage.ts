@@ -21,6 +21,7 @@ export type UploadDraft = {
   exteriorLink: string;
   interiorLink: string;
   tourLink: string;
+  defaultMediaView: 'exterior' | 'interior' | 'tour' | 'photos';
   contactPhone: string;
   contactEmail: string;
   lat: number | null;
@@ -36,11 +37,14 @@ export type UploadDraft = {
   constructionYear: string;
   renovationYear: string;
   renovationStatus: string;
+  buildingStatus: string;
   buildingProject: string;
+  landStatus: string;
   balcony: number;
   loggia: number;
   bathroom: number;
   basement: boolean;
+  attic: boolean;
   elevator: boolean;
   furniture: boolean;
   garage: boolean;
@@ -83,6 +87,7 @@ export function createEmptyUploadDraft(): UploadDraft {
     exteriorLink: '',
     interiorLink: '',
     tourLink: '',
+    defaultMediaView: 'exterior',
     contactPhone: '',
     contactEmail: '',
     lat: null,
@@ -98,11 +103,14 @@ export function createEmptyUploadDraft(): UploadDraft {
     constructionYear: '',
     renovationYear: '',
     renovationStatus: '',
+    buildingStatus: '',
     buildingProject: '',
+    landStatus: '',
     balcony: 0,
     loggia: 0,
     bathroom: 0,
     basement: false,
+    attic: false,
     elevator: false,
     furniture: false,
     garage: false,
@@ -137,6 +145,13 @@ function normalizeDraft(raw: Partial<UploadDraft>): UploadDraft {
     bedroomCount: typeof raw.bedroomCount === 'number' ? raw.bedroomCount : null,
     priceCurrency: raw.priceCurrency === 'GEL' ? 'GEL' : 'USD',
     priceType: raw.priceType === 'per_sqm' ? 'per_sqm' : 'total',
+    defaultMediaView:
+      raw.defaultMediaView === 'interior' ||
+      raw.defaultMediaView === 'tour' ||
+      raw.defaultMediaView === 'photos' ||
+      raw.defaultMediaView === 'exterior'
+        ? raw.defaultMediaView
+        : 'exterior',
   };
 }
 

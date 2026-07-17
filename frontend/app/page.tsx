@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 
 import { listProperties } from '@/lib/api';
+import { apiLang } from '@/lib/apiLang';
 import { buildMapHref, filtersToPropertyQuery } from '@/lib/mapQuery';
 import type { Property } from '@/lib/types';
 import { Filters, type FiltersState } from '@/components/Filters';
@@ -16,6 +17,7 @@ import { MapView } from '@/components/MapView';
 import { PropertyCard } from '@/components/PropertyCard';
 import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
+import { LAND_STATUS_OPTIONS } from '@/lib/propertyTypeUi';
 
 // კატეგორიები იკონებით
 const PROPERTY_CATEGORIES = [
@@ -30,6 +32,17 @@ const PROPERTY_CATEGORIES = [
   { value: 'parking', key: 'parking', icon: '🚗' },
   { value: 'business', key: 'business', icon: '💼' },
 ];
+
+function togglePropertyType(prev: FiltersState, catValue: string, isSelected: boolean): FiltersState {
+  const nextType = isSelected
+    ? prev.type.filter((tp) => tp !== catValue)
+    : [...prev.type, catValue];
+  return {
+    ...prev,
+    type: nextType,
+    landStatus: nextType.includes('land') ? prev.landStatus || [] : [],
+  };
+}
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
@@ -122,7 +135,7 @@ export default function HomePage() {
   // ყველა პროპერტის ჩატვირთვა კატეგორიების რაოდენობისთვის
   const [allProperties, setAllProperties] = React.useState<Property[]>([]);
   React.useEffect(() => {
-    listProperties({ lang: i18n.language })
+    listProperties({ lang: apiLang(i18n.language) })
       .then((r) => setAllProperties(r.properties))
       .catch(() => {});
   }, [i18n.language]);
@@ -185,12 +198,7 @@ export default function HomePage() {
               return (
                 <button
                   key={cat.value}
-                  onClick={() => setFilters(prev => ({ 
-                    ...prev, 
-                    type: isSelected 
-                      ? prev.type.filter(t => t !== cat.value) 
-                      : [...prev.type, cat.value]
-                  }))}
+                  onClick={() => setFilters((prev) => togglePropertyType(prev, cat.value, isSelected))}
                   className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${
                     isSelected 
                       ? 'border-blue-500 bg-blue-50 dark:border-amber-500 dark:bg-amber-950/40' 
@@ -222,12 +230,7 @@ export default function HomePage() {
           return (
             <button
               key={cat.value}
-              onClick={() => setFilters(prev => ({ 
-                ...prev, 
-                type: isSelected 
-                  ? prev.type.filter(tp => tp !== cat.value) 
-                  : [...prev.type, cat.value]
-              }))}
+              onClick={() => setFilters((prev) => togglePropertyType(prev, cat.value, isSelected))}
               className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all hover:shadow-md hover:scale-105 ${
                 isSelected 
                   ? 'border-blue-500 bg-blue-50 shadow-md dark:border-amber-500 dark:bg-amber-950/40 dark:shadow-amber-900/20' 
@@ -249,6 +252,40 @@ export default function HomePage() {
           );
         })}
       </div>
+
+      {filters.type.includes('land') && (
+        <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+            {tr('filter_land_status', 'მიწის სტატუსი')}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {LAND_STATUS_OPTIONS.map((item) => {
+              const selected = (filters.landStatus || []).includes(item.value);
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      landStatus: selected
+                        ? (prev.landStatus || []).filter((s) => s !== item.value)
+                        : [...(prev.landStatus || []), item.value],
+                    }))
+                  }
+                  className={`rounded-lg border px-3 py-2 text-xs font-medium transition-all ${
+                    selected
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+                  }`}
+                >
+                  {tr(item.labelKey, item.value)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       
       {/* რუკა - მობაილზე ჩამოსაშლელი */}
       <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">

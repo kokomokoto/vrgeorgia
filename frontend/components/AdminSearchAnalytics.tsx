@@ -76,6 +76,7 @@ const AMENITY_LABELS: Record<string, string> = {
   isolatedKitchen: 'იზოლირებული სამზარეულო',
   heatingCooling: 'გათბობა/გაგრილება',
   basement: 'სარდაფი',
+  attic: 'სხვენი',
   storage: 'სათავსო',
   electricity: 'ელექტროენერგია',
   water: 'წყალი',

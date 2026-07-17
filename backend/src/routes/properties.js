@@ -6,7 +6,7 @@ import { Property } from '../models/Property.js';
 import { User } from '../models/User.js';
 import Agent from '../models/Agent.js';
 import { requireAuth } from '../middleware/auth.js';
-import { translateText } from '../services/translate.js';
+import { translateText, detectLang } from '../services/translate.js';
 import { uploadPropertyPhotosMiddleware, deleteCloudinaryImage } from '../services/cloudinary.js';
 import { uploadPropertyPhotosFromFiles } from '../services/photoUpload.js';
 import { getJWTSecret } from '../config/jwt.js';
@@ -80,7 +80,7 @@ async function userCanManageProperty(requestUserId, property) {
 
 function pickLanguage(req) {
   const raw = (req.query.lang || req.headers['accept-language'] || 'ka').toString();
-  const lang = raw.split(',')[0].trim().toLowerCase();
+  const lang = raw.split(',')[0].trim().toLowerCase().split(/[-_]/)[0];
   const supported = ['ka', 'en', 'ru', 'tr', 'az'];
   return supported.includes(lang) ? lang : 'ka';
 }
@@ -142,11 +142,140 @@ function applyRoomLikeInFilter(filter, fieldName, rawJson) {
   }
 }
 
+// translations may be a Mongoose Map (from a doc) or a plain object (from .lean()).
+function getTranslationEntry(translations, lang) {
+  if (!translations) return null;
+  if (typeof translations.get === 'function') return translations.get(lang) || null;
+  return translations[lang] || null;
+}
+
+// Fields that get cached translations.
+const TRANSLATABLE_FIELDS = ['title', 'desc', 'city', 'street'];
+// region is a stable code (tbilisi, adjara, …) for i18n keys — never auto-translate.
+// Site languages we display in. A field is translated into the requested language
+// whenever its stored text is written in a different language (e.g. a Russian
+// street on the Georgian site → translated to Georgian).
+const AUTO_TRANSLATE_LANGS = ['ka', 'en', 'ru'];
+
+// Avoid duplicate concurrent translation work for the same property+lang.
+const translationInFlight = new Set();
+
+// A field needs translation for `lang` only if it holds text in a different language.
+function fieldNeedsTranslation(text, lang) {
+  const value = text ? String(text).trim() : '';
+  if (!value) return false;
+  return detectLang(value) !== lang;
+}
+
 function applyTranslation(property, lang) {
-  if (lang === 'ka') return property;
-  const t = property.translations?.get(lang);
+  const t = getTranslationEntry(property.translations, lang);
   if (!t) return property;
-  return { ...property, title: t.title ?? property.title, desc: t.desc ?? property.desc };
+  const out = { ...property };
+  for (const f of TRANSLATABLE_FIELDS) {
+    if (t[f] && String(t[f]).trim()) out[f] = t[f];
+  }
+  // region stays as the stable code (tbilisi, …) even if old caches stored a translated label
+  return out;
+}
+
+function hasCompleteTranslation(property, lang) {
+  const t = getTranslationEntry(property.translations, lang);
+  return TRANSLATABLE_FIELDS.every((f) => {
+    if (!fieldNeedsTranslation(property[f], lang)) return true; // already in `lang`
+    return t && t[f] && String(t[f]).trim();
+  });
+}
+
+/**
+ * Translate a property's user-facing text into the given languages ONCE and persist
+ * the result on the document (translations map). Safe to call fire-and-forget.
+ * Returns the (possibly reloaded) translations plain object for immediate use.
+ */
+async function ensurePropertyTranslations(propertyId, langs = AUTO_TRANSLATE_LANGS) {
+  const id = String(propertyId);
+  const targets = (Array.isArray(langs) ? langs : [langs]).filter(Boolean);
+  if (!targets.length) return null;
+
+  // lean read: we only need source text + existing translations.
+  const doc = await Property.findById(id)
+    .select([...TRANSLATABLE_FIELDS, 'translations'].join(' '))
+    .lean();
+  if (!doc) return null;
+
+  const result = { ...(doc.translations || {}) };
+  const missing = targets.filter((lang) => !hasCompleteTranslation(doc, lang));
+  if (!missing.length) return result;
+
+  const setOps = {};
+  for (const lang of missing) {
+    const guardKey = `${id}:${lang}`;
+    if (translationInFlight.has(guardKey)) continue;
+    translationInFlight.add(guardKey);
+    try {
+      const existing = getTranslationEntry(doc.translations, lang) || {};
+      const entry = { ...existing };
+      for (const field of TRANSLATABLE_FIELDS) {
+        const src = doc[field];
+        if (!fieldNeedsTranslation(src, lang)) continue;
+        if (entry[field] && String(entry[field]).trim()) continue;
+        const translated = await translateText(src, lang); // source auto-detected
+        if (translated && translated !== src) entry[field] = translated;
+      }
+      if (Object.keys(entry).length) {
+        setOps[`translations.${lang}`] = entry;
+        result[lang] = entry;
+      }
+    } catch (err) {
+      console.warn(`ensurePropertyTranslations ${guardKey} failed:`, err?.message || err);
+    } finally {
+      translationInFlight.delete(guardKey);
+    }
+  }
+
+  // Targeted $set avoids full-document validation (legacy docs may hold stale enums).
+  if (Object.keys(setOps).length) {
+    await Property.updateOne({ _id: id }, { $set: setOps });
+  }
+  return result;
+}
+
+// Fire-and-forget helper (never rejects to the caller).
+function scheduleTranslations(propertyId, langs = AUTO_TRANSLATE_LANGS) {
+  ensurePropertyTranslations(propertyId, langs).catch((err) =>
+    console.warn('scheduleTranslations failed:', err?.message || err)
+  );
+}
+
+// For list responses: fill missing translations in the background so subsequent
+// loads are served from the cache. Capped to avoid bursts on very large lists.
+function scheduleListTranslations(properties, lang, cap = 60) {
+  let count = 0;
+  for (const p of properties) {
+    if (count >= cap) break;
+    if (hasCompleteTranslation(p, lang)) continue;
+    count += 1;
+    scheduleTranslations(p._id, [lang]);
+  }
+}
+
+/**
+ * Await missing translations for the first N incomplete items so the current
+ * response uses the site language (e.g. Russian street → Georgian on KA).
+ * Remaining items stay fire-and-forget via scheduleListTranslations.
+ */
+async function fillMissingTranslationsForResponse(properties, lang, awaitCap = 25) {
+  const incomplete = properties.filter((p) => !hasCompleteTranslation(p, lang)).slice(0, awaitCap);
+  if (!incomplete.length) return;
+  await Promise.all(
+    incomplete.map(async (p) => {
+      try {
+        const translations = await ensurePropertyTranslations(p._id, [lang]);
+        if (translations) p.translations = translations;
+      } catch (err) {
+        console.warn('list translate failed:', p._id, err?.message || err);
+      }
+    })
+  );
 }
 
 /** საჯაროდ არ ჩანს საკადასტრო, თუ მონიშნულია დამალვა */
@@ -189,13 +318,19 @@ router.post(
     body('rooms').optional().isNumeric().withMessage('ოთახების რაოდენობა უნდა იყოს რიცხვი'),
     body('bedrooms').optional().isNumeric().withMessage('საძინებლების რაოდენობა უნდა იყოს რიცხვი'),
     body('buildingProject').optional().isString().trim(),
+    body('buildingStatus').optional().isString().trim(),
     body('renovationStatus').optional().isString().trim(),
+    body('landStatus').optional().isIn(['', 'agricultural', 'non_agricultural']).withMessage('მიწის სტატუსი არასწორია'),
     body('priceCurrency').optional().isIn(['USD', 'GEL']).withMessage('ვალუტა უნდა იყოს USD ან GEL'),
     body('priceType').optional().isIn(['total', 'per_sqm']).withMessage('ფასის ტიპი უნდა იყოს total ან per_sqm'),
     body('threeDLink').optional().isString().trim().isLength({ max: 1000 }),
     body('exteriorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('tourLink').optional().isString().trim().isLength({ max: 2000 }),
+    body('defaultMediaView')
+      .optional()
+      .isIn(['exterior', 'interior', 'tour', 'photos'])
+      .withMessage('defaultMediaView უნდა იყოს exterior, interior, tour ან photos'),
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail(),
     body('cadastralCode').optional().isString().trim(),
@@ -291,7 +426,9 @@ router.post(
         cadastralCode: (req.body.cadastralCode || '').trim(),
         cadastralHidden,
         buildingProject: req.body.buildingProject || '',
+        buildingStatus: req.body.buildingStatus || '',
         renovationStatus: req.body.renovationStatus || '',
+        landStatus: req.body.type === 'land' ? (req.body.landStatus || '') : '',
         amenities,
         location: { lat: Number(req.body.lat), lng: Number(req.body.lng) },
         type: req.body.type,
@@ -306,6 +443,9 @@ router.post(
         exteriorLink: req.body.exteriorLink || '',
         interiorLink: req.body.interiorLink || '',
         tourLink: normalizeTourLink(req.body.tourLink || ''),
+        defaultMediaView: ['exterior', 'interior', 'tour', 'photos'].includes(req.body.defaultMediaView)
+          ? req.body.defaultMediaView
+          : 'exterior',
         mediaLinks,
         status: 'pending',
         userId: req.user.id,
@@ -317,6 +457,7 @@ router.post(
         },
       });
 
+      scheduleTranslations(property._id);
       res.status(201).json({ property });
     } catch (err) {
       console.error('Property.create failed:', err);
@@ -410,6 +551,8 @@ router.get(
     query('balconies').optional({ values: 'falsy' }).isString(),
     query('buildingProject').optional({ values: 'falsy' }).isString().trim(),
     query('renovationStatus').optional({ values: 'falsy' }).isString().trim(),
+    query('buildingStatus').optional({ values: 'falsy' }).isString().trim(),
+    query('landStatus').optional({ values: 'falsy' }).isString().trim(),
     query('priceCurrency').optional({ values: 'falsy' }).isIn(['USD', 'GEL']),
     query('priceType').optional({ values: 'falsy' }).isIn(['total', 'per_sqm']),
     query('sort').optional({ values: 'falsy' }).isString(),
@@ -598,6 +741,26 @@ router.get(
         filter.renovationStatus = req.query.renovationStatus;
       }
     }
+    if (req.query.buildingStatus) {
+      try {
+        const statuses = JSON.parse(req.query.buildingStatus);
+        if (Array.isArray(statuses) && statuses.length > 0) {
+          filter.buildingStatus = { $in: statuses };
+        }
+      } catch (e) {
+        filter.buildingStatus = req.query.buildingStatus;
+      }
+    }
+    if (req.query.landStatus) {
+      try {
+        const statuses = JSON.parse(req.query.landStatus);
+        if (Array.isArray(statuses) && statuses.length > 0) {
+          filter.landStatus = { $in: statuses };
+        }
+      } catch (e) {
+        filter.landStatus = req.query.landStatus;
+      }
+    }
 
     // ID-ით ძებნა (ციფრული numericId)
     if (req.query.propertyId) {
@@ -636,6 +799,9 @@ router.get(
 
     const properties = await Property.find(filter).sort(finalSort).limit(200).lean();
 
+    await fillMissingTranslationsForResponse(properties, lang);
+    scheduleListTranslations(properties, lang);
+
     const translated = properties.map((p) => {
       const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
       return stripHiddenCadastral(safe);
@@ -659,6 +825,9 @@ router.get(
     })
       .sort({ createdAt: -1 })
       .lean();
+
+    await fillMissingTranslationsForResponse(properties, lang);
+    scheduleListTranslations(properties, lang);
 
     const translated = properties.map((p) => {
       const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
@@ -802,6 +971,15 @@ router.get(
 
     delete property.editDraft;
 
+    if (!hasCompleteTranslation(property, lang)) {
+      try {
+        const translations = await ensurePropertyTranslations(property._id, [lang]);
+        if (translations) property.translations = translations;
+      } catch (err) {
+        console.warn('lazy translate (GET by id) failed:', err?.message || err);
+      }
+    }
+
     res.json({ property: applyTranslation(property, lang) });
   }
 );
@@ -887,12 +1065,17 @@ router.put(
     body('exteriorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('interiorLink').optional().isString().trim().isLength({ max: 1000 }),
     body('tourLink').optional().isString().trim().isLength({ max: 2000 }),
+    body('defaultMediaView')
+      .optional()
+      .isIn(['exterior', 'interior', 'tour', 'photos'])
+      .withMessage('defaultMediaView უნდა იყოს exterior, interior, tour ან photos'),
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
     body('photos').optional().isArray(),
     body('panoramaPhotos').optional().isArray(),
     body('mainPhoto').optional().isInt({ min: 0 }),
     body('cadastralHidden').optional().isBoolean(),
+    body('landStatus').optional().isIn(['', 'agricultural', 'non_agricultural']),
     body('brokerListingMode').optional().isIn(['public', 'unlisted', 'private', 'sold'])
   ],
   async (req, res) => {
@@ -907,8 +1090,12 @@ router.put(
     }
 
     const patch = {};
-    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'street', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'tourLink', 'cadastralCode', 'privateNotes', 'buildingProject', 'renovationStatus', 'cadastralHidden']) {
+    for (const k of ['title', 'desc', 'type', 'dealType', 'city', 'street', 'region', 'tbilisiDistrict', 'threeDLink', 'exteriorLink', 'interiorLink', 'tourLink', 'defaultMediaView', 'cadastralCode', 'privateNotes', 'buildingProject', 'buildingStatus', 'renovationStatus', 'landStatus', 'cadastralHidden']) {
       if (req.body[k] !== undefined) patch[k] = req.body[k];
+    }
+    const nextType = patch.type !== undefined ? patch.type : existing.type;
+    if (nextType !== 'land') {
+      patch.landStatus = '';
     }
     if (patch.tourLink !== undefined) {
       patch.tourLink = normalizeTourLink(patch.tourLink);
@@ -1009,10 +1196,14 @@ router.put(
     const oldLivePhotos = [...(existing.photos || [])];
     const draftPhotos = existing.editDraft?.photos ? [...existing.editDraft.photos] : [];
 
+    // If any user-facing text changed, drop the cached translations so they are rebuilt fresh.
+    const textChanged = TRANSLATABLE_FIELDS.some((f) => patch[f] !== undefined);
+
     const mongoUpdate = {};
     if (Object.keys(patch).length > 0) mongoUpdate.$set = patch;
     if (unsetShareToken) mongoUpdate.$unset = { shareToken: '' };
     mongoUpdate.$unset = { ...(mongoUpdate.$unset || {}), editDraft: '' };
+    if (textChanged) mongoUpdate.$unset = { ...mongoUpdate.$unset, translations: '' };
 
     if (Object.keys(mongoUpdate.$set || {}).length === 0 && !mongoUpdate.$unset?.editDraft) {
       const fresh = await Property.findById(req.params.id).lean();
@@ -1035,6 +1226,8 @@ router.put(
         await deleteCloudinaryImage(url);
       }
     }
+
+    if (textChanged) scheduleTranslations(updated._id);
 
     res.json({ property: updated });
   }

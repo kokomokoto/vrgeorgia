@@ -28,6 +28,17 @@ type NominatimResult = {
 
 export type { NominatimAddress, NominatimResult };
 
+/**
+ * Nominatim-ის `accept-language` საიტის ენის მიხედვით: მიმდინარე ენა ჯერ,
+ * შემდეგ fallback-ები. ასე რუკის ძებნა/რევერსი იმ ენაზე აბრუნებს შედეგს,
+ * რომელზეც საიტია გადართული.
+ */
+export function acceptLanguageForSite(lang?: string): string {
+  const primary = (lang || 'ka').split('-')[0].toLowerCase();
+  const order = [primary, 'ka', 'en', 'ru'];
+  return [...new Set(order)].join(',');
+}
+
 export function formatNominatimResult(result: NominatimResult): string {
   if (result.address) {
     const a = result.address;
@@ -51,16 +62,17 @@ export function formatNominatimResult(result: NominatimResult): string {
 /**
  * კოორდინატიდან მოკლე მისამართი/ქუჩა (საქართველო)
  */
-export async function reverseGeocodeLabel(lat: number, lng: number): Promise<string> {
+export async function reverseGeocodeLabel(lat: number, lng: number, lang?: string): Promise<string> {
+  const acceptLang = acceptLanguageForSite(lang);
   const url =
     `https://nominatim.openstreetmap.org/reverse?` +
     `lat=${encodeURIComponent(String(lat))}` +
     `&lon=${encodeURIComponent(String(lng))}` +
-    `&format=json&addressdetails=1&zoom=18`;
+    `&format=json&addressdetails=1&zoom=18&accept-language=${encodeURIComponent(acceptLang)}`;
   try {
     const res = await fetch(url, {
       headers: {
-        'Accept-Language': 'ka,en',
+        'Accept-Language': acceptLang,
       },
     });
     if (!res.ok) return '';

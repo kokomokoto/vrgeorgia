@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { formatNominatimResult } from '@/lib/reverseGeocode';
+import { formatNominatimResult, acceptLanguageForSite } from '@/lib/reverseGeocode';
 
 interface SearchResult {
   display_name: string;
@@ -28,6 +29,7 @@ interface AddressSearchProps {
 }
 
 export default function AddressSearch({ onSelect, placeholder, mapFillFromPick }: AddressSearchProps) {
+  const { i18n } = useTranslation();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,14 +62,22 @@ export default function AddressSearch({ onSelect, placeholder, mapFillFromPick }
 
     setLoading(true);
     try {
-      // საქართველოში ძებნა (countrycodes=ge)
+      // ძებნის ენა = საიტის ენა (არა ბრაუზერის). ასე შედეგები იმ ენაზე ჩნდება,
+      // რომელზეც საიტია გადართული.
+      const acceptLang = acceptLanguageForSite(i18n.language);
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?` +
         `q=${encodeURIComponent(searchQuery)}&` +
         `format=json&` +
         `addressdetails=1&` +
         `limit=8&` +
-        `countrycodes=ge`
+        `countrycodes=ge&` +
+        `accept-language=${encodeURIComponent(acceptLang)}`,
+        {
+          headers: {
+            'Accept-Language': acceptLang,
+          },
+        }
       );
       
       if (response.ok) {

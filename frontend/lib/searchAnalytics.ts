@@ -38,6 +38,8 @@ export function hasActiveSearchFilters(filters: FiltersState): boolean {
     filters.amenities.length ||
     filters.buildingProject.length ||
     filters.renovationStatus.length ||
+    filters.buildingStatus.length ||
+    filters.landStatus.length ||
     filters.propertyId.trim()
   );
 }
@@ -73,6 +75,8 @@ export function filtersToSearchPayload(
     amenities: filters.amenities,
     buildingProject: filters.buildingProject,
     renovationStatus: filters.renovationStatus,
+    buildingStatus: filters.buildingStatus,
+    landStatus: filters.landStatus,
     minConstructionYear: filters.minConstructionYear,
     maxConstructionYear: filters.maxConstructionYear,
     minRenovationYear: filters.minRenovationYear,

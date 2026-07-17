@@ -3,6 +3,8 @@ import { User } from '../models/User.js';
 
 const MIN_PHONE_DIGITS = 2;
 const MIN_NAME_TOKEN_LEN = 2;
+const SEARCH_TRANSLATION_LANGS = ['ka', 'en', 'ru'];
+const SEARCH_TRANSLATION_FIELDS = ['title', 'desc', 'city', 'street'];
 
 export function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -121,6 +123,14 @@ export async function buildPropertyTextSearchOr(q) {
       { 'contact.email': textRx },
       { privateNotes: textRx }
     );
+
+    // ცალენოვან ველებში მისამართი შენახულია ერთ ენაზე, თარგმანები კი translations map-ში.
+    // ვეძებთ სამივე ენის ვარიანტში, რომ მაგ. ინგლისურად შენახული ქუჩა ქართული query-თაც მოიძებნოს.
+    for (const lang of SEARCH_TRANSLATION_LANGS) {
+      for (const field of SEARCH_TRANSLATION_FIELDS) {
+        textOr.push({ [`translations.${lang}.${field}`]: textRx });
+      }
+    }
   }
 
   for (const digits of collectPhoneDigitGroups(trimmed)) {

@@ -1,4 +1,4 @@
-/** sqm ან houseSqm — ბარათზე ფასის გამოთვლის ლოგიკას ემთხვევა */
+/** ორივე ფართობი → houseSqm; მხოლოდ ერთი → ის (ბარათის ლოგიკას ემთხვევა) */
 function buildAreaSqmExpr() {
   return {
     $let: {
@@ -8,9 +8,9 @@ function buildAreaSqmExpr() {
       },
       in: {
         $cond: [
-          { $gt: ['$$sqm', 0] },
-          '$$sqm',
-          { $cond: [{ $gt: ['$$houseSqm', 0] }, '$$houseSqm', 0] },
+          { $gt: ['$$houseSqm', 0] },
+          '$$houseSqm',
+          { $cond: [{ $gt: ['$$sqm', 0] }, '$$sqm', 0] },
         ],
       },
     },

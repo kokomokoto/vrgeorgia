@@ -24,15 +24,15 @@ import { mergeParsedLocation, resolveLocationFromCoords, resolveLocationFromSear
 import { splitStreetFromFullAddress } from '@/lib/propertyDisplay';
 import {
   applyConstructionYearChange,
-  applyFloorChange,
   applyRenovationYearChange,
-  applyTotalFloorsChange,
-  getFloorInputMax,
   getRenovationInputMin,
   validateDetailFields,
 } from '@/lib/propertyDetailValidation';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { PropertyRoomsBedroomsSelectors } from '@/components/PropertyRoomsBedroomsSelectors';
+import { PropertyFloorFields } from '@/components/PropertyFloorFields';
+import { PropertyLandStatusFields } from '@/components/PropertyLandStatusFields';
+import { isLandType } from '@/lib/propertyTypeUi';
 import {
   BALCONY_CUSTOM_MIN,
   BALCONY_PRESETS,
@@ -45,6 +45,7 @@ import {
 } from '@/components/PropertyCountSelector';
 import { PropertyVirtualTourFields } from '@/components/PropertyVirtualTourFields';
 import { FormattedNumberInput } from '@/components/FormattedNumberInput';
+import { LinkedPriceInputs } from '@/components/LinkedPriceInputs';
 import { formatNumberForDisplay } from '@/lib/formatNumberInput';
 import type { Property } from '@/lib/types';
 import {
@@ -107,7 +108,7 @@ const CITY_TO_REGION: Record<string, string> = {
   'ამბროლაური': 'racha', 'ონი': 'racha', 'ცაგერი': 'racha', 'ლენტეხი': 'racha',
 };
 
-type UploadPhotoItem = { id: string; file: File };
+type UploadPhotoItem = { id: string; file: File; preview: string };
 
 function createUploadPhotoId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -116,8 +117,26 @@ function createUploadPhotoId(): string {
   return `photo-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
+function createUploadPhotoItem(file: File): UploadPhotoItem {
+  return {
+    id: createUploadPhotoId(),
+    file,
+    preview: URL.createObjectURL(file),
+  };
+}
+
+function revokeUploadPhotoPreview(item: UploadPhotoItem) {
+  if (item.preview.startsWith('blob:')) {
+    URL.revokeObjectURL(item.preview);
+  }
+}
+
+function revokeUploadPhotoPreviews(items: UploadPhotoItem[]) {
+  items.forEach(revokeUploadPhotoPreview);
+}
+
 export default function UploadPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
 
@@ -162,6 +181,9 @@ export default function UploadPage() {
   const [exteriorLink, setExteriorLink] = React.useState('');
   const [interiorLink, setInteriorLink] = React.useState('');
   const [tourLink, setTourLink] = React.useState('');
+  const [defaultMediaView, setDefaultMediaView] = React.useState<
+    'exterior' | 'interior' | 'tour' | 'photos'
+  >('exterior');
   const [contactPhone, setContactPhone] = React.useState('');
   const [contactEmail, setContactEmail] = React.useState('');
   const [lat, setLat] = React.useState<number | null>(null);
@@ -169,7 +191,6 @@ export default function UploadPage() {
   const [addressMapFill, setAddressMapFill] = React.useState({ key: 0, text: '' });
   const MAX_PHOTOS = MAX_PROPERTY_PHOTOS;
   const [photoItems, setPhotoItems] = React.useState<UploadPhotoItem[]>([]);
-  const [photoPreviews, setPhotoPreviews] = React.useState<string[]>([]);
   const [mainPhotoIndex, setMainPhotoIndex] = React.useState<number>(0);
   const [cadastralCode, setCadastralCode] = React.useState('');
   const [cadastralHidden, setCadastralHidden] = React.useState(false);
@@ -182,11 +203,14 @@ export default function UploadPage() {
   const [constructionYear, setConstructionYear] = React.useState('');
   const [renovationYear, setRenovationYear] = React.useState('');
   const [renovationStatus, setRenovationStatus] = React.useState('');
+  const [buildingStatus, setBuildingStatus] = React.useState('');
   const [buildingProject, setBuildingProject] = React.useState('');
+  const [landStatus, setLandStatus] = React.useState('');
   const [balcony, setBalcony] = React.useState<number>(0);
   const [loggia, setLoggia] = React.useState<number>(0);
   const [bathroom, setBathroom] = React.useState<number>(0);
   const [basement, setBasement] = React.useState(false);
+  const [attic, setAttic] = React.useState(false);
   const [elevator, setElevator] = React.useState(false);
   const [furniture, setFurniture] = React.useState(false);
   const [garage, setGarage] = React.useState(false);
@@ -213,29 +237,12 @@ export default function UploadPage() {
   const [uploadPhase, setUploadPhase] = React.useState<'idle' | 'saving' | 'photos'>('idle');
   const [photoUploadProgress, setPhotoUploadProgress] = React.useState({ done: 0, total: 0 });
 
+  const photoItemsRef = React.useRef(photoItems);
+  photoItemsRef.current = photoItems;
+
   React.useEffect(() => {
-    if (photoItems.length === 0) {
-      setPhotoPreviews([]);
-      return;
-    }
-    let cancelled = false;
-    Promise.all(
-      photoItems.map(
-        (item) =>
-          new Promise<string>((resolve, reject) => {
-            const r = new FileReader();
-            r.onloadend = () => resolve(r.result as string);
-            r.onerror = () => reject(new Error('read'));
-            r.readAsDataURL(item.file);
-          })
-      )
-    ).then((urls) => {
-      if (!cancelled) setPhotoPreviews(urls);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [photoItems]);
+    return () => revokeUploadPhotoPreviews(photoItemsRef.current);
+  }, []);
 
   const photoGridRef = React.useRef<HTMLDivElement>(null);
   const pendingFlipRef = React.useRef<Map<string, DOMRect> | null>(null);
@@ -262,6 +269,7 @@ export default function UploadPage() {
     setExteriorLink(draft.exteriorLink);
     setInteriorLink(draft.interiorLink);
     setTourLink(draft.tourLink);
+    setDefaultMediaView(draft.defaultMediaView || 'exterior');
     setContactPhone(draft.contactPhone);
     setContactEmail(draft.contactEmail);
     setLat(draft.lat);
@@ -276,11 +284,14 @@ export default function UploadPage() {
     setConstructionYear(draft.constructionYear);
     setRenovationYear(draft.renovationYear);
     setRenovationStatus(draft.renovationStatus);
+    setBuildingStatus(draft.buildingStatus || '');
     setBuildingProject(draft.buildingProject);
+    setLandStatus(draft.landStatus || '');
     setBalcony(draft.balcony);
     setLoggia(draft.loggia);
     setBathroom(draft.bathroom);
     setBasement(draft.basement);
+    setAttic(Boolean(draft.attic));
     setElevator(draft.elevator);
     setFurniture(draft.furniture);
     setGarage(draft.garage);
@@ -334,6 +345,7 @@ export default function UploadPage() {
         exteriorLink,
         interiorLink,
         tourLink,
+        defaultMediaView,
         contactPhone,
         contactEmail,
         lat,
@@ -349,11 +361,14 @@ export default function UploadPage() {
         constructionYear,
         renovationYear,
         renovationStatus,
+        buildingStatus,
         buildingProject,
+        landStatus,
         balcony,
         loggia,
         bathroom,
         basement,
+        attic,
         elevator,
         furniture,
         garage,
@@ -395,6 +410,7 @@ export default function UploadPage() {
     exteriorLink,
     interiorLink,
     tourLink,
+    defaultMediaView,
     contactPhone,
     contactEmail,
     lat,
@@ -409,11 +425,14 @@ export default function UploadPage() {
     constructionYear,
     renovationYear,
     renovationStatus,
+    buildingStatus,
     buildingProject,
+    landStatus,
     balcony,
     loggia,
     bathroom,
     basement,
+    attic,
     elevator,
     furniture,
     garage,
@@ -438,7 +457,10 @@ export default function UploadPage() {
     if (!window.confirm(t('upload_draft_clear_confirm'))) return;
     clearUploadDraftStorage();
     applyUploadDraft(createEmptyUploadDraft());
-    setPhotoItems([]);
+    setPhotoItems((prev) => {
+      revokeUploadPhotoPreviews(prev);
+      return [];
+    });
     setMainPhotoIndex(0);
     setDraftRestored(false);
     setError(null);
@@ -476,7 +498,7 @@ export default function UploadPage() {
       if (space <= 0) return prev;
       return [
         ...prev,
-        ...incoming.slice(0, space).map((file) => ({ id: createUploadPhotoId(), file })),
+        ...incoming.slice(0, space).map((file) => createUploadPhotoItem(file)),
       ];
     });
   };
@@ -518,7 +540,11 @@ export default function UploadPage() {
   const openPhotoPicker = () => photoInputRef.current?.click();
 
   const removePhoto = (index: number) => {
-    setPhotoItems((prev) => prev.filter((_, i) => i !== index));
+    setPhotoItems((prev) => {
+      const removed = prev[index];
+      if (removed) revokeUploadPhotoPreview(removed);
+      return prev.filter((_, i) => i !== index);
+    });
     setMainPhotoIndex((prev) => adjustMainIndexAfterRemoval(prev, index));
   };
 
@@ -540,26 +566,34 @@ export default function UploadPage() {
     if (parsed.label) setAddressMapFill((s) => ({ key: s.key + 1, text: parsed.label }));
   }, []);
   const isStep4Complete = title !== '' && price !== '';
-  const isStep5Filled =
-    roomCount !== null ||
-    bedroomCount !== null ||
-    floor !== '' ||
-    balcony > 0 ||
-    loggia > 0 ||
-    bathroom > 0 ||
-    constructionYear !== '' ||
-    renovationYear !== '' ||
-    renovationStatus !== '' ||
-    basement ||
-    elevator ||
-    furniture ||
-    garage ||
-    centralHeating ||
-    naturalGas ||
-    internet ||
-    electricity ||
-    water ||
-    terrace;
+  const isLand = isLandType(type);
+  const isStep5Filled = isLand
+    ? landStatus !== '' ||
+      naturalGas ||
+      internet ||
+      electricity ||
+      water
+    : roomCount !== null ||
+      bedroomCount !== null ||
+      floor !== '' ||
+      balcony > 0 ||
+      loggia > 0 ||
+      bathroom > 0 ||
+      constructionYear !== '' ||
+      renovationYear !== '' ||
+      renovationStatus !== '' ||
+      buildingStatus !== '' ||
+      basement ||
+      attic ||
+      elevator ||
+      furniture ||
+      garage ||
+      centralHeating ||
+      naturalGas ||
+      internet ||
+      electricity ||
+      water ||
+      terrace;
   const isStep5Complete = isStep5Filled;
   const isStep6Complete = photoItems.length > 0;
   const isStep7Complete = privateNotes.trim() !== '';
@@ -637,7 +671,9 @@ export default function UploadPage() {
       if (!type) throw new Error(t('choose_property_type'));
       if (!dealType) throw new Error(t('choose_deal_type'));
 
-      const detailError = validateDetailFields(floor, totalFloors, constructionYear, renovationYear);
+      const detailError = isLandType(type)
+        ? null
+        : validateDetailFields(floor, totalFloors, constructionYear, renovationYear);
       if (detailError === 'floor_exceeds_total') throw new Error(t('error_floor_exceeds_total'));
       if (detailError === 'renovation_before_construction') {
         throw new Error(t('error_renovation_before_construction'));
@@ -658,9 +694,9 @@ export default function UploadPage() {
       form.set('tbilisiDistrict', tbilisiDistrict);
       form.set('tbilisiSubdistricts', JSON.stringify(tbilisiSubdistricts));
       if (sqm.trim()) form.set('sqm', sqm);
-      if (houseSqm.trim()) form.set('houseSqm', houseSqm);
-      form.set('rooms', String(roomCount || 0));
-      form.set('bedrooms', String(bedroomCount || 0));
+      if (houseSqm.trim() && !isLandType(type)) form.set('houseSqm', houseSqm);
+      form.set('rooms', String(isLandType(type) ? 0 : roomCount || 0));
+      form.set('bedrooms', String(isLandType(type) ? 0 : bedroomCount || 0));
       form.set('type', type);
       form.set('dealType', dealType);
       form.set('lat', String(lat));
@@ -668,45 +704,83 @@ export default function UploadPage() {
       form.set('exteriorLink', exteriorLink);
       form.set('interiorLink', interiorLink);
       form.set('tourLink', tourLink);
+      form.set('defaultMediaView', defaultMediaView);
       form.set('contactPhone', contactPhone);
       form.set('contactEmail', contactEmail);
       form.set('cadastralCode', cadastralCode);
       form.set('cadastralHidden', cadastralHidden ? 'true' : 'false');
       
       // დეტალური ინფორმაცია
-      form.set('floor', floor);
-      form.set('totalFloors', totalFloors);
-      form.set('constructionYear', constructionYear);
-      form.set('renovationYear', renovationYear);
-      if (renovationStatus) form.set('renovationStatus', renovationStatus);
-      if (buildingProject) form.set('buildingProject', buildingProject);
-      form.set('balcony', String(balcony));
-      form.set('loggia', String(loggia));
-      form.set('bathroom', String(bathroom));
-      
-      // ობიექტი amenities-სთვის
-      const amenities = {
-        basement,
-        elevator,
-        furniture,
-        garage,
-        centralHeating,
-        naturalGas,
-        storage,
-        internet,
-        electricity,
-        water,
-        security,
-        airConditioner,
-        fireplace,
-        pool,
-        garden,
-        balcony: balcony > 0,
-        terrace,
-        isolatedKitchen,
-        heatingCooling
-      };
-      form.set('amenities', JSON.stringify(amenities));
+      const landListing = isLandType(type);
+      if (landListing) {
+        form.set('landStatus', landStatus);
+        form.set('floor', '0');
+        form.set('totalFloors', '0');
+        form.set('balcony', '0');
+        form.set('loggia', '0');
+        form.set('bathroom', '0');
+        form.set(
+          'amenities',
+          JSON.stringify({
+            basement: false,
+            attic: false,
+            elevator: false,
+            furniture: false,
+            garage: false,
+            centralHeating: false,
+            naturalGas,
+            storage: false,
+            internet,
+            electricity,
+            water,
+            security: false,
+            airConditioner: false,
+            fireplace: false,
+            pool: false,
+            garden: false,
+            balcony: false,
+            terrace: false,
+            isolatedKitchen: false,
+            heatingCooling: false,
+          })
+        );
+      } else {
+        form.set('floor', floor);
+        form.set('totalFloors', totalFloors);
+        form.set('constructionYear', constructionYear);
+        form.set('renovationYear', renovationYear);
+        if (renovationStatus) form.set('renovationStatus', renovationStatus);
+        if (buildingStatus) form.set('buildingStatus', buildingStatus);
+        if (buildingProject) form.set('buildingProject', buildingProject);
+        form.set('balcony', String(balcony));
+        form.set('loggia', String(loggia));
+        form.set('bathroom', String(bathroom));
+        form.set(
+          'amenities',
+          JSON.stringify({
+            basement,
+            attic,
+            elevator,
+            furniture,
+            garage,
+            centralHeating,
+            naturalGas,
+            storage,
+            internet,
+            electricity,
+            water,
+            security,
+            airConditioner,
+            fireplace,
+            pool,
+            garden,
+            balcony: balcony > 0,
+            terrace,
+            isolatedKitchen,
+            heatingCooling,
+          })
+        );
+      }
       form.set('privateNotes', privateNotes);
 
       let panoramaFlags: boolean[] = [];
@@ -932,6 +1006,7 @@ export default function UploadPage() {
                           address: result?.address,
                         },
                         CITY_TO_REGION,
+                        i18n.language,
                       );
                       if (!parsed.city && address) {
                         const parts = address.split(',').map((p) => p.trim());
@@ -962,7 +1037,7 @@ export default function UploadPage() {
                   onPick={async (a, b) => {
                     setLat(a);
                     setLng(b);
-                    const parsed = await resolveLocationFromCoords(a, b, CITY_TO_REGION);
+                    const parsed = await resolveLocationFromCoords(a, b, CITY_TO_REGION, i18n.language);
                     if (parsed) applyParsedLocation(parsed);
                   }}
                 />
@@ -1107,10 +1182,12 @@ export default function UploadPage() {
                   <span className="ml-auto text-green-600 font-medium">
                     {formatNumberForDisplay(price)} {priceCurrency === 'USD' ? '$' : '₾'}
                     {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''}
-                    {houseSqm
+                    {houseSqm && !isLand
                       ? ` • ${t('house_area_detail')}: ${formatNumberForDisplay(houseSqm)} ${t('sqm_unit_short')}`
                       : ''}
-                    {sqm ? ` • ${formatNumberForDisplay(sqm)} ${t('sqm_unit_short')}` : ''}
+                    {sqm
+                      ? ` • ${t('land_area_detail')}: ${formatNumberForDisplay(sqm)} ${t('sqm_unit_short')}`
+                      : ''}
                   </span>
                 )}
               </div>
@@ -1138,67 +1215,24 @@ export default function UploadPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">💵 {t('price_label_icon')}</label>
-                    <div className="flex gap-2">
-                      <FormattedNumberInput
-                        className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        placeholder="0"
-                        value={price}
-                        onChange={setPrice}
-                      />
-                      <div className="flex rounded-lg border border-slate-300 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setPriceCurrency('USD')}
-                          className={`px-4 py-3 font-medium transition-colors ${
-                            priceCurrency === 'USD' 
-                              ? 'bg-blue-600 text-white' 
-                              : 'bg-white text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          $
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPriceCurrency('GEL')}
-                          className={`px-4 py-3 font-medium transition-colors ${
-                            priceCurrency === 'GEL' 
-                              ? 'bg-blue-600 text-white' 
-                              : 'bg-white text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          ₾
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => setPriceType('total')}
-                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
-                          priceType === 'total'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        {t('total_price')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPriceType('per_sqm')}
-                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${
-                          priceType === 'per_sqm'
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        {t('price_per_sqm')}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
+                <div className="space-y-4">
+                  <LinkedPriceInputs
+                    price={price}
+                    priceType={priceType}
+                    priceCurrency={priceCurrency}
+                    areaSqm={
+                      !isLand && Number(houseSqm) > 0
+                        ? Number(houseSqm)
+                        : Number(sqm) > 0
+                          ? Number(sqm)
+                          : 0
+                    }
+                    onPriceChange={setPrice}
+                    onPriceTypeChange={setPriceType}
+                    onCurrencyChange={setPriceCurrency}
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    {!isLand && (
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
                         🏠 {t('house_sqm_label')}
@@ -1210,7 +1244,8 @@ export default function UploadPage() {
                         onChange={setHouseSqm}
                       />
                     </div>
-                    <div>
+                    )}
+                    <div className={!isLand ? '' : 'col-span-2'}>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
                         📐 {t('area_sqm')}{' '}
                         <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
@@ -1253,6 +1288,9 @@ export default function UploadPage() {
                   onExteriorChange={setExteriorLink}
                   onInteriorChange={setInteriorLink}
                   onTourChange={setTourLink}
+                  defaultMediaView={defaultMediaView}
+                  onDefaultMediaViewChange={setDefaultMediaView}
+                  hasPhotos={photoItems.length > 0}
                 />
 
                 {isStep4Complete && (
@@ -1279,9 +1317,17 @@ export default function UploadPage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">🔧 {t('detailed_info_header')}</h3>
-                  <p className="text-sm text-slate-500">{t('detailed_info_desc')}</p>
+                  <p className="text-sm text-slate-500">
+                    {isLand ? t('land_details_desc') : t('detailed_info_desc')}
+                  </p>
                 </div>
-                {roomCount !== null && (
+                {isLand
+                  ? landStatus !== '' && (
+                      <span className="ml-auto text-green-600 font-medium">
+                        {t(`land_status_${landStatus}`)}
+                      </span>
+                    )
+                  : roomCount !== null && (
                   <span className="ml-auto text-green-600 font-medium">
                     {roomCount} {t('rooms_short')}
                     {bedroomCount !== null ? `, ${bedroomCount} ${t('bedrooms_short')}` : ''}
@@ -1292,6 +1338,40 @@ export default function UploadPage() {
             
             {currentStep === 5 && (
               <div className="space-y-6 mt-4">
+                {isLand ? (
+                  <>
+                    <PropertyLandStatusFields
+                      landStatus={landStatus}
+                      setLandStatus={setLandStatus}
+                    />
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-3">⚡ {t('communications')}</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { key: 'naturalGas', label: t('amenity_naturalGas'), icon: '🔥', state: naturalGas, setter: setNaturalGas },
+                          { key: 'internet', label: t('amenity_internet'), icon: '📶', state: internet, setter: setInternet },
+                          { key: 'electricity', label: t('amenity_electricity'), icon: '💡', state: electricity, setter: setElectricity },
+                          { key: 'water', label: t('amenity_water'), icon: '💧', state: water, setter: setWater },
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => item.setter(!item.state)}
+                            className={`p-3 rounded-xl border-2 transition-all ${
+                              item.state
+                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="text-2xl mb-1">{item.icon}</div>
+                            <div className="text-xs font-medium">{item.label}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                <>
                 <PropertyRoomsBedroomsSelectors
                   roomCount={roomCount}
                   setRoomCount={setRoomCount}
@@ -1299,48 +1379,14 @@ export default function UploadPage() {
                   setBedroomCount={setBedroomCount}
                 />
 
-                {/* სართული, პროექტი, წლები, რემონტი — ყველა კატეგორიაში, არასავალდებულო */}
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">
-                      🏢 {t('floor_label')}{' '}
-                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">{t('which_floor')}</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={getFloorInputMax(totalFloors)}
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder={t('floor_example')}
-                          value={floor}
-                          onChange={(e) => setFloor(applyFloorChange(e.target.value, totalFloors))}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">{t('total_floors')}</label>
-                        <input
-                          type="number"
-                          min={1}
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder={t('total_floors_example')}
-                          value={totalFloors}
-                          onChange={(e) => {
-                            const next = applyTotalFloorsChange(e.target.value, floor);
-                            setTotalFloors(next.totalFloors);
-                            setFloor(next.floor);
-                          }}
-                        />
-                      </div>
-                    </div>
-                    {getFloorInputMax(totalFloors) !== undefined && (
-                      <p className="mt-2 text-xs text-slate-500">
-                        {t('floor_max_hint', { max: getFloorInputMax(totalFloors) })}
-                      </p>
-                    )}
-                  </div>
+                {/* სართული / სართულიანობა — კერძო სახლზე სართული არასავალდებულო */}
+                <PropertyFloorFields
+                  type={type}
+                  floor={floor}
+                  totalFloors={totalFloors}
+                  setFloor={setFloor}
+                  setTotalFloors={setTotalFloors}
+                />
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">
                       🏠 {t('building_project_label')}{' '}
@@ -1370,6 +1416,32 @@ export default function UploadPage() {
                           }`}
                         >
                           {proj.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      🏗️ {t('building_status_label')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {[
+                        { value: 'newly_built', label: t('building_status_newly_built') },
+                        { value: 'under_construction', label: t('building_status_under_construction') },
+                        { value: 'old_built', label: t('building_status_old_built') },
+                      ].map((item) => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => setBuildingStatus(buildingStatus === item.value ? '' : item.value)}
+                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                            buildingStatus === item.value
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                          }`}
+                        >
+                          {item.label}
                         </button>
                       ))}
                     </div>
@@ -1446,7 +1518,6 @@ export default function UploadPage() {
                       ))}
                     </div>
                   </div>
-                </>
 
                 {/* აივანი და ლოჯია */}
                 <div className="grid grid-cols-2 gap-4">
@@ -1492,19 +1563,20 @@ export default function UploadPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-3">✨ დამატებითი კომფორტი</label>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                     {[
-                      { key: 'basement', label: 'სარდაფი', icon: '🏚️', state: basement, setter: setBasement },
-                      { key: 'elevator', label: 'ლიფტი', icon: '🛗', state: elevator, setter: setElevator },
-                      { key: 'furniture', label: 'ავეჯი', icon: '🪑', state: furniture, setter: setFurniture },
-                      { key: 'garage', label: 'ავტოფარეხი', icon: '🚗', state: garage, setter: setGarage },
-                      { key: 'storage', label: 'სათავსო', icon: '📦', state: storage, setter: setStorage },
-                      { key: 'airConditioner', label: 'კონდიციონერი', icon: '❄️', state: airConditioner, setter: setAirConditioner },
-                      { key: 'fireplace', label: 'ბუხარი', icon: '🔥', state: fireplace, setter: setFireplace },
-                      { key: 'pool', label: 'აუზი', icon: '🏊', state: pool, setter: setPool },
-                      { key: 'garden', label: 'ბაღი/ეზო', icon: '🌳', state: garden, setter: setGarden },
-                      { key: 'terrace', label: 'ტერასა', icon: '🏞️', state: terrace, setter: setTerrace },
-                      { key: 'security', label: 'დაცვა', icon: '🔒', state: security, setter: setSecurity },
-                      { key: 'isolatedKitchen', label: 'იზოლ. სამზარეულო', icon: '🍳', state: isolatedKitchen, setter: setIsolatedKitchen },
-                      { key: 'heatingCooling', label: 'გათბობა/გაგრილება', icon: '🌡️', state: heatingCooling, setter: setHeatingCooling },
+                      { key: 'basement', label: t('amenity_basement'), icon: '🏚️', state: basement, setter: setBasement },
+                      { key: 'attic', label: t('amenity_attic'), icon: '🏠', state: attic, setter: setAttic },
+                      { key: 'elevator', label: t('amenity_elevator'), icon: '🛗', state: elevator, setter: setElevator },
+                      { key: 'furniture', label: t('amenity_furniture'), icon: '🪑', state: furniture, setter: setFurniture },
+                      { key: 'garage', label: t('amenity_garage'), icon: '🚗', state: garage, setter: setGarage },
+                      { key: 'storage', label: t('amenity_storage'), icon: '📦', state: storage, setter: setStorage },
+                      { key: 'airConditioner', label: t('amenity_airConditioner'), icon: '❄️', state: airConditioner, setter: setAirConditioner },
+                      { key: 'fireplace', label: t('amenity_fireplace'), icon: '🔥', state: fireplace, setter: setFireplace },
+                      { key: 'pool', label: t('amenity_pool'), icon: '🏊', state: pool, setter: setPool },
+                      { key: 'garden', label: t('amenity_garden'), icon: '🌳', state: garden, setter: setGarden },
+                      { key: 'terrace', label: t('terrace'), icon: '🏞️', state: terrace, setter: setTerrace },
+                      { key: 'security', label: t('amenity_security'), icon: '🔒', state: security, setter: setSecurity },
+                      { key: 'isolatedKitchen', label: t('amenity_isolatedKitchen'), icon: '🍳', state: isolatedKitchen, setter: setIsolatedKitchen },
+                      { key: 'heatingCooling', label: t('amenity_heatingCooling'), icon: '🌡️', state: heatingCooling, setter: setHeatingCooling },
                     ].map((item) => (
                       <button
                         key={item.key}
@@ -1550,6 +1622,8 @@ export default function UploadPage() {
                     ))}
                   </div>
                 </div>
+                </>
+                )}
 
                 {/* შემდეგი ეტაპი - ყოველთვის ხელმისაწვდომია რადგან Step 6 არასავალდებულოა */}
                 <button 
@@ -1604,29 +1678,19 @@ export default function UploadPage() {
                   }}
                 />
 
-                {photoItems.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-xl p-8 py-14 text-center">
-                    <div className="mb-3 text-5xl">📸</div>
-                    <p className="mb-1 text-slate-700 font-medium">{t('choose_or_drop_photos')}</p>
-                    <p className="mb-5 text-sm text-slate-500">{t('photos_drop_zone_hint')}</p>
-                    <button
-                      type="button"
-                      onClick={openPhotoPicker}
-                      className="inline-block rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700"
-                    >
-                      {t('choose_photos')}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3 p-1">
+                <div className="space-y-3 p-1">
+                  {photoItems.length > 0 && (
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-sm font-medium text-slate-700">
-                        ✅ {t('selected_photos', { count: photoPreviews.length })}
+                        ✅ {t('selected_photos', { count: photoItems.length })}
                       </span>
                       <button
                         type="button"
                         onClick={() => {
-                          setPhotoItems([]);
+                          setPhotoItems((prev) => {
+                            revokeUploadPhotoPreviews(prev);
+                            return [];
+                          });
                           setMainPhotoIndex(0);
                         }}
                         className="text-sm text-red-600 hover:text-red-700"
@@ -1634,85 +1698,106 @@ export default function UploadPage() {
                         {t('delete_all')}
                       </button>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      💡 {t('click_main_photo')} · {t('photo_drag_reorder_hint')} · {t('photos_drop_zone_hint')}
-                    </p>
-                    <PhotoSortableGrid
-                      className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5"
-                      layoutKey={photoLayoutKey}
-                      gridRef={photoGridRef}
-                      pendingFlipRef={pendingFlipRef}
-                      draggingFlipKey={draggingFlipKey}
-                    >
-                      {photoItems.length < MAX_PHOTOS && (
-                        <button
-                          type="button"
-                          data-flip-key="photo-add-slot"
-                          onClick={openPhotoPicker}
-                          className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
-                            photoFileDropActive
-                              ? 'border-blue-500 bg-blue-100 text-blue-700'
-                              : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
-                          }`}
+                  )}
+                  <p className="text-xs text-slate-500">
+                    💡{' '}
+                    {photoItems.length > 0
+                      ? `${t('click_main_photo')} · ${t('photo_drag_reorder_hint')} · ${t('photos_drop_zone_hint')}`
+                      : t('photos_drop_zone_hint')}
+                  </p>
+                  {photoItems.length === 0 ? (
+                    <div className="flex justify-center py-4">
+                      <button
+                        type="button"
+                        onClick={openPhotoPicker}
+                        className={`flex aspect-square w-32 max-w-[40vw] flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors sm:w-36 ${
+                          photoFileDropActive
+                            ? 'border-blue-500 bg-blue-100 text-blue-700'
+                            : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
+                        }`}
+                      >
+                        <span className="text-2xl font-light leading-none">+</span>
+                        <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
+                          {t('add_new_photos')}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {photoItems.length}/{MAX_PHOTOS}
+                        </span>
+                      </button>
+                    </div>
+                  ) : (
+                  <PhotoSortableGrid
+                    className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5"
+                    layoutKey={photoLayoutKey}
+                    gridRef={photoGridRef}
+                    pendingFlipRef={pendingFlipRef}
+                    draggingFlipKey={draggingFlipKey}
+                  >
+                    {photoItems.length < MAX_PHOTOS && (
+                      <button
+                        type="button"
+                        data-flip-key="photo-add-slot"
+                        onClick={openPhotoPicker}
+                        className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
+                          photoFileDropActive
+                            ? 'border-blue-500 bg-blue-100 text-blue-700'
+                            : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
+                        }`}
+                      >
+                        <span className="text-2xl font-light leading-none">+</span>
+                        <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
+                          {t('add_new_photos')}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {photoItems.length}/{MAX_PHOTOS}
+                        </span>
+                      </button>
+                    )}
+                    {photoItems.map((item, index) => (
+                        <div
+                          key={item.id}
+                          data-flip-key={item.id}
+                          {...getThumbDragProps(index)}
+                          className={`relative group aspect-square cursor-grab active:cursor-grabbing ${
+                            index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                          } ${isDragging(index) ? 'z-20 scale-[1.03] opacity-90 ring-2 ring-amber-400 ring-offset-1' : ''}`}
+                          onClick={() => setAsMainPhoto(index)}
                         >
-                          <span className="text-2xl font-light leading-none">+</span>
-                          <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
-                            {t('add_new_photos')}
+                          <span className="absolute left-1 top-1 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            {index + 1}
                           </span>
-                          <span className="text-[10px] text-slate-400">
-                            {photoItems.length}/{MAX_PHOTOS}
-                          </span>
-                        </button>
-                      )}
-                      {photoPreviews.map((preview, index) => {
-                        const item = photoItems[index];
-                        const stableKey = item?.id ?? `preview-${index}`;
-                        return (
-                          <div
-                            key={stableKey}
-                            data-flip-key={stableKey}
-                            {...getThumbDragProps(index)}
-                            className={`relative group aspect-square cursor-grab active:cursor-grabbing ${
-                              index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''
-                            } ${isDragging(index) ? 'z-20 scale-[1.03] opacity-90 ring-2 ring-amber-400 ring-offset-1' : ''}`}
-                            onClick={() => setAsMainPhoto(index)}
+                          <span
+                            className="absolute bottom-1 right-1 z-10 rounded bg-black/40 px-1 text-[10px] text-white opacity-80"
+                            aria-hidden
                           >
-                            <span className="absolute left-1 top-1 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                              {index + 1}
+                            ⋮⋮
+                          </span>
+                          <img
+                            src={item.preview}
+                            alt={`${t('photo')} ${index + 1}`}
+                            className="pointer-events-none h-full w-full rounded-lg border border-slate-200 object-cover"
+                            draggable={false}
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removePhoto(index);
+                            }}
+                            className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                          >
+                            ✕
+                          </button>
+                          {index === mainPhotoIndex && (
+                            <span className="absolute bottom-1 left-1 rounded bg-blue-600 px-2 py-0.5 text-xs text-white">
+                              ⭐ {t('main_photo')}
                             </span>
-                            <span
-                              className="absolute bottom-1 right-1 z-10 rounded bg-black/40 px-1 text-[10px] text-white opacity-80"
-                              aria-hidden
-                            >
-                              ⋮⋮
-                            </span>
-                            <img
-                              src={preview}
-                              alt={`${t('photo')} ${index + 1}`}
-                              className="pointer-events-none h-full w-full rounded-lg border border-slate-200 object-cover"
-                              draggable={false}
-                            />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removePhoto(index);
-                              }}
-                              className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
-                            >
-                              ✕
-                            </button>
-                            {index === mainPhotoIndex && (
-                              <span className="absolute bottom-1 left-1 rounded bg-blue-600 px-2 py-0.5 text-xs text-white">
-                                ⭐ {t('main_photo')}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </PhotoSortableGrid>
-                  </div>
-                )}
+                          )}
+                        </div>
+                      ))}
+                  </PhotoSortableGrid>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1876,7 +1961,7 @@ export default function UploadPage() {
                       </span>
                     </div>
                   )}
-                  {houseSqm && (
+                  {houseSqm && !isLand && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>🏠</span>
                       <span>
@@ -1884,11 +1969,17 @@ export default function UploadPage() {
                       </span>
                     </div>
                   )}
+                  {isLand && landStatus !== '' && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span>🌾</span>
+                      <span>{t(`land_status_${landStatus}`)}</span>
+                    </div>
+                  )}
                   {sqm && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>📐</span>
                       <span>
-                        {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
+                        {t('land_area_detail')}: {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
                       </span>
                     </div>
                   )}

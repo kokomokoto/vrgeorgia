@@ -26,6 +26,7 @@ import { tourFetch } from "@/lib/tourApi";
 export function TourEditor({ tourId }: TourEditorProps) {
   const searchParams = useSearchParams();
   const embedMode = searchParams.get("embed") === "1";
+  const embedSessionId = searchParams.get("session") || "";
   const [draft, setDraft] = useState<TourDraft | null>(null);
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
   const [selectedSceneIds, setSelectedSceneIds] = useState<string[]>([]);
@@ -552,17 +553,46 @@ export function TourEditor({ tourId }: TourEditorProps) {
     if (embedMode) {
       setPublishedUrl(publicUrl);
       let delivered = false;
-      try {
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage(
-            { type: VRGEORGIA_TOUR_MESSAGE, url: publicUrl, tourId },
-            "*"
-          );
-          delivered = true;
+
+      // 1) postMessage → upload/edit tab (instant when opener exists)
+      const notifyOpener = () => {
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(
+              { type: VRGEORGIA_TOUR_MESSAGE, url: publicUrl, tourId },
+              "*"
+            );
+            return true;
+          }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
+        return false;
+      };
+      delivered = notifyOpener();
+      if (!delivered) {
+        window.setTimeout(notifyOpener, 400);
+        window.setTimeout(notifyOpener, 1200);
       }
+
+      // 2) API fallback — works when opener is missing (noopener tab, cross-port)
+      if (embedSessionId) {
+        try {
+          const pendingRes = await tourFetch("/api/tour-embed/published", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sessionId: embedSessionId,
+              url: publicUrl,
+              tourId,
+            }),
+          });
+          if (pendingRes.ok) delivered = true;
+        } catch {
+          /* ignore */
+        }
+      }
+
       setPublishMsg(
         delivered
           ? "გამოქვეყნდა! ტურის ბმული გაიგზავნა VR Georgia-ში — დაბრუნდით ატვირთვის ტაბში."

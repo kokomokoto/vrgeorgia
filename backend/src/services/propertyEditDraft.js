@@ -38,7 +38,9 @@ const EDIT_DRAFT_FIELDS = [
   'constructionYear',
   'renovationYear',
   'buildingProject',
+  'buildingStatus',
   'renovationStatus',
+  'landStatus',
   'cadastralCode',
   'cadastralHidden',
   'location',
@@ -51,6 +53,7 @@ const EDIT_DRAFT_FIELDS = [
   'exteriorLink',
   'interiorLink',
   'tourLink',
+  'defaultMediaView',
   'amenities',
   'privateNotes',
 ];

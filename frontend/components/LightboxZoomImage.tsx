@@ -264,7 +264,7 @@ export function LightboxZoomImage({
         src={src}
         alt={alt}
         draggable={false}
-        className="max-h-full w-full select-none object-contain transition-transform duration-75 md:w-auto md:max-w-full"
+        className="h-full w-full max-h-full max-w-full select-none object-contain transition-transform duration-75"
         style={{
           transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
           transformOrigin: 'center center',

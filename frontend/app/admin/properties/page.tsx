@@ -62,6 +62,7 @@ function buildPropertiesQueryString(
         k === 'amenities' ||
         k === 'buildingProject' ||
         k === 'renovationStatus' ||
+        k === 'buildingStatus' ||
         k === 'balconies' ||
         k === 'rooms' ||
         k === 'bedrooms') &&

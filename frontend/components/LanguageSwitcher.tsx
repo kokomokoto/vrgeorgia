@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { apiLang } from '@/lib/apiLang';
 
 const langs = [
   { code: 'ka', label: 'KA' },
@@ -11,11 +12,12 @@ const langs = [
 
 export function LanguageSwitcher() {
   const { i18n } = useTranslation();
+  const current = apiLang(i18n.language);
 
   return (
     <select
       className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-      value={i18n.language}
+      value={current}
       onChange={(e) => i18n.changeLanguage(e.target.value)}
       aria-label="Language"
     >

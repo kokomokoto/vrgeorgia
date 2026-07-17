@@ -39,11 +39,15 @@ const propertySchema = new mongoose.Schema(
     
     // ბინის პროექტის ტიპი (მხოლოდ apartment-ისთვის)
     buildingProject: { type: String, enum: ['', 'czech', 'khrushchev', 'urban', 'lvov', 'budapest', 'kiev', 'moscow', 'new_build', 'tbilisi', 'other'], default: '' },
+    buildingStatus: { type: String, enum: ['', 'newly_built', 'under_construction', 'old_built'], default: '' },
     renovationStatus: { type: String, enum: ['', 'green_frame', 'white_frame', 'black_frame', 'renovated', 'to_renovate'], default: '' },
+    /** მიწის სტატუსი: სასოფლო / არასასოფლო (მხოლოდ type=land) */
+    landStatus: { type: String, enum: ['', 'agricultural', 'non_agricultural'], default: '' },
     
     // კომფორტი და კომუნიკაციები
     amenities: {
       basement: { type: Boolean, default: false },
+      attic: { type: Boolean, default: false },
       elevator: { type: Boolean, default: false },
       furniture: { type: Boolean, default: false },
       garage: { type: Boolean, default: false },
@@ -80,6 +84,12 @@ const propertySchema = new mongoose.Schema(
     exteriorLink: { type: String, default: '' }, // 3D ექსტერიერი
     interiorLink: { type: String, default: '' }, // 3D ინტერიერი
     tourLink: { type: String, default: '' }, // VR 360° ტური (tour-builder /v/...)
+    /** ობიექტის გახსნისას რომელი მედია ტაბი იყოს პირველი */
+    defaultMediaView: {
+      type: String,
+      enum: ['exterior', 'interior', 'tour', 'photos'],
+      default: 'exterior',
+    },
     
     // მედია ლინკები (YouTube, Facebook, TikTok და ა.შ.)
     mediaLinks: [{
@@ -131,13 +141,17 @@ const propertySchema = new mongoose.Schema(
     editDraft: { type: mongoose.Schema.Types.Mixed, default: undefined },
 
     // Optional translated fields cache, keyed by language code.
-    // Example: { en: { title: '...', desc: '...' }, ru: { ... } }
+    // Example: { en: { title: '...', desc: '...', city: '...', street: '...', region: '...' }, ru: { ... } }
+    // Filled once on the server and served to every user (no per-user re-translation).
     translations: {
       type: Map,
       of: new mongoose.Schema(
         {
           title: { type: String },
-          desc: { type: String }
+          desc: { type: String },
+          city: { type: String },
+          street: { type: String },
+          region: { type: String }
         },
         { _id: false }
       ),

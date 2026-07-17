@@ -196,6 +196,8 @@ export type PropertyQuery = {
   amenities?: string[]; // კომფორტი და კომუნიკაციები
   buildingProject?: string[];
   renovationStatus?: string[];
+  buildingStatus?: string[];
+  landStatus?: string[];
   balconies?: string[];
   sort?: string;
   propertyId?: string;
@@ -210,7 +212,7 @@ export async function listProperties(query: PropertyQuery) {
   const params: Record<string, string> = {};
   for (const [k, v] of Object.entries(query)) {
     if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
-    if ((k === 'tbilisiSubdistricts' || k === 'type' || k === 'dealType' || k === 'amenities' || k === 'buildingProject' || k === 'renovationStatus' || k === 'balconies' || k === 'rooms' || k === 'bedrooms') && Array.isArray(v)) {
+    if ((k === 'tbilisiSubdistricts' || k === 'type' || k === 'dealType' || k === 'amenities' || k === 'buildingProject' || k === 'renovationStatus' || k === 'buildingStatus' || k === 'landStatus' || k === 'balconies' || k === 'rooms' || k === 'bedrooms') && Array.isArray(v)) {
       params[k] = JSON.stringify(v);
     } else {
       params[k] = String(v);
@@ -259,6 +261,8 @@ export async function getMyProperties(query?: PropertyQuery) {
         'amenities',
         'buildingProject',
         'renovationStatus',
+        'buildingStatus',
+        'landStatus',
         'balconies',
         'rooms',
         'bedrooms',
@@ -324,6 +328,13 @@ export async function updateProfile(data: { phone?: string; name?: string; email
   return request<{ user: User }>('/api/auth/profile', {
     method: 'PUT',
     body: JSON.stringify(data)
+  });
+}
+
+export async function changePassword(data: { currentPassword: string; newPassword: string }) {
+  return request<{ ok: boolean; message?: string }>('/api/auth/password', {
+    method: 'PUT',
+    body: JSON.stringify(data),
   });
 }
 
@@ -432,6 +443,8 @@ export async function getAgentProperties(agentId: string, query: AgentProperties
         k === 'amenities' ||
         k === 'buildingProject' ||
         k === 'renovationStatus' ||
+        k === 'buildingStatus' ||
+        k === 'landStatus' ||
         k === 'balconies' ||
         k === 'rooms' ||
         k === 'bedrooms') &&

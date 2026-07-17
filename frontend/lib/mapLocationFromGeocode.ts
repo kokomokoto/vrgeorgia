@@ -1,6 +1,6 @@
 import { CITY_REGION_MAP } from '@/lib/georgiaLocations';
 import { CITY_DISTRICTS_MAP, CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
-import { formatNominatimResult, type NominatimAddress, type NominatimResult } from '@/lib/reverseGeocode';
+import { formatNominatimResult, acceptLanguageForSite, type NominatimAddress, type NominatimResult } from '@/lib/reverseGeocode';
 import { lookupTbilisiUbaniAtPoint, normalizeTbilisiSubdistrictKa } from '@/lib/tbilisiUbaniLookup';
 
 export type ParsedMapLocation = {
@@ -193,16 +193,21 @@ export function parseLocationFromNominatim(result: NominatimResult): ParsedMapLo
   };
 }
 
-export async function reverseGeocodeLocation(lat: number, lng: number): Promise<ParsedMapLocation | null> {
+export async function reverseGeocodeLocation(
+  lat: number,
+  lng: number,
+  lang?: string,
+): Promise<ParsedMapLocation | null> {
+  const acceptLang = acceptLanguageForSite(lang);
   const url =
     `https://nominatim.openstreetmap.org/reverse?` +
     `lat=${encodeURIComponent(String(lat))}` +
     `&lon=${encodeURIComponent(String(lng))}` +
-    `&format=json&addressdetails=1&zoom=18`;
+    `&format=json&addressdetails=1&zoom=18&accept-language=${encodeURIComponent(acceptLang)}`;
   try {
     const res = await fetch(url, {
       headers: {
-        'Accept-Language': 'ka,en',
+        'Accept-Language': acceptLang,
       },
     });
     if (!res.ok) return null;
@@ -219,9 +224,10 @@ export async function resolveLocationFromCoords(
   lat: number,
   lng: number,
   cityToRegion: Record<string, string> = CITY_REGION_MAP,
+  lang?: string,
 ): Promise<ReturnType<typeof mergeParsedLocation> | null> {
   const [nominatimParsed, tbilisiZone] = await Promise.all([
-    reverseGeocodeLocation(lat, lng),
+    reverseGeocodeLocation(lat, lng, lang),
     lookupTbilisiUbaniAtPoint(lat, lng).catch(() => null),
   ]);
 
@@ -267,9 +273,10 @@ export async function resolveLocationFromSearchPick(
   lng: number,
   searchResult: NominatimResult,
   cityToRegion: Record<string, string> = CITY_REGION_MAP,
+  lang?: string,
 ): Promise<ReturnType<typeof mergeParsedLocation>> {
   const fromSearch = mergeParsedLocation(parseLocationFromNominatim(searchResult), cityToRegion);
-  const fromCoords = await resolveLocationFromCoords(lat, lng, cityToRegion);
+  const fromCoords = await resolveLocationFromCoords(lat, lng, cityToRegion, lang);
 
   if (!fromCoords) return fromSearch;
 

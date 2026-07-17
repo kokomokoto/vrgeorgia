@@ -15,6 +15,7 @@ import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import analyticsRoutes from './routes/analytics.js';
 import tourApiRoutes from './routes/tourApi.js';
+import tourEmbedRoutes from './routes/tourEmbed.js';
 import { attachTourUi } from './tourUiServer.js';
 import {
   attachProductionTourProxy,
@@ -60,6 +61,7 @@ const defaultDevOrigins = [
 const defaultProdOrigins = [
   'https://vrgeorgia.ge',
   'https://www.vrgeorgia.ge',
+  'https://staging.vrgeorgia.ge',
   'https://vrgeorgia.onrender.com',
   'https://vrgeorgia-frontend.onrender.com',
   'https://vrgeorgia-tour-builder.onrender.com',
@@ -122,7 +124,10 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api', apiLimiter);
 
-// Dev: პროდაქშენის ტური (iframe) — proxy უნდა იყოს tourApi-ზე ადრე, რომ /api/tours/* production-ზე მივიდეს
+// Embed tour link handoff — always local (not proxied to production in dev)
+app.use('/api', tourEmbedRoutes);
+
+// Dev: მხოლოდ /v/ + published GET → production (ნახვა). ტურის შექმნა/რედაქტირება ლოკალურია.
 if (shouldUseProductionTourProxy()) {
   attachProductionTourProxy(app);
 }
@@ -133,9 +138,8 @@ app.use('/api/agents', agentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
-if (!shouldUseProductionTourProxy()) {
-  app.use('/api', tourApiRoutes);
-}
+// ყოველთვის ლოკალური tour API — create/edit არ უნდა იყოს დამოკიდებული Render-ზე
+app.use('/api', tourApiRoutes);
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });

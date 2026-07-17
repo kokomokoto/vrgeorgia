@@ -1,15 +1,26 @@
 ---
-description: დავალების დასრულებამდე ყოველთვის შეამოწმე ცვლილებები
+description: 
 alwaysApply: true
 ---
 
-# დავალების დასრულებამდე შემოწმება
+## Mandatory Runtime Verification
 
-სანამ უთხრა მომხმარებელს რომ დავალება მზადაა:
+Before saying a task is complete, verify the actual result in runtime, not only by code inspection.
 
-1. **UI/CSS ცვლილებები** — გადახედე შესაბამის კომპონენტს/სტილებს; მობილური ხედი (`md:` breakpoint) ცალკე გადაამოწმე თუ Header, layout ან responsive სტილები შეიცვა.
-2. **Frontend** — გაუშვი `npm run build` frontend-ში ან მინიმუმ `read_lints` შეცვლილ ფაილებზე; TypeScript/React შეცდომები არ დატოვო.
-3. **Backend** — თუ API/route/model შეიცვა, დარწმუნდი რომ იმპორტები და ტიპები სწორია.
-4. **არ გამოაცხადო „მზადაა“** თუ ცხადი ვიზუალური ბაგი (მაგ. გადაჭარბებული SVG, გატეხილი layout) ჯერ არ გამოსწორებულა ან build/lint ვერ გავიდა.
+- Do not claim success based only on code changes.
+- Do not claim success based only on lints.
+- Do not claim success based only on build success.
+- Always verify the exact user-reported scenario end-to-end.
+- Before any frontend/API verification: confirm backend is up (`http://localhost:5000`, e.g. `/api/health` or a known endpoint). If down, start it (`npm run dev:api` or `cd backend && npm run dev`) and re-check. Never treat "სერვერთან კავშირი ვერ მოხერხდა" as a code bug until backend reachability is verified.
+- If frontend changed, check the exact affected route/page.
+- If backend changed, verify the relevant endpoint/flow responds correctly.
+- If the issue involves UI behavior, confirm the bug is actually gone in the affected screen.
+- Before finishing: check Next.js / console runtime issues (e.g. the "N Issues" overlay, terminal `error`, `Unhandled Runtime Error`, Rules of Hooks). Fix them before claiming done.
+- If `.next`, dev bundle, manifest, or missing chunk errors appear, stop dev server, clear `.next`, restart, and verify the affected route again.
+- If verification fails, continue fixing until it passes.
+- If end-to-end verification was not possible, explicitly say: `Not verified end-to-end.`
 
-მოკლედ: ჯერ შეამოწმე, მერე დაწერე რომ დასრულდა.
+At the end of each task, include:
+- Verified:
+- Result:
+- Remaining issue:

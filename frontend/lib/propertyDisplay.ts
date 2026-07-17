@@ -47,11 +47,14 @@ export function getPropertyAddressLine(p: Property): string {
   return parts.join(', ');
 }
 
-/** ფასის გამოთვლისთვის — ჯერ მიწის/ზოგადი ფართობი, შემდეგ სახლის ფართობი */
-function getAreaForPrice(p: Property): number {
+/**
+ * ფასის გამოთვლისთვის:
+ * ორივე ფართობი → სახლის ფართობი; მხოლოდ ერთი → ის.
+ */
+export function getAreaForPrice(p: Property): number {
   const sqm = p.sqm != null && p.sqm > 0 ? p.sqm : 0;
   const houseSqm = p.houseSqm != null && p.houseSqm > 0 ? p.houseSqm : 0;
-  return sqm || houseSqm;
+  return houseSqm || sqm;
 }
 
 export function getPropertyPrices(p: Property): {
@@ -88,16 +91,17 @@ export function formatSqmCompact(sqm: number): string {
   return sqm.toLocaleString();
 }
 
-const KA_MONTHS = ['იან', 'თებ', 'მარ', 'აპრ', 'მაი', 'ივნ', 'ივლ', 'აგვ', 'სექ', 'ოქტ', 'ნოე', 'დეკ'];
-
 /** მაგ. 22 მაი 20:45 */
-export function formatListedDate(createdAt?: string): string {
+export function formatListedDate(createdAt?: string, lang = 'ka'): string {
   if (!createdAt) return '';
   const d = new Date(createdAt);
   if (Number.isNaN(d.getTime())) return '';
-  const day = d.getDate();
-  const month = KA_MONTHS[d.getMonth()];
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${day} ${month} ${hh}:${mm}`;
+  const locale =
+    lang === 'ru' ? 'ru-RU' : lang === 'en' ? 'en-GB' : 'ka-GE';
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(d);
 }

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
 import { Filters, type FiltersState } from '@/components/Filters';
-import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty } from '@/lib/api';
+import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty, changePassword } from '@/lib/api';
 import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import {
@@ -53,7 +53,17 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
   const canSetListingVisibility = user ? isAgentRole(user.role) || isAdminRole(user.role) : false;
+  const canChangePassword = user
+    ? isAgentRole(user.role) || isAdminRole(user.role)
+    : false;
 
   const clearAllFilters = useCallback(() => {
     setFilters({ ...DEFAULT_MAP_FILTERS });
@@ -214,6 +224,45 @@ export default function ProfilePage() {
     }
   };
 
+  const resetPasswordForm = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
+    setPasswordMessage(null);
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+    setPasswordMessage(null);
+
+    if (newPassword.length < 6) {
+      setPasswordError(t('password_too_short'));
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(t('password_mismatch'));
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordError(t('password_same_as_current'));
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changePassword({ currentPassword, newPassword });
+      setPasswordMessage(t('change_password_success'));
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: unknown) {
+      setPasswordError(err instanceof Error ? err.message : t('error_save_failed'));
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const filtersActive = filtersAreActive(filters) || Boolean(filterVisibility);
 
   return (
@@ -291,12 +340,62 @@ export default function ProfilePage() {
                     {saving ? '...' : t('save')}
                   </button>
                   <button
-                    onClick={() => setEditMode(false)}
+                    onClick={() => {
+                      setEditMode(false);
+                      resetPasswordForm();
+                    }}
                     className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     {t('cancel')}
                   </button>
                 </div>
+
+                {canChangePassword && (
+                  <div className="mt-2 space-y-3 border-t border-slate-200 pt-4">
+                    <p className="text-sm font-medium text-slate-800">{t('change_password')}</p>
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-500">{t('current_password')}</label>
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        className="w-full max-w-md rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-500">{t('new_password')}</label>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        className="w-full max-w-md rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder={t('password_min')}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-500">{t('confirm_new_password')}</label>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        className="w-full max-w-md rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
+                    {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
+                    {passwordMessage && <p className="text-sm text-green-700">{passwordMessage}</p>}
+                    <button
+                      type="button"
+                      onClick={handleChangePassword}
+                      disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+                      className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {changingPassword ? '...' : t('change_password')}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -321,7 +420,10 @@ export default function ProfilePage() {
 
                 <div className="mt-4 flex flex-wrap gap-3">
                   <button
-                    onClick={() => setEditMode(true)}
+                    onClick={() => {
+                      resetPasswordForm();
+                      setEditMode(true);
+                    }}
                     className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                   >
                     {t('editProfile')}

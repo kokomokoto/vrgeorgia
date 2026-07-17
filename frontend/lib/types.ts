@@ -2,11 +2,15 @@ export type DealType = 'sale' | 'rent' | 'mortgage';
 export type PropertyType = 'apartment' | 'house' | 'commercial' | 'land' | 'cottage' | 'hotel' | 'building' | 'warehouse' | 'parking' | 'business';
 export type PriceCurrency = 'USD' | 'GEL';
 export type PriceType = 'total' | 'per_sqm';
+export type DefaultMediaView = 'exterior' | 'interior' | 'tour' | 'photos';
 export type BuildingProject = '' | 'czech' | 'khrushchev' | 'urban' | 'lvov' | 'budapest' | 'kiev' | 'moscow' | 'new_build' | 'tbilisi' | 'other';
+export type BuildingStatus = '' | 'newly_built' | 'under_construction' | 'old_built';
 export type RenovationStatus = '' | 'green_frame' | 'white_frame' | 'black_frame' | 'renovated' | 'to_renovate';
+export type LandStatus = '' | 'agricultural' | 'non_agricultural';
 
 export type Amenities = {
   basement?: boolean;
+  attic?: boolean;
   elevator?: boolean;
   furniture?: boolean;
   garage?: boolean;
@@ -58,7 +62,10 @@ export type Property = {
   /** true: საკადასტრო არ ჩანს საჯაროდ და არ იძებნება ძიებით */
   cadastralHidden?: boolean;
   buildingProject?: BuildingProject;
+  buildingStatus?: BuildingStatus;
   renovationStatus?: RenovationStatus;
+  /** მიწის სტატუსი (სასოფლო / არასასოფლო) — type=land */
+  landStatus?: LandStatus;
   
   // კომფორტი
   amenities?: Amenities;
@@ -74,6 +81,8 @@ export type Property = {
   exteriorLink?: string; // 3D ექსტერიერი
   interiorLink?: string; // 3D ინტერიერი
   tourLink?: string; // VR 360° ტური (tour-builder)
+  /** ობიექტის გახსნისას პირველი მედია ტაბი */
+  defaultMediaView?: DefaultMediaView;
   mediaLinks?: Array<{
     url: string;
     type: 'youtube' | 'facebook' | 'tiktok' | 'instagram' | 'other';

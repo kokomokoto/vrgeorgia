@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import { User } from '../models/User.js';
 import { Property } from '../models/Property.js';
 import Agent from '../models/Agent.js';
@@ -209,6 +210,42 @@ router.put('/users/:id', requireAuth, adminMiddleware, async (req, res) => {
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'განახლება ვერ მოხერხდა' });
+  }
+});
+
+// Admin: set / reset user password (e.g. when agent forgot password)
+router.put('/users/:id/password', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const newPassword = String(req.body?.newPassword || '').trim();
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'ახალი პაროლი მინიმუმ 6 სიმბოლო უნდა იყოს' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'მომხმარებელი ვერ მოიძებნა' });
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    await user.save();
+
+    await writeAudit(req.user.id, 'user.password_reset', 'user', req.params.id, {
+      email: user.email,
+      role: user.role,
+    });
+
+    res.json({
+      ok: true,
+      message: 'პაროლი წარმატებით განახლდა',
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'პაროლის აღდგენა ვერ მოხერხდა' });
   }
 });
 

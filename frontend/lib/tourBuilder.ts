@@ -76,13 +76,66 @@ export function getTourBuilderOrigin(): string {
 }
 
 /** ახალი ტაბში იხსნება — ტური იქმნება და რედაქტორში გადადის */
-export function getTourBuilderEmbedUrl(userId?: string | null): string {
+export function getTourBuilderEmbedUrl(
+  userId?: string | null,
+  sessionId?: string | null
+): string {
   const base = `${getTourBuilderOrigin()}/embed`;
-  if (!userId) return base;
-  return `${base}?userId=${encodeURIComponent(userId)}`;
+  const params = new URLSearchParams();
+  if (userId) params.set('userId', String(userId));
+  if (sessionId) params.set('session', sessionId);
+  const q = params.toString();
+  return q ? `${base}?${q}` : base;
 }
 
 export const VRGEORGIA_TOUR_STORAGE_KEY = 'vrgeorgia_pending_tour_link';
+export const VRGEORGIA_TOUR_EMBED_SESSION_KEY = 'vrgeorgia_tour_embed_session';
+
+/** Session id links tour-builder publish → upload/edit form (API polling fallback). */
+export function getOrCreateTourEmbedSession(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    let session = window.sessionStorage.getItem(VRGEORGIA_TOUR_EMBED_SESSION_KEY);
+    if (!session) {
+      session =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      window.sessionStorage.setItem(VRGEORGIA_TOUR_EMBED_SESSION_KEY, session);
+    }
+    return session;
+  } catch {
+    return '';
+  }
+}
+
+export function clearTourEmbedSession(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(VRGEORGIA_TOUR_EMBED_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Poll backend for a tour link published from embed mode. */
+export async function fetchPendingEmbedTourLink(
+  sessionId: string
+): Promise<{ url: string; tourId: string } | null> {
+  const id = sessionId.trim();
+  if (!id) return null;
+  try {
+    const res = await fetch(
+      `${getApiBase()}/api/tour-embed/pending?sessionId=${encodeURIComponent(id)}`
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { url?: string; tourId?: string };
+    if (!data.url) return null;
+    return { url: data.url, tourId: data.tourId || '' };
+  } catch {
+    return null;
+  }
+}
 
 export function getPublishedTourUrl(tourId: string): string {
   return `${getTourBuilderOrigin()}/v/${tourId}`;
@@ -126,8 +179,10 @@ export function resolveTourPublicUrl(storedUrl: string | null | undefined): stri
 }
 
 /** არსებული ტურის რედაქტირების ბმული embed რეჟიმში */
-export function getTourEditUrl(tourId: string): string {
-  return `${getTourBuilderOrigin()}/tours/${tourId}/edit?embed=1`;
+export function getTourEditUrl(tourId: string, sessionId?: string | null): string {
+  const params = new URLSearchParams({ embed: '1' });
+  if (sessionId) params.set('session', sessionId);
+  return `${getTourBuilderOrigin()}/tours/${tourId}/edit?${params.toString()}`;
 }
 
 export const VRGEORGIA_TOUR_MESSAGE = 'VRGEORGIA_TOUR_PUBLISHED' as const;

@@ -238,6 +238,28 @@ export async function applyPropertyQueryFilters(filter, query) {
     }
   }
 
+  if (query.buildingStatus) {
+    try {
+      const statuses = JSON.parse(query.buildingStatus);
+      if (Array.isArray(statuses) && statuses.length > 0) {
+        filter.buildingStatus = { $in: statuses };
+      }
+    } catch {
+      filter.buildingStatus = query.buildingStatus;
+    }
+  }
+
+  if (query.landStatus) {
+    try {
+      const statuses = JSON.parse(query.landStatus);
+      if (Array.isArray(statuses) && statuses.length > 0) {
+        filter.landStatus = { $in: statuses };
+      }
+    } catch {
+      filter.landStatus = query.landStatus;
+    }
+  }
+
   if (query.propertyId) {
     const numId = Number(query.propertyId);
     if (!Number.isNaN(numId) && numId > 0) {

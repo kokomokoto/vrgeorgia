@@ -1,16 +1,11 @@
 import type { Property } from './types';
+import { getAreaForPrice } from './propertyDisplay';
 
 export type FilterRange = { min: number; max: number };
 
 /** ფასის ფილტრი — default სრული ფასი, არა raw price ველი */
 export function resolvePriceFilterType(priceType?: string): 'total' | 'per_sqm' {
   return priceType === 'per_sqm' ? 'per_sqm' : 'total';
-}
-
-function getAreaForPrice(p: Property): number {
-  const sqm = p.sqm != null && p.sqm > 0 ? p.sqm : 0;
-  const houseSqm = p.houseSqm != null && p.houseSqm > 0 ? p.houseSqm : 0;
-  return sqm || houseSqm;
 }
 
 function effectivePrice(

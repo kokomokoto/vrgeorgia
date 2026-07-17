@@ -7,7 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { uploadAvatar } from '../services/cloudinary.js';
 import { getJWTExpiresIn, getJWTSecret } from '../config/jwt.js';
 import { syncAgentProfileForUser } from '../services/agentProfile.js';
-import { isAgentRole } from '../utils/userRoles.js';
+import { isAgentRole, isAdminRole } from '../utils/userRoles.js';
 
 const router = express.Router();
 
@@ -145,6 +145,42 @@ router.put(
     }
 
     res.json({ user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name } });
+  }
+);
+
+// Change password (agents / agent_admins)
+router.put(
+  '/password',
+  requireAuth,
+  [
+    body('currentPassword').isString().isLength({ min: 1 }).withMessage('მიმდინარე პაროლი სავალდებულოა'),
+    body('newPassword').isString().isLength({ min: 6 }).withMessage('ახალი პაროლი მინიმუმ 6 სიმბოლო უნდა იყოს'),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!isAgentRole(user.role) && !isAdminRole(user.role)) {
+      return res.status(403).json({ message: 'პაროლის შეცვლა ხელმისაწვდომია აგენტებისა და ადმინებისთვის' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) {
+      return res.status(400).json({ message: 'მიმდინარე პაროლი არასწორია' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: 'ახალი პაროლი უნდა განსხვავდებოდეს მიმდინარესგან' });
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    await user.save();
+
+    res.json({ ok: true, message: 'პაროლი წარმატებით შეიცვალა' });
   }
 );
 

@@ -7,6 +7,7 @@ import { useCompare } from '@/components/CompareProvider';
 import { resolveImageUrl } from '@/lib/api';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
+import { getPropertyPrices } from '@/lib/propertyDisplay';
 
 export default function ComparePage() {
   const { t } = useTranslation();
@@ -20,7 +21,11 @@ export default function ComparePage() {
     { key: 'price', label: t('price'), getValue: (p) => p.price || 0 },
     { key: 'sqm', label: t('sqm'), getValue: (p) => p.sqm || 0 },
     { key: 'rooms', label: t('rooms'), getValue: (p) => p.rooms || 0 },
-    { key: 'pricePerSqm', label: t('pricePerSqm'), getValue: (p) => p.sqm ? Math.round(p.price / p.sqm) : 0 },
+    {
+      key: 'pricePerSqm',
+      label: t('pricePerSqm'),
+      getValue: (p) => getPropertyPrices(p).pricePerSqm ?? 0,
+    },
     { key: 'floor', label: t('floor'), getValue: (p) => p.floor || 0 },
     { key: 'constructionYear', label: t('construction_year'), getValue: (p) => p.constructionYear || 0 },
     { key: 'renovationYear', label: t('renovation_year'), getValue: (p) => p.renovationYear || 0 },
@@ -53,7 +58,10 @@ export default function ComparePage() {
     { key: 'price', label: t('price'), format: (p: Property) => `$${p.price.toLocaleString()}` },
     { key: 'sqm', label: t('sqm'), format: (p: Property) => p.sqm ? `${p.sqm} ${t('sqm_unit_short')}` : '-' },
     { key: 'rooms', label: t('rooms'), format: (p: Property) => p.rooms ? p.rooms.toString() : '-' },
-    { key: 'pricePerSqm', label: t('pricePerSqm'), format: (p: Property) => p.sqm ? `$${Math.round(p.price / p.sqm).toLocaleString()}` : '-' },
+    { key: 'pricePerSqm', label: t('pricePerSqm'), format: (p: Property) => {
+      const { currencySymbol, pricePerSqm } = getPropertyPrices(p);
+      return pricePerSqm != null ? `${currencySymbol}${pricePerSqm.toLocaleString()}` : '-';
+    }},
     { key: 'type', label: t('type'), format: (p: Property) => t(p.type) },
     { key: 'dealType', label: t('dealType'), format: (p: Property) => t(p.dealType === 'rent' ? 'rentType' : p.dealType) },
     { key: 'city', label: t('city'), format: (p: Property) => p.city || '-' },

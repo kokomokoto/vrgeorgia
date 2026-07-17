@@ -26,13 +26,14 @@ import {
   applyConstructionYearChange,
   applyFloorChange,
   applyRenovationYearChange,
-  applyTotalFloorsChange,
-  getFloorInputMax,
   getRenovationInputMin,
   validateDetailFields,
 } from '@/lib/propertyDetailValidation';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from '@/components/TbilisiDistrictSelector';
 import { PropertyRoomsBedroomsSelectors } from '@/components/PropertyRoomsBedroomsSelectors';
+import { PropertyFloorFields } from '@/components/PropertyFloorFields';
+import { PropertyLandStatusFields } from '@/components/PropertyLandStatusFields';
+import { isLandType } from '@/lib/propertyTypeUi';
 import {
   BALCONY_CUSTOM_MIN,
   BALCONY_PRESETS,
@@ -45,6 +46,7 @@ import {
 } from '@/components/PropertyCountSelector';
 import { PropertyVirtualTourFields } from '@/components/PropertyVirtualTourFields';
 import { FormattedNumberInput } from '@/components/FormattedNumberInput';
+import { LinkedPriceInputs } from '@/components/LinkedPriceInputs';
 import { formatNumberForDisplay } from '@/lib/formatNumberInput';
 import type { Property } from '@/lib/types';
 
@@ -101,7 +103,7 @@ const CITY_TO_REGION: Record<string, string> = {
 };
 
 export default function EditPropertyPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const params = useParams();
   const { user, profileLoaded } = useAuth();
@@ -135,6 +137,9 @@ export default function EditPropertyPage() {
   const [exteriorLink, setExteriorLink] = useState('');
   const [interiorLink, setInteriorLink] = useState('');
   const [tourLink, setTourLink] = useState('');
+  const [defaultMediaView, setDefaultMediaView] = useState<
+    'exterior' | 'interior' | 'tour' | 'photos'
+  >('exterior');
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [lat, setLat] = useState<number | null>(null);
@@ -159,11 +164,14 @@ export default function EditPropertyPage() {
   const [constructionYear, setConstructionYear] = useState('');
   const [renovationYear, setRenovationYear] = useState('');
   const [renovationStatus, setRenovationStatus] = useState('');
+  const [buildingStatus, setBuildingStatus] = useState('');
   const [buildingProject, setBuildingProject] = useState('');
+  const [landStatus, setLandStatus] = useState('');
   const [balcony, setBalcony] = useState<number>(0);
   const [loggia, setLoggia] = useState<number>(0);
   const [bathroom, setBathroom] = useState<number>(0);
   const [basement, setBasement] = useState(false);
+  const [attic, setAttic] = useState(false);
   const [elevator, setElevator] = useState(false);
   const [furniture, setFurniture] = useState(false);
   const [garage, setGarage] = useState(false);
@@ -241,6 +249,14 @@ export default function EditPropertyPage() {
         setExteriorLink(p.exteriorLink || p.threeDLink || '');
         setInteriorLink(p.interiorLink || '');
         setTourLink(p.tourLink || '');
+        setDefaultMediaView(
+          p.defaultMediaView === 'interior' ||
+            p.defaultMediaView === 'tour' ||
+            p.defaultMediaView === 'photos' ||
+            p.defaultMediaView === 'exterior'
+            ? p.defaultMediaView
+            : 'exterior'
+        );
         setContactPhone(p.contact?.phone || '');
         setContactEmail(p.contact?.email || '');
         const loc = p.location;
@@ -265,13 +281,16 @@ export default function EditPropertyPage() {
         setConstructionYear(loadedConstructionYear);
         setRenovationYear(applyRenovationYearChange(loadedRenovationYear, loadedConstructionYear));
         setRenovationStatus((p as any).renovationStatus || '');
+        setBuildingStatus((p as any).buildingStatus || '');
         setBuildingProject((p as any).buildingProject || '');
+        setLandStatus((p as any).landStatus || '');
         setBalcony((p as any).balcony || 0);
         setLoggia((p as any).loggia || 0);
         setBathroom((p as any).bathroom || 0);
         // amenities
         const am = (p as any).amenities || {};
         setBasement(!!am.basement);
+        setAttic(!!am.attic);
         setElevator(!!am.elevator);
         setFurniture(!!am.furniture);
         setGarage(!!am.garage);
@@ -306,24 +325,155 @@ export default function EditPropertyPage() {
 
   const photoGridRef = useRef<HTMLDivElement>(null);
   const pendingFlipRef = useRef<Map<string, DOMRect> | null>(null);
+  const existingPhotosRef = useRef(existingPhotos);
+  const panoramaPhotosRef = useRef(panoramaPhotos);
+  const mainPhotoIndexRef = useRef(mainPhotoIndex);
+  const photosPersistRef = useRef<Promise<void> | null>(null);
+  const photoPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  existingPhotosRef.current = existingPhotos;
+  panoramaPhotosRef.current = panoramaPhotos;
+  mainPhotoIndexRef.current = mainPhotoIndex;
+
   const photoLayoutKey = existingPhotos.join('|');
 
-  const handlePhotoReorder = useCallback((from: number, to: number) => {
-    if (from === to) return;
-    if (photoGridRef.current) {
-      pendingFlipRef.current = captureFlipPositions(photoGridRef.current);
+  const cleanPanoramaList = (list: string[], photos: string[]) =>
+    list.filter((u) => photos.some((p) => p === u || normalizePhotoUrl(p) === normalizePhotoUrl(u)));
+
+  const runPersistPhotosDraft = useCallback(async () => {
+    const nextPhotos = existingPhotosRef.current;
+    const nextPanorama = cleanPanoramaList(panoramaPhotosRef.current, nextPhotos);
+    const nextMain = mainPhotoIndexRef.current;
+
+    const task = (async () => {
+      const res = await updateProperty(
+        id,
+        {
+          photos: nextPhotos,
+          panoramaPhotos: nextPanorama,
+          mainPhoto: nextMain,
+        },
+        { draft: true }
+      );
+      const p = res.property;
+      const savedPhotos = p.photos || nextPhotos;
+      const savedPanorama = (p as Property).panoramaPhotos || nextPanorama;
+      const savedMain = (p as any).mainPhoto ?? nextMain;
+      setExistingPhotos(savedPhotos);
+      setPanoramaPhotos(savedPanorama);
+      setMainPhotoIndex(savedMain);
+      existingPhotosRef.current = savedPhotos;
+      panoramaPhotosRef.current = savedPanorama;
+      mainPhotoIndexRef.current = savedMain;
+    })();
+
+    photosPersistRef.current = task;
+    try {
+      await task;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('error_save_failed'));
+      throw err;
+    } finally {
+      if (photosPersistRef.current === task) photosPersistRef.current = null;
     }
-    setExistingPhotos((prev) => {
-      const next = reorderArray(prev, from, to);
-      setMainPhotoIndex((mi) => {
-        const mainPhoto = prev[mi];
-        if (!mainPhoto) return 0;
-        const nextIndex = next.indexOf(mainPhoto);
-        return nextIndex >= 0 ? nextIndex : 0;
+  }, [id, t]);
+
+  const schedulePersistPhotosDraft = useCallback(() => {
+    if (photoPersistTimerRef.current) clearTimeout(photoPersistTimerRef.current);
+    photoPersistTimerRef.current = setTimeout(() => {
+      photoPersistTimerRef.current = null;
+      void runPersistPhotosDraft();
+    }, 300);
+  }, [runPersistPhotosDraft]);
+
+  const flushPersistPhotosDraft = useCallback(async () => {
+    if (photoPersistTimerRef.current) {
+      clearTimeout(photoPersistTimerRef.current);
+      photoPersistTimerRef.current = null;
+    }
+    if (photosPersistRef.current) {
+      await photosPersistRef.current;
+    }
+    await runPersistPhotosDraft();
+  }, [runPersistPhotosDraft]);
+
+  const handleDeletePhoto = (index: number) => {
+    const removed = existingPhotosRef.current[index];
+    const newPhotos = existingPhotosRef.current.filter((_, i) => i !== index);
+    const newPanorama = removed
+      ? panoramaPhotosRef.current.filter(
+          (u) => u !== removed && normalizePhotoUrl(u) !== normalizePhotoUrl(removed)
+        )
+      : cleanPanoramaList(panoramaPhotosRef.current, newPhotos);
+    const newMain = adjustMainIndexAfterRemoval(mainPhotoIndexRef.current, index);
+
+    existingPhotosRef.current = newPhotos;
+    panoramaPhotosRef.current = newPanorama;
+    mainPhotoIndexRef.current = newMain;
+    setExistingPhotos(newPhotos);
+    setPanoramaPhotos(newPanorama);
+    setMainPhotoIndex(newMain);
+    schedulePersistPhotosDraft();
+  };
+
+  const handleDeleteAllPhotos = async () => {
+    if (existingPhotosRef.current.length === 0) return;
+    existingPhotosRef.current = [];
+    panoramaPhotosRef.current = [];
+    mainPhotoIndexRef.current = 0;
+    setExistingPhotos([]);
+    setPanoramaPhotos([]);
+    setMainPhotoIndex(0);
+    try {
+      await flushPersistPhotosDraft();
+    } catch {
+      /* error already set */
+    }
+  };
+
+  const persistPanoramaPhotos = async (next: string[]) => {
+    const clean = cleanPanoramaList(next, existingPhotosRef.current);
+    panoramaPhotosRef.current = clean;
+    setPanoramaSaving(true);
+    try {
+      const res = await updateProperty(
+        id,
+        {
+          photos: existingPhotosRef.current,
+          panoramaPhotos: clean,
+        } as any,
+        { draft: true }
+      );
+      const savedPanorama = (res.property as Property).panoramaPhotos || clean;
+      setPanoramaPhotos(savedPanorama);
+      panoramaPhotosRef.current = savedPanorama;
+    } finally {
+      setPanoramaSaving(false);
+    }
+  };
+
+  const handlePhotoReorder = useCallback(
+    (from: number, to: number) => {
+      if (from === to) return;
+      if (photoGridRef.current) {
+        pendingFlipRef.current = captureFlipPositions(photoGridRef.current);
+      }
+      setExistingPhotos((prev) => {
+        const next = reorderArray(prev, from, to);
+        setMainPhotoIndex((mi) => {
+          const mainPhoto = prev[mi];
+          const nextIndex = mainPhoto ? next.indexOf(mainPhoto) : 0;
+          const newMain = nextIndex >= 0 ? nextIndex : 0;
+          mainPhotoIndexRef.current = newMain;
+          existingPhotosRef.current = next;
+          schedulePersistPhotosDraft();
+          return newMain;
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    [schedulePersistPhotosDraft]
+  );
 
   const { getThumbDragProps, isDragging, draggingIndex } = usePhotoDragReorder(handlePhotoReorder);
   const draggingFlipKey =
@@ -345,26 +495,34 @@ export default function EditPropertyPage() {
     if (parsed.label) setAddressMapFill((s) => ({ key: s.key + 1, text: parsed.label }));
   }, []);
   const isStep4Complete = title !== '' && price !== '';
-  const isStep5Filled =
-    roomCount !== null ||
-    bedroomCount !== null ||
-    floor !== '' ||
-    balcony > 0 ||
-    loggia > 0 ||
-    bathroom > 0 ||
-    constructionYear !== '' ||
-    renovationYear !== '' ||
-    renovationStatus !== '' ||
-    basement ||
-    elevator ||
-    furniture ||
-    garage ||
-    centralHeating ||
-    naturalGas ||
-    internet ||
-    electricity ||
-    water ||
-    terrace;
+  const isLand = isLandType(type);
+  const isStep5Filled = isLand
+    ? landStatus !== '' ||
+      naturalGas ||
+      internet ||
+      electricity ||
+      water
+    : roomCount !== null ||
+      bedroomCount !== null ||
+      floor !== '' ||
+      balcony > 0 ||
+      loggia > 0 ||
+      bathroom > 0 ||
+      constructionYear !== '' ||
+      renovationYear !== '' ||
+      renovationStatus !== '' ||
+      buildingStatus !== '' ||
+      basement ||
+      attic ||
+      elevator ||
+      furniture ||
+      garage ||
+      centralHeating ||
+      naturalGas ||
+      internet ||
+      electricity ||
+      water ||
+      terrace;
   const isStep5Complete = isStep5Filled;
   const isStep6Complete = existingPhotos.length > 0;
   const isStep7Complete = privateNotes.trim() !== '';
@@ -435,41 +593,6 @@ export default function EditPropertyPage() {
     { num: 7, title: t('private_notes_step'), icon: '🔒', complete: isStep7Complete },
   ];
 
-  // ფოტოს წაშლა
-  const handleDeletePhoto = (index: number) => {
-    const removed = existingPhotos[index];
-    const newPhotos = existingPhotos.filter((_, i) => i !== index);
-    setExistingPhotos(newPhotos);
-    if (removed) {
-      setPanoramaPhotos((prev) => prev.filter((u) => u !== removed));
-    }
-    setMainPhotoIndex((prev) => adjustMainIndexAfterRemoval(prev, index));
-  };
-
-  const handleDeleteAllPhotos = () => {
-    if (existingPhotos.length === 0) return;
-    setExistingPhotos([]);
-    setPanoramaPhotos([]);
-    setMainPhotoIndex(0);
-  };
-
-  const cleanPanoramaList = (list: string[], photos: string[]) =>
-    list.filter((u) => photos.some((p) => p === u || normalizePhotoUrl(p) === normalizePhotoUrl(u)));
-
-  const persistPanoramaPhotos = async (next: string[]) => {
-    const clean = cleanPanoramaList(next, existingPhotos);
-    setPanoramaSaving(true);
-    try {
-      const res = await updateProperty(id, {
-        photos: existingPhotos,
-        panoramaPhotos: clean,
-      } as any, { draft: true });
-      setPanoramaPhotos((res.property as Property).panoramaPhotos || clean);
-    } finally {
-      setPanoramaSaving(false);
-    }
-  };
-
   const togglePanoramaPhoto = async (photoUrl: string) => {
     const prev = panoramaPhotos;
     const wasOn = isPanoramaPhoto(photoUrl, prev);
@@ -487,7 +610,12 @@ export default function EditPropertyPage() {
 
   const handleAddMorePhotos = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const remaining = MAX_PROPERTY_PHOTOS - existingPhotos.length;
+    try {
+      await flushPersistPhotosDraft();
+    } catch {
+      return;
+    }
+    const remaining = MAX_PROPERTY_PHOTOS - existingPhotosRef.current.length;
     if (remaining <= 0) {
       setError(t('max_photos_reached', { max: MAX_PROPERTY_PHOTOS }));
       return;
@@ -501,11 +629,17 @@ export default function EditPropertyPage() {
       const res = await uploadPropertyPhotosInBatches(id, list, panoramaFlags, (p) =>
         setPhotoUploadProgress({ done: p.uploaded, total: p.total })
       , { draft: true });
-      setExistingPhotos(res.photos || []);
-      setPanoramaPhotos(res.panoramaPhotos || []);
+      const savedPhotos = res.photos || [];
+      const savedPanorama = res.panoramaPhotos || [];
+      existingPhotosRef.current = savedPhotos;
+      panoramaPhotosRef.current = savedPanorama;
+      setExistingPhotos(savedPhotos);
+      setPanoramaPhotos(savedPanorama);
       setMainPhotoIndex((prev) => {
-        const nextLen = (res.photos || []).length;
-        return prev >= nextLen ? Math.max(0, nextLen - 1) : prev;
+        const nextLen = savedPhotos.length;
+        const nextMain = prev >= nextLen ? Math.max(0, nextLen - 1) : prev;
+        mainPhotoIndexRef.current = nextMain;
+        return nextMain;
       });
       if (addPhotosInputRef.current) addPhotosInputRef.current.value = '';
     } catch (err: any) {
@@ -520,28 +654,69 @@ export default function EditPropertyPage() {
     setSaving(true);
     setError(null);
     try {
+      await flushPersistPhotosDraft();
       if (lat === null || lng === null) throw new Error(t('error_select_location'));
       if (!type) throw new Error(t('error_select_type'));
       if (!dealType) throw new Error(t('error_select_deal_type'));
       // cadastralCode არასავალდებულოა
 
-      const detailError = validateDetailFields(floor, totalFloors, constructionYear, renovationYear);
+      const detailError = isLandType(type)
+        ? null
+        : validateDetailFields(floor, totalFloors, constructionYear, renovationYear);
       if (detailError === 'floor_exceeds_total') throw new Error(t('error_floor_exceeds_total'));
       if (detailError === 'renovation_before_construction') {
         throw new Error(t('error_renovation_before_construction'));
       }
 
-      const amenities = {
-        basement, elevator, furniture, garage, centralHeating,
-        naturalGas, storage, internet, electricity, water,
-        security, airConditioner, fireplace, pool, garden,
-        balcony: balcony > 0,
-        terrace,
-        isolatedKitchen, heatingCooling
-      };
+      const landListing = isLandType(type);
+      const amenities = landListing
+        ? {
+            basement: false,
+            attic: false,
+            elevator: false,
+            furniture: false,
+            garage: false,
+            centralHeating: false,
+            naturalGas,
+            storage: false,
+            internet,
+            electricity,
+            water,
+            security: false,
+            airConditioner: false,
+            fireplace: false,
+            pool: false,
+            garden: false,
+            balcony: false,
+            terrace: false,
+            isolatedKitchen: false,
+            heatingCooling: false,
+          }
+        : {
+            basement,
+            attic,
+            elevator,
+            furniture,
+            garage,
+            centralHeating,
+            naturalGas,
+            storage,
+            internet,
+            electricity,
+            water,
+            security,
+            airConditioner,
+            fireplace,
+            pool,
+            garden,
+            balcony: balcony > 0,
+            terrace,
+            isolatedKitchen,
+            heatingCooling,
+          };
 
-      const roomsPayload = roomCount === null ? 0 : roomCount;
-      const bedroomsPayload = bedroomCount === null ? 0 : bedroomCount;
+      const roomsPayload = landListing ? 0 : roomCount === null ? 0 : roomCount;
+      const bedroomsPayload = landListing ? 0 : bedroomCount === null ? 0 : bedroomCount;
 
       await updateProperty(id, {
         title, desc,
@@ -550,25 +725,31 @@ export default function EditPropertyPage() {
         city, street: street.trim(), region,
         tbilisiDistrict, tbilisiSubdistricts,
         sqm: Number(sqm) || 0,
-        houseSqm: Number(houseSqm) || 0,
+        houseSqm: landListing ? 0 : Number(houseSqm) || 0,
         rooms: roomsPayload,
         bedrooms: bedroomsPayload,
         type: type as any,
         dealType: dealType as any,
-        exteriorLink, interiorLink, tourLink,
+        exteriorLink, interiorLink, tourLink, defaultMediaView,
         contactPhone, contactEmail,
         location: { lat, lng },
         photos: existingPhotos,
         panoramaPhotos: cleanPanoramaList(panoramaPhotos, existingPhotos),
         mainPhoto: mainPhotoIndex,
-        floor: Number(floor) || 0,
-        totalFloors: Number(totalFloors) || 0,
-        constructionYear: constructionYear ? Number(constructionYear) : null,
-        renovationYear: renovationYear ? Number(renovationYear) : null,
-        renovationStatus,
-        buildingProject,
-        balcony, loggia, bathroom,
-        amenities, cadastralCode, cadastralHidden,
+        floor: landListing ? 0 : Number(floor) || 0,
+        totalFloors: landListing ? 0 : Number(totalFloors) || 0,
+        constructionYear: landListing ? null : constructionYear ? Number(constructionYear) : null,
+        renovationYear: landListing ? null : renovationYear ? Number(renovationYear) : null,
+        renovationStatus: landListing ? '' : renovationStatus,
+        buildingStatus: landListing ? '' : buildingStatus,
+        buildingProject: landListing ? '' : buildingProject,
+        balcony: landListing ? 0 : balcony,
+        loggia: landListing ? 0 : loggia,
+        bathroom: landListing ? 0 : bathroom,
+        ...(landListing ? { landStatus } : { landStatus: '' }),
+        amenities,
+        cadastralCode,
+        cadastralHidden,
         privateNotes,
       } as any);
 
@@ -738,6 +919,7 @@ export default function EditPropertyPage() {
                           address: result?.address,
                         },
                         CITY_TO_REGION,
+                        i18n.language,
                       );
                       if (!parsed.city && address) {
                         const parts = address.split(',').map((p) => p.trim());
@@ -765,7 +947,7 @@ export default function EditPropertyPage() {
                     onPick={async (a, b) => {
                       setLat(a);
                       setLng(b);
-                      const parsed = await resolveLocationFromCoords(a, b, CITY_TO_REGION);
+                      const parsed = await resolveLocationFromCoords(a, b, CITY_TO_REGION, i18n.language);
                       if (parsed) applyParsedLocation(parsed);
                     }}
                   />
@@ -886,10 +1068,12 @@ export default function EditPropertyPage() {
                   <span className="ml-auto text-green-600 font-medium">
                     {formatNumberForDisplay(price)} {priceCurrency === 'USD' ? '$' : '₾'}
                     {priceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : ''}
-                    {houseSqm
+                    {houseSqm && !isLand
                       ? ` • ${t('house_area_detail')}: ${formatNumberForDisplay(houseSqm)} ${t('sqm_unit_short')}`
                       : ''}
-                    {sqm ? ` • ${formatNumberForDisplay(sqm)} ${t('sqm_unit_short')}` : ''}
+                    {sqm
+                      ? ` • ${t('land_area_detail')}: ${formatNumberForDisplay(sqm)} ${t('sqm_unit_short')}`
+                      : ''}
                   </span>
                 )}
               </div>
@@ -914,31 +1098,24 @@ export default function EditPropertyPage() {
                     onChange={(e) => setDesc(e.target.value)}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">💵 {t('price_label_icon')}</label>
-                    <div className="flex gap-2">
-                      <FormattedNumberInput
-                        className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                        placeholder="0"
-                        value={price}
-                        onChange={setPrice}
-                      />
-                      <div className="flex rounded-lg border border-slate-300 overflow-hidden">
-                        <button type="button" onClick={() => setPriceCurrency('USD')}
-                          className={`px-4 py-3 font-medium transition-colors ${priceCurrency === 'USD' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>$</button>
-                        <button type="button" onClick={() => setPriceCurrency('GEL')}
-                          className={`px-4 py-3 font-medium transition-colors ${priceCurrency === 'GEL' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>₾</button>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <button type="button" onClick={() => setPriceType('total')}
-                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${priceType === 'total' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{t('total_price')}</button>
-                      <button type="button" onClick={() => setPriceType('per_sqm')}
-                        className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border transition-colors ${priceType === 'per_sqm' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{t('price_per_sqm')}</button>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
+                <div className="space-y-4">
+                  <LinkedPriceInputs
+                    price={price}
+                    priceType={priceType}
+                    priceCurrency={priceCurrency}
+                    areaSqm={
+                      !isLand && Number(houseSqm) > 0
+                        ? Number(houseSqm)
+                        : Number(sqm) > 0
+                          ? Number(sqm)
+                          : 0
+                    }
+                    onPriceChange={setPrice}
+                    onPriceTypeChange={setPriceType}
+                    onCurrencyChange={setPriceCurrency}
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    {!isLand && (
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
                         🏠 {t('house_sqm_label')}
@@ -950,7 +1127,8 @@ export default function EditPropertyPage() {
                         onChange={setHouseSqm}
                       />
                     </div>
-                    <div>
+                    )}
+                    <div className={!isLand ? '' : 'col-span-2'}>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
                         📐 {t('area_sqm')}{' '}
                         <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
@@ -991,6 +1169,9 @@ export default function EditPropertyPage() {
                   onExteriorChange={setExteriorLink}
                   onInteriorChange={setInteriorLink}
                   onTourChange={setTourLink}
+                  defaultMediaView={defaultMediaView}
+                  onDefaultMediaViewChange={setDefaultMediaView}
+                  hasPhotos={existingPhotos.length > 0}
                 />
                 {isStep4Complete && (
                   <button onClick={() => setCurrentStep(5)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
@@ -1010,9 +1191,17 @@ export default function EditPropertyPage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">🔧 {t('detailed_info_header')}</h3>
-                  <p className="text-sm text-slate-500">{t('detailed_info_desc')}</p>
+                  <p className="text-sm text-slate-500">
+                    {isLand ? t('land_details_desc') : t('detailed_info_desc')}
+                  </p>
                 </div>
-                {roomCount !== null && (
+                {isLand
+                  ? landStatus !== '' && (
+                      <span className="ml-auto text-green-600 font-medium">
+                        {t(`land_status_${landStatus}`)}
+                      </span>
+                    )
+                  : roomCount !== null && (
                   <span className="ml-auto text-green-600 font-medium">
                     {roomCount} {t('rooms_short')}
                     {bedroomCount !== null ? `, ${bedroomCount} ${t('bedrooms_short')}` : ''}
@@ -1022,6 +1211,32 @@ export default function EditPropertyPage() {
             </button>
             {currentStep === 5 && (
               <div className="space-y-6 mt-4">
+                {isLand ? (
+                  <>
+                    <PropertyLandStatusFields
+                      landStatus={landStatus}
+                      setLandStatus={setLandStatus}
+                    />
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-3">⚡ {t('communications')}</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { key: 'naturalGas', label: t('amenity_naturalGas'), icon: '🔥', state: naturalGas, setter: setNaturalGas },
+                          { key: 'internet', label: t('amenity_internet'), icon: '📶', state: internet, setter: setInternet },
+                          { key: 'electricity', label: t('amenity_electricity'), icon: '💡', state: electricity, setter: setElectricity },
+                          { key: 'water', label: t('amenity_water'), icon: '💧', state: water, setter: setWater },
+                        ].map((item) => (
+                          <button key={item.key} type="button" onClick={() => item.setter(!item.state)}
+                            className={`p-3 rounded-xl border-2 transition-all ${item.state ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                            <div className="text-2xl mb-1">{item.icon}</div>
+                            <div className="text-xs font-medium">{item.label}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                <>
                 <PropertyRoomsBedroomsSelectors
                   roomCount={roomCount}
                   setRoomCount={setRoomCount}
@@ -1030,46 +1245,13 @@ export default function EditPropertyPage() {
                 />
 
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">
-                      🏢 {t('floor_label')}{' '}
-                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">{t('which_floor')}</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={getFloorInputMax(totalFloors)}
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder={t('floor_example')}
-                          value={floor}
-                          onChange={(e) => setFloor(applyFloorChange(e.target.value, totalFloors))}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-slate-500 mb-1 block">{t('total_floors')}</label>
-                        <input
-                          type="number"
-                          min={1}
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder={t('total_floors_example')}
-                          value={totalFloors}
-                          onChange={(e) => {
-                            const next = applyTotalFloorsChange(e.target.value, floor);
-                            setTotalFloors(next.totalFloors);
-                            setFloor(next.floor);
-                          }}
-                        />
-                      </div>
-                    </div>
-                    {getFloorInputMax(totalFloors) !== undefined && (
-                      <p className="mt-2 text-xs text-slate-500">
-                        {t('floor_max_hint', { max: getFloorInputMax(totalFloors) })}
-                      </p>
-                    )}
-                  </div>
+                  <PropertyFloorFields
+                    type={type}
+                    floor={floor}
+                    totalFloors={totalFloors}
+                    setFloor={setFloor}
+                    setTotalFloors={setTotalFloors}
+                  />
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">
                       🏠 {t('building_project_label')}{' '}
@@ -1099,6 +1281,32 @@ export default function EditPropertyPage() {
                           }`}
                         >
                           {proj.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      🏗️ {t('building_status_label')}{' '}
+                      <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {[
+                        { value: 'newly_built', label: t('building_status_newly_built') },
+                        { value: 'under_construction', label: t('building_status_under_construction') },
+                        { value: 'old_built', label: t('building_status_old_built') },
+                      ].map((item) => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => setBuildingStatus(buildingStatus === item.value ? '' : item.value)}
+                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                            buildingStatus === item.value
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
+                          }`}
+                        >
+                          {item.label}
                         </button>
                       ))}
                     </div>
@@ -1222,6 +1430,7 @@ export default function EditPropertyPage() {
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                     {[
                       { key: 'basement', label: t('amenity_basement'), icon: '🏚️', state: basement, setter: setBasement },
+                      { key: 'attic', label: t('amenity_attic'), icon: '🏠', state: attic, setter: setAttic },
                       { key: 'elevator', label: t('amenity_elevator'), icon: '🛗', state: elevator, setter: setElevator },
                       { key: 'furniture', label: t('amenity_furniture'), icon: '🪑', state: furniture, setter: setFurniture },
                       { key: 'garage', label: t('amenity_garage'), icon: '🚗', state: garage, setter: setGarage },
@@ -1263,6 +1472,8 @@ export default function EditPropertyPage() {
                     ))}
                   </div>
                 </div>
+                </>
+                )}
 
                 <button onClick={() => setCurrentStep(6)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                   {t('next_step')}
@@ -1287,56 +1498,64 @@ export default function EditPropertyPage() {
             </button>
             {currentStep === 6 && (
               <div className="space-y-4 mt-4">
-                {existingPhotos.length > 0 ? (
-                  <div className="space-y-3">
+                <input
+                  ref={addPhotosInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleAddMorePhotos(e.target.files)}
+                />
+                <div className="space-y-3">
+                  {existingPhotos.length > 0 && (
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-700">📸 {existingPhotos.length} {t('photos_count')}</span>
-                      {existingPhotos.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={handleDeleteAllPhotos}
-                          className="text-sm text-red-600 hover:text-red-700"
-                        >
-                          {t('delete_all')}
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        ref={addPhotosInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => handleAddMorePhotos(e.target.files)}
-                      />
+                      <span className="text-sm font-medium text-slate-700">
+                        ✅ {t('selected_photos', { count: existingPhotos.length })}
+                      </span>
                       <button
                         type="button"
-                        disabled={addingPhotos || existingPhotos.length >= MAX_PROPERTY_PHOTOS}
+                        onClick={handleDeleteAllPhotos}
+                        className="text-sm text-red-600 hover:text-red-700"
+                      >
+                        {t('delete_all')}
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-500">
+                    💡{' '}
+                    {existingPhotos.length > 0
+                      ? `${t('click_main_photo')} · ${t('photo_drag_reorder_hint')} · ${t('photo_360_toggle_hint')}${panoramaSaving ? ` (${t('saving')}…)` : ''}`
+                      : t('photos_drop_zone_hint')}
+                  </p>
+                  {existingPhotos.length === 0 ? (
+                    <div className="flex justify-center py-4">
+                      <button
+                        type="button"
+                        disabled={addingPhotos}
                         onClick={() => addPhotosInputRef.current?.click()}
-                        className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                          addingPhotos || existingPhotos.length >= MAX_PROPERTY_PHOTOS
-                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        className={`flex aspect-square w-32 max-w-[40vw] flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors sm:w-36 ${
+                          addingPhotos
+                            ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                            : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
                         }`}
                       >
-                        {addingPhotos
-                          ? photoUploadProgress.total > 0
-                            ? t('photos_upload_progress', {
-                                done: photoUploadProgress.done,
-                                total: photoUploadProgress.total,
-                              })
-                            : t('saving')
-                          : `+ ${t('add_new_photos')}`}
+                        <span className="text-2xl font-light leading-none">+</span>
+                        <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
+                          {addingPhotos
+                            ? photoUploadProgress.total > 0
+                              ? t('photos_upload_progress', {
+                                  done: photoUploadProgress.done,
+                                  total: photoUploadProgress.total,
+                                })
+                              : t('saving')
+                            : t('add_new_photos')}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          0/{MAX_PROPERTY_PHOTOS}
+                        </span>
                       </button>
-                      <div className="text-xs text-slate-500">
-                        {t('choose_or_drop_photos')} ({existingPhotos.length}/{MAX_PROPERTY_PHOTOS})
-                      </div>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      💡 {t('click_main_photo')} · {t('photo_drag_reorder_hint')} · {t('photo_360_toggle_hint')}
-                      {panoramaSaving ? ` (${t('saving')}…)` : ''}
-                    </p>
+                  ) : (
                     <PhotoSortableGrid
                       className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3"
                       layoutKey={photoLayoutKey}
@@ -1344,6 +1563,34 @@ export default function EditPropertyPage() {
                       pendingFlipRef={pendingFlipRef}
                       draggingFlipKey={draggingFlipKey}
                     >
+                      {existingPhotos.length < MAX_PROPERTY_PHOTOS && (
+                        <button
+                          type="button"
+                          data-flip-key="photo-add-slot"
+                          disabled={addingPhotos}
+                          onClick={() => addPhotosInputRef.current?.click()}
+                          className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
+                            addingPhotos
+                              ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                              : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
+                          }`}
+                        >
+                          <span className="text-2xl font-light leading-none">+</span>
+                          <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
+                            {addingPhotos
+                              ? photoUploadProgress.total > 0
+                                ? t('photos_upload_progress', {
+                                    done: photoUploadProgress.done,
+                                    total: photoUploadProgress.total,
+                                  })
+                                : t('saving')
+                              : t('add_new_photos')}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {existingPhotos.length}/{MAX_PROPERTY_PHOTOS}
+                          </span>
+                        </button>
+                      )}
                       {existingPhotos.map((photo, index) => {
                         const is360 = isPanoramaPhoto(photo, panoramaPhotos);
                         return (
@@ -1403,42 +1650,8 @@ export default function EditPropertyPage() {
                       );
                       })}
                     </PhotoSortableGrid>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
-                    <div className="text-5xl mb-3">📸</div>
-                    <p className="text-slate-500">{t('no_photos')}</p>
-                    <div className="mt-4 flex justify-center">
-                      <input
-                        ref={addPhotosInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => handleAddMorePhotos(e.target.files)}
-                      />
-                      <button
-                        type="button"
-                        disabled={addingPhotos}
-                        onClick={() => addPhotosInputRef.current?.click()}
-                        className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                          addingPhotos
-                            ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
-                      >
-                        {addingPhotos
-                          ? photoUploadProgress.total > 0
-                            ? t('photos_upload_progress', {
-                                done: photoUploadProgress.done,
-                                total: photoUploadProgress.total,
-                              })
-                            : t('saving')
-                          : t('add_photos')}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1607,7 +1820,7 @@ export default function EditPropertyPage() {
                       </span>
                     </div>
                   )}
-                  {houseSqm && (
+                  {houseSqm && !isLand && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>🏠</span>
                       <span>
@@ -1615,11 +1828,17 @@ export default function EditPropertyPage() {
                       </span>
                     </div>
                   )}
+                  {isLand && landStatus !== '' && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span>🌾</span>
+                      <span>{t(`land_status_${landStatus}`)}</span>
+                    </div>
+                  )}
                   {sqm && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span>📐</span>
                       <span>
-                        {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
+                        {t('land_area_detail')}: {formatNumberForDisplay(sqm)} {t('sqm_unit_short')}
                       </span>
                     </div>
                   )}

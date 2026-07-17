@@ -34,9 +34,11 @@ export function PropertySpecChips({
   const chips: { key: string; label: string; value: string; icon: React.ReactNode }[] = [];
 
   if (hasSqm) {
+    const sqmIsLand =
+      hasHouseSqm || p.type === 'house' || p.type === 'cottage' || p.type === 'land';
     chips.push({
       key: 'sqm',
-      label: t('areaLabel'),
+      label: t(sqmIsLand ? 'land_area_detail' : 'areaLabel'),
       value: `${formatSqmCompact(p.sqm!)} ${t('sqm_unit_short')}`,
       icon: (
         <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
@@ -45,7 +47,19 @@ export function PropertySpecChips({
       ),
     });
   }
-  if (hasHouseSqm) {
+  if (p.type === 'land' && p.landStatus) {
+    chips.push({
+      key: 'landStatus',
+      label: t('land_status_label'),
+      value: t(`land_status_${p.landStatus}`),
+      icon: (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+          <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M12 3c.5 2 2 4 4 5-2 1-3.5 3-4 5-.5-2-2-4-4-5 2-1 3.5-3 4-5zM5 19h14" />
+        </svg>
+      ),
+    });
+  }
+  if (hasHouseSqm && p.type !== 'land') {
     chips.push({
       key: 'houseSqm',
       label: t('house_area_detail'),
@@ -67,6 +81,17 @@ export function PropertySpecChips({
       key: 'floor',
       label: t('floor_detail'),
       value: totalFloors > 0 ? `${floor}/${totalFloors}` : String(floor),
+      icon: (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+          <path strokeWidth={2} strokeLinecap="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-16 0H3m2-12h14" />
+        </svg>
+      ),
+    });
+  } else if (totalFloors > 0) {
+    chips.push({
+      key: 'storeys',
+      label: t('storeys_detail'),
+      value: String(totalFloors),
       icon: (
         <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
           <path strokeWidth={2} strokeLinecap="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-16 0H3m2-12h14" />

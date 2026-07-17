@@ -1,5 +1,6 @@
 import type { FiltersState } from '@/components/Filters';
 import type { PropertyQuery } from '@/lib/api';
+import { apiLang } from '@/lib/apiLang';
 
 const ARRAY_KEYS = new Set([
   'tbilisiSubdistricts',
@@ -8,6 +9,8 @@ const ARRAY_KEYS = new Set([
   'amenities',
   'buildingProject',
   'renovationStatus',
+  'buildingStatus',
+  'landStatus',
   'balconies',
   'rooms',
   'bedrooms'
@@ -39,6 +42,8 @@ export const DEFAULT_MAP_FILTERS: FiltersState = {
   amenities: [],
   buildingProject: [],
   renovationStatus: [],
+  buildingStatus: [],
+  landStatus: [],
   propertyId: ''
 };
 
@@ -96,9 +101,11 @@ export function filtersToPropertyQuery(
     amenities: filters.amenities.length ? filters.amenities : undefined,
     buildingProject: filters.buildingProject.length ? filters.buildingProject : undefined,
     renovationStatus: filters.renovationStatus.length ? filters.renovationStatus : undefined,
+    buildingStatus: filters.buildingStatus.length ? filters.buildingStatus : undefined,
+    landStatus: filters.landStatus.length ? filters.landStatus : undefined,
     propertyId: filters.propertyId || undefined,
     sort: sort || undefined,
-    lang: lang || undefined
+    lang: lang ? apiLang(lang) : undefined
   };
   return q;
 }
@@ -144,6 +151,8 @@ export function searchParamsToFiltersState(sp: URLSearchParams): { filters: Filt
   filters.amenities = parseJsonStringArray(sp.get('amenities'));
   filters.buildingProject = parseJsonStringArray(sp.get('buildingProject'));
   filters.renovationStatus = parseJsonStringArray(sp.get('renovationStatus'));
+  filters.buildingStatus = parseJsonStringArray(sp.get('buildingStatus'));
+  filters.landStatus = parseJsonStringArray(sp.get('landStatus'));
   filters.propertyId = sp.get('propertyId') || '';
   const sort = sp.get('sort') || 'date_desc';
   return { filters, sort };

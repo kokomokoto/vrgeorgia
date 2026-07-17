@@ -2,6 +2,7 @@
 
 import 'leaflet/dist/leaflet.css';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Property } from '@/lib/types';
 import { resolveImageUrl } from '@/lib/api';
 import { isPanoramaPhoto } from '@/lib/panorama';
@@ -141,6 +142,7 @@ export default function MapInner({
   showTbilisiZones = false,
   tbilisiZonesAutoFit = true
 }: MapInnerProps) {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -621,10 +623,10 @@ export default function MapInner({
         selectedMarkerRef.current = L.marker([selectedLocation.lat, selectedLocation.lng], { icon: redIcon }).addTo(
           map
         );
-        selectedMarkerRef.current.bindPopup('არჩეული ლოკაცია').openPopup();
+        selectedMarkerRef.current.bindPopup(t('selected_location')).openPopup();
       }
     });
-  }, [selectedLocation, ready]);
+  }, [selectedLocation, ready, t]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || !ready || !center) return;

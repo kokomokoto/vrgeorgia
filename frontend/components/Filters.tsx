@@ -20,6 +20,8 @@ import {
   snapRangeBounds,
 } from '@/lib/propertyFilterRanges';
 import type { Property } from '@/lib/types';
+import { parseSearchInputValue } from '@/lib/searchInput';
+import { LAND_STATUS_OPTIONS } from '@/lib/propertyTypeUi';
 
 // გარიგების ტიპები
 const DEAL_TYPES = [
@@ -69,6 +71,10 @@ export type FiltersState = {
   amenities: string[];
   buildingProject: string[];
   renovationStatus: string[];
+  /** ახალაშენებული / მშენებარე / ძველი */
+  buildingStatus: string[];
+  /** სასოფლო / არასასოფლო — მიწისთვის */
+  landStatus: string[];
   propertyId: string;
 };
 
@@ -85,19 +91,22 @@ function FilterDropdown({
   children,
   isActive,
   onClear,
+  defaultOpen = false,
 }: {
   label: string;
   summary: string;
   children: React.ReactNode;
   isActive: boolean;
   onClear?: () => void;
+  defaultOpen?: boolean;
 }) {
   const { t } = useTranslation();
   const { inline, spacious } = React.useContext(FilterDropdownLayoutContext);
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(defaultOpen);
   const ref = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
+    if (inline && spacious) return;
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
@@ -105,23 +114,82 @@ function FilterDropdown({
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  }, [inline, spacious]);
+
+  const triggerPad = spacious ? 'px-4 py-3.5 sm:px-5' : 'px-3 py-2.5';
+
+  if (inline && spacious) {
+    return (
+      <div
+        ref={ref}
+        className={`overflow-hidden rounded-2xl border transition-colors ${
+          isActive
+            ? 'border-blue-200 bg-blue-50/50 dark:border-amber-500/40 dark:bg-amber-950/25'
+            : 'border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
+        }`}
+      >
+        <div className="flex w-full items-stretch">
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className={`flex min-w-0 flex-1 items-center justify-between gap-3 ${triggerPad} text-left`}
+          >
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-zinc-400">
+                {label}
+              </div>
+              <div
+                className={`mt-0.5 truncate text-base font-medium ${
+                  isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'
+                }`}
+              >
+                {summary}
+              </div>
+            </div>
+            <svg
+              className={`h-5 w-5 flex-shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {isActive && onClear ? (
+            <button
+              type="button"
+              onClick={() => {
+                onClear();
+                setOpen(false);
+              }}
+              className="mr-3 flex h-9 w-9 shrink-0 self-center items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-white/80 hover:text-slate-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+              aria-label={t('clear_filters')}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+        {open && (
+          <div className="border-t border-slate-200/80 bg-white px-4 py-4 dark:border-zinc-700 dark:bg-zinc-950/40 sm:px-5 sm:py-5">
+            {children}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const panelClass = inline
-    ? `relative z-10 mt-2 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900 ${
-        spacious ? 'p-4 sm:p-5' : 'p-3'
-      }`
+    ? `relative z-10 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900`
     : 'absolute top-full left-0 right-0 z-30 mt-1 min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40';
 
-  const triggerClass = `flex w-full items-center gap-1 rounded-xl border transition-all ${
-    spacious ? 'text-base' : 'text-sm'
-  } ${
+  const triggerClass = `flex w-full items-center gap-1 rounded-xl border transition-all text-sm ${
     isActive
       ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
       : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600'
   }`;
-
-  const triggerPad = spacious ? 'px-4 py-3.5' : 'px-3 py-2.5';
 
   return (
     <div ref={ref} className="relative">
@@ -132,17 +200,11 @@ function FilterDropdown({
           className={`flex min-w-0 flex-1 items-center justify-between gap-3 ${triggerPad} text-left`}
         >
           <div className="min-w-0">
-            <div
-              className={`font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500 ${
-                spacious ? 'text-xs' : 'text-[10px]'
-              }`}
-            >
+            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
               {label}
             </div>
             <div
-              className={`truncate font-medium ${isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'} ${
-                spacious ? 'text-base' : ''
-              }`}
+              className={`truncate font-medium ${isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'}`}
             >
               {summary}
             </div>
@@ -164,9 +226,7 @@ function FilterDropdown({
               onClear();
               setOpen(false);
             }}
-            className={`mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:text-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 ${
-              spacious ? 'self-center' : ''
-            }`}
+            className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/90 hover:text-slate-700 dark:text-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
             aria-label={t('clear_filters')}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
@@ -235,8 +295,8 @@ function LocationFilterTrigger({
 }
 
 export function Filters({
-  value,
-  onChange,
+  value: committed,
+  onChange: publish,
   variant = 'default',
   onClearAll,
   rangeProperties,
@@ -258,10 +318,44 @@ export function Filters({
   const [mounted, setMounted] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [extendedOpen, setExtendedOpen] = React.useState(false);
+  /** გაფართოებული ძიების დრაფტი — API-ზე იგზავნება მხოლოდ გამოყენებისას */
+  const [extendedDraft, setExtendedDraft] = React.useState<FiltersState | null>(null);
   const [locationModalOpen, setLocationModalOpen] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
+  }, []);
+
+  const value = extendedOpen && extendedDraft ? extendedDraft : committed;
+  const onChange = React.useCallback(
+    (next: FiltersState) => {
+      if (extendedOpen) setExtendedDraft(next);
+      else publish(next);
+    },
+    [extendedOpen, publish]
+  );
+
+  const openExtendedSearch = React.useCallback(() => {
+    setExtendedDraft({
+      ...committed,
+      buildingStatus: [...(committed.buildingStatus || [])],
+      landStatus: [...(committed.landStatus || [])],
+      amenities: [...(committed.amenities || [])],
+      buildingProject: [...(committed.buildingProject || [])],
+      renovationStatus: [...(committed.renovationStatus || [])],
+    });
+    setExtendedOpen(true);
+  }, [committed]);
+
+  const applyExtendedSearch = React.useCallback(() => {
+    if (extendedDraft) publish(extendedDraft);
+    setExtendedDraft(null);
+    setExtendedOpen(false);
+  }, [extendedDraft, publish]);
+
+  const discardExtendedSearch = React.useCallback(() => {
+    setExtendedDraft(null);
+    setExtendedOpen(false);
   }, []);
 
   const mapSidebar = variant === 'mapSidebar';
@@ -269,11 +363,11 @@ export function Filters({
   const filterRanges = React.useMemo(() => {
     if (!mapSidebar || !rangeProperties?.length) return null;
     return computePropertyFilterRanges(rangeProperties, {
-      priceCurrency: value.priceCurrency || 'USD',
-      priceType: resolvePriceFilterType(value.priceType),
+      priceCurrency: committed.priceCurrency || 'USD',
+      priceType: resolvePriceFilterType(committed.priceType),
       usdToGel,
     });
-  }, [mapSidebar, rangeProperties, value.priceCurrency, value.priceType, usdToGel]);
+  }, [mapSidebar, rangeProperties, committed.priceCurrency, committed.priceType, usdToGel]);
 
   const priceSliderBounds = React.useMemo(() => {
     if (!filterRanges?.price) return null;
@@ -427,6 +521,8 @@ export function Filters({
     + (value.tbilisiSubdistricts?.length || 0)
     + (value.amenities?.length || 0)
     + value.renovationStatus.length
+    + value.buildingStatus.length
+    + (value.landStatus?.length || 0)
     + value.balconies.length;
 
   const labels = {
@@ -567,6 +663,17 @@ export function Filters({
   );
 
   const yearSummary = () => {
+    const parts: string[] = [];
+    if (value.buildingStatus.length > 0) {
+      parts.push(
+        value.buildingStatus.map((s) => t(`building_status_${s}`)).join(', ')
+      );
+    }
+    if ((value.landStatus?.length || 0) > 0) {
+      parts.push(
+        value.landStatus.map((s) => t(`land_status_${s}`)).join(', ')
+      );
+    }
     const built =
       value.minConstructionYear || value.maxConstructionYear
         ? `${value.minConstructionYear || '—'}-${value.maxConstructionYear || '—'}`
@@ -575,9 +682,9 @@ export function Filters({
       value.minRenovationYear || value.maxRenovationYear
         ? `${value.minRenovationYear || '—'}-${value.maxRenovationYear || '—'}`
         : '';
-    if (built && renovated) return `აშენება: ${built}, რემონტი: ${renovated}`;
-    if (built) return `აშენება: ${built}`;
-    if (renovated) return `რემონტი: ${renovated}`;
+    if (built) parts.push(`აშენება: ${built}`);
+    if (renovated) parts.push(`რემონტი: ${renovated}`);
+    if (parts.length) return parts.join(' · ');
     return labels.any;
   };
 
@@ -599,7 +706,9 @@ export function Filters({
     value.minConstructionYear ||
     value.maxConstructionYear ||
     value.minRenovationYear ||
-    value.maxRenovationYear
+    value.maxRenovationYear ||
+    value.buildingStatus.length ||
+    (value.landStatus?.length || 0) > 0
   );
   const comfortActive =
     (value.amenities?.length || 0) > 0 || value.has3d === 'true' || value.hasPhotos === 'true';
@@ -624,6 +733,8 @@ export function Filters({
       maxConstructionYear: '',
       minRenovationYear: '',
       maxRenovationYear: '',
+      buildingStatus: [],
+      landStatus: [],
     });
   const clearComfortFilter = () =>
     onChange({ ...value, amenities: [], has3d: '', hasPhotos: '' });
@@ -948,16 +1059,21 @@ export function Filters({
   const compactFilterItemClass = mapSidebar ? '' : '';
 
   const extendedOnlyActiveCount =
-    (yearActive ? 1 : 0) +
-    (value.has3d === 'true' ? 1 : 0) +
-    (value.hasPhotos === 'true' ? 1 : 0) +
-    (value.amenities?.length || 0) +
-    value.buildingProject.length +
-    value.renovationStatus.length;
-
-  const extendedGridClass = mapSidebar
-    ? 'mb-3 grid grid-cols-1 gap-2'
-    : 'grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3';
+    (!!(
+      committed.minConstructionYear ||
+      committed.maxConstructionYear ||
+      committed.minRenovationYear ||
+      committed.maxRenovationYear ||
+      (committed.buildingStatus?.length || 0) ||
+      (committed.landStatus?.length || 0)
+    )
+      ? 1
+      : 0) +
+    (committed.has3d === 'true' ? 1 : 0) +
+    (committed.hasPhotos === 'true' ? 1 : 0) +
+    (committed.amenities?.length || 0) +
+    committed.buildingProject.length +
+    committed.renovationStatus.length;
 
   const renderSearchField = (wrapperClassName: string) => (
     <div className={wrapperClassName}>
@@ -975,17 +1091,8 @@ export function Filters({
         placeholder={labels.search_placeholder}
         value={value.q || value.propertyId || ''}
         onChange={(e) => {
-          const v = e.target.value;
-          const trimmed = v.trim();
-          const num = Number(trimmed);
-          // მხოლოდ განცხადების ID (100000+), არა ტელეფონის ციფრები (მაგ. 33, 558)
-          const isListingNumericId =
-            /^\d+$/.test(trimmed) && !Number.isNaN(num) && num >= 100000;
-          if (isListingNumericId) {
-            onChange({ ...value, q: '', propertyId: trimmed });
-          } else {
-            onChange({ ...value, q: v, propertyId: '' });
-          }
+          const patch = parseSearchInputValue(e.target.value);
+          onChange({ ...value, ...patch });
         }}
       />
     </div>
@@ -1066,11 +1173,23 @@ export function Filters({
                   type="button"
                   title={t(cat.key)}
                   onClick={() => {
+                    const nextType = isSelected
+                      ? value.type.filter((x) => x !== cat.value)
+                      : [...value.type, cat.value];
+                    const landOnly =
+                      nextType.length === 1 && nextType[0] === 'land';
+                    const includesLand = nextType.includes('land');
+                    const nextAmenities = landOnly
+                      ? (value.amenities || []).filter(
+                          (a) => a !== 'basement' && a !== 'attic'
+                        )
+                      : value.amenities;
                     onChange({
                       ...value,
-                      type: isSelected
-                        ? value.type.filter((x) => x !== cat.value)
-                        : [...value.type, cat.value]
+                      type: nextType,
+                      amenities: nextAmenities,
+                      buildingStatus: landOnly ? [] : value.buildingStatus,
+                      landStatus: includesLand ? value.landStatus || [] : [],
                     });
                   }}
                   className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-all ${
@@ -1085,6 +1204,39 @@ export function Filters({
               );
             })}
           </div>
+          {value.type.includes('land') && (
+            <div className="mt-3">
+              <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+                {t('filter_land_status')}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {LAND_STATUS_OPTIONS.map((item) => {
+                  const selected = (value.landStatus || []).includes(item.value);
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() =>
+                        onChange({
+                          ...value,
+                          landStatus: selected
+                            ? (value.landStatus || []).filter((s) => s !== item.value)
+                            : [...(value.landStatus || []), item.value],
+                        })
+                      }
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        selected
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-500'
+                      }`}
+                    >
+                      {t(item.labelKey)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1367,7 +1519,7 @@ export function Filters({
         <div className={compactFilterItemClass}>
         <button
           type="button"
-          onClick={() => setExtendedOpen(true)}
+          onClick={openExtendedSearch}
           className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
             extendedOnlyActiveCount > 0
               ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
@@ -1394,32 +1546,138 @@ export function Filters({
 
       <ExtendedSearchModal
         open={extendedOpen}
-        onClose={() => setExtendedOpen(false)}
+        onClose={discardExtendedSearch}
+        onApply={applyExtendedSearch}
         title={labels.extended_search}
         closeLabel={labels.close}
+        applyLabel={t('extended_search_apply')}
       >
         <FilterDropdownLayoutContext.Provider value={{ inline: true, spacious: true }}>
-          <div className="space-y-5">
-            <div className={extendedGridClass}>
-              <FilterDropdown label="🏗️ აშენება/რემონტი" summary={yearSummary()} isActive={yearActive} onClear={clearYearFilter}>
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-[10px] text-slate-500 mb-1.5">აშენების წელი</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="დან" value={value.minConstructionYear} onChange={(e) => set('minConstructionYear', e.target.value)} />
-                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="მდე" value={value.maxConstructionYear} onChange={(e) => set('maxConstructionYear', e.target.value)} />
+          <div className="mx-auto w-full max-w-4xl space-y-3">
+              <FilterDropdown
+                label="🏗️ აშენება/რემონტი"
+                summary={yearSummary()}
+                isActive={yearActive}
+                onClear={clearYearFilter}
+                defaultOpen
+              >
+                <div className="space-y-5">
+                  {value.type.includes('land') && (
+                    <div>
+                      <div className="mb-2 text-sm font-medium text-slate-700 dark:text-zinc-200">
+                        {t('filter_land_status')}
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {LAND_STATUS_OPTIONS.map((item) => {
+                          const selected = (value.landStatus || []).includes(item.value);
+                          return (
+                            <button
+                              key={item.value}
+                              type="button"
+                              onClick={() =>
+                                onChange({
+                                  ...value,
+                                  landStatus: selected
+                                    ? (value.landStatus || []).filter((s) => s !== item.value)
+                                    : [...(value.landStatus || []), item.value],
+                                })
+                              }
+                              className={`rounded-xl border px-3 py-3 text-center text-sm font-medium transition-all ${
+                                selected
+                                  ? 'border-emerald-500 bg-emerald-600 text-white shadow-sm dark:border-emerald-400 dark:bg-emerald-500 dark:text-black'
+                                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500'
+                              }`}
+                            >
+                              {t(item.labelKey)}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-500 mb-1.5">რემონტის წელი</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="დან" value={value.minRenovationYear} onChange={(e) => set('minRenovationYear', e.target.value)} />
-                      <input type="number" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="მდე" value={value.maxRenovationYear} onChange={(e) => set('maxRenovationYear', e.target.value)} />
+                  )}
+                  {!(value.type.length === 1 && value.type[0] === 'land') && (
+                    <div>
+                      <div className="mb-2 text-sm font-medium text-slate-700 dark:text-zinc-200">
+                        {t('building_status_label')}
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {[
+                          { value: 'newly_built', key: 'building_status_newly_built' },
+                          { value: 'under_construction', key: 'building_status_under_construction' },
+                          { value: 'old_built', key: 'building_status_old_built' },
+                        ].map((item) => {
+                          const selected = value.buildingStatus.includes(item.value);
+                          return (
+                            <button
+                              key={item.value}
+                              type="button"
+                              onClick={() =>
+                                onChange({
+                                  ...value,
+                                  buildingStatus: selected
+                                    ? value.buildingStatus.filter((s) => s !== item.value)
+                                    : [...value.buildingStatus, item.value],
+                                })
+                              }
+                              className={`rounded-xl border px-3 py-3 text-center text-sm font-medium transition-all ${
+                                selected
+                                  ? 'border-blue-500 bg-blue-600 text-white shadow-sm dark:border-amber-400 dark:bg-amber-500 dark:text-black'
+                                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500'
+                              }`}
+                            >
+                              {t(item.key)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <div className="mb-2 text-sm font-medium text-slate-700 dark:text-zinc-200">
+                        აშენების წელი
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-amber-500 dark:focus:ring-amber-900/40"
+                          placeholder="დან"
+                          value={value.minConstructionYear}
+                          onChange={(e) => set('minConstructionYear', e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-amber-500 dark:focus:ring-amber-900/40"
+                          placeholder="მდე"
+                          value={value.maxConstructionYear}
+                          onChange={(e) => set('maxConstructionYear', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-2 text-sm font-medium text-slate-700 dark:text-zinc-200">
+                        რემონტის წელი
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-amber-500 dark:focus:ring-amber-900/40"
+                          placeholder="დან"
+                          value={value.minRenovationYear}
+                          onChange={(e) => set('minRenovationYear', e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-amber-500 dark:focus:ring-amber-900/40"
+                          placeholder="მდე"
+                          value={value.maxRenovationYear}
+                          onChange={(e) => set('maxRenovationYear', e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               </FilterDropdown>
-            </div>
 
             <FilterDropdown
         label={t('filter_comfort')}
@@ -1452,26 +1710,35 @@ export function Filters({
             <span className="text-sm sm:text-base">{t('hasPhotos_filter')}</span>
           </label>
           <hr className="col-span-full my-1 border-slate-100 dark:border-zinc-800" />
-          {[
-            { key: 'elevator', labelKey: 'amenity_filter_elevator' },
-            { key: 'furniture', labelKey: 'amenity_filter_furniture' },
-            { key: 'internet', labelKey: 'amenity_filter_internet' },
-            { key: 'airConditioner', labelKey: 'amenity_filter_airConditioner' },
-            { key: 'centralHeating', labelKey: 'amenity_filter_centralHeating' },
-            { key: 'naturalGas', labelKey: 'amenity_filter_naturalGas' },
-            { key: 'garage', labelKey: 'amenity_filter_garage' },
-            { key: 'security', labelKey: 'amenity_filter_security' },
-            { key: 'pool', labelKey: 'amenity_filter_pool' },
-            { key: 'garden', labelKey: 'amenity_filter_garden' },
-            { key: 'terrace', labelKey: 'terrace' },
-            { key: 'isolatedKitchen', labelKey: 'amenity_filter_isolatedKitchen' },
-            { key: 'heatingCooling', labelKey: 'amenity_filter_heatingCooling' },
-            { key: 'basement', labelKey: 'amenity_filter_basement' },
-            { key: 'storage', labelKey: 'amenity_filter_storage' },
-            { key: 'electricity', labelKey: 'amenity_filter_electricity' },
-            { key: 'water', labelKey: 'amenity_filter_water' },
-            { key: 'fireplace', labelKey: 'amenity_filter_fireplace' },
-          ].map(({ key, labelKey }) => {
+          {(() => {
+            const landOnlySelected =
+              value.type.length === 1 && value.type[0] === 'land';
+            const amenityOptions: { key: string; labelKey: string }[] = [
+              { key: 'elevator', labelKey: 'amenity_filter_elevator' },
+              { key: 'furniture', labelKey: 'amenity_filter_furniture' },
+              { key: 'internet', labelKey: 'amenity_filter_internet' },
+              { key: 'airConditioner', labelKey: 'amenity_filter_airConditioner' },
+              { key: 'centralHeating', labelKey: 'amenity_filter_centralHeating' },
+              { key: 'naturalGas', labelKey: 'amenity_filter_naturalGas' },
+              { key: 'garage', labelKey: 'amenity_filter_garage' },
+              { key: 'security', labelKey: 'amenity_filter_security' },
+              { key: 'pool', labelKey: 'amenity_filter_pool' },
+              { key: 'garden', labelKey: 'amenity_filter_garden' },
+              { key: 'terrace', labelKey: 'terrace' },
+              { key: 'isolatedKitchen', labelKey: 'amenity_filter_isolatedKitchen' },
+              { key: 'heatingCooling', labelKey: 'amenity_filter_heatingCooling' },
+              ...(!landOnlySelected
+                ? [
+                    { key: 'basement', labelKey: 'amenity_filter_basement' },
+                    { key: 'attic', labelKey: 'amenity_filter_attic' },
+                  ]
+                : []),
+              { key: 'storage', labelKey: 'amenity_filter_storage' },
+              { key: 'electricity', labelKey: 'amenity_filter_electricity' },
+              { key: 'water', labelKey: 'amenity_filter_water' },
+              { key: 'fireplace', labelKey: 'amenity_filter_fireplace' },
+            ];
+            return amenityOptions.map(({ key, labelKey }) => {
             const amenities = value.amenities || [];
             const isSelected = amenities.includes(key);
             return (
@@ -1493,7 +1760,8 @@ export function Filters({
                 <span className="text-sm sm:text-base">{t(labelKey)}</span>
               </label>
             );
-          })}
+          });
+          })()}
         </div>
       </FilterDropdown>
 
@@ -1504,7 +1772,7 @@ export function Filters({
           isActive={value.buildingProject.length > 0}
           onClear={clearBuildingProjectFilter}
         >
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {[
               { value: 'new_build', key: 'project_new_build' },
               { value: 'czech', key: 'project_czech' },
@@ -1521,10 +1789,10 @@ export function Filters({
                 key={proj.value}
                 type="button"
                 onClick={() => onChange({ ...value, buildingProject: value.buildingProject.includes(proj.value) ? value.buildingProject.filter(p => p !== proj.value) : [...value.buildingProject, proj.value] })}
-                className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all text-left ${
+                className={`rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-all ${
                   value.buildingProject.includes(proj.value)
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'
+                    ? 'border-blue-500 bg-blue-600 text-white shadow-sm dark:border-amber-400 dark:bg-amber-500 dark:text-black'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200'
                 }`}
               >
                 {t(proj.key)}
@@ -1540,7 +1808,7 @@ export function Filters({
         isActive={value.renovationStatus.length > 0}
         onClear={clearRenovationFilter}
       >
-        <div className="grid grid-cols-1 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { value: 'green_frame', key: 'renovation_green_frame' },
             { value: 'white_frame', key: 'renovation_white_frame' },
@@ -1559,10 +1827,10 @@ export function Filters({
                     : [...value.renovationStatus, item.value],
                 })
               }
-              className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all text-left ${
+              className={`rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-all ${
                 value.renovationStatus.includes(item.value)
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300'
+                  ? 'border-emerald-500 bg-emerald-600 text-white shadow-sm'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200'
               }`}
             >
               {t(item.key)}

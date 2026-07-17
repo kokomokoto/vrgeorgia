@@ -8,6 +8,7 @@ function EmbedInner() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const userId = searchParams.get('userId') || searchParams.get('uid');
+  const sessionId = searchParams.get('session');
 
   useEffect(() => {
     let alive = true;
@@ -24,7 +25,9 @@ function EmbedInner() {
         if (!res.ok) throw new Error('Failed to create tour');
         const tour = await res.json();
         if (!alive) return;
-        window.location.replace(`/tours/${tour.id}/edit?embed=1`);
+        const params = new URLSearchParams({ embed: '1' });
+        if (sessionId) params.set('session', sessionId);
+        window.location.replace(`/tours/${tour.id}/edit?${params.toString()}`);
       } catch (e) {
         if (!alive) return;
         setError(e instanceof Error ? e.message : 'Error');
@@ -33,7 +36,7 @@ function EmbedInner() {
     return () => {
       alive = false;
     };
-  }, [userId]);
+  }, [userId, sessionId]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-300">

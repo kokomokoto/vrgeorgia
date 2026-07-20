@@ -64,6 +64,8 @@ const resources = {
       copyPrivateLink: 'კერძო ლინკის აკოპირება',
       linkCopied: 'ლინკი დაკოპირდა',
       all_visibilities: 'ყველა ხილვადობა',
+      adminAgentVisibilityHint:
+        'ადმინის რეჟიმი: შეგიძლიათ ნახოთ და გაფილტროთ საჯარო, ლინკით დამალული, პირადი და გაყიდული განცხადებები.',
       noProperties: 'თქვენ ჯერ არ გაქვთ განცხადებები',
       addFirst: 'დაამატეთ პირველი განცხადება',
       favorites: 'ფავორიტები',
@@ -221,6 +223,8 @@ const resources = {
       // Agents
       agents: 'აგენტები',
       services_nav: 'მომსახურება',
+      faq_nav: 'FAQ',
+      about_nav: 'შესახებ',
       noAgents: 'აგენტები ვერ მოიძებნა',
       reviews: 'შეფასებები',
       yearsExperience: 'წლის გამოცდილება',
@@ -795,6 +799,8 @@ const resources = {
       copyPrivateLink: 'Copy private link',
       linkCopied: 'Link copied',
       all_visibilities: 'All visibilities',
+      adminAgentVisibilityHint:
+        'Admin mode: you can view and filter public, unlisted, private and sold listings.',
       noProperties: 'You have no properties yet',
       addFirst: 'Add your first property',
       favorites: 'Favorites',
@@ -951,6 +957,8 @@ const resources = {
       },
       agents: 'Agents',
       services_nav: 'Services',
+      faq_nav: 'FAQ',
+      about_nav: 'About',
       noAgents: 'No agents found',
       reviews: 'Reviews',
       yearsExperience: 'years experience',
@@ -1544,6 +1552,8 @@ const resources = {
       copyPrivateLink: 'Копировать приватную ссылку',
       linkCopied: 'Ссылка скопирована',
       all_visibilities: 'Вся видимость',
+      adminAgentVisibilityHint:
+        'Режим админа: можно смотреть и фильтровать публичные, скрытые по ссылке, личные и проданные объявления.',
       noProperties: 'У вас пока нет объявлений',
       addFirst: 'Добавьте первое объявление',
       edit: 'Редактировать',
@@ -1667,6 +1677,8 @@ const resources = {
       },
       agents: 'Агенты',
       services_nav: 'Услуги',
+      faq_nav: 'FAQ',
+      about_nav: 'О сайте',
       noAgents: 'Агенты не найдены',
       reviews: 'Отзывы',
       yearsExperience: 'лет опыта',

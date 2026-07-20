@@ -43,6 +43,7 @@ interface PropertyRow {
   tbilisiDistrict: string;
   sqm: number;
   status: string;
+  listingVisibility?: 'public' | 'unlisted' | 'private';
   pinned?: boolean;
   photos: string[];
   createdAt: string;
@@ -81,11 +82,18 @@ const statusColors: Record<string, string> = {
   sold: 'bg-gray-100 text-gray-700',
 };
 
+const visibilityColors: Record<string, string> = {
+  public: 'bg-emerald-100 text-emerald-700',
+  unlisted: 'bg-blue-100 text-blue-700',
+  private: 'bg-slate-200 text-slate-700',
+};
+
 function buildAgentPropertiesQueryString(
   filters: FiltersState,
   sortBy: string,
   page: number,
   statusFilter: string,
+  visibilityFilter: string,
   userId: string
 ): string {
   const query: PropertyQuery = {
@@ -106,6 +114,7 @@ function buildAgentPropertiesQueryString(
         k === 'buildingProject' ||
         k === 'renovationStatus' ||
         k === 'buildingStatus' ||
+        k === 'landStatus' ||
         k === 'balconies' ||
         k === 'rooms' ||
         k === 'bedrooms') &&
@@ -117,6 +126,7 @@ function buildAgentPropertiesQueryString(
     }
   }
   if (statusFilter) params.set('status', statusFilter);
+  if (visibilityFilter) params.set('listingVisibility', visibilityFilter);
   return params.toString();
 }
 
@@ -137,6 +147,7 @@ export default function AdminAgentDetailPage() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState('');
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
   const [sortBy, setSortBy] = useState('date_desc');
   const [propsLoading, setPropsLoading] = useState(false);
@@ -146,6 +157,7 @@ export default function AdminAgentDetailPage() {
   const clearAllFilters = useCallback(() => {
     setFilters({ ...DEFAULT_MAP_FILTERS });
     setStatusFilter('');
+    setVisibilityFilter('');
   }, []);
 
   const authHeaders = useCallback(() => {
@@ -184,14 +196,21 @@ export default function AdminAgentDetailPage() {
 
     setPropsLoading(true);
     try {
-      const qs = buildAgentPropertiesQueryString(filters, sortBy, page, statusFilter, userId);
+      const qs = buildAgentPropertiesQueryString(
+        filters,
+        sortBy,
+        page,
+        statusFilter,
+        visibilityFilter,
+        userId
+      );
       const res = await fetch(`${getApiBase()}/api/admin/properties?${qs}`, { headers });
       if (!res.ok) return;
       const data = await res.json();
       setProperties(data.properties || []);
       setPages(data.pages || 1);
       setPropertiesTotal(data.total ?? 0);
-      if (!filtersAreActive(filters) && !statusFilter) {
+      if (!filtersAreActive(filters) && !statusFilter && !visibilityFilter) {
         setAllPropertiesCount(data.total ?? 0);
       }
       trackSearchFilters('admin_agent_detail', filters, {
@@ -202,7 +221,7 @@ export default function AdminAgentDetailPage() {
     } finally {
       setPropsLoading(false);
     }
-  }, [userId, page, statusFilter, filters, sortBy, authHeaders, agentId]);
+  }, [userId, page, statusFilter, visibilityFilter, filters, sortBy, authHeaders, agentId]);
 
   useEffect(() => {
     (async () => {
@@ -241,7 +260,7 @@ export default function AdminAgentDetailPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, filters, sortBy]);
+  }, [statusFilter, visibilityFilter, filters, sortBy]);
 
   useEffect(() => {
     if (loading || initPropsLoading || !userId) return;
@@ -395,17 +414,16 @@ export default function AdminAgentDetailPage() {
             <h2 className="text-xl font-semibold text-gray-800">განცხადებები</h2>
             <div className="flex flex-wrap items-center gap-2">
               <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+                value={visibilityFilter}
+                onChange={(e) => setVisibilityFilter(e.target.value)}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
+                aria-label={t('listingVisibilityLabel')}
               >
-                <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
-                <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
-                <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
-                <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
-                <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
-                <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
-                <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
+                <option value="">{t('all_visibilities')}</option>
+                <option value="public">{t('listingMode_public')}</option>
+                <option value="unlisted">{t('listingMode_unlisted')}</option>
+                <option value="private">{t('listingMode_private')}</option>
+                <option value="sold">{t('listingMode_sold')}</option>
               </select>
               <select
                 value={statusFilter}
@@ -417,6 +435,19 @@ export default function AdminAgentDetailPage() {
                 <option value="active">აქტიური</option>
                 <option value="rejected">უარყოფილი</option>
                 <option value="sold">გაყიდული</option>
+              </select>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+              >
+                <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
+                <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
+                <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
+                <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
+                <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
+                <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
+                <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
               </select>
             </div>
           </div>
@@ -441,7 +472,7 @@ export default function AdminAgentDetailPage() {
               <p className="text-sm font-medium text-gray-800">
                 {propsLoading
                   ? t('loading', 'იტვირთება...')
-                  : filtersAreActive(filters) || statusFilter
+                  : filtersAreActive(filters) || statusFilter || visibilityFilter
                     ? t('found_results', {
                         count: propertiesTotal,
                         total: allPropertiesCount,
@@ -465,24 +496,34 @@ export default function AdminAgentDetailPage() {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ტიპი</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ფასი</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">სტატუსი</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">
+                    {t('listingVisibilityLabel')}
+                  </th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">მოქმედებები</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {propsLoading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                       იტვირთება...
                     </td>
                   </tr>
                 ) : properties.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                       განცხადებები ვერ მოიძებნა
                     </td>
                   </tr>
                 ) : (
-                  properties.map((property) => (
+                  properties.map((property) => {
+                    const vis = property.listingVisibility || 'public';
+                    const visibilityNames: Record<string, string> = {
+                      public: t('listingMode_public'),
+                      unlisted: t('listingMode_unlisted'),
+                      private: t('listingMode_private'),
+                    };
+                    return (
                     <tr key={property._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -540,6 +581,15 @@ export default function AdminAgentDetailPage() {
                           }
                         >
                           {statusNames[property.status] || property.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${
+                            visibilityColors[vis] || 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {visibilityNames[vis] || vis}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -622,32 +672,72 @@ export default function AdminAgentDetailPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
 
             {pages > 1 && (
-              <div className="px-6 py-4 bg-gray-50 flex justify-between items-center">
+              <div className="flex flex-wrap items-center justify-center gap-2 bg-gray-50 px-4 py-4 sm:px-6">
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-4 py-2 bg-white border rounded-lg disabled:opacity-50"
+                  disabled={page === 1 || propsLoading}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  ← წინა
+                  ←
                 </button>
-                <span className="text-gray-600">
-                  გვერდი {page} / {pages}
-                </span>
+
+                {Array.from({ length: pages }, (_, i) => i + 1).map((pageNum) => {
+                  const showPage =
+                    pageNum === 1 ||
+                    pageNum === pages ||
+                    Math.abs(pageNum - page) <= 2;
+
+                  const showEllipsis =
+                    (pageNum === 2 && page > 4) ||
+                    (pageNum === pages - 1 && page < pages - 3);
+
+                  if (showEllipsis) {
+                    return (
+                      <span key={`ellipsis-${pageNum}`} className="px-1 text-gray-400">
+                        …
+                      </span>
+                    );
+                  }
+
+                  if (!showPage) return null;
+
+                  return (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setPage(pageNum)}
+                      disabled={propsLoading}
+                      className={`min-w-[2.5rem] rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+                        pageNum === page
+                          ? 'border-blue-600 bg-blue-600 text-white'
+                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.min(pages, p + 1))}
-                  disabled={page === pages}
-                  className="px-4 py-2 bg-white border rounded-lg disabled:opacity-50"
+                  disabled={page === pages || propsLoading}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  შემდეგი →
+                  →
                 </button>
+
+                <span className="ml-2 w-full text-center text-sm text-gray-500 sm:ml-3 sm:w-auto">
+                  გვერდი {page} / {pages}
+                </span>
               </div>
             )}
           </div>

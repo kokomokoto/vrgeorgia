@@ -36,6 +36,7 @@ export function Header() {
   const compareText = mounted ? t('compare') : 'შედარება';
   const agentsText = mounted ? t('agents') : 'აგენტები';
   const servicesNavText = mounted ? t('services_nav') : 'მომსახურება';
+  const aboutNavText = mounted ? t('about_nav') : 'შესახებ';
   const messagesText = mounted ? t('messages') : 'შეტყობინებები';
   const adminText = mounted ? t('admin_panel') : 'ადმინ პანელი';
   const isAdmin = profileLoaded && isAdminRole(user?.role);
@@ -71,6 +72,9 @@ export function Header() {
               />
             </svg>
             {servicesNavText}
+          </Link>
+          <Link href="/about" className="text-sm text-slate-700 hover:text-slate-900 dark:text-zinc-200 dark:hover:text-white">
+            {aboutNavText}
           </Link>
           <Link href="/agents" className="text-sm flex items-center gap-1 text-slate-700 hover:text-slate-900 dark:text-zinc-200 dark:hover:text-white">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -153,6 +157,9 @@ export function Header() {
                 />
               </svg>
               {servicesNavText}
+            </Link>
+            <Link href="/about" onClick={() => setOpen(false)} className="py-2 text-sm text-slate-800 dark:text-zinc-100">
+              {aboutNavText}
             </Link>
             <Link href="/agents" onClick={() => setOpen(false)} className="flex flex-row items-center gap-2 py-2 text-sm text-slate-800 dark:text-zinc-100">
               <svg className="h-4 w-4 shrink-0" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>

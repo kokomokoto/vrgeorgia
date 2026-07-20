@@ -11,7 +11,7 @@ import { getTourBuilderPublicBase, normalizeTourLink } from '../utils/tourLink.j
 import { TourModel, SceneModel } from '../models/tourModels.js';
 import { deleteTour } from '../services/tour/tourDb.js';
 import { syncAgentProfileForUser, backfillMissingAgentProfiles } from '../services/agentProfile.js';
-import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
+import { applyPropertyQueryFilters, parsePropertySortOption, applyListingVisibilityFilter } from '../utils/propertyQueryFilters.js';
 import { getSearchAnalyticsStats } from '../utils/searchAnalyticsAgg.js';
 import { getAgentPortfolioStats } from '../utils/agentPortfolioStats.js';
 import { parseAnalyticsPeriodDays, analyticsPeriodStartDate } from '../utils/analyticsPeriod.js';
@@ -485,6 +485,11 @@ router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
     if (req.query.userId) {
       filter.userId = req.query.userId;
     }
+
+    applyListingVisibilityFilter(
+      filter,
+      req.query.listingVisibility || req.query.brokerListingMode || ''
+    );
 
     const filterQuery = {
       ...req.query,

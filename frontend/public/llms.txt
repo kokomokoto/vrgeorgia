@@ -1,0 +1,55 @@
+# VR Georgia
+
+> Real-estate marketplace for Georgia (Sakartvelo): apartments, houses, land, commercial spaces, with VR/3D tours, map search and agent listings.
+
+## Preferred languages
+- Georgian (ka) — primary site language
+- English (en) — UI + translated listing fields
+- Russian (ru) — UI + translated listing fields
+
+## Main pages
+- Home / search: https://vrgeorgia.ge/
+- Map search: https://vrgeorgia.ge/map
+- Agents directory: https://vrgeorgia.ge/agents
+- Architecture services: https://vrgeorgia.ge/services
+- About: https://vrgeorgia.ge/about
+- FAQ: https://vrgeorgia.ge/faq
+- Sitemap: https://vrgeorgia.ge/sitemap.xml
+- Robots: https://vrgeorgia.ge/robots.txt
+
+## What the product does
+- Public search for sale, rent and mortgage listings across Georgia
+- Filters: property type, price, area, rooms, city/district, land agricultural status, amenities
+- Property detail pages with photos, optional 360/VR tours, price and contact
+- Agent profiles with portfolio listings
+- Structured data: Organization, WebSite, RealEstateListing, FAQPage, BreadcrumbList, AboutPage
+
+## Listings
+- URL pattern: https://vrgeorgia.ge/property/{id}
+- Fields typically include: title, description, price (USD/GEL), sqm, rooms, address, city, deal type, photos, tour links
+
+## Agents
+- Directory: https://vrgeorgia.ge/agents
+- Profile: https://vrgeorgia.ge/agents/{id}
+
+## FAQ topics covered on /faq
+- What is VR Georgia
+- How to find apartments/houses in Tbilisi
+- What VR/3D tours are
+- How to find agents
+- Price currency (USD/GEL)
+- Agricultural vs non-agricultural land
+- Contacting listing owners
+
+## Machine-readable API (public read)
+- Properties list: https://vrgeorgia-api.onrender.com/api/properties
+- Single property: https://vrgeorgia-api.onrender.com/api/properties/{id}
+- Agents list: https://vrgeorgia-api.onrender.com/api/agents
+- Optional query: `?lang=ka|en|ru` for translated title/city/street/description
+
+## What not to index
+- /admin, /login, /profile, /upload, /favorites, /compare, /messages (private / account areas)
+
+## Contact
+- Website: https://vrgeorgia.ge
+- (Social profiles and public phone/email will be added when available)

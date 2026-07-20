@@ -5,11 +5,14 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'next/navigation';
 import { getAgent, getAgentProperties, getAgentReviews, addAgentReview, Agent, AgentReview, Property, resolveImageUrl } from '@/lib/api';
+import { useAuth } from '@/components/AuthProvider';
 import { PropertyCard } from '@/components/PropertyCard';
 import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { Filters, type FiltersState } from '@/components/Filters';
 import { DEFAULT_MAP_FILTERS, filtersAreActive, filtersToPropertyQuery } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
+import { apiLang } from '@/lib/apiLang';
+import { isAdminRole } from '@/lib/userRoles';
 function AgentPhotoLightbox({
   src,
   alt,
@@ -74,14 +77,27 @@ export default function AgentProfilePage() {
   const { t, i18n } = useTranslation();
   const params = useParams();
   const agentId = params.id as string;
-  
+  const { user, profileLoaded } = useAuth();
+  const isAdmin = profileLoaded && isAdminRole(user?.role);
+  const ITEMS_PER_PAGE = 20;
+
   const [agent, setAgent] = useState<Agent | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertiesTotal, setPropertiesTotal] = useState(0);
   const [allPropertiesCount, setAllPropertiesCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [rangeProperties, setRangeProperties] = useState<Property[]>([]);
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
   const [sortBy, setSortBy] = useState('date_desc');
+  const [visibilityFilter, setVisibilityFilter] = useState('');
+  const [visibilityCounts, setVisibilityCounts] = useState<{
+    all: number;
+    public: number;
+    unlisted: number;
+    private: number;
+    sold: number;
+  } | null>(null);
   const [reviews, setReviews] = useState<AgentReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [propertiesLoading, setPropertiesLoading] = useState(true);
@@ -95,9 +111,41 @@ export default function AgentProfilePage() {
   const [submitting, setSubmitting] = useState(false);
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
 
+  const adminQuery = isAdmin
+    ? {
+        adminView: true as const,
+        ...(visibilityFilter ? { listingVisibility: visibilityFilter } : {}),
+      }
+    : {};
+
   useEffect(() => {
     loadAgentData();
-  }, [agentId]);
+  }, [agentId, isAdmin]);
+
+  // ფილტრის range-ისთვის მსუბუქი ნიმუში (არა სრული სია)
+  useEffect(() => {
+    if (!agentId || loading) return;
+    let alive = true;
+    getAgentProperties(agentId, {
+      lang: apiLang(i18n.language),
+      page: 1,
+      limit: 200,
+      sort: 'date_desc',
+      ...(isAdmin ? { adminView: true } : {}),
+    })
+      .then((r) => {
+        if (!alive) return;
+        setRangeProperties(r.properties);
+        if (r.visibilityCounts) setVisibilityCounts(r.visibilityCounts);
+        setAllPropertiesCount(r.visibilityCounts?.all ?? r.total ?? r.properties.length);
+      })
+      .catch(() => {
+        if (alive) setRangeProperties([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [agentId, isAdmin, i18n.language, loading]);
 
   useEffect(() => {
     if (!agentId || loading) return;
@@ -109,19 +157,23 @@ export default function AgentProfilePage() {
 
       getAgentProperties(agentId, {
         ...filtersToPropertyQuery(filters, sortBy, i18n.language),
-        limit: 200,
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+        ...adminQuery,
       })
         .then((r) => {
           if (!alive) return;
           setProperties(r.properties);
           setPropertiesTotal(r.total);
-          if (!filtersAreActive(filters)) {
-            setAllPropertiesCount(r.total);
+          setTotalPages(r.totalPages ?? (Math.ceil((r.total || 0) / ITEMS_PER_PAGE) || 1));
+          if (r.visibilityCounts) setVisibilityCounts(r.visibilityCounts);
+          if (!filtersAreActive(filters) && !visibilityFilter) {
+            setAllPropertiesCount(r.visibilityCounts?.all ?? r.total);
           }
           trackSearchFilters('agent', filters, {
             agentId,
             sort: sortBy,
-            resultCount: r.properties.length,
+            resultCount: r.total ?? r.properties.length,
           });
         })
         .catch((err: Error) => {
@@ -138,23 +190,43 @@ export default function AgentProfilePage() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [agentId, filters, sortBy, i18n.language, loading]);
+  }, [agentId, filters, sortBy, i18n.language, loading, isAdmin, visibilityFilter, currentPage]);
 
   const clearAllFilters = useCallback(() => {
+    setCurrentPage(1);
     setFilters({ ...DEFAULT_MAP_FILTERS });
+    setVisibilityFilter('');
   }, []);
+
+  const handleFiltersChange = useCallback((next: FiltersState) => {
+    setCurrentPage(1);
+    setFilters(next);
+  }, []);
+
+  const handleSortChange = useCallback((next: string) => {
+    setCurrentPage(1);
+    setSortBy(next);
+  }, []);
+
+  const handleVisibilityChange = useCallback((next: string) => {
+    setCurrentPage(1);
+    setVisibilityFilter(next);
+  }, []);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   async function loadAgentData() {
     try {
       setLoading(true);
-      const [agentData, propsData, reviewsData] = await Promise.all([
+      setCurrentPage(1);
+      const [agentData, reviewsData] = await Promise.all([
         getAgent(agentId),
-        getAgentProperties(agentId, { limit: 200 }),
         getAgentReviews(agentId),
       ]);
       setAgent(agentData);
-      setRangeProperties(propsData.properties);
-      setAllPropertiesCount(propsData.total ?? propsData.properties.length);
       setReviews(reviewsData);
     } catch (err: any) {
       setError(err.message);
@@ -353,21 +425,80 @@ export default function AgentProfilePage() {
         <div className="mb-8">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-bold text-slate-900">{t('agentProperties')}</h2>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
-            >
-              <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
-              <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
-              <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
-              <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
-              <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
-              <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
-              <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
-              <option value="views_asc">{t('sort_views_asc', 'ნახვები ↑')}</option>
-            </select>
+            <div className="flex flex-wrap items-center gap-2">
+              {isAdmin && (
+                <select
+                  value={visibilityFilter}
+                  onChange={(e) => handleVisibilityChange(e.target.value)}
+                  className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm text-rose-800"
+                  aria-label={t('listingVisibilityLabel')}
+                >
+                  <option value="">
+                    {t('all_visibilities')}
+                    {visibilityCounts ? ` (${visibilityCounts.all})` : ''}
+                  </option>
+                  <option value="public">
+                    {t('listingMode_public')}
+                    {visibilityCounts ? ` (${visibilityCounts.public})` : ''}
+                  </option>
+                  <option value="unlisted">
+                    {t('listingMode_unlisted')}
+                    {visibilityCounts ? ` (${visibilityCounts.unlisted})` : ''}
+                  </option>
+                  <option value="private">
+                    {t('listingMode_private')}
+                    {visibilityCounts ? ` (${visibilityCounts.private})` : ''}
+                  </option>
+                  <option value="sold">
+                    {t('listingMode_sold')}
+                    {visibilityCounts ? ` (${visibilityCounts.sold})` : ''}
+                  </option>
+                </select>
+              )}
+              <select
+                value={sortBy}
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
+              >
+                <option value="date_desc">{t('sort_date_desc', 'ახალი → ძველი')}</option>
+                <option value="date_asc">{t('sort_date_asc', 'ძველი → ახალი')}</option>
+                <option value="price_asc">{t('sort_price_asc', 'ფასი ↑')}</option>
+                <option value="price_desc">{t('sort_price_desc', 'ფასი ↓')}</option>
+                <option value="area_asc">{t('sort_area_asc', 'ფართობი ↑')}</option>
+                <option value="area_desc">{t('sort_area_desc', 'ფართობი ↓')}</option>
+                <option value="views_desc">{t('sort_views_desc', 'ნახვები ↓')}</option>
+                <option value="views_asc">{t('sort_views_asc', 'ნახვები ↑')}</option>
+              </select>
+            </div>
           </div>
+
+          {isAdmin && (
+            <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              {t(
+                'adminAgentVisibilityHint',
+                'ადმინის რეჟიმი: შეგიძლიათ ნახოთ და გაფილტროთ საჯარო, ლინკით დამალული, პირადი და გაყიდული განცხადებები.'
+              )}
+              {visibilityCounts && (
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-white/80 px-2 py-0.5">
+                    {t('all_visibilities')}: {visibilityCounts.all}
+                  </span>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
+                    {t('listingMode_public')}: {visibilityCounts.public}
+                  </span>
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-800">
+                    {t('listingMode_unlisted')}: {visibilityCounts.unlisted}
+                  </span>
+                  <span className="rounded-full bg-slate-200 px-2 py-0.5 text-slate-800">
+                    {t('listingMode_private')}: {visibilityCounts.private}
+                  </span>
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-gray-800">
+                    {t('listingMode_sold')}: {visibilityCounts.sold}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
             <p className="mb-3 text-sm text-slate-500">
@@ -375,7 +506,7 @@ export default function AgentProfilePage() {
             </p>
             <Filters
               value={filters}
-              onChange={setFilters}
+              onChange={handleFiltersChange}
               onClearAll={clearAllFilters}
               rangeProperties={rangeProperties}
               showCategories
@@ -386,12 +517,17 @@ export default function AgentProfilePage() {
             <p className="text-sm font-medium text-slate-800">
               {propertiesLoading
                 ? t('loading', 'იტვირთება...')
-                : filtersAreActive(filters) && allPropertiesCount > 0
+                : (filtersAreActive(filters) || Boolean(visibilityFilter)) && allPropertiesCount > 0
                   ? t('agentListingsFoundFiltered', {
                       count: propertiesTotal,
                       total: allPropertiesCount,
                     })
                   : t('agentListingsFound', { count: propertiesTotal })}
+              {!propertiesLoading && totalPages > 1 && (
+                <span className="ml-2 text-slate-500">
+                  ({t('page_of', 'გვერდი')} {currentPage} / {totalPages})
+                </span>
+              )}
             </p>
           </div>
 
@@ -400,15 +536,76 @@ export default function AgentProfilePage() {
           )}
 
           {propertiesLoading ? (
-            <PropertyCardGridSkeleton count={6} gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" />
+            <PropertyCardGridSkeleton count={8} gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" />
           ) : properties.length === 0 ? (
             <p className="text-slate-500">{t('noProperties')}</p>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {properties.map((prop) => (
-                <PropertyCard key={prop._id} p={prop} />
-              ))}
-            </div>
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {properties.map((prop) => (
+                  <PropertyCard key={prop._id} p={prop} />
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1 || propertiesLoading}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ←
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                    const showPage =
+                      pageNum === 1 ||
+                      pageNum === totalPages ||
+                      Math.abs(pageNum - currentPage) <= 2;
+
+                    const showEllipsis =
+                      (pageNum === 2 && currentPage > 4) ||
+                      (pageNum === totalPages - 1 && currentPage < totalPages - 3);
+
+                    if (showEllipsis) {
+                      return (
+                        <span key={`ellipsis-${pageNum}`} className="px-1 text-slate-400">
+                          …
+                        </span>
+                      );
+                    }
+
+                    if (!showPage) return null;
+
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => handlePageChange(pageNum)}
+                        disabled={propertiesLoading}
+                        className={`min-w-[2.5rem] rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+                          pageNum === currentPage
+                            ? 'border-blue-600 bg-blue-600 text-white'
+                            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || propertiesLoading}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    →
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
         

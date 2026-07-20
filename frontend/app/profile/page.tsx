@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
 import { Filters, type FiltersState } from '@/components/Filters';
+import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty, changePassword } from '@/lib/api';
 import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { isPanoramaPhoto } from '@/lib/panorama';
@@ -567,11 +568,8 @@ export default function ProfilePage() {
                         {property.city}
                         {property.region ? `, ${property.region}` : ''}
                       </p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <p className="text-sm font-semibold text-blue-600">
-                          {property.priceCurrency === 'GEL' ? '₾' : '$'}
-                          {property.price.toLocaleString()}
-                        </p>
+                      <div className="mt-1 flex items-center gap-3">
+                        <PropertyPriceRow p={property} compact className="min-w-0 flex-1" />
                         {property.views !== undefined && (
                           <span className="text-xs text-slate-400">👁 {property.views}</span>
                         )}

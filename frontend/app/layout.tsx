@@ -3,6 +3,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { PageTracker } from '@/components/PageTracker';
 import { SiteChrome } from '@/components/SiteChrome';
+import { buildOrganizationJsonLd, jsonLdScript } from '@/lib/structuredData';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
@@ -29,9 +30,20 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
   metadataBase: new URL('https://vrgeorgia.ge'),
+  alternates: {
+    canonical: 'https://vrgeorgia.ge',
+  },
 };
+
+const orgJsonLd = buildOrganizationJsonLd();
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -39,6 +51,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <meta name="theme-color" content="#2563eb" />
+        <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(orgJsonLd) }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var k='vr-theme';var s=localStorage.getItem(k);var d=document.documentElement;if(s==='dark')d.classList.add('dark');else if(s==='light')d.classList.remove('dark');}catch(e){}})();`,

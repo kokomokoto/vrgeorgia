@@ -76,14 +76,18 @@ export default function MapSearchClient() {
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
-      listProperties(filtersToPropertyQuery(filters, sortBy, i18n.language))
+      listProperties({
+        ...filtersToPropertyQuery(filters, sortBy, i18n.language),
+        page: 1,
+        limit: 5000,
+      })
         .then((r) => {
           if (!alive) return;
           setProperties(r.properties);
           setSelectedId(null);
           setHoveredId(null);
           setMapBounds(null);
-          trackSearchFilters('map', filters, { sort: sortBy, resultCount: r.properties.length });
+          trackSearchFilters('map', filters, { sort: sortBy, resultCount: r.total ?? r.properties.length });
         })
         .catch((e) => {
           if (!alive) return;
@@ -109,7 +113,11 @@ export default function MapSearchClient() {
   React.useEffect(() => {
     let alive = true;
     const rangeFilters = omitPriceAreaFilters(filters);
-    listProperties(filtersToPropertyQuery(rangeFilters, 'date_desc', i18n.language))
+    listProperties({
+      ...filtersToPropertyQuery(rangeFilters, 'date_desc', i18n.language),
+      page: 1,
+      limit: 5000,
+    })
       .then((r) => {
         if (alive) setRangeProperties(r.properties);
       })

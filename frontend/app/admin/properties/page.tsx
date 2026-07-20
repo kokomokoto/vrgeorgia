@@ -25,6 +25,7 @@ interface AdminProperty {
   tbilisiDistrict: string;
   sqm: number;
   status: string;
+  listingVisibility?: 'public' | 'unlisted' | 'private';
   pinned?: boolean;
   photos: string[];
   userId?: {
@@ -44,7 +45,8 @@ function buildPropertiesQueryString(
   filters: FiltersState,
   sortBy: string,
   page: number,
-  statusFilter: string
+  statusFilter: string,
+  visibilityFilter: string
 ): string {
   const query: PropertyQuery = {
     ...filtersToPropertyQuery(filters, sortBy),
@@ -63,6 +65,7 @@ function buildPropertiesQueryString(
         k === 'buildingProject' ||
         k === 'renovationStatus' ||
         k === 'buildingStatus' ||
+        k === 'landStatus' ||
         k === 'balconies' ||
         k === 'rooms' ||
         k === 'bedrooms') &&
@@ -74,6 +77,7 @@ function buildPropertiesQueryString(
     }
   }
   if (statusFilter) params.set('status', statusFilter);
+  if (visibilityFilter) params.set('listingVisibility', visibilityFilter);
   return params.toString();
 }
 
@@ -104,6 +108,9 @@ function AdminProperties() {
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
+  const [visibilityFilter, setVisibilityFilter] = useState(
+    searchParams.get('listingVisibility') || searchParams.get('visibility') || ''
+  );
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
   const [sortBy, setSortBy] = useState('date_desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -116,6 +123,8 @@ function AdminProperties() {
 
   const clearAllFilters = useCallback(() => {
     setFilters({ ...DEFAULT_MAP_FILTERS });
+    setStatusFilter('');
+    setVisibilityFilter('');
   }, []);
 
   const fetchProperties = useCallback(async (token: string, qs: string) => {
@@ -166,7 +175,7 @@ function AdminProperties() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, filters, sortBy]);
+  }, [statusFilter, visibilityFilter, filters, sortBy]);
 
   useEffect(() => {
     if (initLoading) return;
@@ -180,7 +189,7 @@ function AdminProperties() {
       setError('');
 
       try {
-        const qs = buildPropertiesQueryString(filters, sortBy, page, statusFilter);
+        const qs = buildPropertiesQueryString(filters, sortBy, page, statusFilter, visibilityFilter);
         const data = await fetchProperties(token, qs);
         if (!alive || !data) return;
         setProperties(data.properties || []);
@@ -202,12 +211,12 @@ function AdminProperties() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [filters, sortBy, page, statusFilter, i18n.language, initLoading, fetchProperties]);
+  }, [filters, sortBy, page, statusFilter, visibilityFilter, i18n.language, initLoading, fetchProperties]);
 
   const refreshList = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    const qs = buildPropertiesQueryString(filters, sortBy, page, statusFilter);
+    const qs = buildPropertiesQueryString(filters, sortBy, page, statusFilter, visibilityFilter);
     const data = await fetchProperties(token, qs);
     if (data) {
       setProperties(data.properties || []);
@@ -215,7 +224,7 @@ function AdminProperties() {
       setPages(data.pages || 1);
       setSelectedIds([]);
     }
-  }, [filters, sortBy, page, statusFilter, fetchProperties]);
+  }, [filters, sortBy, page, statusFilter, visibilityFilter, fetchProperties]);
 
   const handleStatusChange = async (propertyId: string, status: string) => {
     const reason = status === 'rejected' ? (prompt('მიუთითეთ უარყოფის მიზეზი') || '').trim() : '';
@@ -317,6 +326,18 @@ function AdminProperties() {
     mortgage: 'გირავდება',
   };
 
+  const visibilityNames: Record<string, string> = {
+    public: t('listingMode_public'),
+    unlisted: t('listingMode_unlisted'),
+    private: t('listingMode_private'),
+  };
+
+  const visibilityColors: Record<string, string> = {
+    public: 'bg-emerald-100 text-emerald-700',
+    unlisted: 'bg-blue-100 text-blue-700',
+    private: 'bg-slate-200 text-slate-700',
+  };
+
   const statusNames: Record<string, string> = {
     pending: 'მოლოდინში',
     active: 'აქტიური',
@@ -357,6 +378,18 @@ function AdminProperties() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={visibilityFilter}
+              onChange={(e) => setVisibilityFilter(e.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
+              aria-label={t('listingVisibilityLabel')}
+            >
+              <option value="">{t('all_visibilities')}</option>
+              <option value="public">{t('listingMode_public')}</option>
+              <option value="unlisted">{t('listingMode_unlisted')}</option>
+              <option value="private">{t('listingMode_private')}</option>
+              <option value="sold">{t('listingMode_sold')}</option>
+            </select>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -429,11 +462,12 @@ function AdminProperties() {
           <table className="w-full min-w-[1080px] table-fixed">
             <colgroup>
               <col className="w-12" />
-              <col className="w-72" />
+              <col className="w-64" />
               <col className="w-28" />
               <col className="w-32" />
-              <col className="w-56" />
+              <col className="w-48" />
               <col className="w-28" />
+              <col className="w-36" />
               <col className="w-44" />
             </colgroup>
             <thead className="bg-gray-50">
@@ -452,6 +486,9 @@ function AdminProperties() {
                 <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">ფასი</th>
                 <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">მფლობელი</th>
                 <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">სტატუსი</th>
+                <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">
+                  {t('listingVisibilityLabel')}
+                </th>
                 <th className="sticky right-0 z-10 bg-gray-50 px-4 py-4 text-right text-sm font-semibold text-gray-600 shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.12)]">
                   მოქმედებები
                 </th>
@@ -460,13 +497,13 @@ function AdminProperties() {
             <tbody className="divide-y divide-gray-100">
               {initLoading || listLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                     იტვირთება...
                   </td>
                 </tr>
               ) : properties.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                     განცხადებები ვერ მოიძებნა
                   </td>
                 </tr>
@@ -537,6 +574,18 @@ function AdminProperties() {
                       >
                         {statusNames[property.status] || property.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      {(() => {
+                        const vis = property.listingVisibility || 'public';
+                        return (
+                          <span
+                            className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${visibilityColors[vis] || 'bg-gray-100 text-gray-700'}`}
+                          >
+                            {visibilityNames[vis] || vis}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="sticky right-0 z-10 bg-white px-4 py-4 text-right align-top shadow-[-8px_0_12px_-8px_rgba(0,0,0,0.12)] group-hover:bg-gray-50">
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -619,24 +668,65 @@ function AdminProperties() {
           </table>
 
           {pages > 1 && (
-            <div className="flex items-center justify-between bg-gray-50 px-6 py-4">
+            <div className="flex flex-wrap items-center justify-center gap-2 bg-gray-50 px-4 py-4 sm:px-6">
               <button
+                type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="rounded-lg border bg-white px-4 py-2 disabled:opacity-50"
+                disabled={page === 1 || listLoading}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
-                ← წინა
+                ←
               </button>
-              <span className="text-gray-600">
+
+              {Array.from({ length: pages }, (_, i) => i + 1).map((pageNum) => {
+                const showPage =
+                  pageNum === 1 ||
+                  pageNum === pages ||
+                  Math.abs(pageNum - page) <= 2;
+
+                const showEllipsis =
+                  (pageNum === 2 && page > 4) ||
+                  (pageNum === pages - 1 && page < pages - 3);
+
+                if (showEllipsis) {
+                  return (
+                    <span key={`ellipsis-${pageNum}`} className="px-1 text-gray-400">
+                      …
+                    </span>
+                  );
+                }
+
+                if (!showPage) return null;
+
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setPage(pageNum)}
+                    disabled={listLoading}
+                    className={`min-w-[2.5rem] rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+                      pageNum === page
+                        ? 'border-blue-600 bg-blue-600 text-white'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                disabled={page === pages || listLoading}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                →
+              </button>
+
+              <span className="ml-2 w-full text-center text-sm text-gray-500 sm:ml-3 sm:w-auto">
                 გვერდი {page} / {pages}
               </span>
-              <button
-                onClick={() => setPage((p) => Math.min(pages, p + 1))}
-                disabled={page === pages}
-                className="rounded-lg border bg-white px-4 py-2 disabled:opacity-50"
-              >
-                შემდეგი →
-              </button>
             </div>
           )}
         </div>

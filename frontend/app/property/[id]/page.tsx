@@ -339,6 +339,8 @@ function PropertyDetailInner() {
         const similarQuery: Parameters<typeof listProperties>[0] = {
           type: [r.property.type],
           lang,
+          page: 1,
+          limit: 20,
         };
         if (r.property.region) {
           similarQuery.region = r.property.region;

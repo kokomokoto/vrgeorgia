@@ -204,6 +204,7 @@ export type PropertyQuery = {
   lang?: string;
   page?: number;
   limit?: number;
+  includeTypeCounts?: boolean | string;
   brokerListingMode?: string;
   userId?: string;
 };
@@ -219,7 +220,14 @@ export async function listProperties(query: PropertyQuery) {
     }
   }
   const qs = new URLSearchParams(params).toString();
-  return request<{ properties: Property[] }>(`/api/properties${qs ? `?${qs}` : ''}`);
+  return request<{
+    properties: Property[];
+    total: number;
+    page: number;
+    totalPages: number;
+    limit: number;
+    typeCounts?: Record<string, number>;
+  }>(`/api/properties${qs ? `?${qs}` : ''}`);
 }
 
 export async function getProperty(
@@ -427,6 +435,8 @@ export async function getAgent(id: string) {
 export type AgentPropertiesQuery = PropertyQuery & {
   page?: number;
   limit?: number;
+  adminView?: boolean | string;
+  listingVisibility?: string;
 };
 
 export async function getAgentProperties(agentId: string, query: AgentPropertiesQuery = {}) {
@@ -457,9 +467,20 @@ export async function getAgentProperties(agentId: string, query: AgentProperties
   }
 
   const qs = new URLSearchParams(params).toString();
-  return request<{ properties: Property[]; total: number; page: number; totalPages: number }>(
-    `/api/agents/${agentId}/properties?${qs}`
-  );
+  return request<{
+    properties: Property[];
+    total: number;
+    page: number;
+    totalPages: number;
+    adminView?: boolean;
+    visibilityCounts?: {
+      all: number;
+      public: number;
+      unlisted: number;
+      private: number;
+      sold: number;
+    };
+  }>(`/api/agents/${agentId}/properties?${qs}`);
 }
 
 export async function getAgentReviews(agentId: string) {

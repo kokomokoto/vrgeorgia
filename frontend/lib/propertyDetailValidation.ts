@@ -32,6 +32,15 @@ export function clampFloorField(floor: string, totalFloors: string): string {
 
 export function applyTotalFloorsChange(
   totalFloors: string,
+  _floor: string
+): { floor: string; totalFloors: string } {
+  // Do not clamp floor while totalFloors is being typed (e.g. "1" before "12").
+  return { totalFloors, floor: _floor };
+}
+
+/** Clamp floor after totalFloors input is finished (blur/submit). */
+export function finalizeFloorAfterTotalChange(
+  totalFloors: string,
   floor: string
 ): { floor: string; totalFloors: string } {
   return {

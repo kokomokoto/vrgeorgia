@@ -267,3 +267,30 @@ export async function applyPropertyQueryFilters(filter, query) {
     }
   }
 }
+
+/**
+ * Admin / broker listing visibility filter.
+ * @param {Record<string, unknown>} filter
+ * @param {string} mode public | unlisted | private | sold | ''
+ */
+export function applyListingVisibilityFilter(filter, mode) {
+  const m = String(mode || '').trim();
+  if (!m || m === 'all') return;
+
+  if (m === 'sold') {
+    filter.status = 'sold';
+    return;
+  }
+
+  if (m === 'public') {
+    filter.$and = filter.$and || [];
+    filter.$and.push({
+      $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
+    });
+    return;
+  }
+
+  if (m === 'unlisted' || m === 'private') {
+    filter.listingVisibility = m;
+  }
+}

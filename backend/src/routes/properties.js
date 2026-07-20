@@ -6,7 +6,7 @@ import { Property } from '../models/Property.js';
 import { User } from '../models/User.js';
 import Agent from '../models/Agent.js';
 import { requireAuth } from '../middleware/auth.js';
-import { translateText, detectLang } from '../services/translate.js';
+import { translateText } from '../services/translate.js';
 import { uploadPropertyPhotosMiddleware, deleteCloudinaryImage } from '../services/cloudinary.js';
 import { uploadPropertyPhotosFromFiles } from '../services/photoUpload.js';
 import { getJWTSecret } from '../config/jwt.js';
@@ -23,6 +23,16 @@ import {
   softDeletePropertyDoc,
 } from '../utils/propertySoftDelete.js';
 import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
+import {
+  applyTranslation,
+  ensurePropertyTranslations,
+  fillMissingTranslationsForResponse,
+  hasCompleteTranslation,
+  pickLanguage,
+  scheduleListTranslations,
+  scheduleTranslations,
+  stripHiddenCadastral,
+} from '../utils/propertyTranslations.js';
 import {
   discardEditDraft,
   ensureEditDraft,
@@ -76,13 +86,6 @@ async function userCanManageProperty(requestUserId, property) {
   if (requestUserId === ownerId) return true;
   const me = await User.findById(requestUserId).select('role').lean();
   return isAdminRole(me?.role);
-}
-
-function pickLanguage(req) {
-  const raw = (req.query.lang || req.headers['accept-language'] || 'ka').toString();
-  const lang = raw.split(',')[0].trim().toLowerCase().split(/[-_]/)[0];
-  const supported = ['ka', 'en', 'ru', 'tr', 'az'];
-  return supported.includes(lang) ? lang : 'ka';
 }
 
 /** სართული ≤ სულ სართული; რემონტის წელი ≥ მშენებლობის წელი */
@@ -140,149 +143,6 @@ function applyRoomLikeInFilter(filter, fieldName, rawJson) {
   } catch (e) {
     // ignore parse error
   }
-}
-
-// translations may be a Mongoose Map (from a doc) or a plain object (from .lean()).
-function getTranslationEntry(translations, lang) {
-  if (!translations) return null;
-  if (typeof translations.get === 'function') return translations.get(lang) || null;
-  return translations[lang] || null;
-}
-
-// Fields that get cached translations.
-const TRANSLATABLE_FIELDS = ['title', 'desc', 'city', 'street'];
-// region is a stable code (tbilisi, adjara, …) for i18n keys — never auto-translate.
-// Site languages we display in. A field is translated into the requested language
-// whenever its stored text is written in a different language (e.g. a Russian
-// street on the Georgian site → translated to Georgian).
-const AUTO_TRANSLATE_LANGS = ['ka', 'en', 'ru'];
-
-// Avoid duplicate concurrent translation work for the same property+lang.
-const translationInFlight = new Set();
-
-// A field needs translation for `lang` only if it holds text in a different language.
-function fieldNeedsTranslation(text, lang) {
-  const value = text ? String(text).trim() : '';
-  if (!value) return false;
-  return detectLang(value) !== lang;
-}
-
-function applyTranslation(property, lang) {
-  const t = getTranslationEntry(property.translations, lang);
-  if (!t) return property;
-  const out = { ...property };
-  for (const f of TRANSLATABLE_FIELDS) {
-    if (t[f] && String(t[f]).trim()) out[f] = t[f];
-  }
-  // region stays as the stable code (tbilisi, …) even if old caches stored a translated label
-  return out;
-}
-
-function hasCompleteTranslation(property, lang) {
-  const t = getTranslationEntry(property.translations, lang);
-  return TRANSLATABLE_FIELDS.every((f) => {
-    if (!fieldNeedsTranslation(property[f], lang)) return true; // already in `lang`
-    return t && t[f] && String(t[f]).trim();
-  });
-}
-
-/**
- * Translate a property's user-facing text into the given languages ONCE and persist
- * the result on the document (translations map). Safe to call fire-and-forget.
- * Returns the (possibly reloaded) translations plain object for immediate use.
- */
-async function ensurePropertyTranslations(propertyId, langs = AUTO_TRANSLATE_LANGS) {
-  const id = String(propertyId);
-  const targets = (Array.isArray(langs) ? langs : [langs]).filter(Boolean);
-  if (!targets.length) return null;
-
-  // lean read: we only need source text + existing translations.
-  const doc = await Property.findById(id)
-    .select([...TRANSLATABLE_FIELDS, 'translations'].join(' '))
-    .lean();
-  if (!doc) return null;
-
-  const result = { ...(doc.translations || {}) };
-  const missing = targets.filter((lang) => !hasCompleteTranslation(doc, lang));
-  if (!missing.length) return result;
-
-  const setOps = {};
-  for (const lang of missing) {
-    const guardKey = `${id}:${lang}`;
-    if (translationInFlight.has(guardKey)) continue;
-    translationInFlight.add(guardKey);
-    try {
-      const existing = getTranslationEntry(doc.translations, lang) || {};
-      const entry = { ...existing };
-      for (const field of TRANSLATABLE_FIELDS) {
-        const src = doc[field];
-        if (!fieldNeedsTranslation(src, lang)) continue;
-        if (entry[field] && String(entry[field]).trim()) continue;
-        const translated = await translateText(src, lang); // source auto-detected
-        if (translated && translated !== src) entry[field] = translated;
-      }
-      if (Object.keys(entry).length) {
-        setOps[`translations.${lang}`] = entry;
-        result[lang] = entry;
-      }
-    } catch (err) {
-      console.warn(`ensurePropertyTranslations ${guardKey} failed:`, err?.message || err);
-    } finally {
-      translationInFlight.delete(guardKey);
-    }
-  }
-
-  // Targeted $set avoids full-document validation (legacy docs may hold stale enums).
-  if (Object.keys(setOps).length) {
-    await Property.updateOne({ _id: id }, { $set: setOps });
-  }
-  return result;
-}
-
-// Fire-and-forget helper (never rejects to the caller).
-function scheduleTranslations(propertyId, langs = AUTO_TRANSLATE_LANGS) {
-  ensurePropertyTranslations(propertyId, langs).catch((err) =>
-    console.warn('scheduleTranslations failed:', err?.message || err)
-  );
-}
-
-// For list responses: fill missing translations in the background so subsequent
-// loads are served from the cache. Capped to avoid bursts on very large lists.
-function scheduleListTranslations(properties, lang, cap = 60) {
-  let count = 0;
-  for (const p of properties) {
-    if (count >= cap) break;
-    if (hasCompleteTranslation(p, lang)) continue;
-    count += 1;
-    scheduleTranslations(p._id, [lang]);
-  }
-}
-
-/**
- * Await missing translations for the first N incomplete items so the current
- * response uses the site language (e.g. Russian street → Georgian on KA).
- * Remaining items stay fire-and-forget via scheduleListTranslations.
- */
-async function fillMissingTranslationsForResponse(properties, lang, awaitCap = 25) {
-  const incomplete = properties.filter((p) => !hasCompleteTranslation(p, lang)).slice(0, awaitCap);
-  if (!incomplete.length) return;
-  await Promise.all(
-    incomplete.map(async (p) => {
-      try {
-        const translations = await ensurePropertyTranslations(p._id, [lang]);
-        if (translations) p.translations = translations;
-      } catch (err) {
-        console.warn('list translate failed:', p._id, err?.message || err);
-      }
-    })
-  );
-}
-
-/** საჯაროდ არ ჩანს საკადასტრო, თუ მონიშნულია დამალვა */
-function stripHiddenCadastral(p) {
-  if (!p?.cadastralHidden) return p;
-  const { cadastralCode, cadastralHidden, ...rest } = p;
-  return rest;
 }
 
 /** საჯარო სიისთვის: აქტიური/მოდერაციაში + საჯარო ხილვადობა */
@@ -556,13 +416,22 @@ router.get(
     query('priceCurrency').optional({ values: 'falsy' }).isIn(['USD', 'GEL']),
     query('priceType').optional({ values: 'falsy' }).isIn(['total', 'per_sqm']),
     query('sort').optional({ values: 'falsy' }).isString(),
-    query('propertyId').optional({ values: 'falsy' }).isString().trim()
+    query('propertyId').optional({ values: 'falsy' }).isString().trim(),
+    query('page').optional({ values: 'falsy' }).isInt({ min: 1 }),
+    query('limit').optional({ values: 'falsy' }).isInt({ min: 1, max: 5000 }),
+    query('includeTypeCounts').optional({ values: 'falsy' }).isIn(['true', '1']),
   ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const lang = pickLanguage(req);
+    const pageNum = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+    // Default 40 for list pages; map/range callers pass a higher explicit limit (max 5000).
+    const limitNum = Math.min(5000, Math.max(1, parseInt(String(req.query.limit || '40'), 10) || 40));
+    const skip = (pageNum - 1) * limitNum;
+    const wantTypeCounts =
+      req.query.includeTypeCounts === 'true' || req.query.includeTypeCounts === '1';
 
     // საჯარო სია: სტატუსი + listingVisibility (არ ჩანს private/unlisted/gsold)
     const filter = {
@@ -797,7 +666,20 @@ router.get(
     // ადმინის მიერ აპინული ობიექტები ყოველთვის პირველ რიგში, მერე არჩეული სორტი
     const finalSort = { pinned: -1, pinnedAt: -1, ...sortOption };
 
-    const properties = await Property.find(filter).sort(finalSort).limit(200).lean();
+    const findQuery = Property.find(filter).sort(finalSort).skip(skip).limit(limitNum).lean();
+    const countQuery = Property.countDocuments(filter);
+    const typeCountsQuery = wantTypeCounts
+      ? Property.aggregate([
+          { $match: filter },
+          { $group: { _id: '$type', count: { $sum: 1 } } },
+        ])
+      : Promise.resolve(null);
+
+    const [properties, total, typeCountRows] = await Promise.all([
+      findQuery,
+      countQuery,
+      typeCountsQuery,
+    ]);
 
     await fillMissingTranslationsForResponse(properties, lang);
     scheduleListTranslations(properties, lang);
@@ -806,7 +688,24 @@ router.get(
       const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
       return stripHiddenCadastral(safe);
     });
-    res.json({ properties: translated });
+
+    const payload = {
+      properties: translated,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      limit: limitNum,
+    };
+
+    if (typeCountRows) {
+      const typeCounts = {};
+      for (const row of typeCountRows) {
+        if (row?._id) typeCounts[row._id] = row.count;
+      }
+      payload.typeCounts = typeCounts;
+    }
+
+    res.json(payload);
   }
 );
 

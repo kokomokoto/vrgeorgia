@@ -50,6 +50,10 @@ export default function HomePage() {
   const [filters, setFilters] = React.useState<FiltersState>(HOME_FILTERS_INITIAL);
   const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const [properties, setProperties] = React.useState<Property[]>([]);
+  const [mapProperties, setMapProperties] = React.useState<Property[]>([]);
+  const [totalCount, setTotalCount] = React.useState(0);
+  const [totalPages, setTotalPages] = React.useState(1);
+  const [categoryCounts, setCategoryCounts] = React.useState<Record<string, number>>({});
   const [loading, setLoading] = React.useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -59,9 +63,11 @@ export default function HomePage() {
   const [mapOpen, setMapOpen] = React.useState(false);
   const [selectedMapPropertyId, setSelectedMapPropertyId] = React.useState<string | null>(null);
   const ITEMS_PER_PAGE = 40;
+  /** რუკის მარკერებისთვის — API max limit */
+  const MAP_FETCH_LIMIT = 5000;
 
   const homeMapProps = {
-    properties,
+    properties: mapProperties,
     richHoverTooltips: true as const,
     selectedPropertyId: selectedMapPropertyId,
     onPropertyMarkerClick: setSelectedMapPropertyId
@@ -75,7 +81,23 @@ export default function HomePage() {
 
   const clearAllFilters = React.useCallback(() => {
     clearHomeFiltersStorage();
+    setCurrentPage(1);
     setFilters({ ...HOME_FILTERS_INITIAL });
+  }, []);
+
+  const handleFiltersChange = React.useCallback((next: FiltersState) => {
+    setCurrentPage(1);
+    setFilters(next);
+  }, []);
+
+  const patchFilters = React.useCallback((updater: (prev: FiltersState) => FiltersState) => {
+    setCurrentPage(1);
+    setFilters(updater);
+  }, []);
+
+  const handleSortChange = React.useCallback((next: string) => {
+    setCurrentPage(1);
+    setSortBy(next);
   }, []);
 
   const tr = React.useCallback(
@@ -107,13 +129,22 @@ export default function HomePage() {
       setLoading(true);
       setError(null);
 
-      listProperties(filtersToPropertyQuery(filters, sortBy, i18n.language))
-        .then((r) => {
+      const baseQuery = filtersToPropertyQuery(filters, sortBy, i18n.language);
+
+      listProperties({
+        ...baseQuery,
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+      })
+        .then((listRes) => {
           if (!alive) return;
-          setProperties(r.properties);
-          setCurrentPage(1);
-          setSelectedMapPropertyId(null);
-          trackSearchFilters('home', filters, { sort: sortBy, resultCount: r.properties.length });
+          setProperties(listRes.properties);
+          setTotalCount(listRes.total ?? listRes.properties.length);
+          setTotalPages(listRes.totalPages ?? 1);
+          trackSearchFilters('home', filters, {
+            sort: sortBy,
+            resultCount: listRes.total ?? listRes.properties.length,
+          });
         })
         .catch((e) => {
           if (!alive) return;
@@ -130,31 +161,47 @@ export default function HomePage() {
       alive = false;
       window.clearTimeout(timer);
     };
+  }, [filters, sortBy, i18n.language, filtersHydrated, currentPage]);
+
+  // რუკის მარკერები — იგივე ფილტრებით, გვერდისგან დამოუკიდებლად
+  React.useEffect(() => {
+    if (!filtersHydrated) return;
+
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      listProperties({
+        ...filtersToPropertyQuery(filters, sortBy, i18n.language),
+        page: 1,
+        limit: MAP_FETCH_LIMIT,
+      })
+        .then((mapRes) => {
+          if (!alive) return;
+          setMapProperties(mapRes.properties);
+          setSelectedMapPropertyId(null);
+        })
+        .catch(() => {
+          if (!alive) return;
+          setMapProperties([]);
+        });
+    }, 400);
+
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
   }, [filters, sortBy, i18n.language, filtersHydrated]);
 
-  // ყველა პროპერტის ჩატვირთვა კატეგორიების რაოდენობისთვის
-  const [allProperties, setAllProperties] = React.useState<Property[]>([]);
+  // კატეგორიების რაოდენობა — მსუბუქი count, არა სრული სია
   React.useEffect(() => {
-    listProperties({ lang: apiLang(i18n.language) })
-      .then((r) => setAllProperties(r.properties))
+    listProperties({
+      lang: apiLang(i18n.language),
+      page: 1,
+      limit: 1,
+      includeTypeCounts: true,
+    })
+      .then((r) => setCategoryCounts(r.typeCounts || {}))
       .catch(() => {});
   }, [i18n.language]);
-
-  // კატეგორიების რაოდენობის გამოთვლა
-  const categoryCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    PROPERTY_CATEGORIES.forEach(cat => {
-      counts[cat.value] = allProperties.filter(p => p.type === cat.value).length;
-    });
-    return counts;
-  }, [allProperties]);
-
-  // პაგინაცია
-  const totalPages = Math.ceil(properties.length / ITEMS_PER_PAGE);
-  const paginatedProperties = React.useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return properties.slice(start, start + ITEMS_PER_PAGE);
-  }, [properties, currentPage]);
 
   // გვერდის ცვლილებისას ზემოთ სქროლი
   const handlePageChange = (page: number) => {
@@ -164,12 +211,12 @@ export default function HomePage() {
 
   const searchQuery = filters.q.trim();
   const showSkeleton = loading || !filtersHydrated;
-  const showEmptyResults = filtersHydrated && hasLoadedOnce && !loading && !error && properties.length === 0;
+  const showEmptyResults = filtersHydrated && hasLoadedOnce && !loading && !error && totalCount === 0;
 
   return (
     <div className="grid gap-4 text-slate-900">
       {/* ფილტრები ჰორიზონტალურად */}
-      <Filters value={filters} onChange={setFilters} onClearAll={clearAllFilters} />
+      <Filters value={filters} onChange={handleFiltersChange} onClearAll={clearAllFilters} />
 
       {/* კატეგორიები - მობაილზე ჩამოსაშლელი, დესკტოპზე ყოველთვის ჩანს */}
       <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
@@ -198,7 +245,7 @@ export default function HomePage() {
               return (
                 <button
                   key={cat.value}
-                  onClick={() => setFilters((prev) => togglePropertyType(prev, cat.value, isSelected))}
+                  onClick={() => patchFilters((prev) => togglePropertyType(prev, cat.value, isSelected))}
                   className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${
                     isSelected 
                       ? 'border-blue-500 bg-blue-50 dark:border-amber-500 dark:bg-amber-950/40' 
@@ -230,7 +277,7 @@ export default function HomePage() {
           return (
             <button
               key={cat.value}
-              onClick={() => setFilters((prev) => togglePropertyType(prev, cat.value, isSelected))}
+              onClick={() => patchFilters((prev) => togglePropertyType(prev, cat.value, isSelected))}
               className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all hover:shadow-md hover:scale-105 ${
                 isSelected 
                   ? 'border-blue-500 bg-blue-50 shadow-md dark:border-amber-500 dark:bg-amber-950/40 dark:shadow-amber-900/20' 
@@ -266,7 +313,7 @@ export default function HomePage() {
                   key={item.value}
                   type="button"
                   onClick={() =>
-                    setFilters((prev) => ({
+                    patchFilters((prev) => ({
                       ...prev,
                       landStatus: selected
                         ? (prev.landStatus || []).filter((s) => s !== item.value)
@@ -369,10 +416,10 @@ export default function HomePage() {
       ) : null}
 
       {/* სორტირება და რაოდენობა */}
-      {!showSkeleton && properties.length > 0 && (
+      {!showSkeleton && totalCount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-slate-600 dark:text-zinc-300">
-            {tr('found', 'ნაპოვნია')}: <span className="font-semibold text-slate-900 dark:text-amber-400">{properties.length}</span> {tr('objects', 'ობიექტი')}
+            {tr('found', 'ნაპოვნია')}: <span className="font-semibold text-slate-900 dark:text-amber-400">{totalCount}</span> {tr('objects', 'ობიექტი')}
             {totalPages > 1 && (
               <span className="ml-2">
                 ({tr('page_of', 'გვერდი')} {currentPage} / {totalPages})
@@ -384,7 +431,7 @@ export default function HomePage() {
             <select
               className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => handleSortChange(e.target.value)}
             >
               <option value="date_desc">{tr('sort_date_desc', 'ახალი → ძველი')}</option>
               <option value="date_asc">{tr('sort_date_asc', 'ძველი → ახალი')}</option>
@@ -401,7 +448,7 @@ export default function HomePage() {
 
       {!showSkeleton && !showEmptyResults && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {paginatedProperties.map((p) => (
+          {properties.map((p) => (
             <PropertyCard key={p._id} p={p} compactPhoto />
           ))}
         </div>

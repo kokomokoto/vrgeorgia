@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   applyFloorChange,
   applyTotalFloorsChange,
+  finalizeFloorAfterTotalChange,
   getFloorInputMax,
 } from '@/lib/propertyDetailValidation';
 
@@ -34,6 +35,11 @@ export function PropertyFloorFields({
   const onTotalFloorsChange = (value: string) => {
     const next = applyTotalFloorsChange(value, floor);
     setTotalFloors(next.totalFloors);
+  };
+
+  const onTotalFloorsBlur = () => {
+    const next = finalizeFloorAfterTotalChange(totalFloors, floor);
+    setTotalFloors(next.totalFloors);
     setFloor(next.floor);
   };
 
@@ -55,6 +61,7 @@ export function PropertyFloorFields({
               placeholder={t('house_storeys_example')}
               value={totalFloors}
               onChange={(e) => onTotalFloorsChange(e.target.value)}
+              onBlur={onTotalFloorsBlur}
             />
           </div>
           <div>
@@ -78,6 +85,18 @@ export function PropertyFloorFields({
         <>
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="mb-1 block text-xs text-slate-500">{t('total_floors')}</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                placeholder={t('total_floors_example')}
+                value={totalFloors}
+                onChange={(e) => onTotalFloorsChange(e.target.value)}
+                onBlur={onTotalFloorsBlur}
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-xs text-slate-500">{t('which_floor')}</label>
               <input
                 type="number"
@@ -87,17 +106,6 @@ export function PropertyFloorFields({
                 placeholder={t('floor_example')}
                 value={floor}
                 onChange={(e) => setFloor(applyFloorChange(e.target.value, totalFloors))}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-slate-500">{t('total_floors')}</label>
-              <input
-                type="number"
-                min={1}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                placeholder={t('total_floors_example')}
-                value={totalFloors}
-                onChange={(e) => onTotalFloorsChange(e.target.value)}
               />
             </div>
           </div>

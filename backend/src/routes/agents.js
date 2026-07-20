@@ -1,20 +1,45 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import Agent from '../models/Agent.js';
 import { Property } from '../models/Property.js';
+import { User } from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
+import { getJWTSecret } from '../config/jwt.js';
 import { uploadAgentPhoto } from '../services/cloudinary.js';
 import { backfillMissingAgentProfiles } from '../services/agentProfile.js';
 import {
   applyPropertyQueryFilters,
+  applyListingVisibilityFilter,
   parsePropertySortOption,
   PUBLIC_LISTING_OR,
   PUBLIC_STATUS_OR,
 } from '../utils/propertyQueryFilters.js';
-import { PROPERTY_NOT_DELETED } from '../utils/propertySoftDelete.js';
+import { PROPERTY_NOT_DELETED, withNotDeleted } from '../utils/propertySoftDelete.js';
+import { isAdminRole } from '../utils/userRoles.js';
+import {
+  applyTranslation,
+  fillMissingTranslationsForResponse,
+  pickLanguage,
+  scheduleListTranslations,
+  stripHiddenCadastral,
+} from '../utils/propertyTranslations.js';
 
 const router = express.Router();
 
 const upload = uploadAgentPhoto;
+
+async function isRequestAdmin(req) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return false;
+  try {
+    const decoded = jwt.verify(token, getJWTSecret());
+    const me = await User.findById(decoded.sub).select('role').lean();
+    return isAdminRole(me?.role);
+  } catch {
+    return false;
+  }
+}
 
 // Get all agents (public)
 router.get('/', async (req, res) => {
@@ -75,7 +100,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Get agent's properties (public)
+// Get agent's properties (public; admins can request non-public via adminView=1)
 router.get('/:id/properties', async (req, res) => {
   try {
     const agent = await Agent.findById(req.params.id).select('user').lean();
@@ -85,33 +110,89 @@ router.get('/:id/properties', async (req, res) => {
 
     const { page = 1, limit = 200 } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 200));
+    const limitNum = Math.min(5000, Math.max(1, parseInt(limit, 10) || 200));
     const skip = (pageNum - 1) * limitNum;
 
-    const publicAgentFilter = {
-      userId: agent.user,
-      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }, PROPERTY_NOT_DELETED],
-    };
+    const adminView =
+      (req.query.adminView === '1' || req.query.adminView === 'true') &&
+      (await isRequestAdmin(req));
 
-    await applyPropertyQueryFilters(publicAgentFilter, req.query);
+    let agentFilter;
+    if (adminView) {
+      agentFilter = withNotDeleted({ userId: agent.user });
+      applyListingVisibilityFilter(
+        agentFilter,
+        req.query.listingVisibility || req.query.brokerListingMode || ''
+      );
+    } else {
+      agentFilter = {
+        userId: agent.user,
+        $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }, PROPERTY_NOT_DELETED],
+      };
+    }
+
+    await applyPropertyQueryFilters(agentFilter, req.query);
 
     const finalSort = parsePropertySortOption(req.query.sort);
+    const lang = pickLanguage(req);
 
-    const [properties, total] = await Promise.all([
-      Property.find(publicAgentFilter)
-        .select('-privateNotes -shareToken')
+    const countPromises = [
+      Property.find(agentFilter)
+        .select(adminView ? '-privateNotes' : '-privateNotes -shareToken')
         .sort(finalSort)
         .skip(skip)
-        .limit(limitNum),
-      Property.countDocuments(publicAgentFilter),
-    ]);
+        .limit(limitNum)
+        .lean(),
+      Property.countDocuments(agentFilter),
+    ];
 
-    res.json({
-      properties,
+    if (adminView) {
+      const base = withNotDeleted({ userId: agent.user });
+      const publicF = withNotDeleted({ userId: agent.user });
+      applyListingVisibilityFilter(publicF, 'public');
+      const unlistedF = withNotDeleted({ userId: agent.user });
+      applyListingVisibilityFilter(unlistedF, 'unlisted');
+      const privateF = withNotDeleted({ userId: agent.user });
+      applyListingVisibilityFilter(privateF, 'private');
+      const soldF = withNotDeleted({ userId: agent.user });
+      applyListingVisibilityFilter(soldF, 'sold');
+      countPromises.push(
+        Property.countDocuments(base),
+        Property.countDocuments(publicF),
+        Property.countDocuments(unlistedF),
+        Property.countDocuments(privateF),
+        Property.countDocuments(soldF)
+      );
+    }
+
+    const results = await Promise.all(countPromises);
+    const properties = results[0];
+    const total = results[1];
+
+    await fillMissingTranslationsForResponse(properties, lang);
+    scheduleListTranslations(properties, lang);
+
+    const translated = properties.map((p) => stripHiddenCadastral(applyTranslation(p, lang)));
+
+    const payload = {
+      properties: translated,
       total,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum) || 1,
-    });
+    };
+
+    if (adminView) {
+      payload.visibilityCounts = {
+        all: results[2] || 0,
+        public: results[3] || 0,
+        unlisted: results[4] || 0,
+        private: results[5] || 0,
+        sold: results[6] || 0,
+      };
+      payload.adminView = true;
+    }
+
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

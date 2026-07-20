@@ -426,9 +426,18 @@ router.get(
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const lang = pickLanguage(req);
+    const hasPage =
+      req.query.page !== undefined && req.query.page !== null && String(req.query.page).trim() !== '';
+    const hasLimit =
+      req.query.limit !== undefined && req.query.limit !== null && String(req.query.limit).trim() !== '';
     const pageNum = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
-    // Default 40 for list pages; map/range callers pass a higher explicit limit (max 5000).
-    const limitNum = Math.min(5000, Math.max(1, parseInt(String(req.query.limit || '40'), 10) || 40));
+    // If client omits page/limit (legacy frontend), return a large batch so listings are not capped at 40.
+    // Paginated clients always send page and/or limit explicitly (default page size 40).
+    const fallbackLimit = hasPage || hasLimit ? 40 : 5000;
+    const limitNum = Math.min(
+      5000,
+      Math.max(1, parseInt(String(hasLimit ? req.query.limit : fallbackLimit), 10) || fallbackLimit)
+    );
     const skip = (pageNum - 1) * limitNum;
     const wantTypeCounts =
       req.query.includeTypeCounts === 'true' || req.query.includeTypeCounts === '1';

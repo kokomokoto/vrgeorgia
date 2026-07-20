@@ -13,6 +13,7 @@ import propertyRoutes from './routes/properties.js';
 import agentRoutes from './routes/agents.js';
 import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
+import contentRoutes from './routes/content.js';
 import analyticsRoutes from './routes/analytics.js';
 import tourApiRoutes from './routes/tourApi.js';
 import tourEmbedRoutes from './routes/tourEmbed.js';
@@ -137,6 +138,7 @@ app.use('/api/properties', propertyRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/content', contentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 // ყოველთვის ლოკალური tour API — create/edit არ უნდა იყოს დამოკიდებული Render-ზე
 app.use('/api', tourApiRoutes);

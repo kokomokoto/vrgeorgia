@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import {
   buildDefaultShareMetadata,
   buildPropertyShareMetadata,
@@ -37,6 +36,7 @@ export default async function PropertyDetailLayout({ children, params }: LayoutP
   const jsonLdBlocks: unknown[] = [];
   if (property) {
     jsonLdBlocks.push(buildPropertyJsonLd(id, property));
+    // BreadcrumbList only in JSON-LD (SEO/AI) — not shown visually
     jsonLdBlocks.push(
       buildBreadcrumbJsonLd([
         { name: 'მთავარი', url: SITE_URL },
@@ -57,37 +57,6 @@ export default async function PropertyDetailLayout({ children, params }: LayoutP
           dangerouslySetInnerHTML={{ __html: jsonLdScript(data) }}
         />
       ))}
-      {property ? (
-        <nav
-          aria-label="breadcrumb"
-          className="mx-auto max-w-6xl px-4 pt-3 text-sm text-slate-500 dark:text-zinc-400"
-        >
-          <ol className="flex flex-wrap items-center gap-1.5">
-            <li>
-              <Link href="/" className="hover:text-blue-600 dark:hover:text-amber-400">
-                მთავარი
-              </Link>
-            </li>
-            {typeLabel ? (
-              <>
-                <li aria-hidden>/</li>
-                <li>
-                  <Link
-                    href={`/?type=${encodeURIComponent(JSON.stringify([property.type]))}`}
-                    className="hover:text-blue-600 dark:hover:text-amber-400"
-                  >
-                    {typeLabel}
-                  </Link>
-                </li>
-              </>
-            ) : null}
-            <li aria-hidden>/</li>
-            <li className="max-w-[14rem] truncate font-medium text-slate-800 dark:text-zinc-200 sm:max-w-md">
-              {title}
-            </li>
-          </ol>
-        </nav>
-      ) : null}
       {children}
     </>
   );

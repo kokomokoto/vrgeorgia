@@ -12,15 +12,14 @@ export function ThemeToggle() {
 
   React.useEffect(() => setMounted(true), []);
 
-  /** SSR და პირველ client რენდერზე იგივე სტრინგი — hydration-ს არ ირღვევს; i18n შემდეგ */
-  const label =
-    mounted
-      ? theme === 'dark'
-        ? t('theme_light')
-        : t('theme_dark')
-      : theme === 'dark'
-        ? 'Day mode'
-        : 'Night mode';
+  /** SSR და პირველი client რენდერი იგივეა — theme/i18n მხოლოდ mount-ის შემდეგ */
+  const label = !mounted
+    ? 'Night mode'
+    : theme === 'dark'
+      ? t('theme_light')
+      : t('theme_dark');
+
+  const isDark = mounted && theme === 'dark';
 
   return (
     <button
@@ -30,7 +29,7 @@ export function ThemeToggle() {
       title={label}
       className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg text-slate-700 transition-colors hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-amber-400 dark:hover:bg-zinc-700"
     >
-      {theme === 'dark' ? (
+      {isDark ? (
         <span aria-hidden="true">☀️</span>
       ) : (
         <span aria-hidden="true">🌙</span>

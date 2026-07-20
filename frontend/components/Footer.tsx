@@ -1,8 +1,18 @@
+'use client';
+
+import React from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 
 export function Footer() {
   const { t } = useTranslation();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const tx = (key: string, fallback: string) => (mounted ? t(key) : fallback);
 
   return (
     <footer className="border-t border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/80">
@@ -10,13 +20,13 @@ export function Footer() {
         <div>© {new Date().getFullYear()} VR Georgia</div>
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link href="/faq" className="hover:text-slate-800 dark:hover:text-zinc-200">
-            {t('faq_nav')}
+            {tx('faq_nav', 'FAQ')}
           </Link>
           <Link href="/about" className="hover:text-slate-800 dark:hover:text-zinc-200">
-            {t('about_nav')}
+            {tx('about_nav', 'შესახებ')}
           </Link>
           <Link href="/services" className="hover:text-slate-800 dark:hover:text-zinc-200">
-            {t('services_nav')}
+            {tx('services_nav', 'მომსახურება')}
           </Link>
         </nav>
       </div>

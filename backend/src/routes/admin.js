@@ -25,6 +25,14 @@ import {
   softDeletePropertiesByUserId,
   restorePropertyById,
 } from '../utils/propertySoftDelete.js';
+import {
+  ensureFaqContent,
+  ensureAboutContent,
+  faqPublicPayload,
+  aboutPublicPayload,
+  normalizeFaqItems,
+  normalizeAboutByLang,
+} from '../utils/siteContentService.js';
 
 const router = express.Router();
 
@@ -1192,6 +1200,72 @@ router.get('/analytics/search', requireAuth, adminMiddleware, async (req, res) =
   } catch (error) {
     console.error('Search analytics error:', error);
     res.status(500).json({ message: 'სერჩის ანალიტიკის მიღება ვერ მოხერხდა' });
+  }
+});
+
+/** FAQ კონტენტი — ადმინი */
+router.get('/content/faq', requireAuth, adminMiddleware, async (_req, res) => {
+  try {
+    const doc = await ensureFaqContent();
+    res.json(faqPublicPayload(doc));
+  } catch (error) {
+    console.error('GET /api/admin/content/faq:', error);
+    res.status(500).json({ message: 'FAQ კონტენტის მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.put('/content/faq', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const items = normalizeFaqItems(req.body?.items);
+    if (items.length === 0) {
+      return res.status(400).json({ message: 'მინიმუმ ერთი FAQ პუნქტი საჭიროა' });
+    }
+    const emptyKa = items.some((it) => !it.question.ka.trim() || !it.answer.ka.trim());
+    if (emptyKa) {
+      return res.status(400).json({ message: 'ყველა პუნქტს სჭირდება ქართული კითხვა და პასუხი' });
+    }
+
+    const doc = await ensureFaqContent();
+    doc.faqItems = items;
+    doc.updatedBy = req.user.id;
+    await doc.save();
+    await writeAudit(req.user.id, 'update_site_content', 'site_content', 'faq', {
+      itemCount: items.length,
+    });
+    res.json(faqPublicPayload(doc));
+  } catch (error) {
+    console.error('PUT /api/admin/content/faq:', error);
+    res.status(500).json({ message: 'FAQ შენახვა ვერ მოხერხდა' });
+  }
+});
+
+/** About კონტენტი — ადმინი */
+router.get('/content/about', requireAuth, adminMiddleware, async (_req, res) => {
+  try {
+    const doc = await ensureAboutContent();
+    res.json(aboutPublicPayload(doc));
+  } catch (error) {
+    console.error('GET /api/admin/content/about:', error);
+    res.status(500).json({ message: 'About კონტენტის მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.put('/content/about', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const byLang = normalizeAboutByLang(req.body?.byLang);
+    if (!byLang.ka.title.trim() || !byLang.ka.intro.trim()) {
+      return res.status(400).json({ message: 'ქართულ ვერსიას სჭირდება სათაური და აღწერა' });
+    }
+
+    const doc = await ensureAboutContent();
+    doc.aboutByLang = byLang;
+    doc.updatedBy = req.user.id;
+    await doc.save();
+    await writeAudit(req.user.id, 'update_site_content', 'site_content', 'about', {});
+    res.json(aboutPublicPayload(doc));
+  } catch (error) {
+    console.error('PUT /api/admin/content/about:', error);
+    res.status(500).json({ message: 'About შენახვა ვერ მოხერხდა' });
   }
 });
 

@@ -109,21 +109,26 @@ function formatNetworkError(base: string, init: RequestInit): string {
   );
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+type RequestOptions = RequestInit & { timeoutMs?: number };
+
+async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
   const token = getToken();
-  const headers = new Headers(init.headers);
-  if (!headers.has('Content-Type') && !(init.body instanceof FormData)) {
+  const { timeoutMs: timeoutOverride, ...fetchInit } = init;
+  const headers = new Headers(fetchInit.headers);
+  if (!headers.has('Content-Type') && !(fetchInit.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   let res: Response;
   const controller = new AbortController();
-  const timeoutMs = init.body instanceof FormData ? 120_000 : 45_000;
+  const timeoutMs =
+    timeoutOverride ??
+    (fetchInit.body instanceof FormData ? 120_000 : 45_000);
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     res = await fetch(`${getApiBase()}${path}`, {
-      ...init,
+      ...fetchInit,
       headers,
       cache: 'no-store',
       signal: controller.signal,
@@ -131,10 +136,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw new Error(
-        `${formatNetworkError(getApiBase(), init)} (დრო ამოიწურა — სცადეთ ხელახლა 1–2 წუთში)`
+        `${formatNetworkError(getApiBase(), fetchInit)} (დრო ამოიწურა — სცადეთ ხელახლა 1–2 წუთში)`
       );
     }
-    throw new Error(formatNetworkError(getApiBase(), init));
+    throw new Error(formatNetworkError(getApiBase(), fetchInit));
   } finally {
     clearTimeout(timeoutId);
   }
@@ -313,7 +318,9 @@ export async function updateProperty(
   const payload = opts?.draft ? { ...data, draft: true } : data;
   return request<{ property: Property }>(`/api/properties/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    // ფინალური შენახვა შეიძლება უფრო დიდხანს გაგრძელდეს (Render cold start / DB)
+    timeoutMs: opts?.draft ? 60_000 : 90_000,
   });
 }
 

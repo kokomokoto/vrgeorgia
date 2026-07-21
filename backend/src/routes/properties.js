@@ -1123,22 +1123,29 @@ router.put(
     const updated = await Property.findByIdAndUpdate(req.params.id, mongoUpdate, { new: true }).lean();
     delete updated.editDraft;
 
+    if (textChanged) scheduleTranslations(updated._id);
+
+    // პასუხი ჯერ — Cloudinary cleanup არ უნდა ბლოკავდეს კლიენტს (Render timeout).
+    res.json({ property: updated });
+
     const publishedPhotos = updated.photos || [];
     const publishedKeys = new Set(publishedPhotos.map((u) => normalizePhotoUrl(u)));
     const photoCandidates = [...oldLivePhotos, ...draftPhotos];
     const seen = new Set();
-    for (const url of photoCandidates) {
-      const key = normalizePhotoUrl(url);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (!publishedKeys.has(key)) {
-        await deleteCloudinaryImage(url);
+    void (async () => {
+      try {
+        for (const url of photoCandidates) {
+          const key = normalizePhotoUrl(url);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (!publishedKeys.has(key)) {
+            await deleteCloudinaryImage(url);
+          }
+        }
+      } catch (err) {
+        console.error('Property photo cleanup failed:', err?.message || err);
       }
-    }
-
-    if (textChanged) scheduleTranslations(updated._id);
-
-    res.json({ property: updated });
+    })();
   }
 );
 

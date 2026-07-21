@@ -24,6 +24,7 @@ import {
 } from '../utils/propertySoftDelete.js';
 import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
 import {
+  TRANSLATABLE_FIELDS,
   applyTranslation,
   ensurePropertyTranslations,
   fillMissingTranslationsForResponse,

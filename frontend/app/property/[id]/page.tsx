@@ -7,6 +7,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { deleteProperty, getProperty, listProperties, resolveImageUrl } from '@/lib/api';
+import { getApiBase } from '@/lib/config';
 import { getPropertyAddressLine } from '@/lib/propertyDisplay';
 import { apiLang } from '@/lib/apiLang';
 import { MapView } from '@/components/MapView';
@@ -482,7 +483,7 @@ function PropertyDetailInner() {
 
   const photos = property.photos || [];
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000';
+  const API_BASE = getApiBase();
 
   const sqm = property.sqm || 0;
   const rooms = property.rooms || 0;

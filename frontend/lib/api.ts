@@ -75,11 +75,25 @@ function formatApiErrorBody(json: unknown, rawText: string, status: number): str
   return `HTTP ${status} — სერვერმა ცარიელი ან გაურკვეველი პასუხი დააბრუნა. შეამოწმეთ backend ლოგი და Cloudinary/MongoDB კონფიგურაცია.`;
 }
 
+function isBrowserOnProductionSite(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return (
+    host === 'vrgeorgia.ge' ||
+    host.endsWith('.vrgeorgia.ge') ||
+    host.endsWith('.onrender.com')
+  );
+}
+
 function formatNetworkError(base: string, init: RequestInit): string {
-  const isLocal =
-    base.includes('localhost') || base.includes('127.0.0.1') || base.includes(':5000');
+  const isLocalBase =
+    base.includes('localhost') ||
+    base.includes('127.0.0.1') ||
+    /^https?:\/\/[^/]+:5000\b/i.test(base);
   const isUpload = init.body instanceof FormData;
-  if (isLocal) {
+
+  // პროდაქშენ საიტზე არასდროს ვაჩვენებთ „გაუშვით npm run dev“ — ეს მხოლოდ ლოკალური დეველოპმენტისთვისაა
+  if (isLocalBase && !isBrowserOnProductionSite()) {
     return `სერვერთან კავშირი ვერ მოხერხდა (${base}). გაუშვით backend: cd backend && npm run dev`;
   }
   if (isUpload) {
@@ -91,7 +105,7 @@ function formatNetworkError(base: string, init: RequestInit): string {
   }
   return (
     `სერვერთან კავშირი ვერ მოხერხდა (${base}). ` +
-    'სცადეთ გვერდის განახლება; თუ არ გამოსწორდა — შეამოწმეთ Render-ზე API სერვისი.'
+    'სცადეთ გვერდის განახლება; თუ არ გამოსწორდა — შეამოწმეთ Render-ზე API სერვისი (vrgeorgia-api).'
   );
 }
 

@@ -17,10 +17,19 @@ function isProductionHostname(host: string): boolean {
   );
 }
 
+function isLocalApiUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return isLocalHostname(u.hostname);
+  } catch {
+    return url.includes('localhost') || url.includes('127.0.0.1');
+  }
+}
+
 /**
  * API მისამართი.
- * პროდაქშენი: NEXT_PUBLIC_API_BASE (მაგ. Render backend).
- * LAN/dev: იგივე hostname, პორტი 5000 — თუ env არ არის მითითებული.
+ * პროდაქშენ ჰოსტზე (vrgeorgia.ge / onrender) არასდროს ვაბრუნებთ localhost-ს —
+ * თუნდაც ბილდში შემთხვევით იყოს ჩაშენებული ლოკალური NEXT_PUBLIC_API_BASE.
  */
 export function getApiBase(): string {
   if (typeof window !== 'undefined') {
@@ -28,14 +37,20 @@ export function getApiBase(): string {
     if (isLocalHostname(host)) {
       return normalizeApiBase(`${window.location.protocol}//${host}:5000`);
     }
-    const fromEnv = process.env.NEXT_PUBLIC_API_BASE;
-    if (fromEnv) return normalizeApiBase(fromEnv);
-    if (isProductionHostname(host)) return PRODUCTION_API;
+
+    const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();
+
+    if (isProductionHostname(host)) {
+      if (fromEnv && !isLocalApiUrl(fromEnv)) return normalizeApiBase(fromEnv);
+      return PRODUCTION_API;
+    }
+
+    if (fromEnv && !isLocalApiUrl(fromEnv)) return normalizeApiBase(fromEnv);
     return normalizeApiBase(`${window.location.protocol}//${host}:5000`);
   }
 
-  const fromEnv = process.env.NEXT_PUBLIC_API_BASE;
-  if (fromEnv) return normalizeApiBase(fromEnv);
+  const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();
+  if (fromEnv && !isLocalApiUrl(fromEnv)) return normalizeApiBase(fromEnv);
   if (process.env.NODE_ENV === 'production') return PRODUCTION_API;
   return DEFAULT_LOCAL_API;
 }

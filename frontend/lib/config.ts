@@ -9,10 +9,13 @@ function isLocalHostname(host: string): boolean {
   return host === 'localhost' || host === '127.0.0.1';
 }
 
-function isProductionHostname(host: string): boolean {
+/** პროდაქშენ საიტის ჰოსტები (პარალელური დომენები + Render). */
+export function isProductionHostname(host: string): boolean {
   return (
     host === 'vrgeorgia.ge' ||
     host.endsWith('.vrgeorgia.ge') ||
+    host === 'vhome.ge' ||
+    host.endsWith('.vhome.ge') ||
     host.endsWith('.onrender.com')
   );
 }
@@ -28,7 +31,7 @@ function isLocalApiUrl(url: string): boolean {
 
 /**
  * API მისამართი.
- * პროდაქშენ ჰოსტზე (vrgeorgia.ge / onrender) არასდროს ვაბრუნებთ localhost-ს —
+ * პროდაქშენ ჰოსტზე (vrgeorgia.ge / vhome.ge / onrender) არასდროს ვაბრუნებთ localhost-ს —
  * თუნდაც ბილდში შემთხვევით იყოს ჩაშენებული ლოკალური NEXT_PUBLIC_API_BASE.
  */
 export function getApiBase(): string {

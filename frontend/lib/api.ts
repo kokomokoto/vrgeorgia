@@ -1,9 +1,10 @@
 import type { Property, User } from './types';
-import { API_BASE, getApiBase } from './config';
+import { API_BASE, getApiBase, isProductionHostname } from './config';
 import {
   resolvePropertyImageUrl,
   type PropertyImageVariant,
 } from './imageUrl';
+import { isAdminRole } from './userRoles';
 
 export type { Property, User };
 export type { PropertyImageVariant } from './imageUrl';
@@ -47,6 +48,24 @@ function getToken() {
   return t || null;
 }
 
+/** დეტალური ტექნიკური შეცდომები: ლოკალური dev ან ადმინი (admin / agent_admin). */
+function canSeeTechnicalErrors(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') return true;
+  try {
+    const raw = window.localStorage.getItem('user');
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { role?: string };
+    return isAdminRole(parsed?.role);
+  } catch {
+    return false;
+  }
+}
+
+const PUBLIC_NETWORK_ERROR =
+  'სერვერთან დროებით კავშირი ვერ ხერხდება. სცადეთ ხელახლა ცოტა ხანში.';
+
 function formatApiErrorBody(json: unknown, rawText: string, status: number): string {
   if (json && typeof json === 'object') {
     const o = json as Record<string, unknown>;
@@ -68,24 +87,35 @@ function formatApiErrorBody(json: unknown, rawText: string, status: number): str
       if (entries.length) return entries.join('; ');
     }
     if (typeof o.message === 'string' && o.message.trim()) return o.message.trim();
-    if (o.message && typeof o.message === 'object') return JSON.stringify(o.message);
+    if (o.message && typeof o.message === 'object') {
+      return canSeeTechnicalErrors()
+        ? JSON.stringify(o.message)
+        : PUBLIC_NETWORK_ERROR;
+    }
   }
   const trimmed = rawText?.trim();
-  if (trimmed && trimmed !== '{}') return trimmed.slice(0, 500);
-  return `HTTP ${status} — სერვერმა ცარიელი ან გაურკვეველი პასუხი დააბრუნა. შეამოწმეთ backend ლოგი და Cloudinary/MongoDB კონფიგურაცია.`;
+  if (trimmed && trimmed !== '{}') {
+    if (canSeeTechnicalErrors() || (trimmed.length < 280 && !trimmed.includes('<'))) {
+      return trimmed.slice(0, 500);
+    }
+    return PUBLIC_NETWORK_ERROR;
+  }
+  if (canSeeTechnicalErrors()) {
+    return `HTTP ${status} — სერვერმა ცარიელი ან გაურკვეველი პასუხი დააბრუნა. შეამოწმეთ backend ლოგი და Cloudinary/MongoDB კონფიგურაცია.`;
+  }
+  return PUBLIC_NETWORK_ERROR;
 }
 
 function isBrowserOnProductionSite(): boolean {
   if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  return (
-    host === 'vrgeorgia.ge' ||
-    host.endsWith('.vrgeorgia.ge') ||
-    host.endsWith('.onrender.com')
-  );
+  return isProductionHostname(window.location.hostname);
 }
 
 function formatNetworkError(base: string, init: RequestInit): string {
+  if (!canSeeTechnicalErrors()) {
+    return PUBLIC_NETWORK_ERROR;
+  }
+
   const isLocalBase =
     base.includes('localhost') ||
     base.includes('127.0.0.1') ||
@@ -107,6 +137,16 @@ function formatNetworkError(base: string, init: RequestInit): string {
     `სერვერთან კავშირი ვერ მოხერხდა (${base}). ` +
     'სცადეთ გვერდის განახლება; თუ არ გამოსწორდა — შეამოწმეთ Render-ზე API სერვისი (vrgeorgia-api).'
   );
+}
+
+/** UI catch ბლოკებისთვის: ადმინი/dev — დეტალი, სხვა — ზოგადი. */
+export function getNetworkErrorMessage(opts?: { upload?: boolean; timedOut?: boolean }): string {
+  const init: RequestInit = opts?.upload ? { body: new FormData() } : {};
+  const msg = formatNetworkError(getApiBase(), init);
+  if (opts?.timedOut && canSeeTechnicalErrors()) {
+    return `${msg} (დრო ამოიწურა — სცადეთ ხელახლა 1–2 წუთში)`;
+  }
+  return msg;
 }
 
 type RequestOptions = RequestInit & { timeoutMs?: number };
@@ -135,8 +175,11 @@ async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
+      const baseMsg = formatNetworkError(getApiBase(), fetchInit);
       throw new Error(
-        `${formatNetworkError(getApiBase(), fetchInit)} (დრო ამოიწურა — სცადეთ ხელახლა 1–2 წუთში)`
+        canSeeTechnicalErrors()
+          ? `${baseMsg} (დრო ამოიწურა — სცადეთ ხელახლა 1–2 წუთში)`
+          : PUBLIC_NETWORK_ERROR
       );
     }
     throw new Error(formatNetworkError(getApiBase(), fetchInit));
@@ -166,12 +209,20 @@ async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
 
   const raw = await res.text();
   if (!raw?.trim()) {
-    throw new Error('სერვერმა ცარიელი პასუხი დააბრუნა');
+    throw new Error(
+      canSeeTechnicalErrors()
+        ? 'სერვერმა ცარიელი პასუხი დააბრუნა'
+        : PUBLIC_NETWORK_ERROR
+    );
   }
   try {
     return JSON.parse(raw) as T;
   } catch {
-    throw new Error('სერვერმა არა-JSON პასუხი დააბრუნა');
+    throw new Error(
+      canSeeTechnicalErrors()
+        ? 'სერვერმა არა-JSON პასუხი დააბრუნა'
+        : PUBLIC_NETWORK_ERROR
+    );
   }
 }
 

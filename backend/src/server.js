@@ -63,6 +63,8 @@ const defaultProdOrigins = [
   'https://vrgeorgia.ge',
   'https://www.vrgeorgia.ge',
   'https://staging.vrgeorgia.ge',
+  'https://vhome.ge',
+  'https://www.vhome.ge',
   'https://vrgeorgia.onrender.com',
   'https://vrgeorgia-frontend.onrender.com',
   'https://vrgeorgia-tour-builder.onrender.com',

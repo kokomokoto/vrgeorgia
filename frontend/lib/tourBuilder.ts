@@ -17,7 +17,12 @@ function isLocalHostname(hostname: string): boolean {
 }
 
 function isProductionSiteHostname(hostname: string): boolean {
-  return hostname === 'vrgeorgia.ge' || hostname.endsWith('.vrgeorgia.ge');
+  return (
+    hostname === 'vrgeorgia.ge' ||
+    hostname.endsWith('.vrgeorgia.ge') ||
+    hostname === 'vhome.ge' ||
+    hostname.endsWith('.vhome.ge')
+  );
 }
 
 /** Render / production frontend — tour UI იმავე API ჰოსტზეა */

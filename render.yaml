@@ -38,7 +38,7 @@ services:
       - key: MONGODB_URI
         sync: false
       - key: ALLOWED_ORIGINS
-        value: https://vrgeorgia.ge,https://www.vrgeorgia.ge,https://vrgeorgia-frontend.onrender.com,https://vrgeorgia-api.onrender.com
+        value: https://vrgeorgia.ge,https://www.vrgeorgia.ge,https://vhome.ge,https://www.vhome.ge,https://vrgeorgia-frontend.onrender.com,https://vrgeorgia-api.onrender.com
       - key: TOUR_BUILDER_PUBLIC_URL
         value: https://vrgeorgia-api.onrender.com
       - key: API_PUBLIC_URL

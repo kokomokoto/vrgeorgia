@@ -52,7 +52,7 @@ Open: `http://localhost:3000`
 | `NODE_ENV` | `production` |
 | `MONGODB_URI` | `mongodb+srv://...mongodb.net/vrgeorgia` (Atlas — not localhost) |
 | `JWT_SECRET` | long random string |
-| `ALLOWED_ORIGINS` | `https://vrgeorgia.ge,https://www.vrgeorgia.ge` (optional if defaults match) |
+| `ALLOWED_ORIGINS` | `https://vrgeorgia.ge,https://www.vrgeorgia.ge,https://vhome.ge,https://www.vhome.ge` |
 
 **Frontend** build variable:
 

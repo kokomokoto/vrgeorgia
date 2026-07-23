@@ -17,6 +17,14 @@ const nextConfig = {
         hostname: '*.vrgeorgia.ge',
       },
       {
+        protocol: 'https',
+        hostname: 'vhome.ge',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.vhome.ge',
+      },
+      {
         protocol: 'http',
         hostname: 'localhost',
       },

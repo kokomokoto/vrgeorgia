@@ -51,7 +51,7 @@ export async function attachTourUi(app) {
   }
 
   const defaultFrameAncestors =
-    "'self' http://localhost:3000 http://127.0.0.1:3000 https://vrgeorgia.ge https://www.vrgeorgia.ge https://vrgeorgia-frontend.onrender.com https://vrgeorgia-api.onrender.com";
+    "'self' http://localhost:3000 http://127.0.0.1:3000 https://vrgeorgia.ge https://www.vrgeorgia.ge https://vhome.ge https://www.vhome.ge https://vrgeorgia-frontend.onrender.com https://vrgeorgia-api.onrender.com";
   const frameAncestors = (
     process.env.TOUR_FRAME_ANCESTORS || defaultFrameAncestors
   ).trim();

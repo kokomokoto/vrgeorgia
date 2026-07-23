@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 const useStandalone = process.env.TOUR_UI_STANDALONE === "1";
 
 const tourFrameAncestors =
-  "frame-ancestors 'self' http://localhost:3000 http://127.0.0.1:3000 https://vrgeorgia.ge https://www.vrgeorgia.ge https://vrgeorgia-frontend.onrender.com https://vrgeorgia-api.onrender.com";
+  "frame-ancestors 'self' http://localhost:3000 http://127.0.0.1:3000 https://vrgeorgia.ge https://www.vrgeorgia.ge https://vhome.ge https://www.vhome.ge https://vrgeorgia-frontend.onrender.com https://vrgeorgia-api.onrender.com";
 
 const nextConfig: NextConfig = {
   ...(useStandalone ? { output: "standalone" as const } : {}),

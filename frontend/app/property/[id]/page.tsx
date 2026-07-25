@@ -278,6 +278,28 @@ function PropertyDetailInner() {
 
   const tour3dWrapRef = React.useRef<HTMLDivElement>(null);
   const propertyMapWrapRef = React.useRef<HTMLDivElement>(null);
+  /**
+   * Aspect ratio ONLY via padding-bottom % (of definite parent width).
+   * Do NOT use CSS aspect-ratio here: with width:100% it can resolve cyclically
+   * (~1084px on a 522px phone) and cut the 3D viewer in half.
+   */
+  const mediaHeroFrameClass =
+    'relative box-border w-full min-w-0 max-w-full overflow-hidden rounded-md border border-slate-200 ' +
+    '[:fullscreen]:!h-screen [:fullscreen]:!w-screen [:fullscreen]:!max-h-none [:fullscreen]:!max-w-none ' +
+    '[:fullscreen]:!p-0 [:fullscreen]:rounded-none';
+  const mediaHeroFrameStyle: React.CSSProperties = {
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    height: 0,
+    paddingBottom: '56.25%', // 16:9
+    overflow: 'hidden',
+    contain: 'inline-size',
+  };
+  const getEmbedFrameStyle = (_embedUrl: string): React.CSSProperties => {
+    // Same 16:9 frame for SuperSplat exterior and interactive 3D tour
+    return mediaHeroFrameStyle;
+  };
   const toggleTour3dFullscreen = React.useCallback(() => {
     const el = tour3dWrapRef.current;
     if (!el) return;
@@ -449,14 +471,11 @@ function PropertyDetailInner() {
     if (appliedDefaultForId.current !== property._id) {
       appliedDefaultForId.current = property._id;
       const preferred = property.defaultMediaView;
-      if (
-        preferred &&
-        (preferred === 'exterior' ||
-          preferred === 'interior' ||
-          preferred === 'tour' ||
-          preferred === 'photos') &&
-        available[preferred]
-      ) {
+      // თუ ნამდვილი 3D (ექსტერიერი/ინტერიერი/ტური) არსებობს — მას ვაჩვენებთ პირველად,
+      // თუნდაც defaultMediaView=photos იყოს (ფოტოების ტაბი მაინც ხელმისაწვდომია).
+      const preferredIsReal3d =
+        preferred === 'exterior' || preferred === 'interior' || preferred === 'tour';
+      if (preferredIsReal3d && preferred && available[preferred]) {
         setView3dMode(preferred);
       } else {
         setView3dMode(pickFallback());
@@ -573,6 +592,96 @@ function PropertyDetailInner() {
   const showing3dExterior = view3dMode === 'exterior' && has3dExterior;
   const showingPhotos = view3dMode === 'photos' && hasPhotos;
   const photoHeroActive = usePhotoHero || showingPhotos;
+
+  const renderHeroPhotoStage = () => (
+    <div
+      className={`${mediaHeroFrameClass} ${displayIs360 ? 'bg-black' : 'touch-pan-y bg-slate-100'}`}
+      style={mediaHeroFrameStyle}
+      onTouchStart={displayIs360 ? undefined : heroSwipe.onTouchStart}
+      onTouchMove={displayIs360 ? undefined : heroSwipe.onTouchMove}
+      onTouchEnd={displayIs360 ? undefined : heroSwipe.onTouchEnd}
+    >
+      {photos.length > 1 && displayPhotoIndex > 0 && (
+        <button
+          type="button"
+          aria-label={t('previous_photo') || 'Previous photo'}
+          className="absolute left-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-r from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
+          onClick={() => {
+            setHoverPhotoIndex(null);
+            setHeroPhotoIndex((i) => Math.max(0, i - 1));
+          }}
+        >
+          <span className="text-3xl leading-none drop-shadow-lg">‹</span>
+        </button>
+      )}
+      {photos.length > 1 && displayPhotoIndex < photos.length - 1 && (
+        <button
+          type="button"
+          aria-label={t('next_photo') || 'Next photo'}
+          className="absolute right-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-l from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
+          onClick={() => {
+            setHoverPhotoIndex(null);
+            setHeroPhotoIndex((i) => Math.min(photos.length - 1, i + 1));
+          }}
+        >
+          <span className="text-3xl leading-none drop-shadow-lg">›</span>
+        </button>
+      )}
+      {displayIs360 && displayPhotoUrl ? (
+        <div className="absolute inset-0">
+          <PanoramaViewer
+            key={displayPhotoUrl}
+            src={resolveImageUrl(displayPhotoUrl)}
+            className="h-full w-full"
+            showNavbar={false}
+          />
+          <span className="pointer-events-none absolute left-2 top-2 z-[2] rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow">
+            {t('photo_360')}
+          </span>
+          <button
+            type="button"
+            className="absolute bottom-3 left-3 z-10 rounded-lg bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm hover:bg-black/75"
+            onClick={() => setLightboxIndex(displayPhotoIndex)}
+          >
+            {t('photos')}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="group absolute inset-0 block cursor-pointer text-left"
+          onClick={() => {
+            if (heroSwipe.consumeSwipe()) return;
+            setLightboxIndex(displayPhotoIndex);
+          }}
+          aria-label={t('photos')}
+        >
+          {photos.map((photo, idx) => {
+            if (!loadedGalleryPhotos.has(photo)) return null;
+            const active = idx === displayPhotoIndex;
+            return (
+              <img
+                key={photo}
+                src={resolveGalleryPhotoUrl(photo, property.panoramaPhotos)}
+                alt=""
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${
+                  active ? 'z-[1] opacity-100 group-hover:opacity-95' : 'z-0 opacity-0'
+                }`}
+              />
+            );
+          })}
+          {displayPhotoUrl && !loadedGalleryPhotos.has(displayPhotoUrl) && (
+            <Shimmer className="absolute inset-0 rounded-none" />
+          )}
+        </button>
+      )}
+      {photos.length > 1 && (
+        <span className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+          {displayPhotoIndex + 1} / {photos.length}
+        </span>
+      )}
+    </div>
+  );
 
   const ownerRoleLabel =
     owner && typeof owner === 'object' && isAgentRole(owner.role) ? t('agent_role') : t('broker');
@@ -765,7 +874,7 @@ function PropertyDetailInner() {
     ) : null;
 
   return (
-    <div className="grid w-full min-w-0 gap-2 sm:gap-2.5 lg:grid-cols-[1fr_minmax(280px,320px)] lg:items-start">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] lg:items-start">
       {/* სათაური + მისამართი — მარცხე სვეტი (3D-ის სიგანე) */}
       <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:flex-row sm:items-start sm:gap-2.5 sm:p-3 lg:col-start-1 lg:row-start-1">
         <div className="min-w-0 flex-1">
@@ -821,7 +930,7 @@ function PropertyDetailInner() {
       {/* 3D ან მთავარი ფოტო + მარჯვე პანელები (desktop) */}
       {showMediaHero && (
         <>
-        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 lg:col-start-1 lg:row-start-2">
+        <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 lg:col-start-1 lg:row-start-2">
           {has3dTour ? (
           <>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -882,77 +991,7 @@ function PropertyDetailInner() {
             </div>
           </div>
           {showingPhotos ? (
-              <div
-                className="relative mx-auto aspect-video w-full max-h-[85vh] touch-pan-y overflow-hidden rounded-md border border-slate-200 bg-slate-100"
-                onTouchStart={heroSwipe.onTouchStart}
-                onTouchMove={heroSwipe.onTouchMove}
-                onTouchEnd={heroSwipe.onTouchEnd}
-              >
-                {photos.length > 1 && displayPhotoIndex > 0 && (
-                  <button
-                    type="button"
-                    aria-label={t('previous_photo') || 'Previous photo'}
-                    className="absolute left-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-r from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
-                    onClick={() => {
-                      setHoverPhotoIndex(null);
-                      setHeroPhotoIndex((i) => Math.max(0, i - 1));
-                    }}
-                  >
-                    <span className="text-3xl leading-none drop-shadow-lg">‹</span>
-                  </button>
-                )}
-                {photos.length > 1 && displayPhotoIndex < photos.length - 1 && (
-                  <button
-                    type="button"
-                    aria-label={t('next_photo') || 'Next photo'}
-                    className="absolute right-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-l from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
-                    onClick={() => {
-                      setHoverPhotoIndex(null);
-                      setHeroPhotoIndex((i) => Math.min(photos.length - 1, i + 1));
-                    }}
-                  >
-                    <span className="text-3xl leading-none drop-shadow-lg">›</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="group relative block h-full w-full cursor-pointer text-left"
-                  onClick={() => {
-                    if (heroSwipe.consumeSwipe()) return;
-                    setLightboxIndex(displayPhotoIndex);
-                  }}
-                  aria-label={t('photos')}
-                >
-                  {photos.map((photo, idx) => {
-                    if (!loadedGalleryPhotos.has(photo)) return null;
-                    const is360 = isPanoramaPhoto(photo, property.panoramaPhotos);
-                    const active = idx === displayPhotoIndex;
-                    return (
-                      <img
-                        key={photo}
-                        src={resolveGalleryPhotoUrl(photo, property.panoramaPhotos)}
-                        alt=""
-                        className={`absolute inset-0 h-full w-full transition-opacity duration-150 ${
-                          active ? 'z-[1] opacity-100 group-hover:opacity-95' : 'z-0 opacity-0'
-                        } ${is360 ? 'bg-slate-900 object-contain' : 'object-cover'}`}
-                      />
-                    );
-                  })}
-                  {displayPhotoUrl && !loadedGalleryPhotos.has(displayPhotoUrl) && (
-                    <Shimmer className="absolute inset-0 rounded-none" />
-                  )}
-                  {displayIs360 && (
-                    <span className="absolute left-2 top-2 z-[2] rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow">
-                      {t('photo_360')}
-                    </span>
-                  )}
-                </button>
-                {photos.length > 1 && (
-                  <span className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                    {displayPhotoIndex + 1} / {photos.length}
-                  </span>
-                )}
-              </div>
+              renderHeroPhotoStage()
           ) : (() => {
             const convertToEmbedUrl = (input: string) => {
               if (!input) return '';
@@ -979,8 +1018,13 @@ function PropertyDetailInner() {
             
             if (!embedUrl || !embedUrl.startsWith('http')) {
               return (
-                <div className="mx-auto flex aspect-video w-full max-h-[85vh] items-center justify-center rounded-md border border-slate-200 bg-slate-100">
-                  <p className="text-slate-500">{t('invalid_3d_link')}</p>
+                <div
+                  className={`${mediaHeroFrameClass} bg-slate-100`}
+                  style={mediaHeroFrameStyle}
+                >
+                  <p className="absolute inset-0 flex items-center justify-center text-slate-500">
+                    {t('invalid_3d_link')}
+                  </p>
                 </div>
               );
             }
@@ -988,17 +1032,21 @@ function PropertyDetailInner() {
             return (
               <div
                 ref={tour3dWrapRef}
-                className="relative mx-auto aspect-video w-full max-h-[85vh] overflow-hidden rounded-md border border-slate-200"
+                className={`${mediaHeroFrameClass} bg-black`}
+                style={getEmbedFrameStyle(embedUrl)}
               >
                 <iframe
-                  className="absolute inset-0 h-full w-full"
+                  className="absolute inset-0 block h-full w-full border-0"
                   src={embedUrl}
                   title="3D Tour"
+                  width="100%"
+                  height="100%"
+                  scrolling="no"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; xr-spatial-tracking; web-share"
                   allowFullScreen
                   referrerPolicy="no-referrer-when-downgrade"
-                  loading="lazy"
-                  style={{ border: 'none' }}
+                  loading="eager"
+                  style={{ overflow: 'hidden' }}
                 />
                 <button
                   type="button"
@@ -1023,77 +1071,7 @@ function PropertyDetailInner() {
               <div className="mb-2 text-sm font-semibold">
                 {t('photos')} ({photos.length})
               </div>
-              <div
-                className="relative mx-auto aspect-video w-full max-h-[85vh] touch-pan-y overflow-hidden rounded-md border border-slate-200 bg-slate-100"
-                onTouchStart={heroSwipe.onTouchStart}
-                onTouchMove={heroSwipe.onTouchMove}
-                onTouchEnd={heroSwipe.onTouchEnd}
-              >
-                {photos.length > 1 && displayPhotoIndex > 0 && (
-                  <button
-                    type="button"
-                    aria-label={t('previous_photo') || 'Previous photo'}
-                    className="absolute left-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-r from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
-                    onClick={() => {
-                      setHoverPhotoIndex(null);
-                      setHeroPhotoIndex((i) => Math.max(0, i - 1));
-                    }}
-                  >
-                    <span className="text-3xl leading-none drop-shadow-lg">‹</span>
-                  </button>
-                )}
-                {photos.length > 1 && displayPhotoIndex < photos.length - 1 && (
-                  <button
-                    type="button"
-                    aria-label={t('next_photo') || 'Next photo'}
-                    className="absolute right-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-l from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
-                    onClick={() => {
-                      setHoverPhotoIndex(null);
-                      setHeroPhotoIndex((i) => Math.min(photos.length - 1, i + 1));
-                    }}
-                  >
-                    <span className="text-3xl leading-none drop-shadow-lg">›</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="group relative block h-full w-full cursor-pointer text-left"
-                  onClick={() => {
-                    if (heroSwipe.consumeSwipe()) return;
-                    setLightboxIndex(displayPhotoIndex);
-                  }}
-                  aria-label={t('photos')}
-                >
-                  {photos.map((photo, idx) => {
-                    if (!loadedGalleryPhotos.has(photo)) return null;
-                    const is360 = isPanoramaPhoto(photo, property.panoramaPhotos);
-                    const active = idx === displayPhotoIndex;
-                    return (
-                      <img
-                        key={photo}
-                        src={resolveGalleryPhotoUrl(photo, property.panoramaPhotos)}
-                        alt=""
-                        className={`absolute inset-0 h-full w-full transition-opacity duration-150 ${
-                          active ? 'z-[1] opacity-100 group-hover:opacity-95' : 'z-0 opacity-0'
-                        } ${is360 ? 'bg-slate-900 object-contain' : 'object-cover'}`}
-                      />
-                    );
-                  })}
-                  {displayPhotoUrl && !loadedGalleryPhotos.has(displayPhotoUrl) && (
-                    <Shimmer className="absolute inset-0 rounded-none" />
-                  )}
-                  {displayIs360 && (
-                    <span className="absolute left-2 top-2 z-[2] rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow">
-                      {t('photo_360')}
-                    </span>
-                  )}
-                </button>
-                {photos.length > 1 && (
-                  <span className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                    {displayPhotoIndex + 1} / {photos.length}
-                  </span>
-                )}
-              </div>
+              {renderHeroPhotoStage()}
             </>
           ) : null}
         </div>

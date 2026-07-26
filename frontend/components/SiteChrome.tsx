@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { usePathname } from 'next/navigation';
+import { DesignBranchBanner } from '@/components/DesignBranchBanner';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 
@@ -25,6 +26,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <DesignBranchBanner />
       {!adminPanel && <Header />}
       <main
         className={

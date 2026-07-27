@@ -25,8 +25,8 @@ export function Header() {
     window.location.href = '/';
   };
 
-  // თარგმანები მხოლოდ client-ზე რომ hydration error არ იყოს
-  const appName = mounted ? t('appName') : 'VR Georgia';
+  // Branch demo: keep brand fixed so the difference is obvious on every language.
+  const appName = 'Vhome';
   const uploadText = mounted ? t('upload') : 'განცხადების დამატება';
   const loginText = mounted ? t('login') : 'შესვლა';
   const registerText = mounted ? t('register') : 'რეგისტრაცია';
@@ -53,7 +53,7 @@ export function Header() {
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-3">
-          <a href="/" onClick={handleLogoClick} className="text-base font-semibold text-yellow-500 cursor-pointer dark:text-amber-400 dark:hover:text-amber-300">
+          <a href="/" onClick={handleLogoClick} className="cursor-pointer text-base font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
             {appName}
           </a>
         </div>

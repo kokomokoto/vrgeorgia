@@ -63,6 +63,7 @@ export type UploadDraft = {
   isolatedKitchen: boolean;
   heatingCooling: boolean;
   privateNotes: string;
+  brokerListingMode: 'public' | 'unlisted' | 'private' | 'sold';
 };
 
 export function createEmptyUploadDraft(): UploadDraft {
@@ -129,6 +130,7 @@ export function createEmptyUploadDraft(): UploadDraft {
     isolatedKitchen: false,
     heatingCooling: false,
     privateNotes: '',
+    brokerListingMode: 'public',
   };
 }
 
@@ -152,6 +154,12 @@ function normalizeDraft(raw: Partial<UploadDraft>): UploadDraft {
       raw.defaultMediaView === 'exterior'
         ? raw.defaultMediaView
         : 'exterior',
+    brokerListingMode:
+      raw.brokerListingMode === 'unlisted' ||
+      raw.brokerListingMode === 'private' ||
+      raw.brokerListingMode === 'sold'
+        ? raw.brokerListingMode
+        : 'public',
   };
 }
 

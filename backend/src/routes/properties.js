@@ -244,7 +244,8 @@ router.post(
     body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail(),
     body('cadastralCode').optional().isString().trim(),
     body('clientRequestId').optional().isString().trim().isLength({ max: 100 }),
-    body('privateNotes').optional().isString().trim().isLength({ max: 5000 })
+    body('privateNotes').optional().isString().trim().isLength({ max: 5000 }),
+    body('brokerListingMode').optional().isIn(['public', 'unlisted', 'private', 'sold']),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -388,6 +389,17 @@ router.post(
       };
       if (clientRequestId) payload.clientRequestId = clientRequestId;
 
+      // ატვირთვისას არჩეული ხილვადობა (საჯარო / ლინკით / პირადი / გაყიდული)
+      const createMode = req.body.brokerListingMode;
+      if (createMode === 'sold') {
+        payload.status = 'sold';
+      } else if (createMode === 'public' || createMode === 'unlisted' || createMode === 'private') {
+        payload.listingVisibility = createMode;
+        if (createMode === 'unlisted') {
+          payload.shareToken = nanoid(16);
+        }
+      }
+
       // გამეორებული ატვირთვა: არსებული ჩანაწერი განვაახლოთ, ახალი არ შევქმნათ
       if (reusable?.doc) {
         const existing = reusable.doc;
@@ -397,6 +409,18 @@ router.post(
         }
         if (clientRequestId && !existing.clientRequestId) {
           existing.clientRequestId = clientRequestId;
+        }
+        // sold სტატუსი CREATE_REPLAY_SKIP_FIELDS-შია — ხელით ვაყენებთ
+        if (createMode === 'sold') {
+          existing.status = 'sold';
+        } else if (createMode && existing.status === 'sold') {
+          existing.status = 'pending';
+        }
+        if (createMode === 'unlisted' && !existing.shareToken) {
+          existing.shareToken = nanoid(16);
+        }
+        if (createMode === 'public' || createMode === 'private') {
+          existing.shareToken = undefined;
         }
         // თუ ამ ცდაზე ფოტოებიც მოვიდა, დავამატოთ — Cloudinary-ზე ატვირთული არ უნდა დაიკარგოს
         if (photos.length > 0) {

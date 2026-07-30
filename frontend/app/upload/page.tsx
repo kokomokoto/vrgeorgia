@@ -12,7 +12,7 @@ import {
   adjustMainIndexAfterRemoval,
   reorderArray,
 } from '@/lib/propertyPhotos';
-import { isAgentRole } from '@/lib/userRoles';
+import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 import { captureFlipPositions } from '@/lib/flipAnimation';
 import { PhotoSortableGrid } from '@/components/PhotoSortableGrid';
 import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
@@ -238,6 +238,10 @@ export default function UploadPage() {
 
   // პირადი ჩანაწერი
   const [privateNotes, setPrivateNotes] = React.useState('');
+  /** აგენტის/ადმინის ხილვადობა — საჯარო / ლინკით / პირადი / გაყიდული */
+  const [brokerListingMode, setBrokerListingMode] = React.useState<
+    'public' | 'unlisted' | 'private' | 'sold'
+  >('public');
 
   const [error, setError] = React.useState<string | null>(null);
   const [photoFailures, setPhotoFailures] = React.useState<PhotoUploadFailure[]>([]);
@@ -341,6 +345,14 @@ export default function UploadPage() {
     setIsolatedKitchen(draft.isolatedKitchen);
     setHeatingCooling(draft.heatingCooling);
     setPrivateNotes(draft.privateNotes);
+    setBrokerListingMode(
+      draft.brokerListingMode === 'unlisted' ||
+        draft.brokerListingMode === 'private' ||
+        draft.brokerListingMode === 'sold' ||
+        draft.brokerListingMode === 'public'
+        ? draft.brokerListingMode
+        : 'public'
+    );
   }, []);
 
   React.useEffect(() => {
@@ -418,6 +430,7 @@ export default function UploadPage() {
         isolatedKitchen,
         heatingCooling,
         privateNotes,
+        brokerListingMode,
       });
     }, 600);
     return () => window.clearTimeout(timer);
@@ -482,6 +495,7 @@ export default function UploadPage() {
     isolatedKitchen,
     heatingCooling,
     privateNotes,
+    brokerListingMode,
   ]);
 
   const clearUploadDraft = React.useCallback(() => {
@@ -628,6 +642,9 @@ export default function UploadPage() {
   const isStep5Complete = isStep5Filled;
   const isStep6Complete = photoItems.length > 0;
   const isStep7Complete = privateNotes.trim() !== '';
+  const canSetListingVisibility = Boolean(
+    user && (isAgentRole(user.role) || isAdminRole(user.role))
+  );
 
   const completedSteps = [
     isStep1Complete,
@@ -823,6 +840,9 @@ export default function UploadPage() {
       }
       form.set('privateNotes', privateNotes);
       form.set('clientRequestId', session.clientRequestId);
+      if (canSetListingVisibility) {
+        form.set('brokerListingMode', brokerListingMode || 'public');
+      }
 
       let panoramaFlags: boolean[] = [];
       if (photoItems.length > 0) {
@@ -2036,6 +2056,32 @@ export default function UploadPage() {
                 </button>
               ))}
             </div>
+
+            {canSetListingVisibility && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <label
+                  htmlFor="upload-listing-visibility"
+                  className="mb-1.5 block text-sm font-medium text-slate-700"
+                >
+                  👁️ {t('listingVisibilityLabel')}
+                </label>
+                <select
+                  id="upload-listing-visibility"
+                  value={brokerListingMode}
+                  onChange={(e) =>
+                    setBrokerListingMode(
+                      e.target.value as 'public' | 'unlisted' | 'private' | 'sold'
+                    )
+                  }
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                >
+                  <option value="public">{t('listingMode_public')}</option>
+                  <option value="unlisted">{t('listingMode_unlisted')}</option>
+                  <option value="private">{t('listingMode_private')}</option>
+                  <option value="sold">{t('listingMode_sold')}</option>
+                </select>
+              </div>
+            )}
 
             {/* შევსებული მონაცემების შეჯამება */}
             {completedSteps > 0 && (

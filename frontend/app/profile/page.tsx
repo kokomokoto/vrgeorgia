@@ -266,6 +266,10 @@ export default function ProfilePage() {
 
   const filtersActive = filtersAreActive(filters) || Boolean(filterVisibility);
 
+  const photolessProperties = rangeProperties.filter(
+    (p) => !Array.isArray(p.photos) || p.photos.length === 0
+  );
+
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-slate-200 bg-white p-6">
@@ -447,6 +451,78 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {photolessProperties.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-slate-800">
+            📷 {t('photoless_listings_title')}
+            <span className="ml-2 text-sm font-normal text-amber-700">
+              ({photolessProperties.length})
+            </span>
+          </h2>
+          <div className="overflow-hidden rounded-xl border border-amber-100 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">{t('photoless_col_title')}</th>
+                    <th className="px-4 py-3">{t('photoless_col_type')}</th>
+                    <th className="px-4 py-3">{t('photoless_col_status')}</th>
+                    <th className="px-4 py-3">{t('photoless_col_date')}</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {photolessProperties.map((item) => (
+                    <tr key={item._id}>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-slate-800">{item.title || '—'}</span>
+                        <span className="ml-2 text-xs text-slate-400">
+                          #{item.numericId ?? item._id.slice(-6)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {t(item.type, { defaultValue: item.type })}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-500">
+                        {t(`status_${item.status}`, {
+                          defaultValue: item.status,
+                        })}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-400">
+                        {item.createdAt
+                          ? new Date(item.createdAt).toLocaleString(
+                              i18n.language === 'en'
+                                ? 'en-GB'
+                                : i18n.language === 'ru'
+                                  ? 'ru-RU'
+                                  : 'ka-GE',
+                              {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }
+                            )
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/property/${item._id}/edit`}
+                          className="text-xs font-medium text-blue-600 hover:underline"
+                        >
+                          {t('photoless_add_photos')} →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-lg border border-slate-200 bg-white p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

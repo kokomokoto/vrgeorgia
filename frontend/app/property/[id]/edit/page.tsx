@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
-import { isAdminRole } from '@/lib/userRoles';
+import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 import { getPropertyForEdit, updateProperty, discardPropertyEditDraft, resolveImageUrl } from '@/lib/api';
 import { uploadPropertyPhotosInBatches } from '@/lib/propertyPhotoUpload';
 import { detectPanoramaFlags, isPanoramaPhoto, normalizePhotoUrl } from '@/lib/panorama';
@@ -192,6 +192,9 @@ export default function EditPropertyPage() {
 
   // პირადი ჩანაწერი
   const [privateNotes, setPrivateNotes] = useState('');
+  const [brokerListingMode, setBrokerListingMode] = useState<
+    'public' | 'unlisted' | 'private' | 'sold'
+  >('public');
 
   const [panoramaSaving, setPanoramaSaving] = useState(false);
 
@@ -310,6 +313,14 @@ export default function EditPropertyPage() {
         setHeatingCooling(!!am.heatingCooling);
         // პირადი ჩანაწერი
         setPrivateNotes((p as any).privateNotes || '');
+        if (p.status === 'sold') {
+          setBrokerListingMode('sold');
+        } else {
+          const vis = p.listingVisibility || 'public';
+          setBrokerListingMode(
+            vis === 'unlisted' || vis === 'private' || vis === 'public' ? vis : 'public'
+          );
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -526,6 +537,9 @@ export default function EditPropertyPage() {
   const isStep5Complete = isStep5Filled;
   const isStep6Complete = existingPhotos.length > 0;
   const isStep7Complete = privateNotes.trim() !== '';
+  const canSetListingVisibility = Boolean(
+    user && (isAgentRole(user.role) || isAdminRole(user.role))
+  );
 
   const completedSteps = [
     isStep1Complete,
@@ -757,6 +771,9 @@ export default function EditPropertyPage() {
         cadastralCode,
         cadastralHidden,
         privateNotes,
+        ...(canSetListingVisibility
+          ? { brokerListingMode: brokerListingMode || 'public' }
+          : {}),
       } as any);
 
       router.push(`/property/${id}`);
@@ -1787,6 +1804,32 @@ export default function EditPropertyPage() {
                 </button>
               ))}
             </div>
+
+            {canSetListingVisibility && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <label
+                  htmlFor="edit-listing-visibility"
+                  className="mb-1.5 block text-sm font-medium text-slate-700"
+                >
+                  👁️ {t('listingVisibilityLabel')}
+                </label>
+                <select
+                  id="edit-listing-visibility"
+                  value={brokerListingMode}
+                  onChange={(e) =>
+                    setBrokerListingMode(
+                      e.target.value as 'public' | 'unlisted' | 'private' | 'sold'
+                    )
+                  }
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                >
+                  <option value="public">{t('listingMode_public')}</option>
+                  <option value="unlisted">{t('listingMode_unlisted')}</option>
+                  <option value="private">{t('listingMode_private')}</option>
+                  <option value="sold">{t('listingMode_sold')}</option>
+                </select>
+              </div>
+            )}
 
             {/* შეჯამება */}
             {completedSteps > 0 && (

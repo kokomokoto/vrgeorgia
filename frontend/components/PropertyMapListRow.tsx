@@ -90,7 +90,8 @@ export function PropertyMapListRow({
           </div>
 
           <h3
-            className="line-clamp-1 shrink-0 text-[13px] font-bold leading-snug text-slate-900 dark:text-amber-400"
+            data-property-price
+            className="line-clamp-1 shrink-0 text-[13px] font-bold leading-snug"
             title={p.title}
           >
             {p.title}

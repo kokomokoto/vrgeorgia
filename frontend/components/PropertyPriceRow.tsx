@@ -42,7 +42,8 @@ export function PropertyPriceRow({
     <div className={`flex min-w-0 flex-nowrap items-center gap-1.5 ${className}`}>
       {displayTotal != null && (
         <span
-          className={`shrink-0 font-bold leading-none tracking-tight text-slate-900 dark:text-amber-400 ${
+          data-property-price
+          className={`shrink-0 font-bold leading-none tracking-tight ${
             compact ? 'text-base' : 'text-xl sm:text-2xl'
           }`}
         >

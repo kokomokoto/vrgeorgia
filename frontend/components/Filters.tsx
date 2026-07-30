@@ -301,22 +301,29 @@ export function Filters({
   onClearAll,
   rangeProperties,
   showCategories = false,
+  hideDealAndSearch = false,
+  forceExpanded = false,
 }: {
   value: FiltersState;
   onChange: (v: FiltersState) => void;
   /** mapSidebar: სრული რუკის მარცხენა სვეტი — ფილტრები ყოველთვის ხილული, ბადე ვიწრო სვეტისთვის, dropdown-ები inline */
-  variant?: 'default' | 'mapSidebar';
+  /** heroCompact: ჰეროზე მხოლოდ გარიგება + ძიება + გაფართოებული */
+  variant?: 'default' | 'mapSidebar' | 'heroCompact';
   /** მთავარი გვერდი — ყველა ფილტრის გასუფთავება */
   onClearAll?: () => void;
   /** მიმდინარე ძიების შედეგები (ფასი/ფართობის გარეშე) — სლაიდერის min/max და ჰისტოგრამა */
   rangeProperties?: Property[];
   /** კატეგორიის ჩიპები (ბინა, სახლი...) — აგენტის პროფილზე და სხვა */
   showCategories?: boolean;
+  /** გარიგება/სერჩის ზოლი დამალული — მოდალში ჩასასმელად */
+  hideDealAndSearch?: boolean;
+  /** მობაილის აკორდეონის გარეშე ყოველთვის გახსნილი */
+  forceExpanded?: boolean;
 }) {
   const { t } = useTranslation();
   const { rate: usdToGel } = useCurrencyRate();
   const [mounted, setMounted] = React.useState(false);
-  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [mobileOpen, setMobileOpen] = React.useState(forceExpanded);
   const [extendedOpen, setExtendedOpen] = React.useState(false);
   /** გაფართოებული ძიების დრაფტი — API-ზე იგზავნება მხოლოდ გამოყენებისას */
   const [extendedDraft, setExtendedDraft] = React.useState<FiltersState | null>(null);
@@ -359,6 +366,7 @@ export function Filters({
   }, []);
 
   const mapSidebar = variant === 'mapSidebar';
+  const heroCompact = variant === 'heroCompact';
 
   const filterRanges = React.useMemo(() => {
     if (!mapSidebar || !rangeProperties?.length) return null;
@@ -476,20 +484,36 @@ export function Filters({
   // Render a stable shell first, then render translated interactive UI after mount.
   if (!mounted) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900" suppressHydrationWarning>
-        <button
-          type="button"
-          className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
-        >
-          <div className="flex items-center gap-2">
-            <span>🔍</span>
-            <span>ფილტრები</span>
+      <div
+        className={
+          heroCompact
+            ? 'block'
+            : 'rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900'
+        }
+        suppressHydrationWarning
+      >
+        {heroCompact ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="h-10 flex-1 rounded-lg bg-slate-100 dark:bg-zinc-800" />
+            <div className="h-10 w-36 rounded-lg bg-slate-100 dark:bg-zinc-800" />
           </div>
-          <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        <div className="hidden md:block text-sm text-slate-500 dark:text-zinc-400">ფილტრები იტვირთება...</div>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
+            >
+              <div className="flex items-center gap-2">
+                <span>🔍</span>
+                <span>ფილტრები</span>
+              </div>
+              <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <div className="hidden md:block text-sm text-slate-500 dark:text-zinc-400">ფილტრები იტვირთება...</div>
+          </>
+        )}
       </div>
     );
   }
@@ -1087,7 +1111,9 @@ export function Filters({
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <input
-        className="w-full min-w-0 rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+        className={`w-full min-w-0 rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm leading-none text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
+          heroCompact ? 'h-11 py-0' : 'py-2.5'
+        }`}
         placeholder={labels.search_placeholder}
         value={value.q || value.propertyId || ''}
         onChange={(e) => {
@@ -1099,15 +1125,19 @@ export function Filters({
   );
 
   return (
-    <FilterDropdownLayoutContext.Provider value={{ inline: mapSidebar }}>
+    <FilterDropdownLayoutContext.Provider value={{ inline: mapSidebar || forceExpanded }}>
     <div
-      className={`rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900 ${
-        mapSidebar ? '!rounded-none border-0 bg-transparent p-0 shadow-none md:p-0' : ''
-      }`}
+      className={
+        mapSidebar
+          ? 'block'
+          : heroCompact
+            ? 'flex h-full w-full items-center'
+            : 'rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900'
+      }
       suppressHydrationWarning
     >
       {/* მობაილზე ძიება + გასუფთავება */}
-      {!mapSidebar && (
+      {!mapSidebar && !heroCompact && !hideDealAndSearch && (
         <div className="mb-3 flex items-center gap-2 md:hidden">
           {renderSearchField('relative min-w-0 flex-1')}
           {onClearAll ? (
@@ -1131,7 +1161,7 @@ export function Filters({
       )}
 
       {/* მობაილზე — დანარჩენი ფილტრები; mapSidebar-ზე ყოველთვის ხილულია */}
-      {!mapSidebar && (
+      {!mapSidebar && !heroCompact && !forceExpanded && (
         <button
           type="button"
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -1154,9 +1184,11 @@ export function Filters({
 
       <div
         className={
-          mapSidebar
+          mapSidebar || forceExpanded
             ? 'block'
-            : `${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`
+            : heroCompact
+              ? 'flex h-full w-full items-center'
+              : `${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`
         }
       >
       {(mapSidebar || showCategories) && (
@@ -1240,18 +1272,64 @@ export function Filters({
         </div>
       )}
 
-      {/* გარიგების ტიპი + ძიება + გასუფთავება (დესკტოპზე ერთ ხაზზე) */}
+      {/* გარიგების ტიპი + ძიება (+ გასუფთავება default-ზე) */}
+      {!hideDealAndSearch && (
       <div
-        className={`mb-3 flex flex-col gap-2 ${
-          mapSidebar ? '' : 'md:flex-row md:flex-wrap md:items-center md:gap-3'
+        className={`flex gap-2 ${
+          mapSidebar
+            ? 'mb-3 flex-col'
+            : heroCompact
+              ? 'h-full w-full flex-row flex-nowrap items-center gap-2'
+              : 'mb-3 flex-col md:flex-row md:flex-wrap md:items-center md:gap-3'
         }`}
       >
+        <div
+          className={`flex shrink-0 items-center gap-2 ${
+            mapSidebar
+              ? 'order-2 flex-wrap'
+              : heroCompact
+                ? 'order-1 flex-nowrap self-center'
+                : 'order-2 flex-wrap md:order-1 md:flex-nowrap'
+          }`}
+        >
+          {DEAL_TYPES.map((dt) => {
+            const isSelected = value.dealType.includes(dt.value);
+            return (
+              <button
+                key={dt.value}
+                type="button"
+                onClick={() => {
+                  const newDealType = isSelected
+                    ? value.dealType.filter((d) => d !== dt.value)
+                    : [...value.dealType, dt.value];
+                  onChange({ ...value, dealType: newDealType });
+                }}
+                className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium leading-none transition-all sm:px-4 ${
+                  heroCompact ? 'h-11' : 'py-2'
+                } ${
+                  isSelected
+                    ? 'bg-blue-600 text-white dark:bg-amber-500 dark:text-black'
+                    : heroCompact
+                      ? 'bg-slate-100 text-slate-800 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-100'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                <span className="inline-flex items-center leading-none" aria-hidden>
+                  {dt.icon}
+                </span>
+                <span className="inline-flex items-center leading-none">{t(dt.key)}</span>
+              </button>
+            );
+          })}
+        </div>
         {renderSearchField(
           mapSidebar
             ? 'relative order-1 min-w-0 w-full'
-            : 'relative order-1 hidden min-w-0 w-full md:order-2 md:block md:min-w-[10rem] md:flex-1'
+            : heroCompact
+              ? 'relative order-2 min-w-0 flex-1 self-center'
+              : 'relative order-1 hidden min-w-0 w-full md:order-2 md:block md:min-w-[10rem] md:flex-1'
         )}
-        {!mapSidebar && onClearAll ? (
+        {!mapSidebar && !heroCompact && onClearAll ? (
           <button
             type="button"
             onClick={onClearAll}
@@ -1269,34 +1347,29 @@ export function Filters({
             <span className="whitespace-nowrap">{labels.clear_filters}</span>
           </button>
         ) : null}
-        <div className={`order-2 flex shrink-0 flex-wrap gap-2 ${mapSidebar ? '' : 'md:order-1 md:flex-nowrap'}`}>
-          {DEAL_TYPES.map((dt) => {
-            const isSelected = value.dealType.includes(dt.value);
-            return (
-              <button
-                key={dt.value}
-                type="button"
-                onClick={() => {
-                  const newDealType = isSelected
-                    ? value.dealType.filter((d) => d !== dt.value)
-                    : [...value.dealType, dt.value];
-                  onChange({ ...value, dealType: newDealType });
-                }}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium transition-all sm:px-4 ${
-                  isSelected
-                    ? 'bg-blue-600 text-white shadow-md dark:bg-amber-500 dark:text-black dark:shadow-amber-900/40'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
-                }`}
-              >
-                <span>{dt.icon}</span>
-                <span>{t(dt.key)}</span>
-              </button>
-            );
-          })}
-        </div>
+        {heroCompact && (
+          <button
+            type="button"
+            onClick={openExtendedSearch}
+            className={`order-3 inline-flex h-11 shrink-0 items-center justify-center gap-2 self-center whitespace-nowrap rounded-lg border px-3 text-sm font-medium leading-none transition-all ${
+              extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
+                : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100'
+            }`}
+          >
+            <span className="truncate leading-none">{labels.extended_search}</span>
+            {(extendedOnlyActiveCount > 0 || activeFilterCount > 0) && (
+              <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold leading-none text-white dark:bg-amber-500 dark:text-black">
+                {Math.max(extendedOnlyActiveCount, activeFilterCount)}
+              </span>
+            )}
+          </button>
+        )}
       </div>
+      )}
 
       {/* მთავარი ფილტრები: ფასი, ფართობი, ქალაქი, ოთახები, გაფართოებული */}
+      {!heroCompact && (
       <div className={mainFiltersRowClass}>
         {mapSidebar ? (
           <>
@@ -1544,6 +1617,8 @@ export function Filters({
         </div>
       </div>
 
+      )}
+
       <ExtendedSearchModal
         open={extendedOpen}
         onClose={discardExtendedSearch}
@@ -1554,6 +1629,150 @@ export function Filters({
       >
         <FilterDropdownLayoutContext.Provider value={{ inline: true, spacious: true }}>
           <div className="mx-auto w-full max-w-4xl space-y-3">
+              {heroCompact && (
+                <p className="text-sm text-slate-600 dark:text-zinc-400">
+                  {mounted
+                    ? `${t('filter_price')} · ${t('filter_area')} · ${labels.city} · ${t('filter_rooms')} · ${t('categories')}`
+                    : 'ფასი · ფართობი · ქალაქი · ოთახები · კატეგორიები'}
+                </p>
+              )}
+              {heroCompact && (
+                <div className={compactGridClass}>
+                  {/* ფასი / ფართობი / ქალაქი / ოთახები — ჰერო რეჟიმში მხოლოდ მოდალში */}
+                  <div className={compactFilterItemClass}>
+                    <FilterDropdown
+                      label={t('filter_price')}
+                      summary={
+                        value.minPrice || value.maxPrice
+                          ? `${value.minPrice || '…'} – ${value.maxPrice || '…'} ${value.priceCurrency || 'USD'}`
+                          : labels.any
+                      }
+                      isActive={!!(value.minPrice || value.maxPrice)}
+                      onClear={() => onChange({ ...value, minPrice: '', maxPrice: '' })}
+                      defaultOpen
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          placeholder="Min"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          value={value.minPrice}
+                          onChange={(e) => onChange({ ...value, minPrice: e.target.value })}
+                        />
+                        <input
+                          type="number"
+                          placeholder="Max"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          value={value.maxPrice}
+                          onChange={(e) => onChange({ ...value, maxPrice: e.target.value })}
+                        />
+                      </div>
+                    </FilterDropdown>
+                  </div>
+                  <div className={compactFilterItemClass}>
+                    <FilterDropdown
+                      label={t('filter_area')}
+                      summary={
+                        value.minSqm || value.maxSqm
+                          ? `${value.minSqm || '…'} – ${value.maxSqm || '…'} მ²`
+                          : labels.any
+                      }
+                      isActive={!!(value.minSqm || value.maxSqm)}
+                      onClear={() => onChange({ ...value, minSqm: '', maxSqm: '' })}
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          placeholder="Min"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          value={value.minSqm}
+                          onChange={(e) => onChange({ ...value, minSqm: e.target.value })}
+                        />
+                        <input
+                          type="number"
+                          placeholder="Max"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          value={value.maxSqm}
+                          onChange={(e) => onChange({ ...value, maxSqm: e.target.value })}
+                        />
+                      </div>
+                    </FilterDropdown>
+                  </div>
+                  <div className={compactFilterItemClass}>
+                    <LocationFilterTrigger
+                      label={labels.city}
+                      summary={citySummary()}
+                      isActive={cityActive}
+                      onClear={clearCityFilter}
+                      onOpen={() => setLocationModalOpen(true)}
+                    />
+                  </div>
+                  <div className={compactFilterItemClass}>
+                    <FilterDropdown
+                      label={t('filter_rooms')}
+                      summary={roomsSummary()}
+                      isActive={roomsActive || bedroomsActive || balconiesActive}
+                      onClear={clearRoomsFilter}
+                    >
+                      <div className="flex flex-wrap gap-1.5">
+                        {['1', '2', '3', '4', '5', '6'].map((r) => {
+                          const isSelected = value.rooms.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={() => {
+                                const nextRooms = isSelected
+                                  ? value.rooms.filter((room) => room !== r)
+                                  : [...value.rooms, r];
+                                onChange({ ...value, rooms: nextRooms });
+                              }}
+                              className={`min-w-[2.5rem] rounded-lg px-2 py-2 text-sm font-medium ${
+                                isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-200'
+                              }`}
+                            >
+                              {r === '6' ? '6+' : r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </FilterDropdown>
+                  </div>
+                  <div className="col-span-full">
+                    <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                      {t('categories')}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PROPERTY_TYPE_CHIPS.map((cat) => {
+                        const isSelected = value.type.includes(cat.value);
+                        return (
+                          <button
+                            key={cat.value}
+                            type="button"
+                            onClick={() => {
+                              const nextType = isSelected
+                                ? value.type.filter((x) => x !== cat.value)
+                                : [...value.type, cat.value];
+                              onChange({
+                                ...value,
+                                type: nextType,
+                                landStatus: nextType.includes('land') ? value.landStatus || [] : [],
+                              });
+                            }}
+                            className={`rounded-lg border px-2 py-1.5 text-xs font-medium ${
+                              isSelected
+                                ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-amber-500 dark:bg-amber-950/50 dark:text-amber-300'
+                                : 'border-slate-200 bg-white text-slate-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+                            }`}
+                          >
+                            {t(cat.key)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
               <FilterDropdown
                 label="🏗️ აშენება/რემონტი"
                 summary={yearSummary()}

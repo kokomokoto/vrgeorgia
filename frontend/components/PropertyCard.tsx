@@ -121,7 +121,10 @@ export function PropertyCard({
   });
 
   return (
-    <div className="group overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-zinc-700/80 dark:bg-zinc-900 dark:hover:shadow-lg dark:hover:shadow-black/20">
+    <div
+      data-property-card
+      className="group overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-black/20"
+    >
       <Link href={`/property/${p._id}`} className="block">
         <div
           className={`relative bg-slate-100 dark:bg-zinc-800 ${
@@ -200,7 +203,8 @@ export function PropertyCard({
 
           <div className={`flex flex-col ${compactPhoto ? 'mt-1 gap-1.5' : 'mt-1.5 gap-2.5'}`}>
           <h3
-            className={`line-clamp-1 break-words font-bold text-slate-900 dark:text-amber-400 ${
+            data-property-title
+            className={`line-clamp-1 break-words font-bold ${
               compactPhoto ? 'text-[15px] leading-[1.3]' : 'text-[15px] leading-snug'
             }`}
             title={displayTitle}
@@ -209,8 +213,8 @@ export function PropertyCard({
           </h3>
 
           {(displayStreet || displayCity) && (
-            <div className="flex min-w-0 items-start gap-1.5 text-sm text-slate-600 dark:text-zinc-400">
-              <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+            <div data-property-muted className="flex min-w-0 items-start gap-1.5 text-sm">
+              <svg className="mt-0.5 h-4 w-4 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -226,9 +230,11 @@ export function PropertyCard({
           </div>
 
           <div
-            className={`flex items-center justify-between gap-2 border-t border-slate-100 text-xs leading-tight text-slate-400 dark:border-zinc-800 dark:text-zinc-500 ${
+            data-property-muted
+            className={`flex items-center justify-between gap-2 border-t text-xs leading-tight ${
               compactPhoto ? 'mt-1 pt-1' : 'mt-1.5 pt-1.5'
             }`}
+            style={{ borderColor: 'var(--theme-surface-border)' }}
           >
             <span className="truncate">{displayCity || '—'}</span>
             {listedAt ? (

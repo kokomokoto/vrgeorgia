@@ -129,6 +129,12 @@ const propertySchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
 
+    /**
+     * ატვირთვის იდემპოტენტობის გასაღები — კლიენტი ერთსა და იმავე გასაღებს აგზავნის
+     * ერთი ატვირთვის ყველა ცდაზე, ამიტომ განმეორებითი დაჭერა ახალ ობიექტს არ ქმნის.
+     */
+    clientRequestId: { type: String, trim: true, default: undefined },
+
     // ადმინის მიერ აპინული ობიექტი — მთავარ გვერდზე პირველ რიგში ჩანს
     pinned: { type: Boolean, default: false },
     pinnedAt: { type: Date, default: null },
@@ -164,6 +170,17 @@ const propertySchema = new mongoose.Schema(
 propertySchema.index({ title: 'text', desc: 'text', city: 'text', region: 'text' });
 propertySchema.index({ shareToken: 1 }, { unique: true, sparse: true });
 propertySchema.index({ deletedAt: 1 });
+
+// იდემპოტენტობა: ერთ მომხმარებელს ერთი გასაღებით მხოლოდ ერთი ობიექტი შეიძლება ჰქონდეს.
+// partialFilterExpression (და არა sparse) — რადგან userId ყოველთვის არსებობს და
+// compound sparse ინდექსი ვერ გამორიცხავს clientRequestId-ის გარეშე დოკუმენტებს.
+propertySchema.index(
+  { userId: 1, clientRequestId: 1 },
+  { unique: true, partialFilterExpression: { clientRequestId: { $type: 'string' } } }
+);
+
+// ჩავარდნილი ატვირთვის აღმოჩენა (იგივე მომხმარებელი + ბოლო წუთები)
+propertySchema.index({ userId: 1, createdAt: -1 });
 
 // კატეგორიის მიხედვით ID-ის დიაპაზონები (100 000 თითოეულისთვის)
 const TYPE_RANGES = {

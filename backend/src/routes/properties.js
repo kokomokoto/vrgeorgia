@@ -158,6 +158,54 @@ const PUBLIC_LISTING_OR = {
   $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
 };
 
+/** ფანჯარა, რომელშიც იდენტური უფოტოო ჩანაწერი ჩავარდნილ ატვირთვად ითვლება */
+const FAILED_UPLOAD_REUSE_WINDOW_MS = 30 * 60 * 1000;
+
+/** ველები, რომლებიც იდემპოტენტურ გამეორებაზე უნდა განახლდეს (ფოტოების გარეშე) */
+const CREATE_REPLAY_SKIP_FIELDS = new Set([
+  'photos',
+  'panoramaPhotos',
+  'mainPhoto',
+  'status',
+  'userId',
+  'clientRequestId',
+]);
+
+/**
+ * იდემპოტენტობა — ჩავარდნილი ატვირთვის ხელახლა დაჭერა უნდა დააბრუნოს იგივე ობიექტი,
+ * და არა შექმნას ახალი. ორი მექანიზმი:
+ *   1. clientRequestId — ზუსტი შესატყვისი (ძირითადი).
+ *   2. იდენტური, ჯერ კიდევ უფოტოო ჩანაწერი ბოლო 30 წუთში — უსაფრთხოების ბადე ძველი
+ *      ქეშირებული ფრონტენდისთვის, რომელიც გასაღებს არ აგზავნის.
+ */
+async function findReusablePropertyForCreate(req, clientRequestId) {
+  if (clientRequestId) {
+    const byKey = await Property.findOne({ userId: req.user.id, clientRequestId });
+    if (byKey) return { doc: byKey, reason: 'idempotency-key' };
+  }
+
+  const lat = Number(req.body.lat);
+  const lng = Number(req.body.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  const byContent = await Property.findOne(
+    withNotDeleted({
+      userId: req.user.id,
+      title: req.body.title,
+      price: Number(req.body.price),
+      type: req.body.type,
+      dealType: req.body.dealType,
+      'location.lat': lat,
+      'location.lng': lng,
+      // მხოლოდ უფოტოო ჩანაწერი — თუ ფოტოები აქვს, ატვირთვა წარმატებული იყო
+      photos: { $size: 0 },
+      createdAt: { $gte: new Date(Date.now() - FAILED_UPLOAD_REUSE_WINDOW_MS) },
+    })
+  ).sort({ createdAt: -1 });
+
+  return byContent ? { doc: byContent, reason: 'photoless-retry' } : null;
+}
+
 // CREATE (protected) - multipart with photos
 router.post(
   '/',
@@ -195,18 +243,30 @@ router.post(
     body('contactPhone').optional().isString().trim().isLength({ max: 50 }),
     body('contactEmail').optional({ values: 'falsy' }).isEmail().withMessage('გთხოვთ შეიყვანოთ სწორი ელ-ფოსტა (მაგ: example@mail.ru)').normalizeEmail(),
     body('cadastralCode').optional().isString().trim(),
+    body('clientRequestId').optional().isString().trim().isLength({ max: 100 }),
     body('privateNotes').optional().isString().trim().isLength({ max: 5000 })
   ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
+    const clientRequestId = String(req.body.clientRequestId || '').trim().slice(0, 100);
+
+    // ჩავარდნილი ატვირთვის გამეორება ახალ ობიექტს არ უნდა შექმნას (იდემპოტენტობა)
+    let reusable = null;
+    try {
+      reusable = await findReusablePropertyForCreate(req, clientRequestId);
+    } catch (lookupErr) {
+      console.warn('create idempotency lookup failed:', lookupErr?.message || lookupErr);
+    }
+
     // საკადასტრო კოდის უნიკალურობის შემოწმება (თუ მითითებულია)
     if (req.body.cadastralCode && req.body.cadastralCode.trim()) {
       const existingByCadastral = await Property.findOne(
         withNotDeleted({ cadastralCode: req.body.cadastralCode.trim() })
       );
-      if (existingByCadastral) {
+      // საკუთარი თავი ვერ იქნება დუბლიკატი — გამეორებულ მოთხოვნას არ ვბლოკავთ
+      if (existingByCadastral && String(existingByCadastral._id) !== String(reusable?.doc?._id || '')) {
         return res.status(400).json({ errors: [{ msg: 'ამ საკადასტრო კოდით ობიექტი უკვე არსებობს', path: 'cadastralCode' }] });
       }
     }
@@ -224,10 +284,19 @@ router.post(
     } catch {
       panoramaFlags = [];
     }
+    let photoFailures = [];
     try {
       const uploaded = await uploadPropertyPhotosFromFiles(req.files || [], panoramaFlags);
       photos = uploaded.urls.slice(0, 30);
-      panoramaPhotos = photos.filter((_, i) => Boolean(panoramaFlags[i]));
+      panoramaPhotos = (uploaded.panoramaUrls || []).filter((u) => photos.includes(u));
+      photoFailures = uploaded.failures || [];
+      // ყველა ფოტო ჩავარდა — ობიექტს უფოტოოდ არ ვქმნით
+      if (photos.length === 0 && photoFailures.length > 0) {
+        return res.status(400).json({
+          message: `ფოტოს ატვირთვა ვერ მოხერხდა: ${photoFailures.map((f) => f.message).join('; ')}`,
+          photoFailures,
+        });
+      }
     } catch (uploadErr) {
       return res.status(400).json({ message: uploadErr.message || 'ფოტოს ატვირთვა ვერ მოხერხდა' });
     }
@@ -261,7 +330,7 @@ router.post(
 
     try {
       const agentProfile = await Agent.findOne({ user: req.user.id }).select('_id phone email').lean();
-      const property = await Property.create({
+      const payload = {
         title: req.body.title,
         desc: req.body.desc,
         price: Number(req.body.price),
@@ -316,12 +385,53 @@ router.post(
           phone: req.body.contactPhone || agentProfile?.phone || '',
           email: req.body.contactEmail || agentProfile?.email || '',
         },
-      });
+      };
+      if (clientRequestId) payload.clientRequestId = clientRequestId;
+
+      // გამეორებული ატვირთვა: არსებული ჩანაწერი განვაახლოთ, ახალი არ შევქმნათ
+      if (reusable?.doc) {
+        const existing = reusable.doc;
+        for (const [key, value] of Object.entries(payload)) {
+          if (CREATE_REPLAY_SKIP_FIELDS.has(key)) continue;
+          existing.set(key, value);
+        }
+        if (clientRequestId && !existing.clientRequestId) {
+          existing.clientRequestId = clientRequestId;
+        }
+        // თუ ამ ცდაზე ფოტოებიც მოვიდა, დავამატოთ — Cloudinary-ზე ატვირთული არ უნდა დაიკარგოს
+        if (photos.length > 0) {
+          const merged = [...(existing.photos || []), ...photos].slice(0, 30);
+          existing.photos = merged;
+          existing.panoramaPhotos = [
+            ...new Set([...(existing.panoramaPhotos || []), ...panoramaPhotos]),
+          ].filter((u) => merged.includes(u));
+        }
+        await existing.save();
+        scheduleTranslations(existing._id);
+        return res.status(200).json({
+          property: existing,
+          resumed: true,
+          resumeReason: reusable.reason,
+          ...(photoFailures.length ? { photoFailures } : {}),
+        });
+      }
+
+      const property = await Property.create(payload);
 
       scheduleTranslations(property._id);
-      res.status(201).json({ property });
+      res.status(201).json({
+        property,
+        ...(photoFailures.length ? { photoFailures } : {}),
+      });
     } catch (err) {
       console.error('Property.create failed:', err);
+      // ორი პარალელური დაჭერა ერთი გასაღებით — უნიკალური ინდექსი აჭერს მეორეს
+      if (err.code === 11000 && clientRequestId) {
+        const winner = await Property.findOne({ userId: req.user.id, clientRequestId });
+        if (winner) {
+          return res.status(200).json({ property: winner, resumed: true, resumeReason: 'concurrent-submit' });
+        }
+      }
       if (err.code === 11000) {
         return res.status(400).json({ message: 'ამ მონაცემებით ჩანაწერი უკვე არსებობს (უნიკალური ველი)' });
       }
@@ -919,16 +1029,27 @@ router.post(
     }
 
     let uploaded = [];
+    let uploadedPanoramas = [];
+    let photoFailures = [];
     try {
       const result = await uploadPropertyPhotosFromFiles(req.files || [], panoramaFlags);
       uploaded = result.urls;
+      uploadedPanoramas = result.panoramaUrls || [];
+      photoFailures = result.failures || [];
     } catch (uploadErr) {
       return res.status(400).json({ message: uploadErr.message || 'ფოტოს ატვირთვა ვერ მოხერხდა' });
     }
-    if (uploaded.length === 0) return res.status(400).json({ message: 'ფოტო არ აიტვირთა' });
+    if (uploaded.length === 0) {
+      return res.status(400).json({
+        message: photoFailures.length
+          ? `ფოტო არ აიტვირთა: ${photoFailures.map((f) => f.message).join('; ')}`
+          : 'ფოტო არ აიტვირთა',
+        photoFailures,
+      });
+    }
 
     const useDraft = req.query.draft === '1' || req.query.draft === 'true';
-    const newPanoramas = uploaded.filter((_, i) => Boolean(panoramaFlags[i]));
+    const newPanoramas = uploadedPanoramas;
 
     if (useDraft) {
       ensureEditDraft(existing);
@@ -939,7 +1060,11 @@ router.post(
       draft.panoramaPhotos = [...new Set(nextPanorama)];
       existing.markModified('editDraft');
       await existing.save();
-      return res.json({ photos: draft.photos, panoramaPhotos: draft.panoramaPhotos });
+      return res.json({
+        photos: draft.photos,
+        panoramaPhotos: draft.panoramaPhotos,
+        ...(photoFailures.length ? { photoFailures } : {}),
+      });
     }
 
     const next = [...(existing.photos || []), ...uploaded].slice(0, 30);
@@ -948,7 +1073,11 @@ router.post(
     existing.panoramaPhotos = [...new Set(nextPanorama)];
     await existing.save();
 
-    res.json({ photos: existing.photos, panoramaPhotos: existing.panoramaPhotos });
+    res.json({
+      photos: existing.photos,
+      panoramaPhotos: existing.panoramaPhotos,
+      ...(photoFailures.length ? { photoFailures } : {}),
+    });
   }
 );
 

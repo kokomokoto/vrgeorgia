@@ -107,6 +107,39 @@ router.get('/me', requireAuth, async (req, res) => {
   res.json({ user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role, status: user.status } });
 });
 
+/**
+ * ტოკენის განახლება (sliding session).
+ *
+ * refresh token-ის გარეშე ტოკენი ზუსტად ვადის გასვლის მომენტში კვდება და აგენტი
+ * სამუშაოს შუაში გადის სისტემიდან. კლიენტი ამ endpoint-ს იძახებს გვერდის ჩატვირთვაზე
+ * და პერიოდულად, ამიტომ აქტიური მომხმარებლის სესია არ იწურება.
+ */
+router.post('/refresh', requireAuth, async (req, res) => {
+  const user = await User.findById(req.user.id).select('_id email phone avatar name role status');
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  if (user.status === 'pending' || user.status === 'rejected') {
+    return res.status(403).json({ message: 'ანგარიში არ არის აქტიური.' });
+  }
+
+  const token = jwt.sign({ sub: user._id.toString() }, getJWTSecret(), {
+    expiresIn: getJWTExpiresIn(),
+  });
+
+  res.json({
+    token,
+    user: {
+      id: user._id,
+      email: user.email,
+      phone: user.phone,
+      avatar: user.avatar,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+    },
+  });
+});
+
 // Update profile
 router.put(
   '/profile',

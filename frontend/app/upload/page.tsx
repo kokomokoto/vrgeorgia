@@ -4,8 +4,8 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
-import { createProperty, getMe, updateProperty } from '@/lib/api';
-import { detectPanoramaFromFile } from '@/lib/panorama';
+import { createProperty, getMe, updateProperty, type PhotoUploadFailure } from '@/lib/api';
+import { detectPanoramaFlags } from '@/lib/panorama';
 import { uploadPropertyPhotosInBatches } from '@/lib/propertyPhotoUpload';
 import {
   MAX_PROPERTY_PHOTOS,
@@ -55,6 +55,13 @@ import {
   saveUploadDraft,
   type UploadDraft,
 } from '@/lib/uploadDraftStorage';
+import {
+  clearUploadSession,
+  ensureUploadSession,
+  loadUploadSession,
+  saveUploadSession,
+  type UploadSession,
+} from '@/lib/uploadSessionStorage';
 
 // საქართველოს რეგიონები
 const GEORGIAN_REGIONS = [
@@ -233,15 +240,39 @@ export default function UploadPage() {
   const [privateNotes, setPrivateNotes] = React.useState('');
 
   const [error, setError] = React.useState<string | null>(null);
+  const [photoFailures, setPhotoFailures] = React.useState<PhotoUploadFailure[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const [uploadPhase, setUploadPhase] = React.useState<'idle' | 'saving' | 'photos'>('idle');
+  const [uploadPhase, setUploadPhase] = React.useState<
+    'idle' | 'preparing' | 'saving' | 'photos'
+  >('idle');
   const [photoUploadProgress, setPhotoUploadProgress] = React.useState({ done: 0, total: 0 });
+
+  /**
+   * სინქრონული ბლოკი — `loading` state-ის განახლება ასინქრონულია, ამიტომ ორი სწრაფი
+   * დაჭერა ორივე შედიოდა handleSubmit-ში და ორ ობიექტს ქმნიდა.
+   */
+  const submittingRef = React.useRef(false);
 
   const photoItemsRef = React.useRef(photoItems);
   photoItemsRef.current = photoItems;
 
   React.useEffect(() => {
     return () => revokeUploadPhotoPreviews(photoItemsRef.current);
+  }, []);
+
+  /**
+   * გვერდის განახლების შემდეგ ფაილები მეხსიერებაში აღარ არსებობს, ამიტომ ვერ
+   * გავაგრძელებთ იმავე ობიექტზე ატვირთვას ფოტოების გაორმაგების რისკის გარეშე.
+   * ნაცვლად ჩუმი დუბლიკატისა — პირდაპირ ვეუბნებით, სად არის შენახული ობიექტი.
+   */
+  const [unfinishedPropertyId, setUnfinishedPropertyId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const existing = loadUploadSession();
+    if (existing?.propertyId) {
+      setUnfinishedPropertyId(existing.propertyId);
+      clearUploadSession();
+    }
   }, []);
 
   const photoGridRef = React.useRef<HTMLDivElement>(null);
@@ -658,8 +689,17 @@ export default function UploadPage() {
   ];
 
   const handleSubmit = async () => {
+    // ორმაგი დაჭერის სინქრონული დაცვა — state-ს დაცვა აქ საკმარისი არაა
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     setLoading(true);
     setError(null);
+    setPhotoFailures([]);
+
+    // ერთი ატვირთვის ყველა ცდას ერთი გასაღები აქვს, ამიტომ სერვერზე დუბლიკატი არ იქმნება
+    let session: UploadSession = ensureUploadSession();
+
     try {
       // ტოკენის შემოწმება
       const token = window.localStorage.getItem('token');
@@ -782,33 +822,62 @@ export default function UploadPage() {
         );
       }
       form.set('privateNotes', privateNotes);
+      form.set('clientRequestId', session.clientRequestId);
 
       let panoramaFlags: boolean[] = [];
       if (photoItems.length > 0) {
-        panoramaFlags = await Promise.all(
-          photoItems.map((item) => detectPanoramaFromFile(item.file))
+        setUploadPhase('preparing');
+        setPhotoUploadProgress({ done: 0, total: photoItems.length });
+        panoramaFlags = await detectPanoramaFlags(
+          photoItems.map((item) => item.file),
+          (done, total) => setPhotoUploadProgress({ done, total })
         );
       }
 
-      setUploadPhase('saving');
-      const res = await createProperty(form);
-      const propertyId = res.property._id;
+      // ჩავარდნილი ცდის გაგრძელება: ობიექტი უკვე შექმნილია, ხელახლა არ ვქმნით
+      let propertyId = session.propertyId;
+      if (!propertyId) {
+        setUploadPhase('saving');
+        const res = await createProperty(form);
+        propertyId = res.property._id;
+        session = { ...session, propertyId };
+        saveUploadSession(session);
+        if (res.photoFailures?.length) setPhotoFailures(res.photoFailures);
+      }
 
-      if (photoItems.length > 0) {
+      const remainingPhotos = photoItems.filter(
+        (item) => !session.uploadedPhotoIds.includes(item.id)
+      );
+
+      if (remainingPhotos.length > 0) {
         setUploadPhase('photos');
-        setPhotoUploadProgress({ done: 0, total: photoItems.length });
-        await uploadPropertyPhotosInBatches(
+        setPhotoUploadProgress({ done: 0, total: remainingPhotos.length });
+        const uploadResult = await uploadPropertyPhotosInBatches(
           propertyId,
-          photoItems.map((item) => item.file),
+          photoItems.map((item) => ({ id: item.id, file: item.file })),
           panoramaFlags,
-          (p) => setPhotoUploadProgress({ done: p.uploaded, total: p.total })
+          (p) => setPhotoUploadProgress({ done: p.uploaded, total: p.total }),
+          {
+            skipIds: new Set(session.uploadedPhotoIds),
+            // ყოველი პაკეტის შემდეგ ვინახავთ — გვერდის განახლებაც არ დაკარგავს პროგრესს
+            onBatchUploaded: (ids) => {
+              session = {
+                ...session,
+                uploadedPhotoIds: [...session.uploadedPhotoIds, ...ids],
+              };
+              saveUploadSession(session);
+            },
+          }
         );
-        if (mainPhotoIndex > 0) {
-          await updateProperty(propertyId, { mainPhoto: mainPhotoIndex });
-        }
+        if (uploadResult.failures.length) setPhotoFailures(uploadResult.failures);
+      }
+
+      if (photoItems.length > 0 && mainPhotoIndex > 0) {
+        await updateProperty(propertyId, { mainPhoto: mainPhotoIndex });
       }
 
       clearUploadDraftStorage();
+      clearUploadSession();
       router.push(`/property/${propertyId}`);
     } catch (e: unknown) {
       const msg =
@@ -817,8 +886,11 @@ export default function UploadPage() {
           : typeof e === 'string'
             ? e
             : JSON.stringify(e);
-      setError(msg?.trim() ? msg.trim() : t('error'));
+      const base = msg?.trim() ? msg.trim() : t('error');
+      // ობიექტი უკვე შენახულია — აგენტმა უნდა იცოდეს, რომ გამეორება დუბლიკატს არ შექმნის
+      setError(session.propertyId ? `${base} ${t('upload_resume_hint')}` : base);
     } finally {
+      submittingRef.current = false;
       setLoading(false);
       setUploadPhase('idle');
       setPhotoUploadProgress({ done: 0, total: 0 });
@@ -850,6 +922,28 @@ export default function UploadPage() {
           ✕ {t('upload_draft_clear')}
         </button>
       </div>
+
+      {unfinishedPropertyId && (
+        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <h3 className="font-semibold text-amber-900">⚠️ {t('upload_unfinished_title')}</h3>
+          <p className="mt-1 text-sm text-amber-800">{t('upload_unfinished_desc')}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href={`/property/${unfinishedPropertyId}/edit`}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+            >
+              {t('upload_unfinished_open')}
+            </a>
+            <button
+              type="button"
+              onClick={() => setUnfinishedPropertyId(null)}
+              className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+            >
+              {t('upload_unfinished_dismiss')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* მთავარი ფორმა */}
@@ -1843,6 +1937,20 @@ export default function UploadPage() {
             </div>
           )}
 
+          {photoFailures.length > 0 && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+              <div className="font-semibold">⚠️ {t('upload_photo_failures_title')}</div>
+              <ul className="mt-2 list-disc pl-5 text-sm space-y-1">
+                {photoFailures.map((f, i) => (
+                  <li key={`${f.name}-${i}`}>
+                    <span className="font-medium">{f.name}</span> — {f.message}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs">{t('upload_photo_failures_hint')}</p>
+            </div>
+          )}
+
           <button
             className={`w-full py-4 rounded-xl text-lg font-bold transition-all ${
               completedSteps >= 6
@@ -1855,14 +1963,19 @@ export default function UploadPage() {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                {uploadPhase === 'photos' && photoUploadProgress.total > 0
-                  ? t('photos_upload_progress', {
+                {uploadPhase === 'preparing' && photoUploadProgress.total > 0
+                  ? t('photos_upload_preparing', {
                       done: photoUploadProgress.done,
                       total: photoUploadProgress.total,
                     })
-                  : uploadPhase === 'saving'
-                    ? t('photos_upload_saving')
-                    : t('loading')}
+                  : uploadPhase === 'photos' && photoUploadProgress.total > 0
+                    ? t('photos_upload_progress', {
+                        done: photoUploadProgress.done,
+                        total: photoUploadProgress.total,
+                      })
+                    : uploadPhase === 'saving'
+                      ? t('photos_upload_saving')
+                      : t('loading')}
               </span>
             ) : (
               <span>🚀 {t('publish')}</span>

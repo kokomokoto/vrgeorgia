@@ -6,7 +6,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import mongoose from 'mongoose';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import authRoutes from './routes/auth.js';
 import propertyRoutes from './routes/properties.js';
@@ -85,14 +85,56 @@ app.use(cors({
   credentials: true
 }));
 
+/**
+ * ლიმიტის გასაღები: ავტორიზებულ მომხმარებელს — მისივე id, სხვას — IP.
+ *
+ * მხოლოდ IP-ზე დაყრდნობა ერთ ოფისში მჯდომ აგენტებს (ერთი NAT მისამართი) აიძულებდა
+ * საერთო ლიმიტის გაზიარებას, რაც ატვირთვის შუაში 429-ს იწვევდა.
+ */
+function rateLimitKey(req) {
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Bearer ')) {
+    const token = auth.slice(7);
+    const payload = token.split('.')[1];
+    if (payload) {
+      try {
+        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+        if (decoded?.sub) return `u:${decoded.sub}`;
+      } catch {
+        /* არავალიდური ტოკენი — IP-ზე გადავდივართ */
+      }
+    }
+  }
+  // ipKeyGenerator — IPv6 ქვექსელის ნორმალიზაცია, თორემ ლიმიტი ადვილად შემოვლადია
+  return `ip:${ipKeyGenerator(req.ip)}`;
+}
+
+/** ატვირთვა ერთ ობიექტზე ათეულობით მოთხოვნაა — ეს გზები ცალკე, ფართო ლიმიტზეა */
+const UPLOAD_PATH_RE = /^\/properties(\/[^/]+)?(\/photos)?\/?$/;
+
 // Rate limiting (ლოკალურ dev-ში გამორთული — HMR/Strict Mode არ აჯერებს 429-ს)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: NODE_ENV === 'production' ? 400 : 10_000,
-  skip: () => NODE_ENV !== 'production',
+  max: NODE_ENV === 'production' ? 1200 : 10_000,
+  keyGenerator: rateLimitKey,
+  skip: (req) =>
+    NODE_ENV !== 'production' ||
+    // ფოტოების ატვირთვა/შენახვა საკუთარ, უფრო ფართო ლიმიტზეა
+    (req.method === 'POST' && UPLOAD_PATH_RE.test(req.path)),
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many requests, please try again later.' }
+});
+
+// ატვირთვის გზები: ერთი ობიექტი = 1 create + 8-მდე ფოტო-პაკეტი, ამიტომ ლიმიტი მაღალია
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: NODE_ENV === 'production' ? 600 : 10_000,
+  keyGenerator: rateLimitKey,
+  skip: () => NODE_ENV !== 'production',
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'ატვირთვის ლიმიტი ამოიწურა. სცადეთ 15 წუთში.' }
 });
 
 const authLimiter = rateLimit({
@@ -125,6 +167,8 @@ app.get('/api/health', (_req, res) => {
 // Rate limit on auth routes (login/register brute-force protection)
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.post('/api/properties', uploadLimiter);
+app.post('/api/properties/:id/photos', uploadLimiter);
 app.use('/api', apiLimiter);
 
 // Embed tour link handoff — always local (not proxied to production in dev)
@@ -148,6 +192,32 @@ app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+/**
+ * ატვირთვის იდემპოტენტობა DB დონეზე unique ინდექსზეა დამოკიდებული. autoIndex
+ * ავტომატურად აშენებს, მაგრამ ჩავარდნა უხმოდ ხდება — მაშინ პარალელური ორმაგი
+ * დაჭერა ისევ დუბლიკატს შექმნიდა. ამიტომ სტარტზე ცხადად ვამოწმებთ და ვლოგავთ.
+ */
+async function verifyIdempotencyIndex() {
+  try {
+    const { Property } = await import('./models/Property.js');
+    await Property.init();
+    const indexes = await Property.collection.indexes();
+    const found = indexes.find(
+      (i) => i.key?.userId === 1 && i.key?.clientRequestId === 1 && i.unique
+    );
+    if (found) {
+      console.log('Upload idempotency index: ok');
+    } else {
+      console.error(
+        'WARNING: upload idempotency index (userId + clientRequestId) is missing — ' +
+          'concurrent double-submits may create duplicate properties.'
+      );
+    }
+  } catch (err) {
+    console.error('Upload idempotency index check failed:', err.message);
+  }
+}
+
 async function start() {
   mongoose.connection.on('error', (err) => {
     console.error('MongoDB connection error:', err);
@@ -158,6 +228,8 @@ async function start() {
   await mongoose.connect(MONGODB_URI);
   console.log('Connected to MongoDB');
   console.log(`Environment: ${NODE_ENV}`);
+
+  await verifyIdempotencyIndex();
 
   await attachTourUi(app);
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getApiBase } from '@/lib/config';
 
-type Item = { href: string; icon: string; label: string; exact?: boolean; badgeKey?: 'registrations' | 'properties' | 'trash' };
+type Item = { href: string; icon: string; label: string; exact?: boolean; badgeKey?: 'registrations' | 'properties' | 'trash' | 'duplicates' };
 
 const ITEMS: Item[] = [
   { href: '/admin', icon: '📊', label: 'მიმოხილვა', exact: true },
@@ -13,6 +13,7 @@ const ITEMS: Item[] = [
   { href: '/admin/users', icon: '👥', label: 'მომხმარებლები' },
   { href: '/admin/agents', icon: '🏢', label: 'აგენტები' },
   { href: '/admin/properties', icon: '🏘️', label: 'განცხადებები', badgeKey: 'properties' },
+  { href: '/admin/duplicates', icon: '🧬', label: 'დუბლიკატები', badgeKey: 'duplicates' },
   { href: '/admin/trash', icon: '🗑️', label: 'ნაგვის ყუთი', badgeKey: 'trash' },
   { href: '/admin/tours', icon: '🌐', label: '3D ტურები' },
   { href: '/admin/messages', icon: '💬', label: 'შეტყობინებები' },
@@ -35,6 +36,7 @@ export function AdminSidebar({
   const [pendingRegistrations, setPendingRegistrations] = useState(pendingRegistrationsProp ?? 0);
   const [pendingProperties, setPendingProperties] = useState(pendingPropertiesProp ?? 0);
   const [trashCount, setTrashCount] = useState(0);
+  const [duplicateCount, setDuplicateCount] = useState(0);
 
   useEffect(() => {
     if (pendingRegistrationsProp !== undefined) setPendingRegistrations(pendingRegistrationsProp);
@@ -59,6 +61,7 @@ export function AdminSidebar({
         setPendingRegistrations(data.pendingRegistrations ?? 0);
         setPendingProperties(data.pendingProperties ?? 0);
         setTrashCount(data.trashCount ?? 0);
+        setDuplicateCount(data.duplicateCount ?? 0);
       } catch {
         /* ignore */
       }
@@ -81,6 +84,7 @@ export function AdminSidebar({
     if (key === 'registrations' && pendingRegistrations > 0) return pendingRegistrations;
     if (key === 'properties' && pendingProperties > 0) return pendingProperties;
     if (key === 'trash' && trashCount > 0) return trashCount;
+    if (key === 'duplicates' && duplicateCount > 0) return duplicateCount;
     return 0;
   };
 
@@ -112,7 +116,9 @@ export function AdminSidebar({
                       ? 'bg-orange-500'
                       : item.badgeKey === 'trash'
                         ? 'bg-gray-500'
-                        : 'bg-rose-500'
+                        : item.badgeKey === 'duplicates'
+                          ? 'bg-purple-500'
+                          : 'bg-rose-500'
                   }`}
                 >
                   {badge}

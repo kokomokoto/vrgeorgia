@@ -33,6 +33,12 @@ import {
   normalizeFaqItems,
   normalizeAboutByLang,
 } from '../utils/siteContentService.js';
+import {
+  DEFAULT_DUPLICATE_WINDOW_MINUTES,
+  findDuplicatePropertyGroups,
+  findPhotolessProperties,
+  mergeDuplicateProperties,
+} from '../services/duplicateProperties.js';
 
 const router = express.Router();
 
@@ -60,12 +66,19 @@ const adminMiddleware = async (req, res, next) => {
 // Lightweight counts for admin sidebar badges
 router.get('/counts', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const [pendingRegistrations, pendingProperties, trashCount] = await Promise.all([
-      User.countDocuments({ status: 'pending' }),
-      Property.countDocuments(withNotDeleted({ status: 'pending' })),
-      Property.countDocuments(PROPERTY_DELETED),
-    ]);
-    res.json({ pendingRegistrations, pendingProperties, trashCount });
+    const [pendingRegistrations, pendingProperties, trashCount, duplicateGroups, photolessList] =
+      await Promise.all([
+        User.countDocuments({ status: 'pending' }),
+        Property.countDocuments(withNotDeleted({ status: 'pending' })),
+        Property.countDocuments(PROPERTY_DELETED),
+        // ბეიჯისთვის მოკლე პერიოდი საკმარისია — სრული სკანი /duplicates-ზეა
+        findDuplicatePropertyGroups({ sinceDays: 30 }).catch(() => []),
+        findPhotolessProperties({ sinceDays: 30, limit: 200 }).catch(() => []),
+      ]);
+    // ბეიჯი ორივე პრობლემას აჩვენებს — ერთსა და იმავე გვერდზე მოგვარდება
+    const duplicateCount =
+      duplicateGroups.reduce((sum, g) => sum + g.count - 1, 0) + photolessList.length;
+    res.json({ pendingRegistrations, pendingProperties, trashCount, duplicateCount });
   } catch (_error) {
     res.status(500).json({ message: 'მონაცემების მიღება ვერ მოხერხდა' });
   }
@@ -710,6 +723,64 @@ router.delete('/trash/:id', requireAuth, adminMiddleware, async (req, res) => {
     res.json({ message: 'განცხადება სამუდამოდ წაიშალა' });
   } catch (error) {
     res.status(500).json({ message: 'სამუდამო წაშლა ვერ მოხერხდა' });
+  }
+});
+
+// ─── დუბლიკატები (ჩავარდნილი ატვირთვების შედეგი) ───
+
+router.get('/duplicates', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const windowMinutes = Math.min(
+      1440,
+      Math.max(5, parseInt(req.query.windowMinutes, 10) || DEFAULT_DUPLICATE_WINDOW_MINUTES)
+    );
+    const sinceDays = Math.min(365, Math.max(1, parseInt(req.query.sinceDays, 10) || 90));
+
+    const [groups, photoless] = await Promise.all([
+      findDuplicatePropertyGroups({ windowMinutes, sinceDays }),
+      findPhotolessProperties({ sinceDays }),
+    ]);
+    res.json({
+      groups,
+      photoless,
+      windowMinutes,
+      sinceDays,
+      totalGroups: groups.length,
+      totalDuplicates: groups.reduce((sum, g) => sum + g.count - 1, 0),
+      totalPhotoless: photoless.length,
+    });
+  } catch (error) {
+    console.error('admin duplicates failed:', error);
+    res.status(500).json({ message: 'დუბლიკატების ძებნა ვერ მოხერხდა' });
+  }
+});
+
+router.post('/duplicates/merge', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const { keeperId, duplicateIds } = req.body || {};
+    if (!keeperId || !Array.isArray(duplicateIds)) {
+      return res.status(400).json({ message: 'keeperId და duplicateIds სავალდებულოა' });
+    }
+
+    const result = await mergeDuplicateProperties({
+      keeperId,
+      duplicateIds,
+      adminUserId: req.user.id,
+    });
+    if (!result.ok) return res.status(400).json({ message: result.message });
+
+    await writeAudit(req.user.id, 'property.duplicates_merged', 'property', keeperId, {
+      removedIds: result.removedIds,
+      addedPhotos: result.addedPhotos,
+    });
+
+    res.json({
+      message: `გაერთიანდა: ${result.removedIds.length} დუბლიკატი წაიშალა, ${result.addedPhotos} ფოტო გადმოვიდა`,
+      ...result,
+    });
+  } catch (error) {
+    console.error('admin duplicates merge failed:', error);
+    res.status(500).json({ message: 'გაერთიანება ვერ მოხერხდა' });
   }
 });
 

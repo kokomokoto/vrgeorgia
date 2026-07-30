@@ -42,19 +42,68 @@ export function getPanoramaViewerUrls(src: string): string[] {
   return [...new Set(out)];
 }
 
-/** ფაილის ზომების წაკითხვა ატვირთვამდე */
+/** ერთი ფაილის ზომების წაკითხვის ჭერი — დეკოდირება შეიძლება არასდროს დასრულდეს */
+const DETECT_TIMEOUT_MS = 10_000;
+
+/**
+ * ფაილის ზომების წაკითხვა ატვირთვამდე.
+ *
+ * ტაიმაუტი აუცილებელია: დიდი სურათის დეკოდირებამ შეიძლება არც `onload` და არც
+ * `onerror` არ გამოიძახოს (მეხსიერების ნაკლებობა), და ატვირთვა უსასრულოდ ჩაიჭედება.
+ */
 export function detectPanoramaFromFile(file: File): Promise<boolean> {
   return new Promise((resolve) => {
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
+    let settled = false;
+
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
       URL.revokeObjectURL(objectUrl);
-      resolve(isEquirectangularAspect(img.naturalWidth, img.naturalHeight));
+      resolve(value);
     };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(false);
-    };
+
+    const timer = window.setTimeout(() => finish(false), DETECT_TIMEOUT_MS);
+
+    img.onload = () => finish(isEquirectangularAspect(img.naturalWidth, img.naturalHeight));
+    img.onerror = () => finish(false);
     img.src = objectUrl;
   });
+}
+
+/** ერთდროულად დეკოდირებული სურათების ჭერი — 16 პარალელური დეკოდი ტაბს ახრჩობს */
+const DETECT_CONCURRENCY = 3;
+
+/**
+ * პანორამის ამოცნობა ბევრ ფაილზე შეზღუდული პარალელიზმით.
+ * `Promise.all` ყველა ფაილზე ერთდროულად სუსტ მოწყობილობაზე ბრაუზერს აგდებდა.
+ */
+export async function detectPanoramaFlags(
+  files: File[],
+  onProgress?: (done: number, total: number) => void
+): Promise<boolean[]> {
+  const flags = new Array<boolean>(files.length).fill(false);
+  let done = 0;
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < files.length) {
+      const index = cursor;
+      cursor += 1;
+      flags[index] = await detectPanoramaFromFile(files[index]);
+      done += 1;
+      onProgress?.(done, files.length);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(DETECT_CONCURRENCY, files.length) }, () => worker())
+  );
+
+  return flags;
 }

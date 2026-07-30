@@ -13,8 +13,19 @@ const MEMORY_CACHE = new Map(); // key: `${to}:${text}` -> translated string
 const MEMORY_CACHE_MAX = 5000;
 const REQUEST_GAP_MS = 150; // throttle between outbound provider calls
 
+/** ერთი პროვაიდერის გამოძახების ჭერი — უტაიმაუტო fetch აჭედავს მთელ რიგს */
+const PROVIDER_TIMEOUT_MS = 6000;
+
+/**
+ * რიგის ჭერი. თარგმანები ერთ სერიულ რიგში გადის, ამიტომ გრძელი backlog
+ * ყველა მომდევნო მოთხოვნას აყოვნებს წუთებით. ჭერზე ახალ ამოცანებს ვტოვებთ
+ * უთარგმნელად — ორიგინალი ტექსტი ჯობია გაყინულ გვერდს.
+ */
+const MAX_QUEUE_DEPTH = 40;
+
 let googleClient = null;
 let queue = Promise.resolve();
+let queueDepth = 0;
 
 async function getGoogleClient() {
   if (googleClient) return googleClient;
@@ -63,9 +74,30 @@ function writeCache(text, from, to, value) {
   MEMORY_CACHE.set(cacheKey(text, from, to), value);
 }
 
+/** რიგის სიღრმე — გადატვირთვის დიაგნოსტიკისთვის */
+export function getTranslateQueueDepth() {
+  return queueDepth;
+}
+
 // Serialize outbound calls so we never burst a free provider.
+// Returns null immediately when the backlog is too deep.
 function enqueue(task) {
-  const run = queue.then(task, task);
+  if (queueDepth >= MAX_QUEUE_DEPTH) return Promise.resolve(null);
+
+  queueDepth += 1;
+  const release = () => {
+    queueDepth -= 1;
+  };
+  const run = queue.then(task, task).then(
+    (value) => {
+      release();
+      return value;
+    },
+    (err) => {
+      release();
+      throw err;
+    }
+  );
   queue = run.then(
     () => new Promise((r) => setTimeout(r, REQUEST_GAP_MS)),
     () => new Promise((r) => setTimeout(r, REQUEST_GAP_MS))
@@ -73,10 +105,30 @@ function enqueue(task) {
   return run;
 }
 
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 async function translateViaGoogleCloud(text, from, to) {
   const client = await getGoogleClient();
   if (!client) return null;
-  const [translated] = await client.translate(text, { from, to });
+  const [translated] = await withTimeout(
+    client.translate(text, { from, to }),
+    PROVIDER_TIMEOUT_MS,
+    'google-cloud'
+  );
   return Array.isArray(translated) ? translated.join('\n') : translated;
 }
 
@@ -91,6 +143,7 @@ async function translateViaGoogleFree(text, from, to) {
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
     },
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`google-free ${res.status}`);
   const data = await res.json();
@@ -108,7 +161,7 @@ async function translateViaMyMemory(text, from, to) {
     `?q=${encodeURIComponent(text)}&langpair=${from}|${to}` +
     (email ? `&de=${encodeURIComponent(email)}` : '');
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`mymemory ${res.status}`);
   const data = await res.json();
   const out = data?.responseData?.translatedText;

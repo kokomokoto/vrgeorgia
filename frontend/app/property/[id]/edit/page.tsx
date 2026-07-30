@@ -8,7 +8,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { isAdminRole } from '@/lib/userRoles';
 import { getPropertyForEdit, updateProperty, discardPropertyEditDraft, resolveImageUrl } from '@/lib/api';
 import { uploadPropertyPhotosInBatches } from '@/lib/propertyPhotoUpload';
-import { detectPanoramaFromFile, isPanoramaPhoto, normalizePhotoUrl } from '@/lib/panorama';
+import { detectPanoramaFlags, isPanoramaPhoto, normalizePhotoUrl } from '@/lib/panorama';
 import {
   MAX_PROPERTY_PHOTOS,
   adjustMainIndexAfterRemoval,
@@ -625,10 +625,16 @@ export default function EditPropertyPage() {
     setError(null);
     setPhotoUploadProgress({ done: 0, total: list.length });
     try {
-      const panoramaFlags = await Promise.all(list.map((f) => detectPanoramaFromFile(f)));
-      const res = await uploadPropertyPhotosInBatches(id, list, panoramaFlags, (p) =>
+      const panoramaFlags = await detectPanoramaFlags(list, (done, total) =>
+        setPhotoUploadProgress({ done, total })
+      );
+      const items = list.map((file, index) => ({ id: `add-${Date.now()}-${index}`, file }));
+      const res = await uploadPropertyPhotosInBatches(id, items, panoramaFlags, (p) =>
         setPhotoUploadProgress({ done: p.uploaded, total: p.total })
       , { draft: true });
+      if (res.failures.length) {
+        setError(res.failures.map((f) => `${f.name}: ${f.message}`).join('; '));
+      }
       const savedPhotos = res.photos || [];
       const savedPanorama = res.panoramaPhotos || [];
       existingPhotosRef.current = savedPhotos;

@@ -29,13 +29,22 @@ export default function ChatWidget() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // წაუკითხავი მესიჯების რაოდენობა - პოლინგი
+  // წაუკითხავი მესიჯების რაოდენობა — პოლინგი მხოლოდ აქტიურ ტაბზე.
+  // ყოველ 15 წამში კითხვა ერთი ტაბიდან 15 წუთში 60 მოთხოვნას ხარჯავდა და
+  // ატვირთვის დროს ლიმიტს/ხმაურს ზრდიდა.
   useEffect(() => {
     if (!token) return;
-    const check = () => { getUnreadCount().then(r => setUnread(r.count)).catch(() => {}); };
+    const check = () => {
+      if (document.visibilityState !== 'visible') return;
+      getUnreadCount().then(r => setUnread(r.count)).catch(() => {});
+    };
     check();
-    const iv = setInterval(check, 15000);
-    return () => clearInterval(iv);
+    const iv = setInterval(check, 60000);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', check);
+    };
   }, [token]);
 
   // კონვერსაციების ჩატვირთვა
@@ -67,9 +76,12 @@ export default function ChatWidget() {
   useEffect(() => {
     if (!selectedUser) return;
     loadMessages(selectedUser._id);
-    // პოლინგი ყოველ 5 წამში
+    // პოლინგი ყოველ 5 წამში — მხოლოდ როცა ჩატი ღიაა და ტაბი აქტიურია
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(() => loadMessages(selectedUser._id), 5000);
+    pollRef.current = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      loadMessages(selectedUser._id);
+    }, 5000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [selectedUser, loadMessages]);
 

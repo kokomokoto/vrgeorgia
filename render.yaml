@@ -33,8 +33,10 @@ services:
         value: 5000
       - key: JWT_SECRET
         generateValue: true
+      # 30d + კლიენტის მხრიდან sliding refresh (/api/auth/refresh) — აგენტი
+      # სამუშაოს შუაში სისტემიდან არ უნდა გავარდეს
       - key: JWT_EXPIRES_IN
-        value: 7d
+        value: 30d
       - key: MONGODB_URI
         sync: false
       - key: ALLOWED_ORIGINS

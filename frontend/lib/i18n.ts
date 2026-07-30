@@ -629,6 +629,17 @@ const resources = {
       photos_count: 'ფოტო',
       photos_upload_saving: 'განცხადება ინახება…',
       photos_upload_progress: 'ფოტოები {{done}} / {{total}}',
+      photos_upload_preparing: 'ფოტოები მუშავდება {{done}} / {{total}}',
+      upload_resume_hint:
+        'ობიექტი უკვე შენახულია — „გამოქვეყნების“ ხელახლა დაჭერა დუბლიკატს არ შექმნის, ატვირთვა იმავე ობიექტზე გაგრძელდება.',
+      upload_photo_failures_title: 'ეს ფოტოები ვერ აიტვირთა:',
+      upload_photo_failures_hint:
+        'დანარჩენი ფოტოები აიტვირთა. ჩამოთვლილები შეამცირეთ ან ჩაანაცვლეთ და სცადეთ ხელახლა.',
+      upload_unfinished_title: 'წინა ატვირთვა ბოლომდე ვერ დასრულდა',
+      upload_unfinished_desc:
+        'ობიექტი შენახულია, მაგრამ ფოტოები შესაძლოა ნაწილობრივ აიტვირთა. გახსენით და დაასრულეთ — ახლიდან ატვირთვა დუბლიკატს შექმნის.',
+      upload_unfinished_open: 'შენახული ობიექტის გახსნა',
+      upload_unfinished_dismiss: 'დამალვა',
       choose_or_drop_photos: 'აირჩიეთ ფოტოები ან ჩააგდეთ აქ',
       photos_drop_zone_hint: 'ფოტოების განყოფილების ნებისმიერ ადგილას ჩააგდეთ ფაილები',
       choose_photos: 'ფოტოების არჩევა',
@@ -1370,6 +1381,17 @@ const resources = {
       photos_count: 'photos',
       photos_upload_saving: 'Saving listing…',
       photos_upload_progress: 'Photos {{done}} / {{total}}',
+      photos_upload_preparing: 'Processing photos {{done}} / {{total}}',
+      upload_resume_hint:
+        'The listing is already saved — pressing Publish again will not create a duplicate, it resumes the same listing.',
+      upload_photo_failures_title: 'These photos could not be uploaded:',
+      upload_photo_failures_hint:
+        'The remaining photos were uploaded. Shrink or replace the listed files and try again.',
+      upload_unfinished_title: 'Previous upload did not finish',
+      upload_unfinished_desc:
+        'The listing was saved, but photos may be only partially uploaded. Open it and finish there — uploading again would create a duplicate.',
+      upload_unfinished_open: 'Open saved listing',
+      upload_unfinished_dismiss: 'Dismiss',
       choose_or_drop_photos: 'Choose photos or drop them here',
       photos_drop_zone_hint: 'Drop image files anywhere in the photos section',
       choose_photos: 'Choose Photos',
@@ -2097,6 +2119,17 @@ const resources = {
       photos_count: 'фото',
       photos_upload_saving: 'Сохранение объявления…',
       photos_upload_progress: 'Фото {{done}} / {{total}}',
+      photos_upload_preparing: 'Обработка фото {{done}} / {{total}}',
+      upload_resume_hint:
+        'Объект уже сохранён — повторное нажатие «Опубликовать» не создаст дубликат, загрузка продолжится для того же объекта.',
+      upload_photo_failures_title: 'Эти фото не загрузились:',
+      upload_photo_failures_hint:
+        'Остальные фото загружены. Уменьшите или замените перечисленные файлы и попробуйте снова.',
+      upload_unfinished_title: 'Предыдущая загрузка не завершилась',
+      upload_unfinished_desc:
+        'Объект сохранён, но фото могли загрузиться частично. Откройте его и завершите — повторная загрузка создаст дубликат.',
+      upload_unfinished_open: 'Открыть сохранённый объект',
+      upload_unfinished_dismiss: 'Скрыть',
       choose_or_drop_photos: 'Выберите фотографии или перетащите сюда',
       photos_drop_zone_hint: 'Перетащите файлы в любое место раздела фотографий',
       choose_photos: 'Выбрать фото',

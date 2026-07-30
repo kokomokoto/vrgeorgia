@@ -102,7 +102,7 @@ export function scheduleTranslations(propertyId, langs = AUTO_TRANSLATE_LANGS) {
   );
 }
 
-export function scheduleListTranslations(properties, lang, cap = 60) {
+export function scheduleListTranslations(properties, lang, cap = 12) {
   let count = 0;
   for (const p of properties) {
     if (count >= cap) break;
@@ -115,11 +115,24 @@ export function scheduleListTranslations(properties, lang, cap = 60) {
 /**
  * Await missing translations for the first N incomplete items so the current
  * response uses the site language.
+ *
+ * Hard-capped by a time budget: translation providers are external and serialized,
+ * so without a deadline one list request could hold the connection for minutes
+ * (measured 107–157s in production). Whatever does not finish in time keeps the
+ * original text in this response and is persisted by the background job for the next one.
  */
-export async function fillMissingTranslationsForResponse(properties, lang, awaitCap = 25) {
+const RESPONSE_TRANSLATION_BUDGET_MS = 2500;
+const RESPONSE_TRANSLATION_AWAIT_CAP = 8;
+
+export async function fillMissingTranslationsForResponse(
+  properties,
+  lang,
+  awaitCap = RESPONSE_TRANSLATION_AWAIT_CAP
+) {
   const incomplete = properties.filter((p) => !hasCompleteTranslation(p, lang)).slice(0, awaitCap);
   if (!incomplete.length) return;
-  await Promise.all(
+
+  const work = Promise.all(
     incomplete.map(async (p) => {
       try {
         const translations = await ensurePropertyTranslations(p._id, [lang]);
@@ -128,7 +141,18 @@ export async function fillMissingTranslationsForResponse(properties, lang, await
         console.warn('list translate failed:', p._id, err?.message || err);
       }
     })
-  );
+  ).catch(() => {});
+
+  let timer;
+  const budget = new Promise((resolve) => {
+    timer = setTimeout(resolve, RESPONSE_TRANSLATION_BUDGET_MS);
+    timer.unref?.();
+  });
+
+  // `work` ბიუჯეტის შემდეგაც გრძელდება ფონურად და თარგმანს ბაზაში ინახავს,
+  // ამიტომ შემდეგ მოთხოვნაზე იგივე ობიექტი უკვე ქეშიდან მოვა.
+  await Promise.race([work, budget]);
+  clearTimeout(timer);
 }
 
 /** საჯაროდ არ ჩანს საკადასტრო, თუ მონიშნულია დამალვა */

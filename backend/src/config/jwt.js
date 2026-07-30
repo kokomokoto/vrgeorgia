@@ -37,5 +37,5 @@ export function getJWTSecret() {
 }
 
 export function getJWTExpiresIn() {
-  return process.env.JWT_EXPIRES_IN?.trim() || '7d';
+  return process.env.JWT_EXPIRES_IN?.trim() || '30d';
 }

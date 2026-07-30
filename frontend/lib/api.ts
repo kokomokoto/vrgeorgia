@@ -312,8 +312,20 @@ export async function getProperty(
   return request<{ property: Property }>(`/api/properties/${id}${q ? `?${q}` : ''}`);
 }
 
+export type PhotoUploadFailure = { name: string; message: string };
+
+/**
+ * ობიექტის შექმნა. `form`-ში `clientRequestId` იდემპოტენტობის გასაღებია — იმავე
+ * გასაღებით განმეორებითი მოთხოვნა ახალ ობიექტს არ ქმნის, არსებულს აბრუნებს
+ * (`resumed: true`), ამიტომ ჩავარდნილი ატვირთვის ხელახლა დაჭერა დუბლიკატს არ იწვევს.
+ */
 export async function createProperty(form: FormData) {
-  return request<{ property: Property }>('/api/properties', {
+  return request<{
+    property: Property;
+    resumed?: boolean;
+    resumeReason?: string;
+    photoFailures?: PhotoUploadFailure[];
+  }>('/api/properties', {
     method: 'POST',
     body: form
   });
@@ -387,7 +399,11 @@ export async function addPropertyPhotos(
     form.append('panoramaFlags', JSON.stringify(panoramaFlags));
   }
   const q = opts?.draft ? '?draft=1' : '';
-  return request<{ photos: string[]; panoramaPhotos?: string[] }>(`/api/properties/${id}/photos${q}`, {
+  return request<{
+    photos: string[];
+    panoramaPhotos?: string[];
+    photoFailures?: PhotoUploadFailure[];
+  }>(`/api/properties/${id}/photos${q}`, {
     method: 'POST',
     body: form,
   });
@@ -402,6 +418,14 @@ export async function deleteProperty(id: string) {
 // Profile APIs
 export async function getMe() {
   return request<{ user: User }>('/api/auth/me');
+}
+
+/** sliding session — ვადის გასვლამდე ახალი ტოკენი, რომ სესია სამუშაოს შუაში არ გაწყდეს */
+export async function refreshSession() {
+  return request<{ token: string; user: User }>('/api/auth/refresh', {
+    method: 'POST',
+    timeoutMs: 20_000,
+  });
 }
 
 export async function updateProfile(data: { phone?: string; name?: string; email?: string }) {

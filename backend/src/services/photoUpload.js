@@ -97,7 +97,7 @@ export async function compressRegularPhotoForCloudinary(inputBuffer) {
     .toBuffer();
 
   let attempts = 0;
-  while (output.length > REGULAR_MAX_BYTES && attempts < 16) {
+  while (output.length > REGULAR_MAX_BYTES && attempts < 24) {
     attempts += 1;
     if (quality > 60) {
       quality -= 5;
@@ -107,8 +107,8 @@ export async function compressRegularPhotoForCloudinary(inputBuffer) {
       continue;
     }
     const m = await sharp(output).metadata();
-    const nw = Math.floor((m.width || 1600) * 0.9);
-    const nh = Math.floor((m.height || 1200) * 0.9);
+    const nw = Math.floor((m.width || 1600) * 0.85);
+    const nh = Math.floor((m.height || 1200) * 0.85);
     if (nw < 640 || nh < 480) break;
     output = await sharp(output)
       .resize(nw, nh, { fit: 'inside', withoutEnlargement: true })
@@ -116,10 +116,11 @@ export async function compressRegularPhotoForCloudinary(inputBuffer) {
       .toBuffer();
   }
 
-  if (output.length > REGULAR_MAX_BYTES) {
-    throw new Error(
-      'ფოტო ძალიან დიდია (~0.5 MB ლიმიტი). სცადეთ უფრო პატარა ფაილი.'
-    );
+  // 0.5 MB სასურველი ზომაა და არა უარის თქმის საფუძველი — ფოტოს დაკარგვა
+  // აგენტს აიძულებს მთელი ობიექტი ხელახლა ატვირთოს. ვწყვეტთ მხოლოდ მაშინ,
+  // როცა Cloudinary-ის რეალურ ლიმიტსაც სცდება.
+  if (output.length > CLOUDINARY_MAX_BYTES) {
+    throw new Error(formatUploadError({ message: 'File size too large' }));
   }
 
   return output;
@@ -141,38 +142,70 @@ function uploadBufferToCloudinary(buffer) {
   });
 }
 
-/** Multer memory ფაილებიდან → შეკუმშვა → Cloudinary URL-ები */
+const CLOUDINARY_UPLOAD_ATTEMPTS = 3;
+
+async function uploadWithRetry(buffer) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= CLOUDINARY_UPLOAD_ATTEMPTS; attempt++) {
+    try {
+      return await uploadBufferToCloudinary(buffer);
+    } catch (err) {
+      lastErr = err;
+      // ზომის შეცდომა გამეორებით არ გამოსწორდება
+      if (String(err?.message || '').includes('File size too large')) break;
+      if (attempt < CLOUDINARY_UPLOAD_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Multer memory ფაილებიდან → შეკუმშვა → Cloudinary URL-ები.
+ *
+ * ერთი გაუმართავი ფოტო მთელ პაკეტს არ აგდებს: წარმატებულები ინახება და
+ * ჩავარდნილები `failures`-ში ბრუნდება, რომ აგენტმა მხოლოდ ისინი ჩაანაცვლოს.
+ */
 export async function uploadPropertyPhotosFromFiles(files, panoramaFlags = []) {
   const list = files || [];
   if (list.length === 0) {
-    return { urls: [], warnings: [] };
+    return { urls: [], warnings: [], failures: [], panoramaUrls: [] };
   }
 
   const urls = [];
+  const panoramaUrls = [];
   const warnings = [];
+  const failures = [];
 
   for (let i = 0; i < list.length; i++) {
     const file = list[i];
-    if (!file.buffer?.length) continue;
+    const name = file?.originalname || `ფოტო #${i + 1}`;
+    if (!file?.buffer?.length) {
+      failures.push({ name, message: 'ფაილი ცარიელია ან ვერ წაიკითხა' });
+      continue;
+    }
     const isPanorama = Boolean(panoramaFlags[i]);
     try {
       const compressed = isPanorama
         ? await compressPanoramaPhotoForCloudinary(file.buffer)
         : await compressRegularPhotoForCloudinary(file.buffer);
-      const url = await uploadBufferToCloudinary(compressed);
+      const url = await uploadWithRetry(compressed);
       urls.push(url);
+      if (isPanorama) panoramaUrls.push(url);
       const limit = isPanorama ? CLOUDINARY_MAX_BYTES : REGULAR_MAX_BYTES;
       if (file.size > limit) {
         const mbBefore = (file.size / (1024 * 1024)).toFixed(1);
         const mbAfter = (compressed.length / (1024 * 1024)).toFixed(2);
         warnings.push(
-          `${file.originalname || 'ფოტო'}: ${mbBefore} MB → ${mbAfter} MB (${isPanorama ? '360°' : 'ჩვეულებრივი'} შეკუმშვა)`
+          `${name}: ${mbBefore} MB → ${mbAfter} MB (${isPanorama ? '360°' : 'ჩვეულებრივი'} შეკუმშვა)`
         );
       }
     } catch (err) {
-      throw new Error(formatUploadError(err));
+      console.error('photo upload failed:', name, err?.message || err);
+      failures.push({ name, message: formatUploadError(err) });
     }
   }
 
-  return { urls, warnings };
+  return { urls, warnings, failures, panoramaUrls };
 }

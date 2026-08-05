@@ -6,82 +6,68 @@ import { DesignableBadge } from '@/components/home-design/DesignableBadge';
 import { HeroSlideshow, HERO_W } from '@/components/home-design/HeroSlideshow';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { useTheme } from '@/components/ThemeProvider';
+import {
+  createDefaultThemeModes,
+  getEnabledThemeModes,
+  resolveActiveThemeMode,
+} from '@/lib/themeModes';
 
 const DRAG_THRESHOLD_PX = 3;
 
 export function HomeHero({
   title,
   subtitle,
+  dealBar,
   children,
 }: {
   title: string;
   subtitle: string;
+  /** Independent deal-type bar (outside search box) */
+  dealBar?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const design = useHomeDesignOptional();
-  const { theme } = useTheme();
+  const { theme, activeModeId } = useTheme();
   const designMode = design?.designMode ?? false;
   const selected = design?.selectedId === 'hero';
   const search = design?.layout.search;
+  const deal = design?.layout.dealBar;
   const hero = design?.layout.hero;
   const heroText = design?.layout.heroText;
   const searchW = search?.w ?? 1280;
-  const searchH = search?.h ?? 70;
+  const searchH = search?.h ?? 88;
+  const dealW = deal?.w ?? 480;
+  const dealH = deal?.h ?? 48;
   const heroH = hero?.h ?? 360;
   const heroTextTitle = heroText?.title?.trim() ? heroText.title : title;
   const heroTextSubtitle = heroText?.subtitle?.trim() ? heroText.subtitle : subtitle;
 
   const imageIds = React.useMemo(() => {
-    const enabledModes = hero?.enabledModes?.length
-      ? hero.enabledModes
-      : (['day', 'twilight', 'night'] as const);
-    const dayIds = hero?.dayImageIds || [];
-    const twilightIds = hero?.twilightImageIds || [];
-    const nightIds = hero?.nightImageIds || [];
-    const dayRotation = hero?.dayRotationIds || [];
-    const twilightRotation = hero?.twilightRotationIds || [];
-    const nightRotation = hero?.nightRotationIds || [];
+    const modes =
+      design?.layout.themeModes?.length
+        ? design.layout.themeModes
+        : createDefaultThemeModes();
+    const enabled = getEnabledThemeModes(modes);
+    const active = resolveActiveThemeMode(enabled, activeModeId, theme);
 
-    let baseIds: string[];
-    let rotationIds: string[];
+    const pick = (modeId: string) => {
+      const mode = modes.find((m) => m.id === modeId);
+      if (!mode) return [] as string[];
+      const selectedRot = mode.imageIds.filter((id) => mode.rotationIds.includes(id));
+      if (selectedRot.length > 0) return selectedRot;
+      return mode.imageIds.length > 0 ? [mode.imageIds[0]] : [];
+    };
 
-    const modeOrder =
-      theme === 'dark'
-        ? (['night', 'twilight', 'day'] as const)
-        : theme === 'twilight'
-          ? (['twilight', 'day', 'night'] as const)
-          : (['day', 'twilight', 'night'] as const);
+    const primary = pick(active.id);
+    if (primary.length > 0) return primary;
 
-    const preferredMode =
-      modeOrder.find((mode) => enabledModes.includes(mode)) ?? enabledModes[0] ?? 'day';
-
-    if (preferredMode === 'night') {
-      baseIds = nightIds.length ? nightIds : twilightIds.length ? twilightIds : dayIds;
-      rotationIds = nightIds.length
-        ? nightRotation
-        : twilightIds.length
-          ? twilightRotation
-          : dayRotation;
-    } else if (preferredMode === 'twilight') {
-      baseIds = twilightIds.length ? twilightIds : dayIds.length ? dayIds : nightIds;
-      rotationIds = twilightIds.length
-        ? twilightRotation
-        : dayIds.length
-          ? dayRotation
-          : nightRotation;
-    } else {
-      baseIds = dayIds.length ? dayIds : twilightIds.length ? twilightIds : nightIds;
-      rotationIds = dayIds.length
-        ? dayRotation
-        : twilightIds.length
-          ? twilightRotation
-          : nightRotation;
+    for (const mode of enabled) {
+      if (mode.id === active.id) continue;
+      const ids = pick(mode.id);
+      if (ids.length > 0) return ids;
     }
-
-    const selected = baseIds.filter((id) => rotationIds.includes(id));
-    if (selected.length > 0) return selected;
-    return baseIds.length > 0 ? [baseIds[0]] : [];
-  }, [hero, theme]);
+    return [];
+  }, [design?.layout.themeModes, activeModeId, theme]);
 
   const intervalSec = hero?.intervalSec ?? 6;
   const transition = hero?.transition ?? 'fade-slow';
@@ -138,9 +124,9 @@ export function HomeHero({
   };
 
   return (
-    <section className="relative left-1/2 w-screen max-w-[100vw] -translate-x-1/2">
+    <section className="relative left-1/2 z-30 w-screen max-w-[100vw] -translate-x-1/2">
       <div
-        className="relative isolate w-full overflow-hidden bg-slate-900"
+        className="relative isolate w-full bg-slate-900"
         style={{
           aspectRatio: `${HERO_W} / ${heroH}`,
           outline: designMode
@@ -162,18 +148,23 @@ export function HomeHero({
         }
       >
         {designMode ? <DesignableBadge id="hero" selected={selected} placement="inside" /> : null}
-        <HeroSlideshow
-          imageIds={imageIds}
-          intervalSec={intervalSec}
-          transition={transition}
-          width={HERO_W}
-          height={heroH}
-        />
-        <div
-          className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-900/40 to-slate-900/20"
-          aria-hidden
-        />
-        <div className="relative z-10 mx-auto flex h-full w-full max-w-[1280px] flex-col justify-end gap-3 px-4 pb-4 pt-8 sm:px-0 sm:pb-5">
+
+        {/* მედია — მხოლოდ აქ იჭრება overflow; სერჩის დროპდაუნები არ იჭრება */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <HeroSlideshow
+            imageIds={imageIds}
+            intervalSec={intervalSec}
+            transition={transition}
+            width={HERO_W}
+            height={heroH}
+          />
+          <div
+            className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-900/40 to-slate-900/20"
+            aria-hidden
+          />
+        </div>
+
+        <div className="relative z-40 mx-auto flex h-full w-full max-w-[1280px] flex-col justify-end gap-3 px-4 pb-4 pt-8 sm:px-0 sm:pb-5">
           <Designable id="heroText" className="max-w-full px-4 sm:px-0">
             <div className="flex h-full max-w-full flex-col justify-start">
               <h1
@@ -197,16 +188,46 @@ export function HomeHero({
               </p>
             </div>
           </Designable>
-          <Designable id="search" className="mx-auto w-full max-w-full">
+
+          {dealBar ? (
+            <Designable id="dealBar" className="max-w-full">
+              <div
+                className="box-border flex h-full w-full items-center"
+                style={{ width: '100%', height: dealH, maxWidth: dealW }}
+              >
+                {dealBar}
+              </div>
+            </Designable>
+          ) : null}
+
+          <Designable id="search" className="relative z-50 mx-auto w-full max-w-full overflow-visible">
             <div
-              className="box-border flex h-full w-full items-center rounded-xl border border-white/30 bg-white/95 px-2.5 shadow-lg backdrop-blur-sm dark:border-zinc-600 dark:bg-zinc-950/90"
+              className={`relative box-border flex h-full w-full items-stretch overflow-visible border shadow-lg ${
+                search?.borderColor ? '' : 'border-white/30 dark:border-zinc-600'
+              }`}
               style={{
                 width: '100%',
                 height: searchH,
                 maxWidth: searchW,
+                borderRadius: search?.borderRadius ?? 12,
+                paddingLeft: search?.padX ?? 10,
+                paddingRight: search?.padX ?? 10,
+                paddingTop: search?.padY ?? 8,
+                paddingBottom: search?.padY ?? 8,
+                ...(search?.borderColor ? { borderColor: search.borderColor } : null),
               }}
             >
-              {children}
+              {/* blur ცალკე ფენაზე — backdrop-filter ჭრის ტექსტს შვილებზე */}
+              <div
+                className={`pointer-events-none absolute inset-0 -z-0 rounded-[inherit] backdrop-blur-sm ${
+                  search?.background ? '' : 'bg-white/95 dark:bg-zinc-950/90'
+                }`}
+                style={search?.background ? { backgroundColor: search.background } : undefined}
+                aria-hidden
+              />
+              <div className="relative z-10 flex h-full min-h-0 w-full items-center overflow-visible">
+                {children}
+              </div>
             </div>
           </Designable>
         </div>

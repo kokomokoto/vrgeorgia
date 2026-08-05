@@ -67,15 +67,53 @@ export async function deleteHeroImageBlob(id: string): Promise<void> {
   }
 }
 
-/** Resolve gallery ids → object URLs. Caller must revoke when done. */
+import {
+  externalMediaDisplayUrl,
+  parseExternalMediaId,
+  type DesignMediaKind,
+} from '@/lib/designMedia';
+
+export type ResolvedHeroMedia = {
+  id: string;
+  url: string;
+  kind: DesignMediaKind;
+  /** Direct video file or YouTube embed URL for playback */
+  embedUrl?: string;
+};
+
+/** Resolve gallery ids → display URLs (IndexedDB blobs or external links). Caller must revoke blob: URLs. */
 export async function resolveHeroImageUrls(
   ids: string[]
-): Promise<{ id: string; url: string }[]> {
-  const out: { id: string; url: string }[] = [];
+): Promise<ResolvedHeroMedia[]> {
+  const out: ResolvedHeroMedia[] = [];
   for (const id of ids) {
+    const external = parseExternalMediaId(id);
+    if (external) {
+      const display = externalMediaDisplayUrl(external.kind, external.url);
+      out.push({
+        id,
+        url: display.url,
+        kind: external.kind,
+        embedUrl: display.embedUrl,
+      });
+      continue;
+    }
     try {
       const blob = await getHeroImageBlob(id);
-      if (blob) out.push({ id, url: URL.createObjectURL(blob) });
+      if (!blob) continue;
+      const kind: DesignMediaKind =
+        blob.type === 'image/gif'
+          ? 'gif'
+          : blob.type.startsWith('video/')
+            ? 'video'
+            : 'image';
+      const objectUrl = URL.createObjectURL(blob);
+      out.push({
+        id,
+        url: objectUrl,
+        kind,
+        embedUrl: kind === 'video' ? objectUrl : undefined,
+      });
     } catch {
       /* skip missing */
     }

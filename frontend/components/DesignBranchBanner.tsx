@@ -9,34 +9,42 @@ import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContex
 
 export function DesignBranchBanner() {
   const design = useHomeDesignOptional();
+  const showDesignToggle = Boolean(design?.canDesignMode);
+  const designOn = Boolean(design?.designMode);
+
+  if (designOn) {
+    return (
+      <div
+        role="status"
+        className="sticky top-0 z-[300] flex items-center justify-center gap-2 border-b border-blue-800/30 bg-blue-700 px-3 py-1.5 text-center text-xs font-semibold text-white shadow-sm"
+      >
+        <span>რედაქტირების რეჟიმი{design?.isDirty ? ' · შეუნახავი' : ''}</span>
+        <button
+          type="button"
+          onClick={() => design?.setDesignMode(false)}
+          className="rounded-md bg-white/15 px-2.5 py-0.5 text-[11px] font-bold hover:bg-white/25"
+        >
+          გამორთვა
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
       role="status"
-      className="sticky top-0 z-[300] flex flex-wrap items-center justify-center gap-2 border-b border-amber-700/40 bg-amber-500 px-3 py-2 text-center text-sm font-semibold text-amber-950 shadow-sm"
+      className="sticky top-0 z-[300] flex flex-wrap items-center justify-center gap-2 border-b border-amber-700/40 bg-amber-500 px-3 py-1.5 text-center text-xs font-semibold text-amber-950 shadow-sm"
     >
       <span>
-        DESIGN BRANCH — <code className="rounded bg-amber-600/30 px-1.5 py-0.5">branch_1</code>
-        {' · '}
-        ეს ზოლი მხოლოდ საცდელ branch-ზე ჩანს.
+        საცდელი branch · <code className="rounded bg-amber-600/30 px-1 py-0.5">branch_1</code>
       </span>
-      {design ? (
+      {showDesignToggle ? (
         <button
           type="button"
-          onClick={() => design.setDesignMode(!design.designMode)}
-          className={`rounded-lg px-3 py-1 text-xs font-bold shadow-sm transition ${
-            design.designMode
-              ? design.isDirty
-                ? 'bg-amber-900 text-amber-50 ring-2 ring-white/70'
-                : 'bg-blue-700 text-white ring-2 ring-white/70'
-              : 'bg-white text-amber-950 hover:bg-amber-50'
-          }`}
+          onClick={() => design?.setDesignMode(true)}
+          className="rounded-md bg-white px-2.5 py-0.5 text-[11px] font-bold text-amber-950 shadow-sm hover:bg-amber-50"
         >
-          {design.designMode
-            ? design.isDirty
-              ? 'Design Mode: ON · შეუნახავი'
-              : 'Design Mode: ON'
-            : 'Design Mode'}
+          რედაქტირება
         </button>
       ) : null}
     </div>

@@ -33,6 +33,7 @@ export function Designable({
     selectedId,
     setSelectedId,
     setSelectedRailItemId,
+    setSelectedTypeItemId,
     updateBox,
     updateServiceRail,
     updateQuickRail,
@@ -129,6 +130,7 @@ export function Designable({
     e.stopPropagation();
     setSelectedId(id);
     setSelectedRailItemId(null);
+    setSelectedTypeItemId(null);
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -192,17 +194,26 @@ export function Designable({
       ? { width: layout.serviceRail.itemW, height: box.h }
       : id === 'quickRail'
         ? { width: layout.quickRail.w, height: box.h }
-        : { width: box.w, height: box.h, maxWidth: '100%' };
+        : {
+            width: box.w,
+            height: box.h,
+            maxWidth: '100%',
+            ...(id === 'typePanel' ? { overflow: 'visible' as const } : {}),
+          };
 
   return (
     <div
-      className={`relative ${designMode ? 'z-20' : ''} ${className}`}
+      className={`group/designable relative ${designMode ? 'z-20' : ''} ${className}`}
       style={{
         ...style,
         ...sizeStyle,
         transform: `translate(${box.x}px, ${box.y}px)`,
-        outline: designMode ? (selected ? '2px solid #2563eb' : '1px dashed #94a3b8') : undefined,
-        outlineOffset: designMode ? 2 : undefined,
+        outline: designMode
+          ? selected
+            ? '2px solid #2563eb'
+            : undefined
+          : undefined,
+        outlineOffset: designMode && selected ? 2 : undefined,
         cursor: designMode ? 'move' : undefined,
         touchAction: designMode ? 'none' : undefined,
       }}
@@ -214,6 +225,7 @@ export function Designable({
               e.stopPropagation();
               setSelectedId(id);
               setSelectedRailItemId(null);
+              setSelectedTypeItemId(null);
             }
           : undefined
       }
@@ -222,11 +234,17 @@ export function Designable({
       onPointerUp={designMode ? onPointerUp : undefined}
       onPointerCancel={designMode ? onPointerUp : undefined}
     >
+      {designMode && !selected ? (
+        <span
+          className="pointer-events-none absolute inset-0 rounded opacity-0 ring-1 ring-dashed ring-slate-400/70 transition group-hover/designable:opacity-100"
+          aria-hidden
+        />
+      ) : null}
       {designMode ? <DesignableBadge id={id} selected={selected} /> : null}
       <div
         className={
           designMode
-            ? id === 'serviceRail' || id === 'quickRail'
+            ? id === 'serviceRail' || id === 'quickRail' || id === 'typePanel'
               ? 'h-full w-full'
               : 'pointer-events-none h-full w-full'
             : 'h-full w-full'
@@ -235,7 +253,7 @@ export function Designable({
         {children}
       </div>
 
-      {designMode && (
+      {designMode && selected ? (
         <div
           className="absolute bottom-0 right-0 z-30 h-4 w-4 translate-x-1/3 translate-y-1/3 cursor-se-resize rounded-sm bg-blue-600 shadow"
           title="სიგანე და სიმაღლე"
@@ -244,7 +262,7 @@ export function Designable({
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         />
-      )}
+      ) : null}
     </div>
   );
 }

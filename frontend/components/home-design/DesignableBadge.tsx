@@ -14,13 +14,27 @@ export function DesignableBadge({
   /** above = sits on top edge; inside = top-left corner inside the block */
   placement?: 'above' | 'inside';
 }) {
+  if (!selected) {
+    return (
+      <span
+        className={`pointer-events-none z-40 rounded-md bg-slate-700/80 px-1.5 py-0.5 text-[9px] font-semibold text-white opacity-0 shadow transition group-hover/designable:opacity-100 ${
+          placement === 'inside'
+            ? 'absolute left-1 top-1'
+            : 'absolute left-0 top-0 -translate-y-full'
+        }`}
+      >
+        {DESIGNABLE_LABELS[id]}
+      </span>
+    );
+  }
+
   return (
     <span
-      className={`pointer-events-none z-40 rounded-md px-2 py-0.5 text-[10px] font-bold shadow ${
+      className={`pointer-events-none z-40 rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white shadow ${
         placement === 'inside'
           ? 'absolute left-1 top-1'
           : 'absolute left-0 top-0 -translate-y-full'
-      } ${selected ? 'bg-blue-600 text-white' : 'bg-slate-700/90 text-white'}`}
+      }`}
     >
       {DESIGNABLE_LABELS[id]}
     </span>

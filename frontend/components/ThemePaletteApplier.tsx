@@ -9,6 +9,7 @@ import {
   themeModeFromThemeClass,
   type ThemePalette,
 } from '@/lib/themePalettes';
+import { resolveActiveThemeMode } from '@/lib/themeModes';
 
 function paletteSignature(p: ThemePalette): string {
   return [
@@ -41,16 +42,22 @@ function paletteSignature(p: ThemePalette): string {
  * Works on every page (falls back to defaults when design layout is missing).
  */
 export function ThemePaletteApplier() {
-  const { theme } = useTheme();
+  const { theme, activeModeId } = useTheme();
   const design = useHomeDesignOptional();
-  const mode = themeModeFromThemeClass(theme);
+  const modes = design?.layout.themeModes;
+  const active =
+    modes && modes.length > 0
+      ? resolveActiveThemeMode(modes, activeModeId, theme)
+      : null;
+  const legacyMode = themeModeFromThemeClass(theme);
   const palette =
-    design?.layout.themePalettes?.[mode] ?? DEFAULT_THEME_PALETTES[mode];
-  const signature = paletteSignature(palette);
+    active?.palette ||
+    design?.layout.themePalettes?.[legacyMode] ||
+    DEFAULT_THEME_PALETTES[legacyMode];
+  const signature = `${activeModeId}|${paletteSignature(palette)}`;
 
   React.useEffect(() => {
     applyThemePaletteToDom(palette);
-    // signature captures all palette fields; palette identity alone is unstable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 

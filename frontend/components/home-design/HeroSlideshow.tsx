@@ -10,20 +10,94 @@ import {
   DEFAULT_HERO_IMAGE,
   resolveHeroImageUrls,
   revokeHeroUrls,
+  type ResolvedHeroMedia,
 } from '@/lib/heroImageStorage';
+import type { DesignMediaKind } from '@/lib/designMedia';
 
 const HERO_W = 1920;
 
 type Layer = {
   key: string;
   src: string;
+  kind: DesignMediaKind;
+  embedUrl?: string;
   opacity: number;
   blur: number;
   z: number;
 };
 
+function HeroMediaLayer({
+  layer,
+  width,
+  height,
+  style,
+}: {
+  layer: Layer;
+  width: number;
+  height: number;
+  style: React.CSSProperties;
+}) {
+  const isStaticDefault =
+    layer.src === DEFAULT_HERO_IMAGE && !layer.src.startsWith('blob:');
+
+  if (isStaticDefault) {
+    return (
+      <Image
+        src={DEFAULT_HERO_IMAGE}
+        alt=""
+        width={width}
+        height={height}
+        priority
+        sizes="100vw"
+        className="absolute inset-0 h-full w-full object-cover object-center"
+        style={style}
+      />
+    );
+  }
+
+  if (layer.kind === 'video' && layer.embedUrl?.includes('youtube.com/embed')) {
+    return (
+      <iframe
+        src={layer.embedUrl}
+        title=""
+        className="pointer-events-none absolute inset-0 h-full w-full scale-110 border-0 object-cover"
+        style={style}
+        allow="autoplay; encrypted-media"
+        tabIndex={-1}
+      />
+    );
+  }
+
+  if (layer.kind === 'video') {
+    return (
+      <video
+        src={layer.embedUrl || layer.src}
+        className="absolute inset-0 h-full w-full object-cover object-center"
+        style={style}
+        autoPlay
+        muted
+        loop
+        playsInline
+        controls={false}
+      />
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={layer.src}
+      alt=""
+      className="absolute inset-0 h-full w-full object-cover object-center"
+      style={style}
+      draggable={false}
+    />
+  );
+}
+
 /**
- * Crossfading hero background. Uses uploaded gallery ids (IndexedDB) or default JPG.
+ * Crossfading hero background. Uses uploaded gallery ids (IndexedDB),
+ * external media URLs, or default JPG.
  */
 export function HeroSlideshow({
   imageIds,
@@ -38,14 +112,14 @@ export function HeroSlideshow({
   width: number;
   height: number;
 }) {
-  const [urls, setUrls] = React.useState<{ id: string; url: string }[]>([]);
+  const [urls, setUrls] = React.useState<ResolvedHeroMedia[]>([]);
   const [layers, setLayers] = React.useState<Layer[]>([]);
   const transitioning = React.useRef(false);
   const indexRef = React.useRef(0);
 
   React.useEffect(() => {
     let cancelled = false;
-    let loaded: { id: string; url: string }[] = [];
+    let loaded: ResolvedHeroMedia[] = [];
 
     (async () => {
       if (imageIds.length === 0) {
@@ -56,6 +130,7 @@ export function HeroSlideshow({
             {
               key: 'default',
               src: DEFAULT_HERO_IMAGE,
+              kind: 'image',
               opacity: 1,
               blur: 0,
               z: 1,
@@ -76,6 +151,8 @@ export function HeroSlideshow({
           {
             key: loaded[0].id,
             src: loaded[0].url,
+            kind: loaded[0].kind,
+            embedUrl: loaded[0].embedUrl,
             opacity: 1,
             blur: 0,
             z: 1,
@@ -86,6 +163,7 @@ export function HeroSlideshow({
           {
             key: 'default',
             src: DEFAULT_HERO_IMAGE,
+            kind: 'image',
             opacity: 1,
             blur: 0,
             z: 1,
@@ -101,8 +179,15 @@ export function HeroSlideshow({
   }, [imageIds.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sources = React.useMemo(() => {
-    if (urls.length > 0) return urls.map((u) => ({ key: u.id, src: u.url }));
-    return [{ key: 'default', src: DEFAULT_HERO_IMAGE }];
+    if (urls.length > 0) {
+      return urls.map((u) => ({
+        key: u.id,
+        src: u.url,
+        kind: u.kind,
+        embedUrl: u.embedUrl,
+      }));
+    }
+    return [{ key: 'default', src: DEFAULT_HERO_IMAGE, kind: 'image' as const, embedUrl: undefined }];
   }, [urls]);
 
   const goNext = React.useCallback(() => {
@@ -110,7 +195,8 @@ export function HeroSlideshow({
     const next = (indexRef.current + 1) % sources.length;
     const duration = heroTransitionDurationMs(transition);
     const incoming = sources[next];
-    const outgoingKey = sources[indexRef.current]?.key;
+    const outgoing = sources[indexRef.current];
+    const outgoingKey = outgoing?.key;
 
     if (transition === 'cut' || duration === 0) {
       indexRef.current = next;
@@ -118,6 +204,8 @@ export function HeroSlideshow({
         {
           key: incoming.key,
           src: incoming.src,
+          kind: incoming.kind,
+          embedUrl: incoming.embedUrl,
           opacity: 1,
           blur: 0,
           z: 1,
@@ -132,7 +220,9 @@ export function HeroSlideshow({
     setLayers([
       {
         key: `${outgoingKey}-out`,
-        src: sources[indexRef.current].src,
+        src: outgoing.src,
+        kind: outgoing.kind,
+        embedUrl: outgoing.embedUrl,
         opacity: 1,
         blur: 0,
         z: 1,
@@ -140,19 +230,22 @@ export function HeroSlideshow({
       {
         key: `${incoming.key}-in`,
         src: incoming.src,
+        kind: incoming.kind,
+        embedUrl: incoming.embedUrl,
         opacity: 0,
         blur: useBlur ? 12 : 0,
         z: 2,
       },
     ]);
 
-    // next frame: animate
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setLayers([
           {
             key: `${outgoingKey}-out`,
-            src: sources[indexRef.current].src,
+            src: outgoing.src,
+            kind: outgoing.kind,
+            embedUrl: outgoing.embedUrl,
             opacity: 0,
             blur: useBlur ? 10 : 0,
             z: 1,
@@ -160,6 +253,8 @@ export function HeroSlideshow({
           {
             key: `${incoming.key}-in`,
             src: incoming.src,
+            kind: incoming.kind,
+            embedUrl: incoming.embedUrl,
             opacity: 1,
             blur: 0,
             z: 2,
@@ -174,6 +269,8 @@ export function HeroSlideshow({
         {
           key: incoming.key,
           src: incoming.src,
+          kind: incoming.kind,
+          embedUrl: incoming.embedUrl,
           opacity: 1,
           blur: 0,
           z: 1,
@@ -196,9 +293,8 @@ export function HeroSlideshow({
   const duration = heroTransitionDurationMs(transition);
 
   return (
-    <div className="absolute inset-0" aria-hidden>
+    <div className="absolute inset-0 overflow-hidden" aria-hidden>
       {layers.map((layer) => {
-        const isStaticDefault = layer.src === DEFAULT_HERO_IMAGE && !layer.src.startsWith('blob:');
         const style: React.CSSProperties = {
           opacity: layer.opacity,
           filter: layer.blur > 0 ? `blur(${layer.blur}px)` : undefined,
@@ -210,31 +306,13 @@ export function HeroSlideshow({
           zIndex: layer.z,
         };
 
-        if (isStaticDefault) {
-          return (
-            <Image
-              key={layer.key}
-              src={DEFAULT_HERO_IMAGE}
-              alt=""
-              width={width}
-              height={height}
-              priority
-              sizes="100vw"
-              className="absolute inset-0 h-full w-full object-cover object-center"
-              style={style}
-            />
-          );
-        }
-
         return (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <HeroMediaLayer
             key={layer.key}
-            src={layer.src}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover object-center"
+            layer={layer}
+            width={width}
+            height={height}
             style={style}
-            draggable={false}
           />
         );
       })}

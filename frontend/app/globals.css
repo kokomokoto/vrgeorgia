@@ -38,6 +38,15 @@
   border-color: var(--theme-surface-border) !important;
 }
 
+/* მედია ფონისას ფერი გადაფარვად რჩება (opacity palette-დან) */
+[data-site-header][data-header-has-media] {
+  background-color: transparent !important;
+}
+
+[data-site-header][data-header-has-media] [data-header-bg-tint] {
+  background-color: var(--theme-header-bg);
+}
+
 [data-site-header] [data-theme-nav] {
   color: var(--theme-header-text) !important;
 }

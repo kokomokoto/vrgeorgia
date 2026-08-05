@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 
 import { listProperties } from '@/lib/api';
+import { apiLang } from '@/lib/apiLang';
 import { buildMapHref, filtersToPropertyQuery } from '@/lib/mapQuery';
 import type { Property } from '@/lib/types';
 import { Filters, type FiltersState } from '@/components/Filters';
@@ -16,20 +17,43 @@ import { MapView } from '@/components/MapView';
 import { PropertyCard } from '@/components/PropertyCard';
 import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
-import { LAND_STATUS_OPTIONS } from '@/lib/propertyTypeUi';
 import { HomeHero } from '@/components/HomeHero';
 import { HomeQuickRail, HomeServiceRail } from '@/components/HomeBrowseRails';
+import { HomeDealBar } from '@/components/HomeDealBar';
+import { HomeTypePanel, HomeLandStatusPanel } from '@/components/HomeTypePanel';
 import { Designable } from '@/components/home-design/Designable';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
+import { useTheme } from '@/components/ThemeProvider';
+import { isRailSectionHiddenForMode } from '@/lib/homeDesignLayout';
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const homeDesign = useHomeDesignOptional();
+  const { activeModeId } = useTheme();
+  const designMode = homeDesign?.designMode ?? false;
+  const modeId = activeModeId || 'day';
   const serviceItemW = homeDesign?.layout.serviceRail.itemW ?? 200;
   const mapW = homeDesign?.layout.map.w ?? 1280;
   const mapH = homeDesign?.layout.map.h ?? 360;
+  const typePanelW = homeDesign?.layout.typePanel.w ?? 1280;
+  const typePanelH = homeDesign?.layout.typePanel.h ?? 164;
+  const typePanelPad = homeDesign?.layout.typePanel.pad ?? 10;
+  const typePanelGap = homeDesign?.layout.typePanel.gap ?? 12;
   const quickW = homeDesign?.layout.quickRail.w ?? 200;
-  const sideCol = Math.max(serviceItemW, quickW);
+  const serviceSectionHidden = isRailSectionHiddenForMode(
+    homeDesign?.layout.serviceRail,
+    modeId
+  );
+  const quickSectionHidden = isRailSectionHiddenForMode(
+    homeDesign?.layout.quickRail,
+    modeId
+  );
+  const showServiceCol = designMode || !serviceSectionHidden;
+  const showQuickCol = designMode || !quickSectionHidden;
+  const sideCol = Math.max(
+    showServiceCol ? serviceItemW : 0,
+    showQuickCol ? quickW : 0
+  );
   const [mounted, setMounted] = React.useState(false);
   const [filters, setFilters] = React.useState<FiltersState>(HOME_FILTERS_INITIAL);
   const [filtersHydrated, setFiltersHydrated] = React.useState(false);
@@ -37,6 +61,7 @@ export default function HomePage() {
   const [mapProperties, setMapProperties] = React.useState<Property[]>([]);
   const [totalCount, setTotalCount] = React.useState(0);
   const [totalPages, setTotalPages] = React.useState(1);
+  const [categoryCounts, setCategoryCounts] = React.useState<Record<string, number>>({});
   const [loading, setLoading] = React.useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -106,6 +131,18 @@ export default function HomePage() {
       }
     }
   }, [filtersHydrated]);
+
+  React.useEffect(() => {
+    if (!filtersHydrated) return;
+    listProperties({
+      lang: apiLang(i18n.language),
+      page: 1,
+      limit: 1,
+      includeTypeCounts: true,
+    })
+      .then((r) => setCategoryCounts(r.typeCounts || {}))
+      .catch(() => {});
+  }, [filtersHydrated, i18n.language]);
 
   React.useEffect(() => {
     if (!filtersHydrated) return;
@@ -194,6 +231,13 @@ export default function HomePage() {
           'home_hero_subtitle',
           'იპოვე ბინა, სახლი ან კომერციული ფართი — მარტივი ძიებით და რუკით.'
         )}
+        dealBar={
+          <HomeDealBar
+            filters={filters}
+            onChange={handleFiltersChange}
+            designMode={designMode}
+          />
+        }
       >
         <Filters
           value={filters}
@@ -209,16 +253,43 @@ export default function HomePage() {
       >
         <div className="flex items-start justify-center gap-5">
           <aside
-            className="sticky top-28 hidden shrink-0 justify-end xl:flex"
-            style={{ width: sideCol }}
+            className={`sticky top-28 hidden shrink-0 justify-end xl:flex ${
+              showServiceCol ? '' : '!hidden'
+            }`}
+            style={{ width: showServiceCol ? sideCol || serviceItemW : 0 }}
           >
-            <Designable id="serviceRail">
-              <HomeServiceRail />
-            </Designable>
+            {showServiceCol ? (
+              <Designable id="serviceRail">
+                <HomeServiceRail />
+              </Designable>
+            ) : null}
           </aside>
 
           <div className="min-w-0 w-full shrink-0" style={{ maxWidth: mapW, width: mapW }}>
-            <div className="w-full">
+            <div className="w-full space-y-4">
+              <Designable id="typePanel">
+                <div
+                  className="mx-auto w-full"
+                  style={{ maxWidth: typePanelW, width: '100%', height: typePanelH }}
+                >
+                  <HomeTypePanel
+                    filters={filters}
+                    onPatch={patchFilters}
+                    categoryCounts={categoryCounts}
+                    tr={tr}
+                    designMode={designMode}
+                    pad={typePanelPad}
+                    gap={typePanelGap}
+                  />
+                </div>
+              </Designable>
+
+              <HomeLandStatusPanel
+                filters={filters}
+                onPatch={patchFilters}
+                tr={tr}
+              />
+
               <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
                 <div className="flex items-center justify-between gap-2">
                   <button
@@ -270,47 +341,17 @@ export default function HomePage() {
               </Designable>
 
               <div className="mt-4 space-y-4 xl:hidden">
-                <div className="flex justify-center overflow-x-auto pb-1">
-                  <HomeServiceRail />
-                </div>
-                <div className="overflow-x-auto pb-1">
-                  <HomeQuickRail />
-                </div>
+                {!serviceSectionHidden || designMode ? (
+                  <div className="flex justify-center overflow-x-auto pb-1">
+                    <HomeServiceRail />
+                  </div>
+                ) : null}
+                {!quickSectionHidden || designMode ? (
+                  <div className="overflow-x-auto pb-1">
+                    <HomeQuickRail />
+                  </div>
+                ) : null}
               </div>
-
-        {filters.type.includes('land') && (
-          <div className="mt-6 rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
-            <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
-              {tr('filter_land_status', 'მიწის სტატუსი')}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {LAND_STATUS_OPTIONS.map((item) => {
-                const selected = (filters.landStatus || []).includes(item.value);
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() =>
-                      patchFilters((prev) => ({
-                        ...prev,
-                        landStatus: selected
-                          ? (prev.landStatus || []).filter((s) => s !== item.value)
-                          : [...(prev.landStatus || []), item.value],
-                      }))
-                    }
-                    className={`rounded-lg border px-3 py-2 text-xs font-medium transition-all ${
-                      selected
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
-                    }`}
-                  >
-                    {tr(item.labelKey, item.value)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         <div className="mt-6 grid gap-4">
           {error && (
@@ -437,10 +478,17 @@ export default function HomePage() {
             </div>
           </div>
 
-          <aside className="sticky top-28 hidden shrink-0 xl:block" style={{ width: sideCol }}>
-            <Designable id="quickRail">
-              <HomeQuickRail />
-            </Designable>
+          <aside
+            className={`sticky top-28 hidden shrink-0 xl:block ${
+              showQuickCol ? '' : '!hidden'
+            }`}
+            style={{ width: showQuickCol ? sideCol || quickW : 0 }}
+          >
+            {showQuickCol ? (
+              <Designable id="quickRail">
+                <HomeQuickRail />
+              </Designable>
+            ) : null}
           </aside>
         </div>
       </div>

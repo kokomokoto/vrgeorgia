@@ -25,12 +25,14 @@ import { Designable } from '@/components/home-design/Designable';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { useTheme } from '@/components/ThemeProvider';
 import { isRailSectionHiddenForMode } from '@/lib/homeDesignLayout';
+import { useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const homeDesign = useHomeDesignOptional();
   const { activeModeId } = useTheme();
   const designMode = homeDesign?.designMode ?? false;
+  const isDesktopLayout = useIsDesignDesktop();
   const modeId = activeModeId || 'day';
   const serviceItemW = homeDesign?.layout.serviceRail.itemW ?? 200;
   const mapW = homeDesign?.layout.map.w ?? 1280;
@@ -249,10 +251,14 @@ export default function HomePage() {
         />
       </HomeHero>
 
-      {/* ქვედა ბლოკი ცენტრში — იგივე 1280 რაც ჰეროს სერჩი; გვერდები თანაბარი სიგანით */}
+      {/* ქვედა ბლოკი — მობილური fluid; desktop-ზე Design Mode სიგანე */}
       <div
-        className="mx-auto w-full px-3 py-4 sm:px-4 xl:px-0"
-        style={{ maxWidth: `calc(${centerW}px + ${sideCol * 2}px + 2.5rem)` }}
+        className="mx-auto w-full max-w-full px-3 py-4 sm:px-4 xl:px-0"
+        style={
+          isDesktopLayout
+            ? { maxWidth: `calc(${centerW}px + ${sideCol * 2}px + 2.5rem)` }
+            : undefined
+        }
       >
         <div className="flex items-start justify-center gap-5">
           <aside
@@ -268,12 +274,23 @@ export default function HomePage() {
             ) : null}
           </aside>
 
-          <div className="min-w-0 w-full shrink-0" style={{ maxWidth: centerW, width: centerW }}>
+          <div
+            className="min-w-0 w-full shrink"
+            style={
+              isDesktopLayout
+                ? { maxWidth: centerW, width: centerW }
+                : { maxWidth: '100%', width: '100%' }
+            }
+          >
             <div className="w-full space-y-4">
               <Designable id="typePanel">
                 <div
                   className="mx-auto w-full"
-                  style={{ maxWidth: typePanelW, width: '100%', height: typePanelH }}
+                  style={
+                    isDesktopLayout
+                      ? { maxWidth: typePanelW, width: '100%', height: typePanelH }
+                      : { maxWidth: '100%', width: '100%', height: 'auto' }
+                  }
                 >
                   <HomeTypePanel
                     filters={filters}
@@ -328,9 +345,9 @@ export default function HomePage() {
                 <div
                   className="relative mx-auto w-full overflow-hidden rounded-lg"
                   style={{
-                    maxWidth: mapW,
+                    maxWidth: isDesktopLayout ? mapW : '100%',
                     width: '100%',
-                    height: Math.max(160, mapH),
+                    height: Math.max(160, isDesktopLayout ? mapH : 280),
                   }}
                 >
                   <Link
@@ -365,9 +382,9 @@ export default function HomePage() {
                 <div
                   className="grid w-full gap-4"
                   style={{
-                    maxWidth: listingsW,
+                    maxWidth: isDesktopLayout ? listingsW : '100%',
                     width: '100%',
-                    minHeight: listingsMinH,
+                    minHeight: isDesktopLayout ? listingsMinH : undefined,
                   }}
                 >
           {error && (

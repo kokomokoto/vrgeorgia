@@ -7,6 +7,7 @@ import {
   railStackHeight,
   type DesignableId,
 } from '@/lib/homeDesignLayout';
+import { useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
 
 type DesignableProps = {
   id: Exclude<DesignableId, 'hero' | 'header' | 'theme'>;
@@ -20,6 +21,7 @@ const DRAG_THRESHOLD_PX = 3;
 /**
  * When Design Mode is on: drag to move, SE handle to resize (W and H independently).
  * History (Ctrl+Z) starts only after real movement — not on mere click/select.
+ * Below md: design x/y/w are ignored so phones stay fluid full-width.
  */
 export function Designable({
   id,
@@ -40,6 +42,9 @@ export function Designable({
     beginHistoryGesture,
     endHistoryGesture,
   } = useHomeDesign();
+  const isDesktop = useIsDesignDesktop();
+  /** Design canvas geometry only on desktop; mobile always fluid */
+  const applyGeometry = isDesktop;
 
   const box = React.useMemo(() => {
     if (id === 'serviceRail') {
@@ -125,7 +130,7 @@ export function Designable({
     e: React.PointerEvent,
     mode: 'move' | 'resize'
   ) => {
-    if (!designMode) return;
+    if (!designMode || !applyGeometry) return;
     e.preventDefault();
     e.stopPropagation();
     setSelectedId(id);
@@ -189,8 +194,15 @@ export function Designable({
     }
   };
 
-  const sizeStyle: React.CSSProperties =
-    id === 'serviceRail'
+  const sizeStyle: React.CSSProperties = !applyGeometry
+    ? {
+        width: '100%',
+        maxWidth: '100%',
+        height: 'auto',
+        ...(id === 'map' ? { minHeight: 220 } : {}),
+        ...(id === 'search' ? { minHeight: 52 } : {}),
+      }
+    : id === 'serviceRail'
       ? { width: layout.serviceRail.itemW, height: box.h }
       : id === 'quickRail'
         ? { width: layout.quickRail.w, height: box.h }
@@ -211,32 +223,40 @@ export function Designable({
                 : {}),
             };
 
-  // Leaflet ირღვევა CSS transform-იან მშობელში — ვიყენებთ left/top-ს
-  const offsetStyle: React.CSSProperties = {
-    position: 'relative',
-    left: box.x,
-    top: box.y,
-  };
+  // Leaflet ირღვევა CSS transform-იან მშობელში — desktop-ზე left/top
+  const offsetStyle: React.CSSProperties = applyGeometry
+    ? {
+        position: 'relative',
+        left: box.x,
+        top: box.y,
+      }
+    : {
+        position: 'relative',
+        left: 0,
+        top: 0,
+      };
+
+  const canInteractDesign = designMode && applyGeometry;
 
   return (
     <div
-      className={`group/designable relative ${designMode ? 'z-20' : ''} ${className}`}
+      className={`group/designable relative ${canInteractDesign ? 'z-20' : ''} ${className}`}
       style={{
         ...style,
         ...sizeStyle,
         ...offsetStyle,
-        outline: designMode
+        outline: canInteractDesign
           ? selected
             ? '2px solid #2563eb'
             : undefined
           : undefined,
-        outlineOffset: designMode && selected ? 2 : undefined,
-        cursor: designMode ? 'move' : undefined,
-        touchAction: designMode ? 'none' : undefined,
+        outlineOffset: canInteractDesign && selected ? 2 : undefined,
+        cursor: canInteractDesign ? 'move' : undefined,
+        touchAction: canInteractDesign ? 'none' : undefined,
       }}
       data-designable={id}
       onClick={
-        designMode
+        canInteractDesign
           ? (e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -246,21 +266,21 @@ export function Designable({
             }
           : undefined
       }
-      onPointerDown={designMode ? (e) => startDrag(e, 'move') : undefined}
-      onPointerMove={designMode ? onPointerMove : undefined}
-      onPointerUp={designMode ? onPointerUp : undefined}
-      onPointerCancel={designMode ? onPointerUp : undefined}
+      onPointerDown={canInteractDesign ? (e) => startDrag(e, 'move') : undefined}
+      onPointerMove={canInteractDesign ? onPointerMove : undefined}
+      onPointerUp={canInteractDesign ? onPointerUp : undefined}
+      onPointerCancel={canInteractDesign ? onPointerUp : undefined}
     >
-      {designMode && !selected ? (
+      {canInteractDesign && !selected ? (
         <span
           className="pointer-events-none absolute inset-0 rounded opacity-0 ring-1 ring-dashed ring-slate-400/70 transition group-hover/designable:opacity-100"
           aria-hidden
         />
       ) : null}
-      {designMode ? <DesignableBadge id={id} selected={selected} /> : null}
+      {canInteractDesign ? <DesignableBadge id={id} selected={selected} /> : null}
       <div
         className={
-          designMode
+          canInteractDesign
             ? id === 'serviceRail' ||
               id === 'quickRail' ||
               id === 'typePanel' ||
@@ -273,7 +293,7 @@ export function Designable({
         {children}
       </div>
 
-      {designMode && selected ? (
+      {canInteractDesign && selected ? (
         <div
           className="absolute bottom-0 right-0 z-30 h-4 w-4 translate-x-1/3 translate-y-1/3 cursor-se-resize rounded-sm bg-blue-600 shadow"
           title="სიგანე და სიმაღლე"

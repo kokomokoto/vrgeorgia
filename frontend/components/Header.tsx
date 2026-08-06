@@ -697,7 +697,7 @@ export function Header() {
       data-designable="header"
       data-header-canvas
       data-header-has-media={hasHeaderMedia ? 'true' : undefined}
-      className="sticky top-0 z-20 box-border overflow-hidden border-b border-slate-200/80 bg-white/85 backdrop-blur-md dark:border-zinc-800/80 dark:backdrop-blur-md relative"
+      className="sticky top-0 z-20 box-border overflow-visible border-b border-slate-200/80 bg-white/85 backdrop-blur-md dark:border-zinc-800/80 dark:backdrop-blur-md relative"
       style={{
         height: headerH,
         ...headerCssVars,
@@ -834,12 +834,8 @@ export function Header() {
         </div>
       ) : null}
 
-      {/* Mobile bar */}
-      <div
-        className={`relative z-[2] mx-auto flex h-full max-w-6xl items-center justify-between gap-3 px-4 md:hidden ${
-          designMode ? 'pointer-events-none' : ''
-        }`}
-      >
+      {/* Mobile bar — მენიუ ყოველთვის ხელმისაწვდომი (Design Mode არ ბლოკავს) */}
+      <div className="relative z-[2] mx-auto flex h-full max-w-6xl items-center justify-between gap-3 px-4 md:hidden">
         {designMode ? (
           <DesignableBadge id="header" selected={selected} placement="inside" />
         ) : null}
@@ -867,7 +863,11 @@ export function Header() {
       </div>
 
       {open && (
-        <div data-theme-surface className="border-t md:hidden" style={{ ...headerCssVars }}>
+        <div
+          data-theme-surface
+          className="absolute left-0 right-0 top-full z-50 border-b border-t border-slate-200 bg-white shadow-lg md:hidden dark:border-zinc-700 dark:bg-zinc-950"
+          style={{ ...headerCssVars }}
+        >
           <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3">
             <Link href="/services" data-theme-nav onClick={() => setOpen(false)} className="flex flex-row items-center gap-2 py-2" style={navStyle}>
               {servicesNavText}

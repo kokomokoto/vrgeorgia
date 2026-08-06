@@ -11,6 +11,7 @@ import {
   getEnabledThemeModes,
   resolveActiveThemeMode,
 } from '@/lib/themeModes';
+import { useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
 
 const DRAG_THRESHOLD_PX = 3;
 
@@ -28,6 +29,7 @@ export function HomeHero({
 }) {
   const design = useHomeDesignOptional();
   const { theme, activeModeId } = useTheme();
+  const isDesktopLayout = useIsDesignDesktop();
   const designMode = design?.designMode ?? false;
   const selected = design?.selectedId === 'hero';
   const search = design?.layout.search;
@@ -170,7 +172,9 @@ export function HomeHero({
               <h1
                 className="font-serif font-semibold tracking-tight"
                 style={{
-                  fontSize: heroText?.titleFontSize ?? 32,
+                  fontSize: isDesktopLayout
+                    ? heroText?.titleFontSize ?? 32
+                    : Math.min(heroText?.titleFontSize ?? 32, 26),
                   color: heroText?.titleColor ?? '#ffffff',
                   lineHeight: 1.2,
                 }}
@@ -180,7 +184,9 @@ export function HomeHero({
               <p
                 className="mt-1.5 leading-relaxed"
                 style={{
-                  fontSize: heroText?.subtitleFontSize ?? 14,
+                  fontSize: isDesktopLayout
+                    ? heroText?.subtitleFontSize ?? 14
+                    : Math.min(heroText?.subtitleFontSize ?? 14, 13),
                   color: heroText?.subtitleColor ?? '#e5e5e5',
                 }}
               >
@@ -192,8 +198,13 @@ export function HomeHero({
           {dealBar ? (
             <Designable id="dealBar" className="max-w-full">
               <div
-                className="box-border flex h-full w-full items-center"
-                style={{ width: '100%', height: dealH, maxWidth: dealW }}
+                className="box-border flex w-full items-center"
+                style={{
+                  width: '100%',
+                  height: isDesktopLayout ? dealH : 'auto',
+                  minHeight: isDesktopLayout ? undefined : 44,
+                  maxWidth: isDesktopLayout ? dealW : '100%',
+                }}
               >
                 {dealBar}
               </div>
@@ -202,13 +213,14 @@ export function HomeHero({
 
           <Designable id="search" className="relative z-50 mx-auto w-full max-w-full overflow-visible">
             <div
-              className={`relative box-border flex h-full w-full items-stretch overflow-visible border shadow-lg ${
+              className={`relative box-border flex w-full items-stretch overflow-visible border shadow-lg ${
                 search?.borderColor ? '' : 'border-white/30 dark:border-zinc-600'
               }`}
               style={{
                 width: '100%',
-                height: searchH,
-                maxWidth: searchW,
+                height: isDesktopLayout ? searchH : 'auto',
+                minHeight: isDesktopLayout ? undefined : 52,
+                maxWidth: isDesktopLayout ? searchW : '100%',
                 borderRadius: search?.borderRadius ?? 12,
                 paddingLeft: search?.padX ?? 10,
                 paddingRight: search?.padX ?? 10,

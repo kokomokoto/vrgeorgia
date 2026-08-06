@@ -92,6 +92,23 @@ function formatApiErrorBody(json: unknown, rawText: string, status: number): str
         ? JSON.stringify(o.message)
         : PUBLIC_NETWORK_ERROR;
     }
+    if (typeof o.error === 'string' && o.error.trim()) {
+      const err = o.error.trim();
+      if (/^not\s*found$/i.test(err) || status === 404) {
+        return (
+          'სერვერმა ვერ იპოვა ეს ფუნქცია (404). ' +
+          'ჩვეულებრივ ეს ნიშნავს, რომ API ჯერ არ არის განახლებული Render-ზე (vrgeorgia-api), ' +
+          'ან გვერდი ძველ ქეშს იყენებს — განაახლე გვერდი (Ctrl+F5) და სცადე ხელახლა.'
+        );
+      }
+      return err;
+    }
+  }
+  if (status === 404) {
+    return (
+      'სერვერმა ვერ იპოვა ეს ფუნქცია (404). ' +
+      'შეამოწმე Render → vrgeorgia-api დეპლოი და განაახლე გვერდი (Ctrl+F5).'
+    );
   }
   const trimmed = rawText?.trim();
   if (trimmed && trimmed !== '{}') {

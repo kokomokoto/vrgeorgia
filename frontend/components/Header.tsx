@@ -413,8 +413,6 @@ export function Header() {
     headerLayout?.servicesLabel?.trim() || (mounted ? t('services_nav') : 'მომსახურება');
   const aboutNavText =
     headerLayout?.aboutLabel?.trim() || (mounted ? t('about_nav') : 'შესახებ');
-  const messagesText =
-    headerLayout?.messagesLabel?.trim() || (mounted ? t('messages') : 'შეტყობინებები');
   const profileText =
     headerLayout?.profileLabel?.trim() || (mounted ? t('profile') : 'პროფილი');
   const adminText =
@@ -617,31 +615,6 @@ export function Header() {
       ) : (
         <>
           <HeaderFreeItem
-            itemId="messages"
-            pos={pos('messages')}
-            designMode={designMode}
-            selected={selectedHeaderItemId === 'messages'}
-            drag={drag}
-            as={Link}
-            href="/messages"
-            className="flex items-center gap-1"
-            style={itemStyle('messages')}
-            onClick={designMode ? onDesignItemClick('messages') : undefined}
-          >
-            <span data-theme-nav className="flex items-center gap-1">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
-              {messagesText}
-            </span>
-          </HeaderFreeItem>
-
-          <HeaderFreeItem
             itemId="profile"
             pos={pos('profile')}
             designMode={designMode}
@@ -838,12 +811,6 @@ export function Header() {
               </Link>
             ) : (
               <>
-                <Link href="/messages" data-theme-nav className="flex items-center gap-1" style={navStyle}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  {messagesText}
-                </Link>
                 <Link href="/profile" data-theme-nav className="font-medium" style={navStyle}>
                   {profileText}
                 </Link>
@@ -931,9 +898,6 @@ export function Header() {
               </Link>
             ) : (
               <>
-                <Link href="/messages" data-theme-nav onClick={() => setOpen(false)} className="py-2" style={navStyle}>
-                  {messagesText}
-                </Link>
                 <Link href="/profile" data-theme-nav onClick={() => setOpen(false)} className="py-2 font-medium" style={navStyle}>
                   {profileText}
                 </Link>

@@ -37,11 +37,13 @@ function isLocalApiUrl(url: string): boolean {
 export function getApiBase(): string {
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
+    const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();
+
+    // ლოკალური frontend შეიძლება მიმართოს production API-ს (.env.local)
     if (isLocalHostname(host)) {
+      if (fromEnv && !isLocalApiUrl(fromEnv)) return normalizeApiBase(fromEnv);
       return normalizeApiBase(`${window.location.protocol}//${host}:5000`);
     }
-
-    const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();
 
     if (isProductionHostname(host)) {
       if (fromEnv && !isLocalApiUrl(fromEnv)) return normalizeApiBase(fromEnv);

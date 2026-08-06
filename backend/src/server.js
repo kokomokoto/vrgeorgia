@@ -68,12 +68,25 @@ const defaultProdOrigins = [
   'https://vrgeorgia.onrender.com',
   'https://vrgeorgia-frontend.onrender.com',
   'https://vrgeorgia-tour-builder.onrender.com',
+  // ლოკალური frontend → production API (Design Mode სინქი)
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
 ];
-const allowedOrigins = process.env.ALLOWED_ORIGINS
+const allowedOriginsRaw = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
   : NODE_ENV === 'production'
     ? defaultProdOrigins
     : defaultDevOrigins;
+
+/** ლოკალური Design Mode / frontend ყოველთვის უნდა ელაპარაკოს production API-ს CORS-ით */
+const LOCAL_DEV_FRONTENDS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+const allowedOrigins = [...allowedOriginsRaw];
+for (const o of LOCAL_DEV_FRONTENDS) {
+  if (!allowedOrigins.includes(o)) allowedOrigins.push(o);
+}
 
 app.use(cors({
   origin: NODE_ENV === 'production'

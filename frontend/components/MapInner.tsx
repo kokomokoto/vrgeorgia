@@ -659,13 +659,24 @@ export default function MapInner({
   useEffect(() => {
     if (!mapRef.current || !ready) return;
     const mapEl = mapRef.current;
-    const observer = new ResizeObserver(() => {
-      const map = mapInstanceRef.current;
-      if (!map) return;
-      map.invalidateSize();
-    });
+    let raf = 0;
+    const bump = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const map = mapInstanceRef.current;
+        if (!map) return;
+        map.invalidateSize({ animate: false });
+      });
+    };
+    const observer = new ResizeObserver(bump);
     observer.observe(mapEl);
-    return () => observer.disconnect();
+    // Design Mode resize / parent size ცვლილება
+    if (mapEl.parentElement) observer.observe(mapEl.parentElement);
+    bump();
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
   }, [ready]);
 
   return <div ref={mapRef} className="h-full w-full" />;

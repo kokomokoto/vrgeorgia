@@ -326,8 +326,12 @@ export default function HomePage() {
 
               <Designable id="map" className="hidden md:block">
                 <div
-                  className="relative mx-auto w-full"
-                  style={{ maxWidth: mapW, width: '100%', height: mapH }}
+                  className="relative mx-auto w-full overflow-hidden rounded-lg"
+                  style={{
+                    maxWidth: mapW,
+                    width: '100%',
+                    height: Math.max(160, mapH),
+                  }}
                 >
                   <Link
                     href={mapHref}
@@ -336,6 +340,7 @@ export default function HomePage() {
                     {tr('map_open_full_view', 'რუკაზე ძებნა')}
                   </Link>
                   <MapView
+                    key={`home-map-${mapW}x${Math.max(160, mapH)}`}
                     {...homeMapProps}
                     heightClassName="h-full"
                     className="h-full w-full"

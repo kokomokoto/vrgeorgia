@@ -206,8 +206,17 @@ export function Designable({
               width: box.w,
               height: box.h,
               maxWidth: '100%',
-              ...(id === 'typePanel' ? { overflow: 'visible' as const } : {}),
+              ...(id === 'typePanel' || id === 'map'
+                ? { overflow: 'visible' as const }
+                : {}),
             };
+
+  // Leaflet ირღვევა CSS transform-იან მშობელში — ვიყენებთ left/top-ს
+  const offsetStyle: React.CSSProperties = {
+    position: 'relative',
+    left: box.x,
+    top: box.y,
+  };
 
   return (
     <div
@@ -215,7 +224,7 @@ export function Designable({
       style={{
         ...style,
         ...sizeStyle,
-        transform: `translate(${box.x}px, ${box.y}px)`,
+        ...offsetStyle,
         outline: designMode
           ? selected
             ? '2px solid #2563eb'

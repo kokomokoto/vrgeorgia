@@ -782,6 +782,8 @@ export type HomeDesignLayout = {
     itemH: number;
   };
   map: BoxLayout;
+  /** Property results: found count, sort, cards, pagination */
+  listings: BoxLayout;
   quickRail: RailSectionLayout & {
     w: number;
     /** each card min-height */
@@ -932,6 +934,8 @@ export const DEFAULT_HOME_DESIGN: HomeDesignLayout = {
     items: DEFAULT_SERVICE_ITEMS,
   },
   map: { x: 0, y: 0, w: 1280, h: 360 },
+  /** h = min-height; რეალური სიმაღლე იზრდება ბარათების რაოდენობით */
+  listings: { x: 0, y: 0, w: 1280, h: 480 },
   quickRail: {
     x: 0,
     y: 0,
@@ -952,6 +956,7 @@ export type DesignableId =
   | 'typePanel'
   | 'serviceRail'
   | 'map'
+  | 'listings'
   | 'quickRail'
   | 'theme';
 
@@ -964,6 +969,7 @@ export const DESIGNABLE_LABELS: Record<DesignableId, string> = {
   typePanel: 'ქონების ტიპები',
   serviceRail: 'სერვისის წრეები',
   map: 'რუკა',
+  listings: 'ობიექტების სია',
   quickRail: 'სწრაფი ბმულები',
   theme: 'რეჟიმები და ფერები',
 };
@@ -978,6 +984,8 @@ export const DESIGNABLE_HINTS: Record<DesignableId, string> = {
   serviceRail:
     'მარცხენა წრეები — ფორმა/სურათი/ტექსტი; ჩვენება/დამალვა რეჟიმის მიხედვით.',
   map: 'მთავარი გვერდის რუკის ზომა და პოზიცია.',
+  listings:
+    'ობიექტების ჩამონათვალი — ნაპოვნია/სორტი/ბარათები/პაგინაცია; გადაადგილება და სიგანე.',
   quickRail:
     'მარჯვენა სწრაფი ბმულები — ფორმა/სურათი/ტექსტი; ჩვენება/დამალვა რეჟიმის მიხედვით.',
   theme: 'რეჟიმები, ფერები და გადასართავი იკონი (emoji / მედია). ჰედერზე იკონზე კლიკი აქ გახსნის.',
@@ -1463,6 +1471,7 @@ export function loadHomeDesign(): HomeDesignLayout {
       dealBar: { ...DEFAULT_HOME_DESIGN.dealBar, ...parsed.dealBar },
       typePanel: normalizeTypePanel(parsed.typePanel),
       map: { ...DEFAULT_HOME_DESIGN.map, ...parsed.map },
+      listings: { ...DEFAULT_HOME_DESIGN.listings, ...parsed.listings },
       serviceRail: {
         ...DEFAULT_HOME_DESIGN.serviceRail,
         ...parsed.serviceRail,

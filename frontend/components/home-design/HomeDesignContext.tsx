@@ -125,7 +125,7 @@ type HomeDesignContextValue = {
   beginHistoryGesture: () => void;
   endHistoryGesture: () => void;
   updateBox: (
-    id: 'heroText' | 'search' | 'map' | 'typePanel' | 'dealBar',
+    id: 'heroText' | 'search' | 'map' | 'typePanel' | 'dealBar' | 'listings',
     patch: Partial<HomeDesignLayout['search']> &
       Partial<Pick<HomeDesignLayout['typePanel'], 'pad' | 'gap'>>
   ) => void;
@@ -474,7 +474,7 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
 
   const updateBox = React.useCallback(
     (
-      id: 'heroText' | 'search' | 'map' | 'typePanel' | 'dealBar',
+      id: 'heroText' | 'search' | 'map' | 'typePanel' | 'dealBar' | 'listings',
       patch: Partial<HomeDesignLayout['search']> &
         Partial<Pick<HomeDesignLayout['typePanel'], 'pad' | 'gap'>>
     ) => {

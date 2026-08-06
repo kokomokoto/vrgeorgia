@@ -70,6 +70,7 @@ const SELECT_ORDER: DesignableId[] = [
   'typePanel',
   'serviceRail',
   'map',
+  'listings',
   'quickRail',
   'theme',
 ];
@@ -702,7 +703,7 @@ export function DesignInspector() {
             <SearchEditor search={layout.search} onUpdate={updateSearch} />
           ) : null}
 
-          {selectedId === 'map' || selectedId === 'dealBar' ? (
+          {selectedId === 'map' || selectedId === 'dealBar' || selectedId === 'listings' ? (
             <NumGrid
               values={{
                 x: layout[selectedId].x,

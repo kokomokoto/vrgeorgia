@@ -35,11 +35,14 @@ export default function HomePage() {
   const serviceItemW = homeDesign?.layout.serviceRail.itemW ?? 200;
   const mapW = homeDesign?.layout.map.w ?? 1280;
   const mapH = homeDesign?.layout.map.h ?? 360;
+  const listingsW = homeDesign?.layout.listings?.w ?? 1280;
+  const listingsMinH = homeDesign?.layout.listings?.h ?? 480;
   const typePanelW = homeDesign?.layout.typePanel.w ?? 1280;
   const typePanelH = homeDesign?.layout.typePanel.h ?? 164;
   const typePanelPad = homeDesign?.layout.typePanel.pad ?? 10;
   const typePanelGap = homeDesign?.layout.typePanel.gap ?? 12;
   const quickW = homeDesign?.layout.quickRail.w ?? 200;
+  const centerW = Math.max(mapW, typePanelW, listingsW);
   const serviceSectionHidden = isRailSectionHiddenForMode(
     homeDesign?.layout.serviceRail,
     modeId
@@ -249,7 +252,7 @@ export default function HomePage() {
       {/* ქვედა ბლოკი ცენტრში — იგივე 1280 რაც ჰეროს სერჩი; გვერდები თანაბარი სიგანით */}
       <div
         className="mx-auto w-full px-3 py-4 sm:px-4 xl:px-0"
-        style={{ maxWidth: `calc(${mapW}px + ${sideCol * 2}px + 2.5rem)` }}
+        style={{ maxWidth: `calc(${centerW}px + ${sideCol * 2}px + 2.5rem)` }}
       >
         <div className="flex items-start justify-center gap-5">
           <aside
@@ -265,7 +268,7 @@ export default function HomePage() {
             ) : null}
           </aside>
 
-          <div className="min-w-0 w-full shrink-0" style={{ maxWidth: mapW, width: mapW }}>
+          <div className="min-w-0 w-full shrink-0" style={{ maxWidth: centerW, width: centerW }}>
             <div className="w-full space-y-4">
               <Designable id="typePanel">
                 <div
@@ -353,7 +356,15 @@ export default function HomePage() {
                 ) : null}
               </div>
 
-        <div className="mt-6 grid gap-4">
+              <Designable id="listings" className="mt-6">
+                <div
+                  className="grid w-full gap-4"
+                  style={{
+                    maxWidth: listingsW,
+                    width: '100%',
+                    minHeight: listingsMinH,
+                  }}
+                >
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200">
               {error}
@@ -474,7 +485,8 @@ export default function HomePage() {
               </button>
             </div>
           )}
-        </div>
+                </div>
+              </Designable>
             </div>
           </div>
 

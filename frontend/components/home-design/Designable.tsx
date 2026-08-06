@@ -194,12 +194,20 @@ export function Designable({
       ? { width: layout.serviceRail.itemW, height: box.h }
       : id === 'quickRail'
         ? { width: layout.quickRail.w, height: box.h }
-        : {
-            width: box.w,
-            height: box.h,
-            maxWidth: '100%',
-            ...(id === 'typePanel' ? { overflow: 'visible' as const } : {}),
-          };
+        : id === 'listings'
+          ? {
+              width: box.w,
+              minHeight: box.h,
+              height: 'auto',
+              maxWidth: '100%',
+              overflow: 'visible' as const,
+            }
+          : {
+              width: box.w,
+              height: box.h,
+              maxWidth: '100%',
+              ...(id === 'typePanel' ? { overflow: 'visible' as const } : {}),
+            };
 
   return (
     <div
@@ -244,7 +252,10 @@ export function Designable({
       <div
         className={
           designMode
-            ? id === 'serviceRail' || id === 'quickRail' || id === 'typePanel'
+            ? id === 'serviceRail' ||
+              id === 'quickRail' ||
+              id === 'typePanel' ||
+              id === 'listings'
               ? 'h-full w-full'
               : 'pointer-events-none h-full w-full'
             : 'h-full w-full'

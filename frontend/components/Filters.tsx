@@ -24,6 +24,7 @@ import { parseSearchInputValue } from '@/lib/searchInput';
 import { LAND_STATUS_OPTIONS } from '@/lib/propertyTypeUi';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { DEFAULT_SEARCH, type SearchLayout } from '@/lib/homeDesignLayout';
+import { useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
 
 export const DEAL_TYPES = [
   { value: 'sale', key: 'deal_sale', icon: '💰' },
@@ -499,6 +500,8 @@ export function Filters({
 
   const mapSidebar = variant === 'mapSidebar';
   const heroCompact = variant === 'heroCompact';
+  const isDesktopLayout = useIsDesignDesktop();
+  const heroTriggerW = heroSearchStyle?.triggerWidth ?? 152;
 
   const filterRanges = React.useMemo(() => {
     if (!mapSidebar || !rangeProperties?.length) return null;
@@ -625,11 +628,11 @@ export function Filters({
         suppressHydrationWarning
       >
         {heroCompact ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="h-10 w-24 rounded-lg bg-slate-100 dark:bg-zinc-800" />
-            <div className="h-10 w-24 rounded-lg bg-slate-100 dark:bg-zinc-800" />
-            <div className="h-10 flex-1 rounded-lg bg-slate-100 dark:bg-zinc-800" />
-            <div className="h-10 w-36 rounded-lg bg-slate-100 dark:bg-zinc-800" />
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center">
+            <div className="h-10 w-full rounded-lg bg-slate-100 dark:bg-zinc-800 sm:w-24" />
+            <div className="h-10 w-full rounded-lg bg-slate-100 dark:bg-zinc-800 sm:w-24" />
+            <div className="col-span-2 h-10 flex-1 rounded-lg bg-slate-100 dark:bg-zinc-800" />
+            <div className="col-span-2 h-10 w-full rounded-lg bg-slate-100 dark:bg-zinc-800 sm:col-span-1 sm:w-36" />
           </div>
         ) : (
           <>
@@ -1523,13 +1526,49 @@ export function Filters({
         </div>
       )}
 
-      {/* გარიგების ტიპი + ძიება (+ გასუფთავება default-ზე) */}
+      {/* ჰერო: desktop — ერთი რიგი; მობილური — სერჩი + შეკეცილი ფილტრები */}
       {!hideDealAndSearch && heroCompact && (
-        <div className="flex h-full w-full flex-col justify-center overflow-visible">
-          {/* ფასი, ფართობი, ქალაქი, ოთახი, სერჩი, გაფართოებული */}
+        <div className="flex h-full w-full min-w-0 flex-col justify-center overflow-visible gap-2">
+          {!isDesktopLayout && (
+            <>
+              {renderSearchField('relative min-w-0 w-full')}
+              <button
+                type="button"
+                onClick={() => setMobileOpen(!mobileOpen)}
+                className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
+                aria-expanded={mobileOpen}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span aria-hidden>🔍</span>
+                  <span>{labels.filters}</span>
+                  {activeFilterCount > 0 && (
+                    <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold text-white dark:bg-amber-500 dark:text-black">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </div>
+                <svg
+                  className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${mobileOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </>
+          )}
+
           <div
-            className="flex min-h-0 w-full flex-wrap items-center overflow-visible sm:flex-nowrap"
-            style={{ gap: heroSearchStyle?.gap ?? 8 }}
+            className={
+              isDesktopLayout
+                ? 'flex min-h-0 w-full min-w-0 flex-nowrap items-center overflow-visible'
+                : mobileOpen
+                  ? 'grid w-full min-w-0 grid-cols-2 gap-2 border-t border-slate-100 pt-2 dark:border-zinc-700'
+                  : 'hidden'
+            }
+            style={isDesktopLayout ? { gap: heroSearchStyle?.gap ?? 8 } : undefined}
           >
             {(
               [
@@ -1588,20 +1627,32 @@ export function Filters({
             ).map((item) => (
               <div
                 key={item.key}
-                className="shrink-0"
-                style={{
-                  width: heroSearchStyle?.triggerWidth ?? 152,
-                  minWidth: heroSearchStyle?.triggerWidth ?? 152,
-                }}
+                className={isDesktopLayout ? 'shrink-0' : 'min-w-0 w-full'}
+                style={
+                  isDesktopLayout
+                    ? {
+                        width: heroTriggerW,
+                        minWidth: heroTriggerW,
+                      }
+                    : { width: '100%', minWidth: 0 }
+                }
               >
                 {item.node}
               </div>
             ))}
-            {renderSearchField('relative min-w-[10rem] flex-1 self-center')}
+            {isDesktopLayout && (
+              <div className="relative min-w-[10rem] flex-1 self-center">
+                {renderSearchField('relative min-w-0 w-full flex-1 self-center')}
+              </div>
+            )}
             <button
               type="button"
               onClick={openExtendedSearch}
-              className={`inline-flex shrink-0 items-center justify-center gap-2 self-center whitespace-nowrap border transition-all ${
+              className={`inline-flex items-center justify-center gap-2 whitespace-nowrap border transition-all ${
+                isDesktopLayout
+                  ? 'shrink-0 self-center'
+                  : 'col-span-2 w-full'
+              } ${
                 heroSearchStyle
                   ? 'overflow-visible leading-tight'
                   : 'min-h-12 rounded-lg px-3 py-2.5 text-sm font-medium leading-tight'
@@ -1645,6 +1696,7 @@ export function Filters({
                           heroSearchStyle.buttonFontWeight || heroSearchStyle.labelFontWeight,
                         lineHeight: 1.35,
                         overflow: 'visible',
+                        width: isDesktopLayout ? undefined : '100%',
                       } as React.CSSProperties;
                     })()
                   : undefined

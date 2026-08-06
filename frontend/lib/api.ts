@@ -451,6 +451,42 @@ export async function uploadAvatar(file: File) {
   });
 }
 
+/** Homepage Design Mode — public layout (ყველა ვიზიტორი) */
+export async function getHomeDesignLayout() {
+  return request<{ layout: unknown | null; updatedAt: string | null }>(
+    '/api/content/home-design',
+    { timeoutMs: 30_000 }
+  );
+}
+
+/** Homepage Design Mode — ადმინის შენახვა (MongoDB) */
+export async function saveHomeDesignLayout(layout: unknown) {
+  return request<{ layout: unknown | null; updatedAt: string | null }>(
+    '/api/admin/content/home-design',
+    {
+      method: 'PUT',
+      body: JSON.stringify({ layout }),
+      timeoutMs: 90_000,
+    }
+  );
+}
+
+/** Design Mode მედია → Cloudinary */
+export async function uploadHomeDesignMediaFile(file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return request<{
+    url: string;
+    kind: 'image' | 'gif' | 'video';
+    resourceType?: string;
+    publicId?: string | null;
+  }>('/api/admin/content/home-design/media', {
+    method: 'POST',
+    body: form,
+    timeoutMs: 180_000,
+  });
+}
+
 // Get properties by user id
 export async function getUserProperties(userId: string) {
   return request<{ properties: Property[] }>(`/api/properties/user/${userId}`);

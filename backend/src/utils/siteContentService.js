@@ -99,3 +99,30 @@ export function aboutPublicPayload(doc) {
     updatedAt: doc.updatedAt || null,
   };
 }
+
+export async function ensureHomeDesignContent() {
+  let doc = await SiteContent.findOne({ key: 'home-design' });
+  if (!doc) {
+    doc = await SiteContent.create({
+      key: 'home-design',
+      layout: null,
+    });
+  }
+  return doc;
+}
+
+/**
+ * @param {unknown} layout
+ * @returns {object | null}
+ */
+export function normalizeHomeDesignLayout(layout) {
+  if (!layout || typeof layout !== 'object' || Array.isArray(layout)) return null;
+  return layout;
+}
+
+export function homeDesignPublicPayload(doc) {
+  return {
+    layout: normalizeHomeDesignLayout(doc.layout) || null,
+    updatedAt: doc.updatedAt || null,
+  };
+}

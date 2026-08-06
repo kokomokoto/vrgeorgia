@@ -346,6 +346,7 @@ export function DesignInspector() {
     resetLayout,
     setDesignMode,
     isDirty,
+    saving,
     saveDesignChanges,
     discardDesignChanges,
     canUndo,
@@ -450,9 +451,9 @@ export function DesignInspector() {
               onClick={() => void onSave()}
               disabled={!isDirty}
               className="flex-[1.6] rounded-md bg-emerald-600 px-2 py-1.5 text-[11px] font-bold text-white shadow-sm enabled:hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Ctrl+S"
+              title="გამოქვეყნება ყველა ბრაუზერზე (Ctrl+S)"
             >
-              {saveFlash ? '✓ შენახულია' : 'შენახვა'}
+              {saveFlash ? '✓ გამოქვეყნდა' : saving ? 'იგზავნება…' : 'შენახვა'}
             </button>
             <button
               type="button"

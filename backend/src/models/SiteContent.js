@@ -42,7 +42,7 @@ const siteContentSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      enum: ['faq', 'about'],
+      enum: ['faq', 'about', 'home-design'],
       trim: true,
     },
     /** FAQ */
@@ -56,6 +56,8 @@ const siteContentSchema = new mongoose.Schema(
       },
       default: undefined,
     },
+    /** Homepage Design Mode layout (JSON) */
+    layout: { type: mongoose.Schema.Types.Mixed, default: undefined },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }

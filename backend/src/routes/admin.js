@@ -28,11 +28,16 @@ import {
 import {
   ensureFaqContent,
   ensureAboutContent,
+  ensureHomeDesignContent,
   faqPublicPayload,
   aboutPublicPayload,
+  homeDesignPublicPayload,
   normalizeFaqItems,
   normalizeAboutByLang,
+  normalizeHomeDesignLayout,
 } from '../utils/siteContentService.js';
+import multer from 'multer';
+import { cloudinary } from '../services/cloudinary.js';
 import {
   DEFAULT_DUPLICATE_WINDOW_MINUTES,
   findDuplicatePropertyGroups,
@@ -1339,5 +1344,102 @@ router.put('/content/about', requireAuth, adminMiddleware, async (req, res) => {
     res.status(500).json({ message: 'About შენახვა ვერ მოხერხდა' });
   }
 });
+
+const uploadHomeDesignMedia = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+});
+
+/** Homepage Design Mode — ადმინი */
+router.get('/content/home-design', requireAuth, adminMiddleware, async (_req, res) => {
+  try {
+    const doc = await ensureHomeDesignContent();
+    res.json(homeDesignPublicPayload(doc));
+  } catch (error) {
+    console.error('GET /api/admin/content/home-design:', error);
+    res.status(500).json({ message: 'მთავარი გვერდის დიზაინის მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.put('/content/home-design', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const layout = normalizeHomeDesignLayout(req.body?.layout);
+    if (!layout) {
+      return res.status(400).json({ message: 'დიზაინის layout საჭიროა' });
+    }
+
+    const doc = await ensureHomeDesignContent();
+    doc.layout = layout;
+    doc.updatedBy = req.user.id;
+    doc.markModified('layout');
+    await doc.save();
+    await writeAudit(req.user.id, 'update_site_content', 'site_content', 'home-design', {
+      version: layout.version ?? null,
+    });
+    res.json(homeDesignPublicPayload(doc));
+  } catch (error) {
+    console.error('PUT /api/admin/content/home-design:', error);
+    res.status(500).json({ message: 'მთავარი გვერდის დიზაინის შენახვა ვერ მოხერხდა' });
+  }
+});
+
+/** Design Mode მედია → Cloudinary (ყველა ბრაუზერში/მოწყობილობაზე ხელმისაწვდომი URL) */
+router.post(
+  '/content/home-design/media',
+  requireAuth,
+  adminMiddleware,
+  (req, res) => {
+    uploadHomeDesignMedia.single('file')(req, res, async (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ message: 'ფაილი ძალიან დიდია (მაქს. 15 MB)' });
+        }
+        console.error('POST /api/admin/content/home-design/media multer:', err);
+        return res.status(400).json({ message: err.message || 'ფაილის ატვირთვა ვერ მოხერხდა' });
+      }
+      try {
+        if (!req.file?.buffer) {
+          return res.status(400).json({ message: 'ფაილი არ არის მიღებული' });
+        }
+        const mime = String(req.file.mimetype || '');
+        const resourceType = mime.startsWith('video/') ? 'video' : 'auto';
+        const result = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder: 'vrgeorgia/home-design',
+              resource_type: resourceType,
+            },
+            (uploadErr, uploaded) => {
+              if (uploadErr) reject(uploadErr);
+              else resolve(uploaded);
+            }
+          );
+          stream.end(req.file.buffer);
+        });
+
+        const url = result?.secure_url || result?.url;
+        if (!url) {
+          return res.status(500).json({ message: 'Cloudinary-მ URL არ დააბრუნა' });
+        }
+
+        let kind = 'image';
+        if (mime === 'image/gif' || /\.gif$/i.test(req.file.originalname || '')) kind = 'gif';
+        else if (mime.startsWith('video/') || result.resource_type === 'video') kind = 'video';
+
+        res.json({
+          url,
+          kind,
+          resourceType: result.resource_type || resourceType,
+          publicId: result.public_id || null,
+        });
+      } catch (error) {
+        console.error('POST /api/admin/content/home-design/media:', error);
+        res.status(500).json({
+          message: error?.message || 'დიზაინის მედიის ატვირთვა ვერ მოხერხდა',
+        });
+      }
+    });
+  }
+);
 
 export default router;

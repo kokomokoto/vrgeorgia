@@ -1442,57 +1442,8 @@ export function loadHomeDesign(): HomeDesignLayout {
       return migrated;
     }
 
-    const serviceItems =
-      parsed.serviceRail?.items?.length
-        ? parsed.serviceRail.items
-        : DEFAULT_HOME_DESIGN.serviceRail.items;
-    const quickItems =
-      parsed.quickRail?.items?.length
-        ? parsed.quickRail.items
-        : DEFAULT_HOME_DESIGN.quickRail.items;
-
-    // support leftover diameter field from partial saves
-    const legacyDiameter = (parsed.serviceRail as { diameter?: number } | undefined)?.diameter;
-
-    const layout: HomeDesignLayout = syncLegacyThemeFields({
-      ...DEFAULT_HOME_DESIGN,
-      ...parsed,
-      version: 2,
-      header: normalizeHeader(parsed.header),
-      hero: normalizeHero(parsed.hero),
-      heroText: normalizeHeroText(parsed.heroText),
-      themeModes: normalizeThemeModes(
-        (parsed as { themeModes?: unknown }).themeModes,
-        parsed.hero,
-        parsed.themePalettes
-      ),
-      themePalettes: normalizeThemePalettes(parsed.themePalettes),
-      search: normalizeSearch(parsed.search),
-      dealBar: { ...DEFAULT_HOME_DESIGN.dealBar, ...parsed.dealBar },
-      typePanel: normalizeTypePanel(parsed.typePanel),
-      map: { ...DEFAULT_HOME_DESIGN.map, ...parsed.map },
-      listings: { ...DEFAULT_HOME_DESIGN.listings, ...parsed.listings },
-      serviceRail: {
-        ...DEFAULT_HOME_DESIGN.serviceRail,
-        ...parsed.serviceRail,
-        itemW: parsed.serviceRail?.itemW ?? legacyDiameter ?? DEFAULT_HOME_DESIGN.serviceRail.itemW,
-        itemH: parsed.serviceRail?.itemH ?? legacyDiameter ?? DEFAULT_HOME_DESIGN.serviceRail.itemH,
-        hiddenModeIds: normalizeHiddenModeIds(
-          (parsed.serviceRail as { hiddenModeIds?: unknown } | undefined)?.hiddenModeIds
-        ),
-        items: serviceItems.map((it) => normalizeRailItem(it, 'svc')),
-      },
-      quickRail: {
-        ...DEFAULT_HOME_DESIGN.quickRail,
-        ...parsed.quickRail,
-        hiddenModeIds: normalizeHiddenModeIds(
-          (parsed.quickRail as { hiddenModeIds?: unknown } | undefined)?.hiddenModeIds
-        ),
-        items: quickItems.map((it) => normalizeRailItem(it, 'quick')),
-      },
-    });
-
-    const needsHrefPersist = serviceItems.some(
+    const layout = normalizeHomeDesignInput(parsed);
+    const needsHrefPersist = (parsed.serviceRail?.items || []).some(
       (it) => it.href && migrateServiceHref(it.href) !== it.href
     );
     if (
@@ -1510,6 +1461,62 @@ export function loadHomeDesign(): HomeDesignLayout {
   } catch {
     return DEFAULT_HOME_DESIGN;
   }
+}
+
+/** Normalize partial/server JSON into a full HomeDesignLayout */
+export function normalizeHomeDesignInput(
+  parsed: Partial<HomeDesignLayout> | null | undefined
+): HomeDesignLayout {
+  if (!parsed || typeof parsed !== 'object') return DEFAULT_HOME_DESIGN;
+
+  const serviceItems =
+    parsed.serviceRail?.items?.length
+      ? parsed.serviceRail.items
+      : DEFAULT_HOME_DESIGN.serviceRail.items;
+  const quickItems =
+    parsed.quickRail?.items?.length
+      ? parsed.quickRail.items
+      : DEFAULT_HOME_DESIGN.quickRail.items;
+
+  const legacyDiameter = (parsed.serviceRail as { diameter?: number } | undefined)?.diameter;
+
+  return syncLegacyThemeFields({
+    ...DEFAULT_HOME_DESIGN,
+    ...parsed,
+    version: 2,
+    header: normalizeHeader(parsed.header),
+    hero: normalizeHero(parsed.hero),
+    heroText: normalizeHeroText(parsed.heroText),
+    themeModes: normalizeThemeModes(
+      (parsed as { themeModes?: unknown }).themeModes,
+      parsed.hero,
+      parsed.themePalettes
+    ),
+    themePalettes: normalizeThemePalettes(parsed.themePalettes),
+    search: normalizeSearch(parsed.search),
+    dealBar: { ...DEFAULT_HOME_DESIGN.dealBar, ...parsed.dealBar },
+    typePanel: normalizeTypePanel(parsed.typePanel),
+    map: { ...DEFAULT_HOME_DESIGN.map, ...parsed.map },
+    listings: { ...DEFAULT_HOME_DESIGN.listings, ...parsed.listings },
+    serviceRail: {
+      ...DEFAULT_HOME_DESIGN.serviceRail,
+      ...parsed.serviceRail,
+      itemW: parsed.serviceRail?.itemW ?? legacyDiameter ?? DEFAULT_HOME_DESIGN.serviceRail.itemW,
+      itemH: parsed.serviceRail?.itemH ?? legacyDiameter ?? DEFAULT_HOME_DESIGN.serviceRail.itemH,
+      hiddenModeIds: normalizeHiddenModeIds(
+        (parsed.serviceRail as { hiddenModeIds?: unknown } | undefined)?.hiddenModeIds
+      ),
+      items: serviceItems.map((it) => normalizeRailItem(it, 'svc')),
+    },
+    quickRail: {
+      ...DEFAULT_HOME_DESIGN.quickRail,
+      ...parsed.quickRail,
+      hiddenModeIds: normalizeHiddenModeIds(
+        (parsed.quickRail as { hiddenModeIds?: unknown } | undefined)?.hiddenModeIds
+      ),
+      items: quickItems.map((it) => normalizeRailItem(it, 'quick')),
+    },
+  });
 }
 
 export function saveHomeDesign(layout: HomeDesignLayout) {

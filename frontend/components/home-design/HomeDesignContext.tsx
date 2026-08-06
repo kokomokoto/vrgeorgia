@@ -23,7 +23,10 @@ import {
   type TypePanelItem,
   loadHomeDesign,
   saveHomeDesign,
+  normalizeHomeDesignInput,
 } from '@/lib/homeDesignLayout';
+import { getHomeDesignLayout, saveHomeDesignLayout } from '@/lib/api';
+import { uploadLocalBlobsInLayout } from '@/lib/homeDesignPublish';
 import { DEFAULT_THEME_PALETTES, normalizeThemePalette } from '@/lib/themePalettes';
 import {
   MAX_HERO_IMAGES_PER_MODE,
@@ -113,7 +116,9 @@ type HomeDesignContextValue = {
   setSelectedHeaderItemId: (id: HeaderItemId | null) => void;
   /** Working copy differs from last saved layout */
   isDirty: boolean;
-  /** Persist working layout to localStorage */
+  /** True while publishing layout + media to the server */
+  saving: boolean;
+  /** Persist working layout to server (and local cache) */
   saveDesignChanges: () => Promise<void>;
   /** Revert working layout to last saved (without exiting) */
   discardDesignChanges: () => Promise<void>;
@@ -303,24 +308,46 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
   }, [syncHistoryFlags]);
 
   React.useEffect(() => {
-    const loaded = loadHomeDesign();
-    const resetKey = 'vhome-night-palette-restored-v2';
-    let next = loaded;
-    try {
-      if (!window.localStorage.getItem(resetKey)) {
-        next = syncLegacyThemeFields({
-          ...loaded,
-          themeModes: restoreOriginalNightPalettes(loaded.themeModes || []),
-        });
-        saveHomeDesign(next);
-        window.localStorage.setItem(resetKey, '1');
+    let cancelled = false;
+
+    (async () => {
+      let next = loadHomeDesign();
+      const resetKey = 'vhome-night-palette-restored-v2';
+      try {
+        if (!window.localStorage.getItem(resetKey)) {
+          next = syncLegacyThemeFields({
+            ...next,
+            themeModes: restoreOriginalNightPalettes(next.themeModes || []),
+          });
+          saveHomeDesign(next);
+          window.localStorage.setItem(resetKey, '1');
+        }
+      } catch {
+        /* keep next */
       }
-    } catch {
-      next = loaded;
-    }
-    setLayout(next);
-    setSavedLayout(cloneLayout(next));
-    setHydrated(true);
+
+      // სერვერი = ყველა ბრაუზერის/მოწყობილობის წყარო; localStorage მხოლოდ ქეში
+      try {
+        const remote = await getHomeDesignLayout();
+        if (!cancelled && remote?.layout) {
+          next = normalizeHomeDesignInput(
+            remote.layout as Partial<HomeDesignLayout>
+          );
+          saveHomeDesign(next);
+        }
+      } catch {
+        /* ოფლაინ / API ჩავარდნა — ვტოვებთ local ქეშს */
+      }
+
+      if (cancelled) return;
+      setLayout(next);
+      setSavedLayout(cloneLayout(next));
+      setHydrated(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   React.useEffect(() => {
@@ -378,14 +405,22 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
     if (saving) return;
     setSaving(true);
     try {
-      const working = cloneLayout(layoutRef.current);
+      let working = cloneLayout(layoutRef.current);
       const previous = savedLayoutRef.current;
-      // Delete blobs removed since last save
       await purgeOrphanHeroBlobs(working, previous);
+      // IndexedDB blobs → Cloudinary URLs, რომ სხვა ბრაუზერშიც გამოჩნდეს
+      working = withSyncedLegacy(await uploadLocalBlobsInLayout(working));
+      await saveHomeDesignLayout(working);
       saveHomeDesign(working);
       setSavedLayout(working);
       setLayout(working);
       clearHistory();
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'დიზაინის შენახვა ვერ მოხერხდა';
+      if (typeof window !== 'undefined') {
+        window.alert(msg);
+      }
     } finally {
       setSaving(false);
     }
@@ -1213,6 +1248,7 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       selectedHeaderItemId,
       setSelectedHeaderItemId,
       isDirty,
+      saving,
       saveDesignChanges,
       discardDesignChanges,
       canUndo,
@@ -1267,6 +1303,7 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       selectedTypeItemId,
       selectedHeaderItemId,
       isDirty,
+      saving,
       saveDesignChanges,
       discardDesignChanges,
       canUndo,

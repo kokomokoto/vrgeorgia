@@ -10,9 +10,24 @@ import type { MapBounds } from '@/lib/mapBounds';
 import { useTheme } from '@/components/ThemeProvider';
 import { useKutaisiZonesMapLayer } from '@/components/KutaisiZonesMapLayer';
 import { useTbilisiZonesMapLayer } from '@/components/TbilisiZonesMapLayer';
+import {
+  resolveMapTileUrl,
+  type MapTileStyle,
+} from '@/lib/themePalettes';
 
-const TILE_LIGHT = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+function currentMapTileStyle(): MapTileStyle {
+  const raw = typeof document !== 'undefined' ? document.documentElement.dataset.mapTiles : undefined;
+  if (
+    raw === 'auto' ||
+    raw === 'light' ||
+    raw === 'dark' ||
+    raw === 'voyager' ||
+    raw === 'positron'
+  ) {
+    return raw;
+  }
+  return 'auto';
+}
 
 function formatPriceLabel(p: Property): string {
   const sym = p.priceCurrency === 'GEL' ? '₾' : '$';
@@ -238,9 +253,11 @@ export default function MapInner({
 
       const map = L.map(mapRef.current!).setView([defaultCenter.lat, defaultCenter.lng], defaultZoom);
 
-      const initialTile = document.documentElement.classList.contains('dark') ? TILE_DARK : TILE_LIGHT;
+      const initialTile = resolveMapTileUrl(currentMapTileStyle(), document.documentElement.classList.contains('dark'));
       const attribution =
-        initialTile === TILE_DARK ? '&copy; OpenStreetMap &copy; CARTO' : '&copy; OpenStreetMap contributors';
+        initialTile.includes('cartocdn')
+          ? '&copy; OpenStreetMap &copy; CARTO'
+          : '&copy; OpenStreetMap contributors';
       const tl = L.tileLayer(initialTile, { attribution }).addTo(map);
       tileLayerRef.current = tl;
 
@@ -277,14 +294,20 @@ export default function MapInner({
   }, []);
 
   useEffect(() => {
-    const tl = tileLayerRef.current;
-    if (!tl || typeof tl.setUrl !== 'function') return;
-    const url = isDark ? TILE_DARK : TILE_LIGHT;
-    tl.setUrl(url);
-    const attr =
-      url === TILE_DARK ? '&copy; OpenStreetMap &copy; CARTO' : '&copy; OpenStreetMap contributors';
-    if (typeof tl.options !== 'undefined') tl.options.attribution = attr;
-    tl.redraw?.();
+    const applyTiles = () => {
+      const tl = tileLayerRef.current;
+      if (!tl || typeof tl.setUrl !== 'function') return;
+      const url = resolveMapTileUrl(currentMapTileStyle(), isDark);
+      tl.setUrl(url);
+      const attr = url.includes('cartocdn')
+        ? '&copy; OpenStreetMap &copy; CARTO'
+        : '&copy; OpenStreetMap contributors';
+      if (typeof tl.options !== 'undefined') tl.options.attribution = attr;
+      tl.redraw?.();
+    };
+    applyTiles();
+    window.addEventListener('theme-palette-changed', applyTiles);
+    return () => window.removeEventListener('theme-palette-changed', applyTiles);
   }, [isDark]);
 
   useEffect(() => {

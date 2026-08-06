@@ -22,9 +22,10 @@ import {
 import type { Property } from '@/lib/types';
 import { parseSearchInputValue } from '@/lib/searchInput';
 import { LAND_STATUS_OPTIONS } from '@/lib/propertyTypeUi';
+import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
+import { DEFAULT_SEARCH, type SearchLayout } from '@/lib/homeDesignLayout';
 
-// გარიგების ტიპები
-const DEAL_TYPES = [
+export const DEAL_TYPES = [
   { value: 'sale', key: 'deal_sale', icon: '💰' },
   { value: 'rent', key: 'deal_rent', icon: '🔑' },
   { value: 'mortgage', key: 'deal_mortgage', icon: '🏦' },
@@ -84,6 +85,13 @@ const FilterDropdownLayoutContext = React.createContext<{ inline: boolean; spaci
   spacious: false,
 });
 
+/** Hero search bar visual styles from Design Mode */
+const HeroSearchStyleContext = React.createContext<SearchLayout | null>(null);
+
+function useHeroSearchStyle(): SearchLayout | null {
+  return React.useContext(HeroSearchStyleContext);
+}
+
 // Dropdown wrapper component
 function FilterDropdown({
   label,
@@ -102,6 +110,7 @@ function FilterDropdown({
 }) {
   const { t } = useTranslation();
   const { inline, spacious } = React.useContext(FilterDropdownLayoutContext);
+  const heroStyle = useHeroSearchStyle();
   const [open, setOpen] = React.useState(defaultOpen);
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -116,7 +125,38 @@ function FilterDropdown({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [inline, spacious]);
 
-  const triggerPad = spacious ? 'px-4 py-3.5 sm:px-5' : 'px-3 py-2.5';
+  const triggerPad = spacious ? 'px-4 py-3.5 sm:px-5' : 'px-3.5 py-3';
+  const minH = heroStyle?.triggerMinHeight ?? 48;
+  const triggerStyle: React.CSSProperties | undefined = heroStyle
+    ? {
+        minHeight: minH,
+        borderRadius: heroStyle.triggerBorderRadius,
+        borderColor: isActive ? undefined : heroStyle.triggerBorderColor,
+        backgroundColor: isActive ? undefined : heroStyle.triggerBackground,
+      }
+    : undefined;
+  const triggerBtnStyle: React.CSSProperties | undefined = heroStyle
+    ? {
+        minHeight: minH,
+        paddingLeft: heroStyle.triggerPadX,
+        paddingRight: heroStyle.triggerPadX,
+        paddingTop: heroStyle.triggerPadY,
+        paddingBottom: heroStyle.triggerPadY,
+      }
+    : undefined;
+  const labelStyle: React.CSSProperties | undefined = heroStyle
+    ? {
+        fontSize: heroStyle.labelFontSize,
+        fontWeight: heroStyle.labelFontWeight,
+        color: isActive ? undefined : heroStyle.labelColor,
+      }
+    : undefined;
+  const summaryStyle: React.CSSProperties | undefined = heroStyle
+    ? {
+        fontSize: heroStyle.summaryFontSize,
+        color: heroStyle.summaryColor,
+      }
+    : undefined;
 
   if (inline && spacious) {
     return (
@@ -183,31 +223,56 @@ function FilterDropdown({
 
   const panelClass = inline
     ? `relative z-10 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900`
-    : 'absolute top-full left-0 right-0 z-30 mt-1 min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40';
+    : 'absolute top-full left-0 z-[200] mt-1 min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/50';
 
   const triggerClass = `flex w-full items-center gap-1 rounded-xl border transition-all text-sm ${
+    heroStyle ? '' : 'min-h-12'
+  } ${
     isActive
       ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
       : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600'
   }`;
 
   return (
-    <div ref={ref} className="relative">
-      <div className={triggerClass}>
+    <div ref={ref} className={`relative ${open && !inline ? 'z-[200]' : ''}`}>
+      <div className={triggerClass} style={triggerStyle}>
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          className={`flex min-w-0 flex-1 items-center justify-between gap-3 ${triggerPad} text-left`}
+          className={`flex min-w-0 flex-1 items-center justify-between gap-2 text-left ${
+            heroStyle ? '' : `min-h-12 ${triggerPad}`
+          }`}
+          style={triggerBtnStyle}
         >
-          <div className="min-w-0">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+          <div className={heroStyle ? 'overflow-visible' : 'min-w-0'}>
+            <div
+              className={`leading-tight ${
+                heroStyle ? 'whitespace-nowrap overflow-visible pb-[0.12em]' : 'truncate'
+              } ${
+                heroStyle
+                  ? isActive
+                    ? 'text-blue-700 dark:text-amber-300'
+                    : heroStyle.labelColor
+                      ? ''
+                      : 'text-slate-800 dark:text-zinc-100'
+                  : `text-sm font-bold ${
+                      isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'
+                    }`
+              }`}
+              style={heroStyle ? labelStyle : undefined}
+            >
               {label}
             </div>
-            <div
-              className={`truncate font-medium ${isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'}`}
-            >
-              {summary}
-            </div>
+            {isActive ? (
+              <div
+                className={`mt-0.5 font-medium text-blue-700 dark:text-amber-300 ${
+                  heroStyle ? 'whitespace-nowrap' : 'truncate text-xs'
+                }`}
+                style={summaryStyle}
+              >
+                {summary}
+              </div>
+            ) : null}
           </div>
           <svg
             className={`h-4 w-4 flex-shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -254,25 +319,87 @@ function LocationFilterTrigger({
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
+  const heroStyle = useHeroSearchStyle();
+  const minH = heroStyle?.triggerMinHeight ?? 48;
+  const boxStyle: React.CSSProperties | undefined = heroStyle
+    ? {
+        minHeight: minH,
+        borderRadius: heroStyle.triggerBorderRadius,
+        borderColor: isActive ? undefined : heroStyle.triggerBorderColor,
+        backgroundColor: isActive ? undefined : heroStyle.triggerBackground,
+      }
+    : undefined;
+  const btnStyle: React.CSSProperties | undefined = heroStyle
+    ? {
+        minHeight: minH,
+        paddingLeft: heroStyle.triggerPadX,
+        paddingRight: heroStyle.triggerPadX,
+        paddingTop: heroStyle.triggerPadY,
+        paddingBottom: heroStyle.triggerPadY,
+      }
+    : undefined;
+  const labelStyle: React.CSSProperties | undefined = heroStyle
+    ? {
+        fontSize: heroStyle.labelFontSize,
+        fontWeight: heroStyle.labelFontWeight,
+        color: isActive ? undefined : heroStyle.labelColor,
+      }
+    : undefined;
+  const summaryStyle: React.CSSProperties | undefined = heroStyle
+    ? {
+        fontSize: heroStyle.summaryFontSize,
+        color: heroStyle.summaryColor,
+      }
+    : undefined;
 
   return (
     <div
       className={`flex w-full items-center gap-1 rounded-xl border text-sm transition-all ${
+        heroStyle ? '' : 'min-h-12'
+      } ${
         isActive
           ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
           : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600'
       }`}
+      style={boxStyle}
     >
       <button
         type="button"
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left"
+        className={`flex min-w-0 flex-1 items-center justify-between gap-2 text-left ${
+          heroStyle ? '' : 'min-h-12 px-3.5 py-3'
+        }`}
+        style={btnStyle}
       >
-        <div className="min-w-0">
-          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">{label}</div>
-          <div className={`truncate font-medium ${isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'}`}>
-            {summary}
+        <div className={heroStyle ? 'overflow-visible' : 'min-w-0'}>
+          <div
+            className={`leading-tight ${
+              heroStyle ? 'whitespace-nowrap overflow-visible pb-[0.12em]' : 'truncate'
+            } ${
+              heroStyle
+                ? isActive
+                  ? 'text-blue-700 dark:text-amber-300'
+                  : heroStyle.labelColor
+                    ? ''
+                    : 'text-slate-800 dark:text-zinc-100'
+                : `text-sm font-bold ${
+                    isActive ? 'text-blue-700 dark:text-amber-300' : 'text-slate-800 dark:text-zinc-100'
+                  }`
+            }`}
+            style={labelStyle}
+          >
+            {label}
           </div>
+          {isActive ? (
+            <div
+              className={`mt-0.5 font-medium text-blue-700 dark:text-amber-300 ${
+                heroStyle ? 'whitespace-nowrap' : 'truncate text-xs'
+              }`}
+              style={summaryStyle}
+            >
+              {summary}
+            </div>
+          ) : null}
         </div>
         <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -301,22 +428,34 @@ export function Filters({
   onClearAll,
   rangeProperties,
   showCategories = false,
+  hideDealAndSearch = false,
+  forceExpanded = false,
 }: {
   value: FiltersState;
   onChange: (v: FiltersState) => void;
   /** mapSidebar: სრული რუკის მარცხენა სვეტი — ფილტრები ყოველთვის ხილული, ბადე ვიწრო სვეტისთვის, dropdown-ები inline */
-  variant?: 'default' | 'mapSidebar';
+  /** heroCompact: ჰეროზე მხოლოდ გარიგება + ძიება + გაფართოებული */
+  variant?: 'default' | 'mapSidebar' | 'heroCompact';
   /** მთავარი გვერდი — ყველა ფილტრის გასუფთავება */
   onClearAll?: () => void;
   /** მიმდინარე ძიების შედეგები (ფასი/ფართობის გარეშე) — სლაიდერის min/max და ჰისტოგრამა */
   rangeProperties?: Property[];
   /** კატეგორიის ჩიპები (ბინა, სახლი...) — აგენტის პროფილზე და სხვა */
   showCategories?: boolean;
+  /** გარიგება/სერჩის ზოლი დამალული — მოდალში ჩასასმელად */
+  hideDealAndSearch?: boolean;
+  /** მობაილის აკორდეონის გარეშე ყოველთვის გახსნილი */
+  forceExpanded?: boolean;
 }) {
   const { t } = useTranslation();
   const { rate: usdToGel } = useCurrencyRate();
+  const design = useHomeDesignOptional();
+  const heroSearchStyle =
+    variant === 'heroCompact'
+      ? ({ ...DEFAULT_SEARCH, ...(design?.layout.search || {}) } as SearchLayout)
+      : null;
   const [mounted, setMounted] = React.useState(false);
-  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [mobileOpen, setMobileOpen] = React.useState(forceExpanded);
   const [extendedOpen, setExtendedOpen] = React.useState(false);
   /** გაფართოებული ძიების დრაფტი — API-ზე იგზავნება მხოლოდ გამოყენებისას */
   const [extendedDraft, setExtendedDraft] = React.useState<FiltersState | null>(null);
@@ -359,6 +498,7 @@ export function Filters({
   }, []);
 
   const mapSidebar = variant === 'mapSidebar';
+  const heroCompact = variant === 'heroCompact';
 
   const filterRanges = React.useMemo(() => {
     if (!mapSidebar || !rangeProperties?.length) return null;
@@ -476,20 +616,38 @@ export function Filters({
   // Render a stable shell first, then render translated interactive UI after mount.
   if (!mounted) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900" suppressHydrationWarning>
-        <button
-          type="button"
-          className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
-        >
-          <div className="flex items-center gap-2">
-            <span>🔍</span>
-            <span>ფილტრები</span>
+      <div
+        className={
+          heroCompact
+            ? 'block'
+            : 'rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900'
+        }
+        suppressHydrationWarning
+      >
+        {heroCompact ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="h-10 w-24 rounded-lg bg-slate-100 dark:bg-zinc-800" />
+            <div className="h-10 w-24 rounded-lg bg-slate-100 dark:bg-zinc-800" />
+            <div className="h-10 flex-1 rounded-lg bg-slate-100 dark:bg-zinc-800" />
+            <div className="h-10 w-36 rounded-lg bg-slate-100 dark:bg-zinc-800" />
           </div>
-          <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        <div className="hidden md:block text-sm text-slate-500 dark:text-zinc-400">ფილტრები იტვირთება...</div>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
+            >
+              <div className="flex items-center gap-2">
+                <span>🔍</span>
+                <span>ფილტრები</span>
+              </div>
+              <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <div className="hidden md:block text-sm text-slate-500 dark:text-zinc-400">ფილტრები იტვირთება...</div>
+          </>
+        )}
       </div>
     );
   }
@@ -951,6 +1109,108 @@ export function Filters({
     </div>
   );
 
+  const renderRoomsDropdownContent = () => (
+    <div className="space-y-3">
+      <div className="mb-2 text-xs text-slate-500">{t('filter_choose_rooms')}</div>
+      <div className="flex gap-1.5">
+        {['1', '2', '3', '4', '5', '6'].map((r) => {
+          const isSelected = value.rooms.includes(r);
+          const displayLabel = r === '6' ? '6+' : r;
+          return (
+            <button
+              key={r}
+              type="button"
+              onClick={() => {
+                const nextRooms = isSelected
+                  ? value.rooms.filter((room) => room !== r)
+                  : [...value.rooms, r].sort((a, b) => Number(a) - Number(b));
+                const nextRoomNums = nextRooms.map((room) => Number(room)).filter((n) => !Number.isNaN(n));
+                const maxRoom = nextRoomNums.length > 0 ? Math.max(...nextRoomNums) : null;
+                const openEnded = nextRooms.includes('6');
+                const nextBedrooms = value.bedrooms.filter((b) => {
+                  if (openEnded) return true;
+                  if (maxRoom === null) return false;
+                  return Number(b) <= maxRoom;
+                });
+                onChange({ ...value, rooms: nextRooms, bedrooms: nextBedrooms });
+              }}
+              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${
+                isSelected
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+              }`}
+            >
+              {displayLabel}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-slate-100 pt-3">
+        <div className="mb-2 text-xs text-slate-500">{t('filter_choose_bedrooms')}</div>
+        <div className="flex gap-1.5">
+          {['1', '2', '3', '4', '5', '6'].map((r) => {
+            const isSelected = value.bedrooms.includes(r);
+            const roomNumber = Number(r);
+            const isDisabled =
+              !hasOpenEndedRooms && maxAllowedBedrooms !== null && roomNumber > maxAllowedBedrooms;
+            const displayLabel = r === '6' ? '6+' : r;
+            return (
+              <button
+                key={r}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => {
+                  const nextBedrooms = isSelected
+                    ? value.bedrooms.filter((bedroom) => bedroom !== r)
+                    : [...value.bedrooms, r].sort((a, b) => Number(a) - Number(b));
+                  onChange({ ...value, bedrooms: nextBedrooms });
+                }}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${
+                  isDisabled
+                    ? 'cursor-not-allowed bg-slate-100 text-slate-400 opacity-60'
+                    : isSelected
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
+                }`}
+              >
+                {displayLabel}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border-t border-slate-100 pt-3">
+        <div className="mb-2 text-xs text-slate-500">{t('filter_balcony_count')}</div>
+        <div className="flex gap-1.5">
+          {['1', '2', '3'].map((b) => {
+            const isSelected = value.balconies.includes(b);
+            return (
+              <button
+                key={b}
+                type="button"
+                onClick={() => {
+                  const next = isSelected
+                    ? value.balconies.filter((x) => x !== b)
+                    : [...value.balconies, b].sort((a, c) => Number(a) - Number(c));
+                  onChange({ ...value, balconies: next });
+                }}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${
+                  isSelected
+                    ? 'bg-orange-600 text-white shadow'
+                    : 'bg-slate-100 text-slate-700 hover:bg-orange-50 hover:text-orange-700'
+                }`}
+              >
+                {b}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
   const renderPriceFilterPanel = () => (
     <div className="flex flex-1 flex-col">
       {priceSliderValues && priceHistogram ? (
@@ -1075,7 +1335,9 @@ export function Filters({
     committed.buildingProject.length +
     committed.renovationStatus.length;
 
-  const renderSearchField = (wrapperClassName: string) => (
+  const renderSearchField = (wrapperClassName: string) => {
+    const inputH = heroSearchStyle?.inputHeight ?? (heroCompact ? 48 : undefined);
+    return (
     <div className={wrapperClassName}>
       <svg
         className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-zinc-500"
@@ -1087,7 +1349,20 @@ export function Filters({
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <input
-        className="w-full min-w-0 rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+        className={`w-full min-w-0 border border-slate-200 bg-white pl-10 pr-3 leading-none text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
+          heroCompact || heroSearchStyle ? 'py-0' : 'rounded-lg py-2.5 text-sm'
+        } ${heroSearchStyle ? '' : heroCompact ? 'h-12 rounded-lg text-sm' : ''}`}
+        style={
+          heroSearchStyle
+            ? {
+                height: inputH,
+                borderRadius: heroSearchStyle.inputBorderRadius,
+                borderColor: heroSearchStyle.inputBorderColor,
+                backgroundColor: heroSearchStyle.inputBackground,
+                fontSize: heroSearchStyle.inputFontSize,
+              }
+            : undefined
+        }
         placeholder={labels.search_placeholder}
         value={value.q || value.propertyId || ''}
         onChange={(e) => {
@@ -1096,18 +1371,24 @@ export function Filters({
         }}
       />
     </div>
-  );
+    );
+  };
 
   return (
-    <FilterDropdownLayoutContext.Provider value={{ inline: mapSidebar }}>
+    <HeroSearchStyleContext.Provider value={heroSearchStyle}>
+    <FilterDropdownLayoutContext.Provider value={{ inline: mapSidebar || forceExpanded }}>
     <div
-      className={`rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900 ${
-        mapSidebar ? '!rounded-none border-0 bg-transparent p-0 shadow-none md:p-0' : ''
-      }`}
+      className={
+        mapSidebar
+          ? 'block'
+          : heroCompact
+            ? 'flex h-full w-full flex-col justify-center overflow-visible'
+            : 'rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900'
+      }
       suppressHydrationWarning
     >
       {/* მობაილზე ძიება + გასუფთავება */}
-      {!mapSidebar && (
+      {!mapSidebar && !heroCompact && !hideDealAndSearch && (
         <div className="mb-3 flex items-center gap-2 md:hidden">
           {renderSearchField('relative min-w-0 flex-1')}
           {onClearAll ? (
@@ -1131,7 +1412,7 @@ export function Filters({
       )}
 
       {/* მობაილზე — დანარჩენი ფილტრები; mapSidebar-ზე ყოველთვის ხილულია */}
-      {!mapSidebar && (
+      {!mapSidebar && !heroCompact && !forceExpanded && (
         <button
           type="button"
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -1154,9 +1435,11 @@ export function Filters({
 
       <div
         className={
-          mapSidebar
+          mapSidebar || forceExpanded
             ? 'block'
-            : `${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`
+            : heroCompact
+              ? 'flex h-full w-full flex-col justify-center overflow-visible'
+              : `${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`
         }
       >
       {(mapSidebar || showCategories) && (
@@ -1240,12 +1523,187 @@ export function Filters({
         </div>
       )}
 
-      {/* გარიგების ტიპი + ძიება + გასუფთავება (დესკტოპზე ერთ ხაზზე) */}
+      {/* გარიგების ტიპი + ძიება (+ გასუფთავება default-ზე) */}
+      {!hideDealAndSearch && heroCompact && (
+        <div className="flex h-full w-full flex-col justify-center overflow-visible">
+          {/* ფასი, ფართობი, ქალაქი, ოთახი, სერჩი, გაფართოებული */}
+          <div
+            className="flex min-h-0 w-full flex-wrap items-center overflow-visible sm:flex-nowrap"
+            style={{ gap: heroSearchStyle?.gap ?? 8 }}
+          >
+            {(
+              [
+                {
+                  key: 'price',
+                  node: (
+                    <FilterDropdown
+                      label={t('filter_price')}
+                      summary={priceSummary()}
+                      isActive={priceActive}
+                      onClear={clearPriceFilter}
+                    >
+                      {renderPriceDropdownContent()}
+                    </FilterDropdown>
+                  ),
+                },
+                {
+                  key: 'area',
+                  node: (
+                    <FilterDropdown
+                      label={t('filter_area')}
+                      summary={areaSummary()}
+                      isActive={areaActive}
+                      onClear={clearAreaFilter}
+                    >
+                      {renderAreaDropdownContent()}
+                    </FilterDropdown>
+                  ),
+                },
+                {
+                  key: 'city',
+                  node: (
+                    <LocationFilterTrigger
+                      label={labels.city}
+                      summary={citySummary()}
+                      isActive={cityActive}
+                      onClear={clearCityFilter}
+                      onOpen={() => setLocationModalOpen(true)}
+                    />
+                  ),
+                },
+                {
+                  key: 'rooms',
+                  node: (
+                    <FilterDropdown
+                      label={t('filter_rooms')}
+                      summary={roomsSummary()}
+                      isActive={roomsActive || bedroomsActive || balconiesActive}
+                      onClear={clearRoomsFilter}
+                    >
+                      {renderRoomsDropdownContent()}
+                    </FilterDropdown>
+                  ),
+                },
+              ] as const
+            ).map((item) => (
+              <div
+                key={item.key}
+                className="shrink-0"
+                style={{
+                  width: heroSearchStyle?.triggerWidth ?? 152,
+                  minWidth: heroSearchStyle?.triggerWidth ?? 152,
+                }}
+              >
+                {item.node}
+              </div>
+            ))}
+            {renderSearchField('relative min-w-[10rem] flex-1 self-center')}
+            <button
+              type="button"
+              onClick={openExtendedSearch}
+              className={`inline-flex shrink-0 items-center justify-center gap-2 self-center whitespace-nowrap border transition-all ${
+                heroSearchStyle
+                  ? 'overflow-visible leading-tight'
+                  : 'min-h-12 rounded-lg px-3 py-2.5 text-sm font-medium leading-tight'
+              } ${
+                extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                  ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
+                  : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100'
+              }`}
+              style={
+                heroSearchStyle
+                  ? (() => {
+                      const fontSize = heroSearchStyle.buttonFontSize || heroSearchStyle.labelFontSize;
+                      const padY = Math.max(10, heroSearchStyle.triggerPadY ?? 12);
+                      const minH = Math.max(
+                        heroSearchStyle.buttonHeight,
+                        heroSearchStyle.triggerMinHeight ?? 48,
+                        Math.ceil(fontSize * 1.55) + padY * 2
+                      );
+                      return {
+                        minHeight: minH,
+                        height: 'auto',
+                        paddingLeft: heroSearchStyle.buttonPadX,
+                        paddingRight: heroSearchStyle.buttonPadX,
+                        paddingTop: padY,
+                        paddingBottom: padY,
+                        borderRadius: heroSearchStyle.buttonBorderRadius,
+                        borderColor:
+                          extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                            ? undefined
+                            : heroSearchStyle.buttonBorderColor,
+                        backgroundColor:
+                          extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                            ? undefined
+                            : heroSearchStyle.buttonBackground,
+                        color:
+                          extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                            ? undefined
+                            : heroSearchStyle.buttonColor || heroSearchStyle.labelColor,
+                        fontSize,
+                        fontWeight:
+                          heroSearchStyle.buttonFontWeight || heroSearchStyle.labelFontWeight,
+                        lineHeight: 1.35,
+                        overflow: 'visible',
+                      } as React.CSSProperties;
+                    })()
+                  : undefined
+              }
+            >
+              <span className="block overflow-visible pb-[0.12em] leading-[1.35]">
+                {labels.extended_search}
+              </span>
+              {(extendedOnlyActiveCount > 0 || activeFilterCount > 0) && (
+                <span className="inline-flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold leading-none text-white dark:bg-amber-500 dark:text-black">
+                  {Math.max(extendedOnlyActiveCount, activeFilterCount)}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!hideDealAndSearch && !heroCompact && (
       <div
-        className={`mb-3 flex flex-col gap-2 ${
-          mapSidebar ? '' : 'md:flex-row md:flex-wrap md:items-center md:gap-3'
+        className={`flex gap-2 ${
+          mapSidebar
+            ? 'mb-3 flex-col'
+            : 'mb-3 flex-col md:flex-row md:flex-wrap md:items-center md:gap-3'
         }`}
       >
+        <div
+          className={`flex shrink-0 items-center gap-2 ${
+            mapSidebar
+              ? 'order-2 flex-wrap'
+              : 'order-2 flex-wrap md:order-1 md:flex-nowrap'
+          }`}
+        >
+          {DEAL_TYPES.map((dt) => {
+            const isSelected = value.dealType.includes(dt.value);
+            return (
+              <button
+                key={dt.value}
+                type="button"
+                onClick={() => {
+                  const newDealType = isSelected
+                    ? value.dealType.filter((d) => d !== dt.value)
+                    : [...value.dealType, dt.value];
+                  onChange({ ...value, dealType: newDealType });
+                }}
+                className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium leading-none transition-all sm:px-4 py-2 ${
+                  isSelected
+                    ? 'bg-blue-600 text-white dark:bg-amber-500 dark:text-black'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                <span className="inline-flex items-center leading-none" aria-hidden>
+                  {dt.icon}
+                </span>
+                <span className="inline-flex items-center leading-none">{t(dt.key)}</span>
+              </button>
+            );
+          })}
+        </div>
         {renderSearchField(
           mapSidebar
             ? 'relative order-1 min-w-0 w-full'
@@ -1269,34 +1727,11 @@ export function Filters({
             <span className="whitespace-nowrap">{labels.clear_filters}</span>
           </button>
         ) : null}
-        <div className={`order-2 flex shrink-0 flex-wrap gap-2 ${mapSidebar ? '' : 'md:order-1 md:flex-nowrap'}`}>
-          {DEAL_TYPES.map((dt) => {
-            const isSelected = value.dealType.includes(dt.value);
-            return (
-              <button
-                key={dt.value}
-                type="button"
-                onClick={() => {
-                  const newDealType = isSelected
-                    ? value.dealType.filter((d) => d !== dt.value)
-                    : [...value.dealType, dt.value];
-                  onChange({ ...value, dealType: newDealType });
-                }}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium transition-all sm:px-4 ${
-                  isSelected
-                    ? 'bg-blue-600 text-white shadow-md dark:bg-amber-500 dark:text-black dark:shadow-amber-900/40'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
-                }`}
-              >
-                <span>{dt.icon}</span>
-                <span>{t(dt.key)}</span>
-              </button>
-            );
-          })}
-        </div>
       </div>
+      )}
 
       {/* მთავარი ფილტრები: ფასი, ფართობი, ქალაქი, ოთახები, გაფართოებული */}
+      {!heroCompact && (
       <div className={mainFiltersRowClass}>
         {mapSidebar ? (
           <>
@@ -1415,104 +1850,7 @@ export function Filters({
         <div className={compactFilterItemClass}>
         {/* ოთახები dropdown */}
         <FilterDropdown label={t('filter_rooms')} summary={roomsSummary()} isActive={roomsActive || bedroomsActive || balconiesActive} onClear={clearRoomsFilter}>
-          <div className="space-y-3">
-            <div className="text-xs text-slate-500 mb-2">{t('filter_choose_rooms')}</div>
-            <div className="flex gap-1.5">
-              {['1', '2', '3', '4', '5', '6'].map((r) => {
-                const isSelected = value.rooms.includes(r);
-                const displayLabel = r === '6' ? '6+' : r;
-                return (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => {
-                      const nextRooms = isSelected
-                        ? value.rooms.filter((room) => room !== r)
-                        : [...value.rooms, r].sort((a, b) => Number(a) - Number(b));
-                      const nextRoomNums = nextRooms.map((room) => Number(room)).filter((n) => !Number.isNaN(n));
-                      const maxRoom = nextRoomNums.length > 0 ? Math.max(...nextRoomNums) : null;
-                      const openEnded = nextRooms.includes('6');
-                      const nextBedrooms = value.bedrooms.filter((b) => {
-                        if (openEnded) return true;
-                        if (maxRoom === null) return false;
-                        return Number(b) <= maxRoom;
-                      });
-                      onChange({ ...value, rooms: nextRooms, bedrooms: nextBedrooms });
-                    }}
-                    className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      isSelected
-                        ? 'bg-blue-600 text-white shadow'
-                        : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                    }`}
-                  >
-                    {displayLabel}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="border-t border-slate-100 pt-3">
-              <div className="text-xs text-slate-500 mb-2">{t('filter_choose_bedrooms')}</div>
-              <div className="flex gap-1.5">
-                {['1', '2', '3', '4', '5', '6'].map((r) => {
-                  const isSelected = value.bedrooms.includes(r);
-                  const roomNumber = Number(r);
-                  const isDisabled = !hasOpenEndedRooms && maxAllowedBedrooms !== null && roomNumber > maxAllowedBedrooms;
-                  const displayLabel = r === '6' ? '6+' : r;
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      disabled={isDisabled}
-                      onClick={() => {
-                        const nextBedrooms = isSelected
-                          ? value.bedrooms.filter((bedroom) => bedroom !== r)
-                          : [...value.bedrooms, r].sort((a, b) => Number(a) - Number(b));
-                        onChange({ ...value, bedrooms: nextBedrooms });
-                      }}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                        isDisabled
-                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-60'
-                          : isSelected
-                          ? 'bg-blue-600 text-white shadow'
-                          : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-                      }`}
-                    >
-                      {displayLabel}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-3">
-              <div className="text-xs text-slate-500 mb-2">{t('filter_balcony_count')}</div>
-              <div className="flex gap-1.5">
-                {['1', '2', '3'].map((b) => {
-                  const isSelected = value.balconies.includes(b);
-                  return (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => {
-                        const next = isSelected
-                          ? value.balconies.filter((x) => x !== b)
-                          : [...value.balconies, b].sort((a, c) => Number(a) - Number(c));
-                        onChange({ ...value, balconies: next });
-                      }}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                        isSelected
-                          ? 'bg-orange-600 text-white shadow'
-                          : 'bg-slate-100 text-slate-700 hover:bg-orange-50 hover:text-orange-700'
-                      }`}
-                    >
-                      {b}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          {renderRoomsDropdownContent()}
         </FilterDropdown>
         </div>
 
@@ -1544,6 +1882,8 @@ export function Filters({
         </div>
       </div>
 
+      )}
+
       <ExtendedSearchModal
         open={extendedOpen}
         onClose={discardExtendedSearch}
@@ -1554,6 +1894,150 @@ export function Filters({
       >
         <FilterDropdownLayoutContext.Provider value={{ inline: true, spacious: true }}>
           <div className="mx-auto w-full max-w-4xl space-y-3">
+              {heroCompact && (
+                <p className="text-sm text-slate-600 dark:text-zinc-400">
+                  {mounted
+                    ? `${t('filter_price')} · ${t('filter_area')} · ${labels.city} · ${t('filter_rooms')} · ${t('categories')}`
+                    : 'ფასი · ფართობი · ქალაქი · ოთახები · კატეგორიები'}
+                </p>
+              )}
+              {heroCompact && (
+                <div className={compactGridClass}>
+                  {/* ფასი / ფართობი / ქალაქი / ოთახები — ჰერო რეჟიმში მხოლოდ მოდალში */}
+                  <div className={compactFilterItemClass}>
+                    <FilterDropdown
+                      label={t('filter_price')}
+                      summary={
+                        value.minPrice || value.maxPrice
+                          ? `${value.minPrice || '…'} – ${value.maxPrice || '…'} ${value.priceCurrency || 'USD'}`
+                          : labels.any
+                      }
+                      isActive={!!(value.minPrice || value.maxPrice)}
+                      onClear={() => onChange({ ...value, minPrice: '', maxPrice: '' })}
+                      defaultOpen
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          placeholder="Min"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          value={value.minPrice}
+                          onChange={(e) => onChange({ ...value, minPrice: e.target.value })}
+                        />
+                        <input
+                          type="number"
+                          placeholder="Max"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          value={value.maxPrice}
+                          onChange={(e) => onChange({ ...value, maxPrice: e.target.value })}
+                        />
+                      </div>
+                    </FilterDropdown>
+                  </div>
+                  <div className={compactFilterItemClass}>
+                    <FilterDropdown
+                      label={t('filter_area')}
+                      summary={
+                        value.minSqm || value.maxSqm
+                          ? `${value.minSqm || '…'} – ${value.maxSqm || '…'} მ²`
+                          : labels.any
+                      }
+                      isActive={!!(value.minSqm || value.maxSqm)}
+                      onClear={() => onChange({ ...value, minSqm: '', maxSqm: '' })}
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          placeholder="Min"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          value={value.minSqm}
+                          onChange={(e) => onChange({ ...value, minSqm: e.target.value })}
+                        />
+                        <input
+                          type="number"
+                          placeholder="Max"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-900"
+                          value={value.maxSqm}
+                          onChange={(e) => onChange({ ...value, maxSqm: e.target.value })}
+                        />
+                      </div>
+                    </FilterDropdown>
+                  </div>
+                  <div className={compactFilterItemClass}>
+                    <LocationFilterTrigger
+                      label={labels.city}
+                      summary={citySummary()}
+                      isActive={cityActive}
+                      onClear={clearCityFilter}
+                      onOpen={() => setLocationModalOpen(true)}
+                    />
+                  </div>
+                  <div className={compactFilterItemClass}>
+                    <FilterDropdown
+                      label={t('filter_rooms')}
+                      summary={roomsSummary()}
+                      isActive={roomsActive || bedroomsActive || balconiesActive}
+                      onClear={clearRoomsFilter}
+                    >
+                      <div className="flex flex-wrap gap-1.5">
+                        {['1', '2', '3', '4', '5', '6'].map((r) => {
+                          const isSelected = value.rooms.includes(r);
+                          return (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={() => {
+                                const nextRooms = isSelected
+                                  ? value.rooms.filter((room) => room !== r)
+                                  : [...value.rooms, r];
+                                onChange({ ...value, rooms: nextRooms });
+                              }}
+                              className={`min-w-[2.5rem] rounded-lg px-2 py-2 text-sm font-medium ${
+                                isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-200'
+                              }`}
+                            >
+                              {r === '6' ? '6+' : r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </FilterDropdown>
+                  </div>
+                  <div className="col-span-full">
+                    <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                      {t('categories')}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PROPERTY_TYPE_CHIPS.map((cat) => {
+                        const isSelected = value.type.includes(cat.value);
+                        return (
+                          <button
+                            key={cat.value}
+                            type="button"
+                            onClick={() => {
+                              const nextType = isSelected
+                                ? value.type.filter((x) => x !== cat.value)
+                                : [...value.type, cat.value];
+                              onChange({
+                                ...value,
+                                type: nextType,
+                                landStatus: nextType.includes('land') ? value.landStatus || [] : [],
+                              });
+                            }}
+                            className={`rounded-lg border px-2 py-1.5 text-xs font-medium ${
+                              isSelected
+                                ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-amber-500 dark:bg-amber-950/50 dark:text-amber-300'
+                                : 'border-slate-200 bg-white text-slate-600 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+                            }`}
+                          >
+                            {t(cat.key)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
               <FilterDropdown
                 label="🏗️ აშენება/რემონტი"
                 summary={yearSummary()}
@@ -1852,5 +2336,6 @@ export function Filters({
       </div>
     </div>
     </FilterDropdownLayoutContext.Provider>
+    </HeroSearchStyleContext.Provider>
   );
 }

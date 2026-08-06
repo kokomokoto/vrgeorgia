@@ -58,7 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var k='vr-theme';var s=localStorage.getItem(k);var d=document.documentElement;if(s==='dark')d.classList.add('dark');else if(s==='light')d.classList.remove('dark');}catch(e){}})();`,
+            __html: `(function(){try{var k='vr-theme';var s=localStorage.getItem(k);var d=document.documentElement;if(s==='dark'){d.classList.add('dark');d.classList.remove('twilight');}else if(s==='twilight'){d.classList.remove('dark');d.classList.add('twilight');}else if(s==='light'){d.classList.remove('dark');d.classList.remove('twilight');}}catch(e){}})();`,
           }}
         />
       </head>

@@ -541,7 +541,7 @@ function TypeCategoryCard({
           : onFilterToggle
       }
       className={`relative min-w-0 overflow-visible border-2 transition-all ${
-        compact ? 'min-h-[4rem] px-0.5 py-1.5' : 'min-h-[5.5rem] sm:min-h-[6rem]'
+        compact ? 'min-h-[4rem] px-0.5 py-1.5' : 'h-full min-h-0'
       } ${designMode || compact ? '' : 'hover:scale-105 hover:shadow-md'} ${
         isDesignSelected
           ? 'border-blue-600 ring-2 ring-blue-400/50 dark:border-blue-400'

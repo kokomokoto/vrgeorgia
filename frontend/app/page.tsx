@@ -325,11 +325,10 @@ export default function HomePage() {
             <div className="flex w-full flex-col max-md:[gap:var(--mobile-stack)] sm:space-y-4 md:block">
               <Designable id="typePanel">
                 <div
-                  className="mx-auto w-full max-w-full md:max-w-[var(--type-w)]"
+                  className="mx-auto h-auto w-full max-w-full md:h-full md:max-w-[var(--type-w)]"
                   style={
                     {
                       width: '100%',
-                      height: 'auto',
                       '--type-w': `${typePanelW}px`,
                     } as React.CSSProperties
                   }

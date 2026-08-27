@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'VR Georgia Analytics',
+  title: 'Vhome Analytics',
   description: 'ანალიტიკის პანელი',
   robots: { index: false, follow: false },
 };

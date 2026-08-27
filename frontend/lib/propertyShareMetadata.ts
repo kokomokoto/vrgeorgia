@@ -4,7 +4,7 @@ import { applyCloudinaryTransform } from '@/lib/imageUrl';
 import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay';
 
 const SITE_URL = 'https://vrgeorgia.ge';
-const SITE_NAME = 'VR Georgia';
+const SITE_NAME = 'Vhome';
 const SITE_HOST = 'vrgeorgia.ge';
 
 const DEAL_LABELS: Record<string, string> = {

@@ -5,7 +5,7 @@ import { initReactI18next } from 'react-i18next';
 const resources = {
   ka: {
     translation: {
-      appName: 'VR Georgia',
+      appName: 'Vhome',
       theme_dark: 'ღამის რეჟიმი',
       theme_light: 'დღის რეჟიმი',
       theme_twilight: 'შუალედური რეჟიმი',
@@ -800,7 +800,7 @@ const resources = {
   },
   en: {
     translation: {
-      appName: 'VR Georgia',
+      appName: 'Vhome',
       theme_dark: 'Night mode',
       theme_light: 'Day mode',
       theme_twilight: 'Twilight mode',
@@ -1594,7 +1594,7 @@ const resources = {
   },
   ru: {
     translation: {
-      appName: 'VR Georgia',
+      appName: 'Vhome',
       theme_dark: 'Ночной режим',
       theme_light: 'Дневной режим',
       theme_twilight: 'Промежуточный режим',

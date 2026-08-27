@@ -9,23 +9,23 @@ import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: {
-    default: 'VR Georgia — უძრავი ქონება საქართველოში',
-    template: '%s | VR Georgia'
+    default: 'Vhome — უძრავი ქონება საქართველოში',
+    template: '%s | Vhome'
   },
   description: 'იპოვეთ სახლი, ბინა, კომერციული ფართი და მიწის ნაკვეთი საქართველოში. ვირტუალური ტურები, დეტალური ფილტრები და სანდო აგენტები.',
-  keywords: ['უძრავი ქონება', 'საქართველო', 'ბინა', 'სახლი', 'იყიდება', 'ქირავდება', 'VR Georgia', 'real estate', 'Georgia', 'Tbilisi'],
-  authors: [{ name: 'VR Georgia' }],
+  keywords: ['უძრავი ქონება', 'საქართველო', 'ბინა', 'სახლი', 'იყიდება', 'ქირავდება', 'Vhome', 'real estate', 'Georgia', 'Tbilisi'],
+  authors: [{ name: 'Vhome' }],
   openGraph: {
     type: 'website',
     locale: 'ka_GE',
     url: 'https://vrgeorgia.ge',
-    siteName: 'VR Georgia',
-    title: 'VR Georgia — უძრავი ქონება საქართველოში',
+    siteName: 'Vhome',
+    title: 'Vhome — უძრავი ქონება საქართველოში',
     description: 'იპოვეთ სახლი, ბინა, კომერციული ფართი და მიწის ნაკვეთი საქართველოში.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'VR Georgia — უძრავი ქონება საქართველოში',
+    title: 'Vhome — უძრავი ქონება საქართველოში',
     description: 'იპოვეთ სახლი, ბინა, კომერციული ფართი და მიწის ნაკვეთი საქართველოში.',
   },
   robots: {

@@ -9,10 +9,10 @@ export const metadata: Metadata = {
     'პასუხები VR Georgia-ზე: როგორ ვიპოვოთ ბინა ან სახლი, რა არის VR ტური, როგორ დავუკავშირდეთ აგენტს, ფასები და მიწის სტატუსი.',
   alternates: { canonical: `${SITE_URL}/faq` },
   openGraph: {
-    title: 'FAQ — VR Georgia',
+    title: 'FAQ — Vhome',
     description: 'ხშირად დასმული კითხვები უძრავი ქონების ძიებაზე საქართველოში.',
     url: `${SITE_URL}/faq`,
-    siteName: 'VR Georgia',
+    siteName: 'Vhome',
     locale: 'ka_GE',
     type: 'website',
   },

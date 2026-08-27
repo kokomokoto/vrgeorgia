@@ -3,7 +3,7 @@ import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay
 import { getPropertyShareImageUrl } from '@/lib/propertyShareMetadata';
 
 export const SITE_URL = 'https://vrgeorgia.ge';
-export const SITE_NAME = 'VR Georgia';
+export const SITE_NAME = 'Vhome';
 export const SITE_API = 'https://vrgeorgia-api.onrender.com';
 
 const DEAL_LABELS: Record<string, string> = {

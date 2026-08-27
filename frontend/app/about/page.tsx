@@ -8,10 +8,10 @@ export const metadata: Metadata = {
     'რა არის VR Georgia: უძრავი ქონების ძიება საქართველოში, რუკა, აგენტები და ვირტუალური ტურები.',
   alternates: { canonical: `${SITE_URL}/about` },
   openGraph: {
-    title: 'VR Georgia-ს შესახებ',
+    title: 'Vhome-ს შესახებ',
     description: 'უძრავი ქონების პლატფორმა საქართველოში — ძიება, რუკა, VR ტურები, აგენტები.',
     url: `${SITE_URL}/about`,
-    siteName: 'VR Georgia',
+    siteName: 'Vhome',
     locale: 'ka_GE',
     type: 'website',
   },

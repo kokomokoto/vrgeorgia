@@ -25,6 +25,8 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: NODE_ENV
         value: production
       - key: NODE_OPTIONS
@@ -65,6 +67,8 @@ services:
     buildCommand: npm install && npm run build
     startCommand: node .next/standalone/server.js
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_API_BASE

@@ -356,7 +356,7 @@ export function Designable({
           outlineOffset: canSelectDesign ? -1 : undefined,
           cursor: canMoveDesign ? 'move' : canSelectDesign ? 'pointer' : undefined,
           touchAction: canMoveDesign || (canResizeDesign && selected) ? 'none' : undefined,
-        } as React.CSSProperties
+        } as unknown as React.CSSProperties
       }
       data-designable={id}
       onClick={

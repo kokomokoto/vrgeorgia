@@ -30,7 +30,6 @@ import {
   clampHeaderItemGapPx,
   DEFAULT_SEARCH_CONTROLS,
   DEFAULT_DEAL_CHIPS,
-  type ThemePalette,
   type TypePanelItem,
   loadHomeDesign,
   saveHomeDesign,
@@ -54,7 +53,11 @@ import {
 } from '@/lib/api';
 import { normalizeSiteSocialLinks } from '@/lib/siteSocialLinks';
 import { uploadLocalBlobsInLayout } from '@/lib/homeDesignPublish';
-import { DEFAULT_THEME_PALETTES, normalizeThemePalette } from '@/lib/themePalettes';
+import {
+  DEFAULT_THEME_PALETTES,
+  normalizeThemePalette,
+  type ThemePalette,
+} from '@/lib/themePalettes';
 import {
   MAX_HERO_IMAGES_PER_MODE,
   deleteHeroImageBlob,

@@ -56,7 +56,7 @@ import {
   type HeroTransition,
   type RailItem,
   type SearchLayout,
-  type ThemePalette,
+  type HeaderItemStyle,
   type TypePanelItem,
 } from '@/lib/homeDesignLayout';
 import {
@@ -67,7 +67,7 @@ import {
   type ThemeModeDef,
 } from '@/lib/themeModes';
 import { hexToRgba, parseColorWithOpacity, MAP_TILE_OPTIONS } from '@/lib/themePalettes';
-import type { MapTileStyle } from '@/lib/themePalettes';
+import type { MapTileStyle, ThemePalette } from '@/lib/themePalettes';
 import {
   EMPTY_SITE_SOCIAL_LINKS,
   SITE_SOCIAL_FIELD_LABELS,
@@ -2178,7 +2178,7 @@ function HeaderItemEditor({
           onCommit={(padPx) => {
             const nextPad = clampHeaderItemGapPx(padPx, 0);
             const prev = header.itemStyles?.[itemId] || {};
-            const nextStyle = { ...prev, padPx: nextPad };
+            const nextStyle: HeaderItemStyle = { ...prev, padPx: nextPad };
             if (nextPad === 0) delete nextStyle.padPx;
             const nextStyles = {
               ...(header.itemStyles || {}),

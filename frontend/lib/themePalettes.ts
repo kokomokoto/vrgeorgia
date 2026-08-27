@@ -53,16 +53,39 @@ export const THEME_MODE_LABELS: Record<ThemeModeId, string> = {
 export const MAP_TILE_OPTIONS: { id: MapTileStyle; label: string }[] = [
   { id: 'auto', label: 'ავტო (რეჟიმის მიხედვით)' },
   { id: 'light', label: 'ნათელი (OSM)' },
-  { id: 'dark', label: 'ბნელი (Carto)' },
+  { id: 'dark', label: 'ბნელი' },
   { id: 'voyager', label: 'Voyager' },
   { id: 'positron', label: 'Positron' },
 ];
 
+const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTR = '&copy; OpenStreetMap contributors';
+const CARTO_ATTR = '&copy; OpenStreetMap &copy; CARTO';
+
+function cartoApiKey(): string {
+  return (process.env.NEXT_PUBLIC_CARTO_API_KEY || '').trim();
+}
+
+function cartoTileUrl(path: string): string {
+  const key = cartoApiKey();
+  const url = `https://{s}.basemaps.cartocdn.com/${path}/{z}/{x}/{y}{r}.png`;
+  return key ? `${url}?apikey=${encodeURIComponent(key)}` : OSM_TILE_URL;
+}
+
 export const MAP_TILE_URLS: Record<Exclude<MapTileStyle, 'auto'>, string> = {
-  light: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  voyager: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  positron: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  light: OSM_TILE_URL,
+  dark: cartoTileUrl('dark_all'),
+  voyager: cartoTileUrl('rastertiles/voyager'),
+  positron: cartoTileUrl('light_all'),
+};
+
+export type MapBasemapClass = 'dark' | 'positron' | null;
+
+export type MapTileLayerConfig = {
+  url: string;
+  attribution: string;
+  /** CSS class on the Leaflet container when Carto is unavailable */
+  paneClass: MapBasemapClass;
 };
 
 export function resolveMapTileStyle(
@@ -73,8 +96,28 @@ export function resolveMapTileStyle(
   return isDark ? 'dark' : 'light';
 }
 
+export function resolveMapTileConfig(
+  style: MapTileStyle | undefined,
+  isDark: boolean
+): MapTileLayerConfig {
+  const resolved = resolveMapTileStyle(style, isDark);
+  const key = cartoApiKey();
+  if (key && resolved !== 'light') {
+    return {
+      url: MAP_TILE_URLS[resolved],
+      attribution: CARTO_ATTR,
+      paneClass: null,
+    };
+  }
+  return {
+    url: OSM_TILE_URL,
+    attribution: OSM_ATTR,
+    paneClass: resolved === 'dark' ? 'dark' : resolved === 'positron' ? 'positron' : null,
+  };
+}
+
 export function resolveMapTileUrl(style: MapTileStyle | undefined, isDark: boolean): string {
-  return MAP_TILE_URLS[resolveMapTileStyle(style, isDark)];
+  return resolveMapTileConfig(style, isDark).url;
 }
 
 export const DEFAULT_THEME_PALETTES: ThemePalettes = {

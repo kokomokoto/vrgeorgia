@@ -2336,6 +2336,71 @@ export function spreadHeaderItemPositions(
   return syncHeaderAccountSlotPositions(next, ids);
 }
 
+/**
+ * Keep designed left-to-right order, but push labels apart in *pixels* so they
+ * still fit when the bar is narrower (other monitor, OS DPI, browser zoom).
+ * `fits: false` means even a packed row overflows — caller should use flex nav.
+ */
+export function fitHeaderItemPositions(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
+  opts?: HeaderOverlapOpts
+): { positions: Partial<Record<HeaderItemId, HeaderItemPos>>; fits: boolean } {
+  const next: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...(positions || {}) };
+  const barW = Math.max(1, opts?.barW ?? HEADER_PACK_REF_WIDTH);
+  const gapPx = Math.max(HEADER_PACK_GAP_MIN_PX, clampHeaderItemGapPx(opts?.gapPx));
+  const ids = (
+    opts?.visibleIds?.length ? [...opts.visibleIds] : HEADER_ITEM_IDS.filter((id) => id !== 'messages')
+  ).filter((id) => Boolean(next[id]));
+  if (ids.length === 0) return { positions: next, fits: true };
+
+  ids.sort((a, b) => next[a]!.x - next[b]!.x || next[a]!.y - next[b]!.y);
+
+  const widthOf = (id: HeaderItemId) => {
+    const wp = opts?.sizes?.[id]?.wPct;
+    if (typeof wp === 'number' && Number.isFinite(wp) && wp > 0) return (wp / 100) * barW;
+    return ((DEFAULT_HEADER_ITEM_SIZE_PCT[id]?.wPct ?? 6) / 100) * barW;
+  };
+
+  const edge = HEADER_CONTENT_INSET_PX;
+  const placedLeft: number[] = [];
+  let cursor = edge;
+  for (const id of ids) {
+    const w = widthOf(id);
+    const extra =
+      clampHeaderItemGapPx(opts?.padPxById?.[id], 0);
+    let left = (next[id]!.x / 100) * barW - w / 2;
+    if (left < cursor) left = cursor;
+    placedLeft.push(left);
+    cursor = left + w + gapPx + extra;
+  }
+
+  const lastId = ids[ids.length - 1]!;
+  let lastRight = placedLeft[placedLeft.length - 1]! + widthOf(lastId);
+  const limit = barW - edge;
+  if (lastRight > limit + 0.5) {
+    const shift = Math.min(lastRight - limit, Math.max(0, placedLeft[0]! - edge));
+    if (shift > 0) {
+      for (let i = 0; i < placedLeft.length; i++) placedLeft[i]! -= shift;
+      lastRight -= shift;
+    }
+  }
+
+  if (lastRight > limit + 0.5) {
+    return { positions: next, fits: false };
+  }
+
+  const out: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...next };
+  ids.forEach((id, i) => {
+    const w = widthOf(id);
+    const center = placedLeft[i]! + w / 2;
+    out[id] = {
+      x: clampRailPercent((center / barW) * 100, next[id]!.x),
+      y: next[id]!.y,
+    };
+  });
+  return { positions: syncHeaderAccountSlotPositions(out, ids), fits: true };
+}
+
 export function headerItemLabelKey(
   id: HeaderItemId
 ):

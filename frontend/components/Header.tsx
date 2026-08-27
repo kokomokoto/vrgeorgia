@@ -18,6 +18,8 @@ import {
   clampHeaderItemGapPx,
   clampOpacity,
   clampRailPercent,
+  fitHeaderItemPositions,
+  HEADER_PACK_REF_WIDTH,
   headerFreeLayoutIsCramped,
   headerHasFreeLayout,
   headerItemPadPxById,
@@ -43,7 +45,7 @@ import {
   externalMediaDisplayUrl,
   type DesignMediaKind,
 } from '@/lib/designMedia';
-import { scaleDesignPx, useHomeDesignScale } from '@/lib/useIsDesignDesktop';
+import { scaleDesignPx, useHomeDesignScale, DESIGN_WIDE_MIN_WIDTH } from '@/lib/useIsDesignDesktop';
 
 const DRAG_THRESHOLD_PX = 3;
 
@@ -476,15 +478,20 @@ export function Header() {
 
   const headerHRaw = headerLayout?.h ?? DEFAULT_HEADER.h;
   const designScale = useHomeDesignScale(1280);
+  const typeScale = useHomeDesignScale(HEADER_PACK_REF_WIDTH);
+  const fontScale = designMode ? designScale : typeScale;
   const headerH = scaleDesignPx(headerHRaw, designScale, 36);
   const itemPositions = headerLayout?.itemPositions;
   const freeLayoutUsable =
     headerHasFreeLayout(itemPositions) && !headerFreeLayoutIsCramped(itemPositions);
+  const [navOverflow, setNavOverflow] = React.useState(false);
+  const navOverflowRef = React.useRef(false);
   /**
-   * Public page: free layout only when saved positions are readable.
+   * Public page: free layout only when saved positions are readable and the
+   * live labels still fit this viewport (zoom / other monitor / OS DPI).
    * Design Mode always uses free/absolute items so labels can be dragged.
    */
-  const useFreeNav = designMode || freeLayoutUsable;
+  const useFreeNav = designMode || (freeLayoutUsable && !navOverflow);
   const drag = useHeaderItemDrag(designMode);
   const itemPadKey = JSON.stringify(headerItemPadPxById(headerLayout?.itemStyles));
   const designRef = React.useRef(design);
@@ -633,18 +640,29 @@ export function Header() {
   const isAdmin = profileLoaded && isAdminRole(user?.role);
   const isAgent = profileLoaded && isAgentRole(user?.role);
 
-  React.useEffect(() => {
-    if (designMode || !useFreeNav) {
+  React.useLayoutEffect(() => {
+    if (designMode || !freeLayoutUsable) {
+      navOverflowRef.current = false;
+      setNavOverflow(false);
       setPublicPositions(undefined);
       return;
     }
     let cancelled = false;
     let raf = 0;
+    let emptyTries = 0;
     const run = () => {
       if (cancelled) return;
+      if (window.innerWidth < DESIGN_WIDE_MIN_WIDTH) return;
       const header = designRef.current?.layout.header;
       const opts = liveHeaderOverlapOpts(header);
-      if (!opts?.visibleIds?.length) return;
+      if (!opts?.visibleIds?.length) {
+        if (!navOverflowRef.current && emptyTries < 10) {
+          emptyTries += 1;
+          raf = requestAnimationFrame(run);
+        }
+        return;
+      }
+      emptyTries = 0;
       const host = document.querySelector('[data-header-canvas]');
       if (!(host instanceof HTMLElement)) return;
       const box = host.getBoundingClientRect();
@@ -653,25 +671,44 @@ export function Header() {
       if (!user && seeded.profile) {
         seeded.login = { ...seeded.profile };
       }
-      const next = spreadHeaderItemPositions(seeded, opts);
-      setPublicPositions((prev) => (headerPositionsEqual(prev, next) ? prev : next));
+      const fitted = fitHeaderItemPositions(seeded, opts);
+      if (!fitted.fits) {
+        navOverflowRef.current = true;
+        setNavOverflow(true);
+        setPublicPositions(undefined);
+        return;
+      }
+      if (navOverflowRef.current) {
+        navOverflowRef.current = false;
+        setNavOverflow(false);
+      }
+      setPublicPositions((prev) =>
+        headerPositionsEqual(prev, fitted.positions) ? prev : fitted.positions
+      );
     };
-    raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(run);
-    });
-    const onResize = () => {
+    run();
+    const schedule = () => {
+      navOverflowRef.current = false;
+      setNavOverflow(false);
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(run);
+      raf = requestAnimationFrame(() => {
+        raf = requestAnimationFrame(run);
+      });
     };
-    window.addEventListener('resize', onResize);
+    window.addEventListener('resize', schedule);
+    window.visualViewport?.addEventListener('resize', schedule);
+    void document.fonts?.ready?.then(() => {
+      if (!cancelled) schedule();
+    });
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener('resize', schedule);
+      window.visualViewport?.removeEventListener('resize', schedule);
     };
   }, [
     designMode,
-    useFreeNav,
+    freeLayoutUsable,
     user,
     isAdmin,
     profileLoaded,
@@ -681,16 +718,18 @@ export function Header() {
     headerLayout?.itemGapPx,
     i18n.language,
     mounted,
+    typeScale,
+    fontScale,
   ]);
 
   const brandFontSize = scaleDesignPx(
     headerLayout?.brandFontSize ?? DEFAULT_HEADER.brandFontSize,
-    designScale,
+    fontScale,
     12
   );
   const navFontSize = scaleDesignPx(
     headerLayout?.navFontSize ?? DEFAULT_HEADER.navFontSize,
-    designScale,
+    fontScale,
     11
   );
   const brandColor = headerLayout?.brandColor?.trim() || '';
@@ -706,7 +745,7 @@ export function Header() {
   const itemStyle = (id: HeaderItemId) => {
     const base = resolveHeaderItemTextStyle(headerLayout, id);
     if (typeof base.fontSize === 'number') {
-      return { ...base, fontSize: scaleDesignPx(base.fontSize, designScale, 11) };
+      return { ...base, fontSize: scaleDesignPx(base.fontSize, fontScale, 11) };
     }
     return base;
   };

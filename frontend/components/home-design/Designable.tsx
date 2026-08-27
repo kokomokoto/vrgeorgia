@@ -9,6 +9,7 @@ import {
   type DesignableId,
 } from '@/lib/homeDesignLayout';
 import { scaleDesignPx, scaleDesignOffset, useHomeDesignScale, useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
+import { HERO_W } from '@/components/home-design/HeroSlideshow';
 
 type DesignableProps = {
   id: Exclude<DesignableId, 'hero' | 'header' | 'theme' | 'social'>;
@@ -68,6 +69,7 @@ export function Designable({
     1280
   );
   const designScale = useHomeDesignScale(designCanvasW);
+  const heroOffsetScale = useHomeDesignScale(HERO_W);
   /** Desktop canvas: offsets + max widths. Heights stay auto/scaled so shrink is uniform. */
   const applyGeometry = isDesktop;
   const canSelectDesign = designMode;
@@ -288,8 +290,9 @@ export function Designable({
     }
   };
 
-  const dX = scaleDesignOffset(box.x, designScale);
-  const dY = scaleDesignOffset(box.y, designScale);
+  const offsetScale = id === 'heroText' ? heroOffsetScale : designScale;
+  const dX = scaleDesignOffset(box.x, offsetScale);
+  const dY = scaleDesignOffset(box.y, offsetScale);
   const dW =
     id === 'serviceRail'
       ? scaleDesignPx(layout.serviceRail.itemW, designScale, 40)
@@ -305,7 +308,7 @@ export function Designable({
 
   const geometryClass =
     id === 'heroText'
-      ? 'max-md:absolute max-md:left-[var(--m-x)] max-md:top-[var(--m-y)] max-md:right-auto max-md:z-[35] max-md:!h-auto max-md:!w-auto max-md:!max-w-[calc(100%-24px)] md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:min-h-[var(--d-min-h)]'
+      ? 'max-md:absolute max-md:left-[var(--m-x)] max-md:top-[var(--m-y)] max-md:right-auto max-md:z-[35] max-md:!h-auto max-md:!w-auto max-md:!max-w-[calc(100%-24px)] md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:min-h-[var(--d-min-h)] md:[translate:0_var(--hero-text-fix-y,0px)]'
       : id === 'search' || id === 'dealBar'
         ? `${id === 'search' ? 'max-md:min-h-[52px] ' : ''}max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:overflow-visible`
         : id === 'typePanel'

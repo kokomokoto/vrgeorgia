@@ -52,7 +52,7 @@ export function useHomeDesignScale(designWidth: number): number {
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const update = () => {
-      const vw = window.innerWidth;
+      const vw = window.visualViewport?.width || window.innerWidth;
       if (vw < DESIGN_DESKTOP_MIN_WIDTH) {
         setScale(1);
         return;
@@ -64,7 +64,11 @@ export function useHomeDesignScale(designWidth: number): number {
     };
     update();
     window.addEventListener('resize', update, { passive: true });
-    return () => window.removeEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
+    };
   }, [designWidth]);
 
   return scale;

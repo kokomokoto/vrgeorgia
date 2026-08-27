@@ -11,9 +11,17 @@ import { useTheme } from '@/components/ThemeProvider';
 import { useKutaisiZonesMapLayer } from '@/components/KutaisiZonesMapLayer';
 import { useTbilisiZonesMapLayer } from '@/components/TbilisiZonesMapLayer';
 import {
-  resolveMapTileUrl,
+  resolveMapTileConfig,
   type MapTileStyle,
 } from '@/lib/themePalettes';
+
+const MAP_BASEMAP_CLASSES = ['map-basemap--dark', 'map-basemap--positron'] as const;
+
+function applyMapBasemapClass(el: HTMLElement | null, paneClass: 'dark' | 'positron' | null) {
+  if (!el) return;
+  el.classList.remove(...MAP_BASEMAP_CLASSES);
+  if (paneClass) el.classList.add(`map-basemap--${paneClass}`);
+}
 
 function currentMapTileStyle(): MapTileStyle {
   const raw = typeof document !== 'undefined' ? document.documentElement.dataset.mapTiles : undefined;
@@ -266,12 +274,12 @@ export default function MapInner({
       }
       createdMap = map;
 
-      const initialTile = resolveMapTileUrl(currentMapTileStyle(), document.documentElement.classList.contains('dark'));
-      const attribution =
-        initialTile.includes('cartocdn')
-          ? '&copy; OpenStreetMap &copy; CARTO'
-          : '&copy; OpenStreetMap contributors';
-      const tl = L.tileLayer(initialTile, { attribution }).addTo(map);
+      const initialTiles = resolveMapTileConfig(
+        currentMapTileStyle(),
+        document.documentElement.classList.contains('dark')
+      );
+      applyMapBasemapClass(container, initialTiles.paneClass);
+      const tl = L.tileLayer(initialTiles.url, { attribution: initialTiles.attribution }).addTo(map);
       tileLayerRef.current = tl;
 
       map.on('click', (e: any) => {
@@ -315,12 +323,10 @@ export default function MapInner({
     const applyTiles = () => {
       const tl = tileLayerRef.current;
       if (!tl || typeof tl.setUrl !== 'function') return;
-      const url = resolveMapTileUrl(currentMapTileStyle(), isDark);
-      tl.setUrl(url);
-      const attr = url.includes('cartocdn')
-        ? '&copy; OpenStreetMap &copy; CARTO'
-        : '&copy; OpenStreetMap contributors';
-      if (typeof tl.options !== 'undefined') tl.options.attribution = attr;
+      const cfg = resolveMapTileConfig(currentMapTileStyle(), isDark);
+      applyMapBasemapClass(mapInstanceRef.current?.getContainer?.() ?? mapRef.current, cfg.paneClass);
+      tl.setUrl(cfg.url);
+      if (typeof tl.options !== 'undefined') tl.options.attribution = cfg.attribution;
       tl.redraw?.();
     };
     applyTiles();

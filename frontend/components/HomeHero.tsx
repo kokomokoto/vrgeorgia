@@ -93,6 +93,51 @@ export function HomeHero({
     mode: 'desktop' | 'mobile';
     historyStarted: boolean;
   } | null>(null);
+  const overlayRef = React.useRef<HTMLDivElement>(null);
+
+  React.useLayoutEffect(() => {
+    if (designMode) return;
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    const apply = () => {
+      const title = overlay.querySelector('[data-designable="heroText"]');
+      if (!(title instanceof HTMLElement)) return;
+      if (window.innerWidth < 768) {
+        title.style.setProperty('--hero-text-fix-y', '0px');
+        return;
+      }
+      title.style.setProperty('--hero-text-fix-y', '0px');
+      const tr = title.getBoundingClientRect();
+      if (tr.width <= 0 || tr.height <= 0) return;
+      const or = overlay.getBoundingClientRect();
+      if (or.height <= 0) return;
+      const headerEl = document.querySelector('[data-site-header]');
+      const headerBottom =
+        headerEl instanceof HTMLElement ? headerEl.getBoundingClientRect().bottom : or.top;
+      const minTop = Math.max(or.top, headerBottom) + 6;
+      const dy = minTop - tr.top;
+      if (dy > 0.5) {
+        title.style.setProperty('--hero-text-fix-y', `${Math.round(dy)}px`);
+      }
+    };
+
+    apply();
+    window.addEventListener('resize', apply);
+    window.visualViewport?.addEventListener('resize', apply);
+    return () => {
+      window.removeEventListener('resize', apply);
+      window.visualViewport?.removeEventListener('resize', apply);
+    };
+  }, [
+    designMode,
+    heroH,
+    heroText?.x,
+    heroText?.y,
+    heroText?.titleFontSize,
+    titleFontSize,
+    designScale,
+  ]);
 
   const onHeightPointerDown = (e: React.PointerEvent, mode: 'desktop' | 'mobile') => {
     if (!design || !designMode) return;
@@ -320,7 +365,10 @@ export function HomeHero({
           ) : null}
         </div>
 
-        <div className="contents md:absolute md:inset-0 md:z-40 md:mx-auto md:flex md:h-full md:w-full md:max-w-[var(--hero-content-w)] md:flex-col md:justify-end md:gap-3 md:overflow-visible md:px-4 md:pb-5 md:pt-8">
+        <div
+          ref={overlayRef}
+          className="contents md:absolute md:inset-0 md:z-40 md:mx-auto md:flex md:h-full md:w-full md:max-w-[var(--hero-content-w)] md:flex-col md:justify-end md:gap-3 md:overflow-visible md:px-4 md:pb-5 md:pt-8"
+        >
           <div className="relative z-30 col-start-1 row-start-1 min-h-0 w-full px-3 pt-2 md:min-h-[4rem] md:px-0 md:pt-0">
             {titleBlock}
           </div>

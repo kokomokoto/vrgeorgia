@@ -6,6 +6,11 @@ const HTML_LIMITED_BOTS =
 const nextConfig = {
   htmlLimitedBots: HTML_LIMITED_BOTS,
   reactStrictMode: true,
+  allowedDevOrigins: [
+    '10.0.2.15',
+    '*.trycloudflare.com',
+    '*.loca.lt',
+  ],
   transpilePackages: ['@photo-sphere-viewer/core'],
   // Production-ზე standalone output Render.com-ისთვის
   output: 'standalone',
@@ -41,6 +46,15 @@ const nextConfig = {
         hostname: 'res.cloudinary.com',
       },
     ],
+  },
+  async rewrites() {
+    if (process.env.NODE_ENV === 'production') return [];
+    const api = 'http://127.0.0.1:5000';
+    return [
+      { source: '/api/:path*', destination: `${api}/api/:path*` },
+      { source: '/uploads/:path*', destination: `${api}/uploads/:path*` },
+      { source: '/v/:path*', destination: `${api}/v/:path*` },
+    ];
   },
   // Security headers
   async headers() {

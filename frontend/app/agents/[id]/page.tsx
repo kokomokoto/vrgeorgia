@@ -536,14 +536,14 @@ export default function AgentProfilePage() {
           )}
 
           {propertiesLoading ? (
-            <PropertyCardGridSkeleton count={8} gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" />
+            <PropertyCardGridSkeleton count={8} gridClassName="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" />
           ) : properties.length === 0 ? (
             <p className="text-slate-500">{t('noProperties')}</p>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {properties.map((prop) => (
-                  <PropertyCard key={prop._id} p={prop} />
+                  <PropertyCard key={prop._id} p={prop} denseMeta />
                 ))}
               </div>
 

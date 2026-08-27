@@ -38,6 +38,38 @@ export function getPropertyStreetLine(p: Property): string {
   return '';
 }
 
+function pushUniqueLocationPart(parts: string[], value?: string | null) {
+  const v = (value || '').trim();
+  if (!v) return;
+  const key = v.toLowerCase();
+  if (parts.some((part) => part.toLowerCase() === key)) return;
+  parts.push(v);
+}
+
+/**
+ * აგენტის/მფლობელის სიაში: ქალაქი, რეგიონი, შემდეგ რაიონი/უბანი/ქუჩა თუ არის.
+ * ერთნაირ ტექსტს ორჯერ არ ამატებს (მაგ. city === region).
+ */
+export function getPropertyOwnerLocationLine(p: Property): string {
+  const parts: string[] = [];
+  pushUniqueLocationPart(parts, p.city);
+  pushUniqueLocationPart(parts, p.region);
+  pushUniqueLocationPart(parts, p.tbilisiDistrict);
+  for (const sub of p.tbilisiSubdistricts || []) {
+    pushUniqueLocationPart(parts, sub);
+  }
+  let street = p.street?.trim() || '';
+  if (street) {
+    street = splitStreetFromFullAddress(street, p.city);
+    street = splitStreetFromFullAddress(street, p.region);
+    for (const part of parts) {
+      street = splitStreetFromFullAddress(street, part);
+    }
+  }
+  pushUniqueLocationPart(parts, street);
+  return parts.join(', ');
+}
+
 /** სრული მისამართი: ქუჩა, ქალაქი (როგორც ობიექტზეა მითითებული) */
 export function getPropertyAddressLine(p: Property): string {
   const parts: string[] = [];

@@ -1,5 +1,9 @@
 import { buildPropertyTextSearchOr } from './propertySearch.js';
-import { applyPriceRangeFilter } from './priceFilter.js';
+import {
+  applyPriceRangeFilter,
+  buildComparableTotalPriceUsdExpr,
+  buildSortAreaExpr,
+} from './priceFilter.js';
 import { applySqmRangeFilter } from './areaFilter.js';
 import { getUsdToGelRate } from './currency.js';
 
@@ -50,6 +54,23 @@ const SORT_MAP = {
   views_desc: { views: -1 },
 };
 
+/** პირველი known სორტ-კლავიში (მრავალიდან) */
+function primarySortKey(sortRaw) {
+  if (!sortRaw) return 'date_desc';
+  const parts = String(sortRaw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const part of parts) {
+    if (SORT_MAP[part]) return part;
+  }
+  return 'date_desc';
+}
+
+/**
+ * Simple Mongo `.sort()` object.
+ * Prefer `queryPropertiesSorted` — raw `pinned` sort treats missing ≠ false.
+ */
 export function parsePropertySortOption(sortRaw) {
   let sortOption = {};
   if (sortRaw) {
@@ -63,7 +84,146 @@ export function parsePropertySortOption(sortRaw) {
   if (Object.keys(sortOption).length === 0) {
     sortOption = { createdAt: -1 };
   }
+  // Note: callers that still use find().sort(this) will mis-order docs with missing `pinned`.
   return { pinned: -1, pinnedAt: -1, ...sortOption };
+}
+
+/**
+ * @returns {{
+ *   key: string,
+ *   needsComputed: false,
+ *   fieldSort: Record<string, 1|-1>,
+ * } | {
+ *   key: string,
+ *   needsComputed: true,
+ *   computed: 'price' | 'area',
+ *   direction: 1 | -1,
+ * }}
+ */
+export function getPropertySortPlan(sortRaw) {
+  const key = primarySortKey(sortRaw);
+  if (key === 'price_asc' || key === 'price_desc') {
+    return {
+      key,
+      needsComputed: true,
+      computed: 'price',
+      direction: key === 'price_asc' ? 1 : -1,
+    };
+  }
+  if (key === 'area_asc' || key === 'area_desc') {
+    return {
+      key,
+      needsComputed: true,
+      computed: 'area',
+      direction: key === 'area_asc' ? 1 : -1,
+    };
+  }
+  const fieldSort = { ...(SORT_MAP[key] || { createdAt: -1 }) };
+  return {
+    key,
+    needsComputed: false,
+    fieldSort,
+  };
+}
+
+/**
+ * List properties with correct ordering:
+ * - pinned (missing treated as false)
+ * - price normalized to USD total; area uses max(sqm, houseSqm)
+ * @param {import('mongoose').Model} PropertyModel
+ * @param {Record<string, unknown>} filter
+ * @param {string|undefined} sortRaw
+ * @param {{ skip?: number, limit?: number, select?: string }} [opts]
+ */
+export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts = {}) {
+  const { skip = 0, limit, select } = opts;
+  const plan = getPropertySortPlan(sortRaw);
+
+  // aggregate $match არ ასრულებს mongoose cast-ს — string userId ObjectId ველს ვერ ემთხვევა
+  // (countDocuments კასტავს → total > 0, სია კი ცარიელი რჩება)
+  const castQuery = PropertyModel.find(filter && typeof filter === 'object' ? filter : {});
+  castQuery.cast(PropertyModel);
+  const matchFilter = castQuery.getFilter();
+
+  const pipeline = [{ $match: matchFilter }];
+
+  // missing `pinned` must sort like false — raw { pinned: -1 } sends those docs to the end
+  const addFields = {
+    _sortPinned: { $cond: [{ $eq: ['$pinned', true] }, 1, 0] },
+  };
+
+  /** @type {Record<string, 1|-1>} */
+  let sortSpec = {
+    _sortPinned: -1,
+    pinnedAt: -1,
+  };
+
+  if (plan.needsComputed) {
+    const usdToGel = plan.computed === 'price' ? await getUsdToGelRate() : 1;
+    addFields._sortValue =
+      plan.computed === 'price'
+        ? buildComparableTotalPriceUsdExpr(usdToGel)
+        : buildSortAreaExpr();
+    pipeline.push({ $addFields: { _sortValue: addFields._sortValue } });
+    pipeline.push({
+      $addFields: {
+        _sortPinned: addFields._sortPinned,
+        _sortMissing: {
+          $cond: [
+            {
+              $or: [{ $eq: ['$_sortValue', null] }, { $not: [{ $gt: ['$_sortValue', 0] }] }],
+            },
+            1,
+            0,
+          ],
+        },
+      },
+    });
+    sortSpec = {
+      _sortPinned: -1,
+      pinnedAt: -1,
+      _sortMissing: 1,
+      _sortValue: plan.direction,
+      createdAt: -1,
+    };
+  } else {
+    pipeline.push({ $addFields: { _sortPinned: addFields._sortPinned } });
+    sortSpec = {
+      _sortPinned: -1,
+      pinnedAt: -1,
+      ...plan.fieldSort,
+    };
+  }
+
+  pipeline.push({ $sort: sortSpec });
+  if (skip) pipeline.push({ $skip: skip });
+  if (limit != null) pipeline.push({ $limit: limit });
+
+  const helperFields = plan.needsComputed
+    ? ['_sortPinned', '_sortValue', '_sortMissing']
+    : ['_sortPinned'];
+
+  if (select) {
+    const include = {};
+    const exclude = Object.fromEntries(helperFields.map((f) => [f, 0]));
+    let hasInclude = false;
+    String(select)
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((token) => {
+        if (token.startsWith('-')) {
+          exclude[token.slice(1)] = 0;
+        } else {
+          include[token] = 1;
+          hasInclude = true;
+        }
+      });
+    pipeline.push({ $project: hasInclude ? include : exclude });
+  } else {
+    pipeline.push({ $unset: helperFields });
+  }
+
+  return PropertyModel.aggregate(pipeline);
 }
 
 /** Apply list/search

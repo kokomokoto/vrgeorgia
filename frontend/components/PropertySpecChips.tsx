@@ -10,12 +10,15 @@ export function PropertySpecChips({
   className = '',
   gapClass = 'gap-1.5',
   compact = false,
+  nowrap = false,
 }: {
   p: Property;
   className?: string;
   gapClass?: string;
-  /** რუკის სია — უფრო დაბალი ჩიპები, სრული ხილვადობა */
+  /** უფრო დაბალი ჩიპები */
   compact?: boolean;
+  /** ერთ ხაზზე, გადატანის გარეშე */
+  nowrap?: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -26,9 +29,11 @@ export function PropertySpecChips({
   const hasSqm = p.sqm != null && p.sqm > 0;
   const hasHouseSqm = p.houseSqm != null && p.houseSqm > 0;
 
-  const iconClass = compact ? 'h-4 w-4 shrink-0 text-slate-500' : 'h-4 w-4 shrink-0 text-slate-500';
+  const iconClass = compact
+    ? 'h-3.5 w-3.5 shrink-0 text-slate-500'
+    : 'h-4 w-4 shrink-0 text-slate-500';
   const chipClass = compact
-    ? 'inline-flex cursor-default items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold leading-normal text-slate-800 dark:bg-zinc-800 dark:text-zinc-100'
+    ? 'inline-flex cursor-default items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-slate-800 dark:bg-zinc-800 dark:text-zinc-100'
     : 'inline-flex cursor-default items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-800 dark:bg-zinc-800 dark:text-zinc-100';
 
   const chips: { key: string; label: string; value: string; icon: React.ReactNode }[] = [];
@@ -127,7 +132,7 @@ export function PropertySpecChips({
   if (chips.length === 0) return null;
 
   return (
-    <div className={`flex flex-wrap ${gapClass} ${className}`}>
+    <div className={`flex ${nowrap ? 'flex-nowrap' : 'flex-wrap'} ${gapClass} ${className}`}>
       {chips.map((chip) => (
         <div key={chip.key} className={chipClass} title={chip.label}>
           {chip.icon}

@@ -13,21 +13,37 @@ import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContex
 import { DesignableBadge } from '@/components/home-design/DesignableBadge';
 import {
   DEFAULT_HEADER,
-  DEFAULT_HEADER_ITEM_POSITIONS,
   HEADER_ITEM_IDS,
+  HEADER_ITEM_GAP_PX_DEFAULT,
+  clampHeaderItemGapPx,
+  clampOpacity,
   clampRailPercent,
+  headerFreeLayoutIsCramped,
   headerHasFreeLayout,
+  headerItemPadPxById,
+  headerPositionsEqual,
+  resolveHeaderItemNoOverlap,
   resolveHeaderItemPos,
+  spreadHeaderItemPositions,
+  syncHeaderAccountSlotPositions,
   type HeaderItemId,
   type HeaderItemPos,
+  type HeaderItemSizePct,
   type HeaderLayout,
 } from '@/lib/homeDesignLayout';
+import {
+  liveHeaderOverlapOpts,
+  measureHeaderItemSizes,
+  seedVisibleHeaderPositions,
+} from '@/lib/headerCanvasMeasure';
 import { resolveActiveThemeMode } from '@/lib/themeModes';
 import { resolveHeroImageUrls, revokeHeroUrls } from '@/lib/heroImageStorage';
+import { clearHomeFiltersStorage } from '@/lib/homeFiltersStorage';
 import {
   externalMediaDisplayUrl,
   type DesignMediaKind,
 } from '@/lib/designMedia';
+import { scaleDesignPx, useHomeDesignScale } from '@/lib/useIsDesignDesktop';
 
 const DRAG_THRESHOLD_PX = 3;
 
@@ -129,86 +145,215 @@ function resolveHeaderItemTextStyle(
   id: HeaderItemId
 ): React.CSSProperties {
   const custom = header?.itemStyles?.[id];
+  const opacity = clampOpacity(custom?.opacity);
   if (id === 'brand') {
     const fontSize = custom?.fontSize ?? header?.brandFontSize ?? DEFAULT_HEADER.brandFontSize;
     const color = custom?.color?.trim() || header?.brandColor?.trim() || '';
-    return { fontSize, ...(color ? { color } : {}) };
+    return {
+      fontSize,
+      ...(color ? { color } : {}),
+      opacity,
+    };
   }
   const fontSize = custom?.fontSize ?? header?.navFontSize ?? DEFAULT_HEADER.navFontSize;
   const color = custom?.color?.trim() || header?.navColor?.trim() || '';
-  return { fontSize, ...(color ? { color } : {}) };
+  return {
+    fontSize,
+    ...(color ? { color } : {}),
+    opacity,
+  };
 }
 
 function useHeaderItemDrag(enabled: boolean) {
   const design = useHomeDesignOptional();
+  const designRef = React.useRef(design);
+  designRef.current = design;
   const dragRef = React.useRef<{
     itemId: HeaderItemId;
+    host: HTMLElement;
+    el: HTMLElement;
+    pointerId: number;
     box: DOMRect;
+    sizes: Partial<Record<HeaderItemId, HeaderItemSizePct>>;
+    /** Pointer offset from item center, as % of header bar */
+    grabDxPct: number;
+    grabDyPct: number;
+    startClientX: number;
+    startClientY: number;
+    /** Y locked at pointer-down (Shift = horizontal-only drag) */
+    lockY: number;
+    /** X locked at pointer-down (Alt = vertical-only drag) */
+    lockX: number;
+    historyStarted: boolean;
   } | null>(null);
 
-  const onPointerDown = React.useCallback(
-    (e: React.PointerEvent, itemId: HeaderItemId) => {
-      if (!enabled || !design) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const host = (e.currentTarget as HTMLElement).closest('[data-header-canvas]');
-      if (!(host instanceof HTMLElement)) return;
-      const box = host.getBoundingClientRect();
-      dragRef.current = { itemId, box };
-      design.beginHistoryGesture();
-      if (itemId === 'theme') {
-        // Theme toggle opens the modes/colors editor (emoji + media), not header chrome.
-        design.setSelectedId('theme');
-        design.setSelectedHeaderItemId(null);
-      } else {
-        design.setSelectedId('header');
-        design.setSelectedHeaderItemId(itemId);
-      }
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    [design, enabled]
-  );
+  React.useEffect(() => {
+    if (!enabled) return;
+    const overlapOpts = (
+      box: DOMRect,
+      sizes: Partial<Record<HeaderItemId, HeaderItemSizePct>>,
+      axisLock?: 'x' | 'y' | null
+    ) => {
+      const header = designRef.current?.layout.header;
+      return {
+        sizes,
+        visibleIds: HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id])),
+        gapPx: clampHeaderItemGapPx(header?.itemGapPx, HEADER_ITEM_GAP_PX_DEFAULT),
+        padPxById: headerItemPadPxById(header?.itemStyles),
+        barW: box.width,
+        barH: box.height,
+        axisLock: axisLock ?? null,
+      };
+    };
 
-  const onPointerMove = React.useCallback(
-    (e: React.PointerEvent) => {
-      if (!enabled || !design || !dragRef.current) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const { itemId, box } = dragRef.current;
+    const applyDragPoint = (
+      clientX: number,
+      clientY: number,
+      shiftKey: boolean,
+      altKey: boolean
+    ) => {
+      const designNow = designRef.current;
+      if (!designNow || !dragRef.current) return;
+      const drag = dragRef.current;
+      const dist = Math.hypot(clientX - drag.startClientX, clientY - drag.startClientY);
+      if (!drag.historyStarted) {
+        if (dist < DRAG_THRESHOLD_PX) return;
+        drag.historyStarted = true;
+        designNow.beginHistoryGesture();
+      }
+      const box = drag.host.getBoundingClientRect();
       if (box.width <= 0 || box.height <= 0) return;
-      const x = clampRailPercent(((e.clientX - box.left) / box.width) * 100, 50);
-      const y = clampRailPercent(((e.clientY - box.top) / box.height) * 100, 50);
-      const prev = design.layout.header.itemPositions || {};
-      const seeded: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...prev };
-      // Persist defaults for other items on first free-layout edit so layout stays stable
-      if (!headerHasFreeLayout(prev)) {
-        for (const id of HEADER_ITEM_IDS) {
-          if (!seeded[id]) seeded[id] = { ...DEFAULT_HEADER_ITEM_POSITIONS[id] };
-        }
-      }
-      seeded[itemId] = { x, y };
-      design.updateHeader({ itemPositions: seeded });
-    },
-    [design, enabled]
-  );
+      drag.box = box;
+      const sizes = measureHeaderItemSizes(drag.host, box);
+      drag.sizes = sizes;
+      const axisLock: 'x' | 'y' | null = shiftKey ? 'x' : altKey ? 'y' : null;
+      let x = clampRailPercent(((clientX - box.left) / box.width) * 100 - drag.grabDxPct, 50);
+      let y = clampRailPercent(((clientY - box.top) / box.height) * 100 - drag.grabDyPct, 50);
+      if (axisLock === 'x') y = drag.lockY;
+      if (axisLock === 'y') x = drag.lockX;
+      const seeded = seedVisibleHeaderPositions(
+        designNow.layout.header.itemPositions,
+        drag.host
+      );
+      seeded[drag.itemId] = resolveHeaderItemNoOverlap(
+        drag.itemId,
+        { x, y },
+        seeded,
+        overlapOpts(box, sizes, axisLock)
+      );
+      const visibleIds = HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id]));
+      designNow.updateHeader({
+        itemPositions: syncHeaderAccountSlotPositions(seeded, visibleIds),
+      });
+    };
 
-  const onPointerUp = React.useCallback(
-    (e: React.PointerEvent) => {
-      if (!enabled || !design || !dragRef.current) return;
-      e.preventDefault();
-      e.stopPropagation();
-      dragRef.current = null;
-      design.endHistoryGesture();
+    const finishDrag = (pointerId?: number) => {
+      const designNow = designRef.current;
+      if (!designNow || !dragRef.current) return;
+      const drag = dragRef.current;
+      if (pointerId !== undefined && drag.pointerId !== pointerId) return;
+      if (drag.historyStarted) {
+        const box = drag.host.getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) {
+          const sizes = measureHeaderItemSizes(drag.host, box);
+          const prev = designNow.layout.header.itemPositions || {};
+          const current = prev[drag.itemId];
+          if (current) {
+            const seeded = seedVisibleHeaderPositions(prev, drag.host);
+            seeded[drag.itemId] = resolveHeaderItemNoOverlap(
+              drag.itemId,
+              current,
+              seeded,
+              overlapOpts(box, sizes, null)
+            );
+            const visibleIds = HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id]));
+            designNow.updateHeader({
+              itemPositions: syncHeaderAccountSlotPositions(seeded, visibleIds),
+            });
+          }
+        }
+        designNow.endHistoryGesture();
+      }
       try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        drag.el.releasePointerCapture(drag.pointerId);
       } catch {
         /* already released */
       }
+      dragRef.current = null;
+      designNow.setActiveEditParams([]);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!dragRef.current || e.pointerId !== dragRef.current.pointerId) return;
+      e.preventDefault();
+      applyDragPoint(e.clientX, e.clientY, e.shiftKey, e.altKey);
+    };
+    const onUp = (e: PointerEvent) => {
+      finishDrag(e.pointerId);
+    };
+    window.addEventListener('pointermove', onMove, { capture: true });
+    window.addEventListener('pointerup', onUp, { capture: true });
+    window.addEventListener('pointercancel', onUp, { capture: true });
+    window.addEventListener('lostpointercapture', onUp, { capture: true });
+    return () => {
+      window.removeEventListener('pointermove', onMove, { capture: true });
+      window.removeEventListener('pointerup', onUp, { capture: true });
+      window.removeEventListener('pointercancel', onUp, { capture: true });
+      window.removeEventListener('lostpointercapture', onUp, { capture: true });
+    };
+  }, [enabled]);
+
+  const onPointerDown = React.useCallback(
+    (e: React.PointerEvent, itemId: HeaderItemId) => {
+      const designNow = designRef.current;
+      if (!enabled || !designNow) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (dragRef.current && !dragRef.current.historyStarted) {
+        dragRef.current = null;
+      }
+      const host = (e.currentTarget as HTMLElement).closest('[data-header-canvas]');
+      if (!(host instanceof HTMLElement)) return;
+      const box = host.getBoundingClientRect();
+      const start = resolveHeaderItemPos(designNow.layout.header.itemPositions, itemId);
+      const el = e.currentTarget as HTMLElement;
+      const r = el.getBoundingClientRect();
+      const centerX = r.left + r.width / 2;
+      const centerY = r.top + r.height / 2;
+      dragRef.current = {
+        itemId,
+        host,
+        el,
+        pointerId: e.pointerId,
+        box,
+        sizes: measureHeaderItemSizes(host, box),
+        grabDxPct: box.width > 0 ? ((e.clientX - centerX) / box.width) * 100 : 0,
+        grabDyPct: box.height > 0 ? ((e.clientY - centerY) / box.height) * 100 : 0,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        lockY: start.y,
+        lockX: start.x,
+        historyStarted: false,
+      };
+      designNow.setActiveEditParams(['posX', 'posY']);
+      if (itemId === 'theme') {
+        // Theme toggle opens the modes/colors editor (emoji + media), not header chrome.
+        designNow.setSelectedId('theme');
+        designNow.setSelectedHeaderItemId(null);
+      } else {
+        designNow.setSelectedId('header');
+        designNow.setSelectedHeaderItemId(itemId);
+      }
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* capture can fail on synthetic / already-released pointers */
+      }
     },
-    [design, enabled]
+    [enabled]
   );
 
-  return { onPointerDown, onPointerMove, onPointerUp };
+  return { onPointerDown, dragRef };
 }
 
 function HeaderFreeItem({
@@ -247,9 +392,14 @@ function HeaderFreeItem({
   const commonStyle: React.CSSProperties = {
     position: 'absolute',
     left: `${pos.x}%`,
-    top: `${pos.y}%`,
+    top: '50%',
     transform: 'translate(-50%, -50%)',
-    zIndex: selected ? 20 : 5,
+    display: 'flex',
+    alignItems: 'center',
+    height: 36,
+    lineHeight: 1,
+    // Stable paint order by X — avoid one label permanently covering another when near
+    zIndex: selected ? 40 : 5 + Math.round(pos.x),
     whiteSpace: 'nowrap',
     ...style,
   };
@@ -257,36 +407,49 @@ function HeaderFreeItem({
   const dragHandlers = designMode
     ? {
         onPointerDown: (e: React.PointerEvent) => drag.onPointerDown(e, itemId),
-        onPointerMove: drag.onPointerMove,
-        onPointerUp: drag.onPointerUp,
-        onPointerCancel: drag.onPointerUp,
+        // <a>/<Link> is draggable by default — native URL-drag steals the gesture.
+        draggable: false,
+        onDragStart: (e: React.DragEvent) => e.preventDefault(),
       }
     : {};
+
+  const content = designMode ? (
+    <span className="pointer-events-none">{children}</span>
+  ) : (
+    children
+  );
 
   if (Comp === Link || Comp === 'a') {
     const Tag = Comp === Link ? Link : 'a';
     return (
       <Tag
         href={href || '#'}
+        data-header-item={itemId}
         className={commonClass}
         style={commonStyle}
         onClick={onClick}
         {...dragHandlers}
       >
-        {children}
+        {content}
       </Tag>
     );
   }
 
   return (
-    <div className={commonClass} style={commonStyle} onClick={onClick} {...dragHandlers}>
-      {children}
+    <div
+      data-header-item={itemId}
+      className={commonClass}
+      style={commonStyle}
+      onClick={onClick}
+      {...dragHandlers}
+    >
+      {content}
     </div>
   );
 }
 
 export function Header() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, profileLoaded } = useAuth();
   const { theme, activeModeId } = useTheme();
   const design = useHomeDesignOptional();
@@ -311,10 +474,55 @@ export function Header() {
   const [open, setOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
 
-  const headerH = headerLayout?.h ?? DEFAULT_HEADER.h;
+  const headerHRaw = headerLayout?.h ?? DEFAULT_HEADER.h;
+  const designScale = useHomeDesignScale(1280);
+  const headerH = scaleDesignPx(headerHRaw, designScale, 36);
   const itemPositions = headerLayout?.itemPositions;
-  const freeLayout = designMode || headerHasFreeLayout(itemPositions);
+  const freeLayoutUsable =
+    headerHasFreeLayout(itemPositions) && !headerFreeLayoutIsCramped(itemPositions);
+  /**
+   * Public page: free layout only when saved positions are readable.
+   * Design Mode always uses free/absolute items so labels can be dragged.
+   */
+  const useFreeNav = designMode || freeLayoutUsable;
   const drag = useHeaderItemDrag(designMode);
+  const itemPadKey = JSON.stringify(headerItemPadPxById(headerLayout?.itemStyles));
+  const designRef = React.useRef(design);
+  designRef.current = design;
+  const [publicPositions, setPublicPositions] = React.useState<
+    Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
+  >(undefined);
+
+  React.useEffect(() => {
+    if (!designMode) return;
+    let cancelled = false;
+    let raf = 0;
+    const run = () => {
+      const designNow = designRef.current;
+      if (cancelled || !designNow || drag.dragRef.current?.historyStarted) return;
+      const header = designNow.layout.header;
+      const opts = liveHeaderOverlapOpts(header);
+      if (!opts?.visibleIds?.length) return;
+      const host = document.querySelector('[data-header-canvas]');
+      if (!(host instanceof HTMLElement)) return;
+      const box = host.getBoundingClientRect();
+      if (box.width <= 0) return;
+      const seeded = seedVisibleHeaderPositions(header.itemPositions, host);
+      for (const id of opts.visibleIds) {
+        if (!seeded[id]) seeded[id] = resolveHeaderItemPos(header.itemPositions, id);
+      }
+      const next = spreadHeaderItemPositions(seeded, opts);
+      if (headerPositionsEqual(header.itemPositions, next)) return;
+      designNow.updateHeader({ itemPositions: next });
+    };
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(run);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [designMode, drag.dragRef, headerHRaw, headerLayout?.itemGapPx, itemPadKey]);
 
   const selectHeaderRoot = React.useCallback(() => {
     design?.setSelectedId('header');
@@ -351,6 +559,7 @@ export function Header() {
     e.preventDefault();
     e.stopPropagation();
     selectHeaderRoot();
+    design.setActiveEditParams(['headerH']);
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -358,7 +567,7 @@ export function Header() {
     }
     heightDragRef.current = {
       startY: e.clientY,
-      origH: headerH,
+      origH: headerHRaw,
       historyStarted: false,
     };
   };
@@ -372,13 +581,15 @@ export function Header() {
       design.beginHistoryGesture();
       d.historyStarted = true;
     }
-    design.updateHeader({ h: d.origH + dy });
+    const rawDy = dy / Math.max(designScale, 0.05);
+    design.updateHeader({ h: d.origH + rawDy });
   };
 
   const onHeightPointerUp = (e: React.PointerEvent) => {
     if (!heightDragRef.current || !design) return;
     const started = heightDragRef.current.historyStarted;
     heightDragRef.current = null;
+    design.setActiveEditParams([]);
     if (started) design.endHistoryGesture();
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -395,6 +606,8 @@ export function Header() {
       return;
     }
     e.preventDefault();
+    // ლოგო = ახალი ძიება — შენახული ფილტრები/სორტი იშლება
+    clearHomeFiltersStorage();
     window.location.href = '/';
   };
 
@@ -420,8 +633,66 @@ export function Header() {
   const isAdmin = profileLoaded && isAdminRole(user?.role);
   const isAgent = profileLoaded && isAgentRole(user?.role);
 
-  const brandFontSize = headerLayout?.brandFontSize ?? DEFAULT_HEADER.brandFontSize;
-  const navFontSize = headerLayout?.navFontSize ?? DEFAULT_HEADER.navFontSize;
+  React.useEffect(() => {
+    if (designMode || !useFreeNav) {
+      setPublicPositions(undefined);
+      return;
+    }
+    let cancelled = false;
+    let raf = 0;
+    const run = () => {
+      if (cancelled) return;
+      const header = designRef.current?.layout.header;
+      const opts = liveHeaderOverlapOpts(header);
+      if (!opts?.visibleIds?.length) return;
+      const host = document.querySelector('[data-header-canvas]');
+      if (!(host instanceof HTMLElement)) return;
+      const box = host.getBoundingClientRect();
+      if (box.width <= 0) return;
+      const seeded = seedVisibleHeaderPositions(header?.itemPositions, host);
+      if (!user && seeded.profile) {
+        seeded.login = { ...seeded.profile };
+      }
+      const next = spreadHeaderItemPositions(seeded, opts);
+      setPublicPositions((prev) => (headerPositionsEqual(prev, next) ? prev : next));
+    };
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(run);
+    });
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(run);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [
+    designMode,
+    useFreeNav,
+    user,
+    isAdmin,
+    profileLoaded,
+    itemPositions,
+    itemPadKey,
+    headerHRaw,
+    headerLayout?.itemGapPx,
+    i18n.language,
+    mounted,
+  ]);
+
+  const brandFontSize = scaleDesignPx(
+    headerLayout?.brandFontSize ?? DEFAULT_HEADER.brandFontSize,
+    designScale,
+    12
+  );
+  const navFontSize = scaleDesignPx(
+    headerLayout?.navFontSize ?? DEFAULT_HEADER.navFontSize,
+    designScale,
+    11
+  );
   const brandColor = headerLayout?.brandColor?.trim() || '';
   const navColor = headerLayout?.navColor?.trim() || '';
   const navStyle: React.CSSProperties = {
@@ -432,7 +703,13 @@ export function Header() {
     fontSize: brandFontSize,
     ...(brandColor ? { color: brandColor } : {}),
   };
-  const itemStyle = (id: HeaderItemId) => resolveHeaderItemTextStyle(headerLayout, id);
+  const itemStyle = (id: HeaderItemId) => {
+    const base = resolveHeaderItemTextStyle(headerLayout, id);
+    if (typeof base.fontSize === 'number') {
+      return { ...base, fontSize: scaleDesignPx(base.fontSize, designScale, 11) };
+    }
+    return base;
+  };
 
   const onDesignItemClick = (itemId: HeaderItemId) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -450,7 +727,16 @@ export function Header() {
     ...(brandColor ? ({ ['--theme-accent']: brandColor } as React.CSSProperties) : {}),
   };
 
-  const pos = (id: HeaderItemId) => resolveHeaderItemPos(itemPositions, id);
+  const pos = (id: HeaderItemId) => {
+    const source = designMode ? itemPositions : publicPositions || itemPositions;
+    if (!designMode && !user && id === 'login') {
+      const loginPos = resolveHeaderItemPos(source, 'login');
+      const profilePos = source?.profile;
+      if (profilePos && !publicPositions) return profilePos;
+      return loginPos;
+    }
+    return resolveHeaderItemPos(source, id);
+  };
 
   const freeNavItems = (
     <>
@@ -662,6 +948,7 @@ export function Header() {
         designMode={designMode}
         selected={design?.selectedId === 'theme' || selectedHeaderItemId === 'theme'}
         drag={drag}
+        style={itemStyle('theme')}
         onClick={
           designMode
             ? (e) => {
@@ -682,6 +969,7 @@ export function Header() {
         designMode={designMode}
         selected={selectedHeaderItemId === 'language'}
         drag={drag}
+        style={itemStyle('language')}
         onClick={designMode ? onDesignItemClick('language') : undefined}
       >
         <span className={designMode ? 'pointer-events-none' : undefined}>
@@ -697,10 +985,11 @@ export function Header() {
       data-designable="header"
       data-header-canvas
       data-header-has-media={hasHeaderMedia ? 'true' : undefined}
-      className="sticky top-0 z-20 box-border overflow-visible border-b border-slate-200/80 bg-white/85 backdrop-blur-md dark:border-zinc-800/80 dark:backdrop-blur-md relative"
+      className="sticky top-0 z-40 box-border overflow-visible border-b border-slate-200/80 bg-white/85 backdrop-blur-md dark:border-zinc-800/80 dark:backdrop-blur-md relative"
       style={{
         height: headerH,
         ...headerCssVars,
+        opacity: clampOpacity(headerLayout?.opacity),
         outline: designMode
           ? selected
             ? '2px solid #2563eb'
@@ -712,6 +1001,9 @@ export function Header() {
       onClick={
         designMode
           ? (e) => {
+              if ((e.target as HTMLElement).closest('a, button, select, input, textarea, label')) {
+                return;
+              }
               e.preventDefault();
               e.stopPropagation();
               selectHeaderRoot();
@@ -728,9 +1020,9 @@ export function Header() {
         </>
       ) : null}
 
-      {/* Desktop free layout — positions relative to full header bar */}
-      {freeLayout ? (
-        <div className="pointer-events-none absolute inset-0 z-[2] hidden md:block">
+      {/* Free layout — xl+ only */}
+      {useFreeNav ? (
+        <div className="pointer-events-none absolute inset-0 z-[2] hidden xl:block">
           {designMode ? (
             <DesignableBadge id="header" selected={selected} placement="inside" />
           ) : null}
@@ -738,28 +1030,30 @@ export function Header() {
         </div>
       ) : null}
 
-      {/* Desktop classic flex layout */}
-      {!freeLayout ? (
-        <div
-          className={`relative z-[2] mx-auto hidden h-full max-w-6xl items-center justify-between gap-3 px-4 md:flex ${
-            designMode ? 'pointer-events-none' : ''
-          }`}
-        >
+      {/* Classic flex — xl+ only (below xl: hamburger — no crushed nav) */}
+      {!useFreeNav ? (
+        <div className="relative z-[2] mx-auto hidden h-full max-w-6xl items-center justify-between gap-3 px-4 xl:flex">
           {designMode ? (
             <DesignableBadge id="header" selected={selected} placement="inside" />
           ) : null}
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 shrink-0 items-center gap-3">
             <a
               href="/"
               onClick={handleLogoClick}
               data-theme-brand
-              className="cursor-pointer font-semibold leading-none"
+              className={`cursor-pointer font-semibold leading-none ${
+                designMode ? 'pointer-events-auto relative z-10 ring-1 ring-blue-400/50' : ''
+              }`}
               style={brandStyle}
             >
               {appName}
             </a>
           </div>
-          <nav className="flex items-center gap-4">
+          <nav
+            className={`flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 ${
+              designMode ? 'pointer-events-auto' : ''
+            }`}
+          >
             <Link href="/services" data-theme-nav className="flex items-center gap-1" style={navStyle}>
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                 <path
@@ -834,8 +1128,8 @@ export function Header() {
         </div>
       ) : null}
 
-      {/* Mobile bar — მენიუ ყოველთვის ხელმისაწვდომი (Design Mode არ ბლოკავს) */}
-      <div className="relative z-[2] mx-auto flex h-full max-w-6xl items-center justify-between gap-3 px-4 md:hidden">
+      {/* Compact bar — below xl (hamburger; avoids crushed classic/free nav) */}
+      <div className="relative z-[2] mx-auto flex h-full max-w-6xl items-center justify-between gap-3 px-4 xl:hidden">
         {designMode ? (
           <DesignableBadge id="header" selected={selected} placement="inside" />
         ) : null}
@@ -849,8 +1143,27 @@ export function Header() {
           {appName}
         </a>
         <div className="flex items-center gap-3">
-          <ThemeToggle />
-          <LanguageSwitcher />
+          <span
+            className={designMode ? 'cursor-pointer rounded-md ring-1 ring-blue-400/50' : undefined}
+            onClick={
+              designMode
+                ? (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    design?.setSelectedId('theme');
+                    design?.setSelectedHeaderItemId(null);
+                  }
+                : undefined
+            }
+          >
+            <ThemeToggle />
+          </span>
+          <span
+            className={designMode ? 'cursor-pointer rounded-md ring-1 ring-blue-400/50' : undefined}
+            onClick={designMode ? onDesignItemClick('language') : undefined}
+          >
+            <LanguageSwitcher />
+          </span>
           <button
             className="rounded-md border border-slate-200 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
             style={{ fontSize: navFontSize }}
@@ -865,7 +1178,7 @@ export function Header() {
       {open && (
         <div
           data-theme-surface
-          className="absolute left-0 right-0 top-full z-50 border-b border-t border-slate-200 bg-white shadow-lg md:hidden dark:border-zinc-700 dark:bg-zinc-950"
+          className="absolute left-0 right-0 top-full z-50 border-b border-t border-slate-200 bg-white shadow-lg xl:hidden dark:border-zinc-700 dark:bg-zinc-950"
           style={{ ...headerCssVars }}
         >
           <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3">

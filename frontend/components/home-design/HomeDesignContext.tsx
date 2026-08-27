@@ -19,13 +19,40 @@ import {
   type HomeDesignLayout,
   type RailItem,
   type SearchLayout,
+  type SearchControlId,
+  type SearchControlLayout,
+  type DealChipId,
+  type DealChipLayout,
+  type DealBarLayout,
+  normalizeSearchControl,
+  normalizeDealChip,
+  clampOpacity,
+  clampHeaderItemGapPx,
+  DEFAULT_SEARCH_CONTROLS,
+  DEFAULT_DEAL_CHIPS,
   type ThemePalette,
   type TypePanelItem,
   loadHomeDesign,
   saveHomeDesign,
   normalizeHomeDesignInput,
+  HERO_MOBILE_STACK_GAP_DEFAULT,
+  HERO_H_MIN,
+  HERO_H_MAX,
+  copyDefaultHeaderItemPositions,
+  applyDefaultGeometry,
+  packHeaderItemPositions,
+  headerItemIdsHiddenByStyle,
+  HEADER_ITEM_IDS,
 } from '@/lib/homeDesignLayout';
 import { getHomeDesignLayout, saveHomeDesignLayout } from '@/lib/api';
+import {
+  listHomeDesignPresets,
+  createHomeDesignPreset,
+  updateHomeDesignPreset,
+  deleteHomeDesignPreset,
+  type HomeDesignPresetMeta,
+} from '@/lib/api';
+import { normalizeSiteSocialLinks } from '@/lib/siteSocialLinks';
 import { uploadLocalBlobsInLayout } from '@/lib/homeDesignPublish';
 import { DEFAULT_THEME_PALETTES, normalizeThemePalette } from '@/lib/themePalettes';
 import {
@@ -97,6 +124,29 @@ function updateThemeModeInLayout(
   return withSyncedLegacy({ ...prev, themeModes });
 }
 
+/** Canvas drag/resize → which inspector fields to highlight */
+export type DesignEditParam =
+  | 'x'
+  | 'y'
+  | 'w'
+  | 'h'
+  | 'mobileX'
+  | 'mobileY'
+  | 'itemW'
+  | 'itemH'
+  | 'headerH'
+  | 'posX'
+  | 'posY'
+  | 'labelX'
+  | 'labelY'
+  | 'countX'
+  | 'countY'
+  | 'iconX'
+  | 'iconY'
+  | 'mediaX'
+  | 'mediaY'
+  | 'mediaScale';
+
 type HomeDesignContextValue = {
   designMode: boolean;
   /** Admin-only — false for guests / non-admins */
@@ -111,9 +161,21 @@ type HomeDesignContextValue = {
   /** When a property-type category card is clicked in Design Mode */
   selectedTypeItemId: string | null;
   setSelectedTypeItemId: (id: string | null) => void;
+  /** When a search-row control (ფასი…) is clicked in Design Mode */
+  selectedSearchControlId: SearchControlId | null;
+  setSelectedSearchControlId: (id: SearchControlId | null) => void;
+  /** When a deal chip is clicked in Design Mode */
+  selectedDealChipId: DealChipId | null;
+  setSelectedDealChipId: (id: DealChipId | null) => void;
   /** Header child folder (logo, nav item…) — null = header root */
   selectedHeaderItemId: HeaderItemId | null;
   setSelectedHeaderItemId: (id: HeaderItemId | null) => void;
+  /**
+   * Params currently being changed on canvas (move → x/y, resize → w/h…).
+   * Inspector highlights matching fields.
+   */
+  activeEditParams: DesignEditParam[];
+  setActiveEditParams: (params: DesignEditParam[]) => void;
   /** Working copy differs from last saved layout */
   isDirty: boolean;
   /** True while publishing layout + media to the server */
@@ -135,6 +197,8 @@ type HomeDesignContextValue = {
       Partial<Pick<HomeDesignLayout['typePanel'], 'pad' | 'gap'>>
   ) => void;
   updateSearch: (patch: Partial<SearchLayout>) => void;
+  updateSearchControl: (id: SearchControlId, patch: Partial<SearchControlLayout>) => void;
+  updateDealChip: (id: DealChipId, patch: Partial<DealChipLayout>) => void;
   updateHero: (patch: Partial<HeroLayout>) => void;
   updateHeader: (patch: Partial<HeaderLayout>) => void;
   updateHeroText: (patch: Partial<HeroTextLayout>) => void;
@@ -160,6 +224,7 @@ type HomeDesignContextValue = {
   removeThemeToggleIconMedia: (modeId: string) => void;
   updateServiceRail: (patch: Partial<HomeDesignLayout['serviceRail']>) => void;
   updateQuickRail: (patch: Partial<HomeDesignLayout['quickRail']>) => void;
+  updateSocialLinks: (patch: Partial<HomeDesignLayout['socialLinks']>) => void;
   addRailItem: (rail: 'serviceRail' | 'quickRail') => void;
   removeRailItem: (rail: 'serviceRail' | 'quickRail', itemId: string) => void;
   updateRailItem: (
@@ -183,11 +248,28 @@ type HomeDesignContextValue = {
   setTypePanelItemMediaUrl: (itemId: string, url: string) => boolean;
   removeTypePanelItemImage: (itemId: string) => void;
   resetLayout: () => void;
+  /** Factory default (კოდის ნაგულისხმევი) — სრული ვიზუალი */
+  resetToFactoryDefault: () => void;
+  designPresets: HomeDesignPresetMeta[];
+  designPresetsMax: number;
+  designPresetsLoading: boolean;
+  refreshDesignPresets: () => Promise<void>;
+  saveCurrentAsPreset: (name: string) => Promise<boolean>;
+  applyDesignPreset: (presetId: string) => Promise<boolean>;
+  overwriteDesignPreset: (presetId: string) => Promise<boolean>;
+  removeDesignPreset: (presetId: string) => Promise<boolean>;
 };
 
 const HomeDesignContext = React.createContext<HomeDesignContextValue | null>(null);
 
-export function HomeDesignProvider({ children }: { children: React.ReactNode }) {
+export function HomeDesignProvider({
+  children,
+  initialLayout = null,
+}: {
+  children: React.ReactNode;
+  /** SSR-fetched public layout — first paint matches saved design */
+  initialLayout?: HomeDesignLayout | null;
+}) {
   const { activeModeId } = useTheme();
   const { user, profileLoaded } = useAuth();
   const canDesignMode = profileLoaded && isAdminRole(user?.role);
@@ -201,24 +283,36 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
     activeModeIdRef.current = activeModeId;
   }, [activeModeId]);
 
+  const bootLayout = initialLayout ?? DEFAULT_HOME_DESIGN;
   const [designMode, setDesignModeState] = React.useState(false);
-  const [layout, setLayout] = React.useState<HomeDesignLayout>(DEFAULT_HOME_DESIGN);
-  const [savedLayout, setSavedLayout] = React.useState<HomeDesignLayout>(DEFAULT_HOME_DESIGN);
+  const [layout, setLayout] = React.useState<HomeDesignLayout>(bootLayout);
+  const [savedLayout, setSavedLayout] = React.useState<HomeDesignLayout>(bootLayout);
   const [selectedId, setSelectedIdState] = React.useState<DesignableId | null>(null);
   const [selectedRailItemId, setSelectedRailItemId] = React.useState<string | null>(null);
   const [selectedTypeItemId, setSelectedTypeItemId] = React.useState<string | null>(null);
+  const [selectedSearchControlId, setSelectedSearchControlId] =
+    React.useState<SearchControlId | null>(null);
+  const [selectedDealChipId, setSelectedDealChipId] = React.useState<DealChipId | null>(null);
   const [selectedHeaderItemId, setSelectedHeaderItemId] = React.useState<HeaderItemId | null>(
     null
   );
+  const [activeEditParams, setActiveEditParams] = React.useState<DesignEditParam[]>([]);
   const [hydrated, setHydrated] = React.useState(false);
 
   const setSelectedId = React.useCallback((id: DesignableId | null) => {
     setSelectedIdState(id);
+    setActiveEditParams([]);
     if (id !== 'serviceRail' && id !== 'quickRail') {
       setSelectedRailItemId(null);
     }
     if (id !== 'typePanel') {
       setSelectedTypeItemId(null);
+    }
+    if (id !== 'search') {
+      setSelectedSearchControlId(null);
+    }
+    if (id !== 'dealBar') {
+      setSelectedDealChipId(null);
     }
     if (id !== 'header') {
       setSelectedHeaderItemId(null);
@@ -227,6 +321,9 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
   const [canUndo, setCanUndo] = React.useState(false);
   const [canRedo, setCanRedo] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [designPresets, setDesignPresets] = React.useState<HomeDesignPresetMeta[]>([]);
+  const [designPresetsMax, setDesignPresetsMax] = React.useState(12);
+  const [designPresetsLoading, setDesignPresetsLoading] = React.useState(false);
 
   const layoutRef = React.useRef(layout);
   const savedLayoutRef = React.useRef(savedLayout);
@@ -307,6 +404,18 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
     syncHistoryFlags();
   }, [syncHistoryFlags]);
 
+  React.useLayoutEffect(() => {
+    // Sync local cache before first paint (may be newer than SSR snapshot).
+    try {
+      const cached = loadHomeDesign();
+      if (!layoutsEqual(cached, layoutRef.current)) {
+        setLayout(cached);
+      }
+    } catch {
+      /* keep SSR / default */
+    }
+  }, []);
+
   React.useEffect(() => {
     let cancelled = false;
 
@@ -337,6 +446,42 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
         }
       } catch {
         /* ოფლაინ / API ჩავარდნა — ვტოვებთ local ქეშს */
+      }
+
+      // One-time: tighten old mobile stack gaps (6 default / gap-3 era ≥10)
+      const gapTightKey = 'vhome-mobile-stack-gap-tight-v1';
+      try {
+        if (!cancelled && !window.localStorage.getItem(gapTightKey)) {
+          const g = next.hero.mobileStackGap ?? 6;
+          if (g === 6 || g >= 10) {
+            next = {
+              ...next,
+              hero: { ...next.hero, mobileStackGap: HERO_MOBILE_STACK_GAP_DEFAULT },
+            };
+            saveHomeDesign(next);
+          }
+          window.localStorage.setItem(gapTightKey, '1');
+        }
+      } catch {
+        /* keep next */
+      }
+
+      // One-time: balanced header nav defaults (left cluster + right utilities)
+      const headerBalanceKey = 'vhome-header-nav-row-v5';
+      try {
+        if (!cancelled && !window.localStorage.getItem(headerBalanceKey)) {
+          next = {
+            ...next,
+            header: {
+              ...next.header,
+              itemPositions: copyDefaultHeaderItemPositions(),
+            },
+          };
+          saveHomeDesign(next);
+          window.localStorage.setItem(headerBalanceKey, '1');
+        }
+      } catch {
+        /* keep next */
       }
 
       if (cancelled) return;
@@ -511,15 +656,44 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
     (
       id: 'heroText' | 'search' | 'map' | 'typePanel' | 'dealBar' | 'listings',
       patch: Partial<HomeDesignLayout['search']> &
-        Partial<Pick<HomeDesignLayout['typePanel'], 'pad' | 'gap'>>
+        Partial<Pick<HomeDesignLayout['typePanel'], 'pad' | 'gap'>> & {
+          mobileX?: number;
+          mobileY?: number;
+        }
     ) => {
-      commit((prev) => ({
-        ...prev,
-        [id]: {
-          ...prev[id],
-          ...patch,
-        },
-      }));
+      commit((prev) => {
+        const nextPatch = { ...patch };
+        if (patch.mobileX !== undefined) {
+          const stack =
+            id === 'dealBar' ||
+            id === 'search' ||
+            id === 'typePanel' ||
+            id === 'map';
+          nextPatch.mobileX = stack
+            ? Math.max(-24, Math.min(24, Math.round(patch.mobileX)))
+            : Math.max(-120, Math.min(360, Math.round(patch.mobileX)));
+        }
+        if (patch.mobileY !== undefined) {
+          const stack =
+            id === 'dealBar' ||
+            id === 'search' ||
+            id === 'typePanel' ||
+            id === 'map';
+          nextPatch.mobileY = stack
+            ? Math.max(-48, Math.min(64, Math.round(patch.mobileY)))
+            : Math.max(-80, Math.min(400, Math.round(patch.mobileY)));
+        }
+        if (patch.opacity !== undefined) {
+          nextPatch.opacity = clampOpacity(patch.opacity);
+        }
+        return {
+          ...prev,
+          [id]: {
+            ...prev[id],
+            ...nextPatch,
+          },
+        };
+      });
     },
     [commit]
   );
@@ -528,12 +702,66 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
     (patch: Partial<SearchLayout>) => {
       commit((prev) => {
         const next: SearchLayout = { ...prev.search, ...patch };
+        if (patch.mobileX !== undefined) {
+          next.mobileX = Math.max(-24, Math.min(24, Math.round(patch.mobileX)));
+        }
+        if (patch.mobileY !== undefined) {
+          next.mobileY = Math.max(-48, Math.min(64, Math.round(patch.mobileY)));
+        }
+        if (patch.controls) {
+          next.controls = { ...prev.search.controls, ...patch.controls };
+        }
         for (const [key, value] of Object.entries(patch)) {
-          if (value === undefined) {
+          if (value === undefined && key !== 'controls') {
             delete next[key as keyof SearchLayout];
           }
         }
         return { ...prev, search: next };
+      });
+    },
+    [commit]
+  );
+
+  const updateSearchControl = React.useCallback(
+    (id: SearchControlId, patch: Partial<SearchControlLayout>) => {
+      commit((prev) => {
+        const fallback = prev.search.controls?.[id] ?? DEFAULT_SEARCH_CONTROLS[id];
+        const merged = normalizeSearchControl(
+          { ...fallback, ...patch },
+          DEFAULT_SEARCH_CONTROLS[id]
+        );
+        return {
+          ...prev,
+          search: {
+            ...prev.search,
+            controls: {
+              ...prev.search.controls,
+              [id]: merged,
+            },
+          },
+        };
+      });
+    },
+    [commit]
+  );
+
+  const updateDealChip = React.useCallback(
+    (id: DealChipId, patch: Partial<DealChipLayout>) => {
+      commit((prev) => {
+        const deal = prev.dealBar as DealBarLayout;
+        const fallback = deal.chips?.[id] ?? DEFAULT_DEAL_CHIPS[id];
+        const merged = normalizeDealChip({ ...fallback, ...patch }, DEFAULT_DEAL_CHIPS[id]);
+        return {
+          ...prev,
+          dealBar: {
+            ...deal,
+            gap: deal.gap ?? 8,
+            chips: {
+              ...(deal.chips || DEFAULT_DEAL_CHIPS),
+              [id]: merged,
+            },
+          },
+        };
       });
     },
     [commit]
@@ -548,8 +776,16 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
           ...patch,
           h:
             patch.h !== undefined
-              ? Math.max(160, Math.min(900, Math.round(patch.h)))
+              ? Math.max(HERO_H_MIN, Math.min(HERO_H_MAX, Math.round(patch.h)))
               : prev.hero.h,
+          mobileH:
+            patch.mobileH !== undefined
+              ? Math.max(80, Math.min(520, Math.round(patch.mobileH)))
+              : prev.hero.mobileH,
+          mobileStackGap:
+            patch.mobileStackGap !== undefined
+              ? Math.max(0, Math.min(32, Math.round(patch.mobileStackGap)))
+              : prev.hero.mobileStackGap,
           intervalSec:
             patch.intervalSec !== undefined
               ? Math.max(2, Math.min(120, Math.round(patch.intervalSec)))
@@ -575,6 +811,14 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
             patch.h !== undefined
               ? Math.max(72, Math.min(360, Math.round(patch.h)))
               : prev.heroText.h,
+          mobileX:
+            patch.mobileX !== undefined
+              ? Math.max(-120, Math.min(360, Math.round(patch.mobileX)))
+              : prev.heroText.mobileX,
+          mobileY:
+            patch.mobileY !== undefined
+              ? Math.max(-80, Math.min(520, Math.round(patch.mobileY)))
+              : prev.heroText.mobileY,
         },
       }));
     },
@@ -601,6 +845,10 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
             patch.h !== undefined
               ? Math.max(44, Math.min(120, Math.round(patch.h)))
               : prev.header.h,
+          itemGapPx:
+            patch.itemGapPx !== undefined
+              ? clampHeaderItemGapPx(patch.itemGapPx)
+              : prev.header.itemGapPx,
           brandFontSize:
             patch.brandFontSize !== undefined
               ? Math.max(12, Math.min(40, Math.round(patch.brandFontSize)))
@@ -986,6 +1234,16 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
     [commit]
   );
 
+  const updateSocialLinks = React.useCallback(
+    (patch: Partial<HomeDesignLayout['socialLinks']>) => {
+      commit((prev) => ({
+        ...prev,
+        socialLinks: normalizeSiteSocialLinks({ ...prev.socialLinks, ...patch }),
+      }));
+    },
+    [commit]
+  );
+
   const addRailItem = React.useCallback(
     (rail: 'serviceRail' | 'quickRail') => {
       commit((prev) => {
@@ -1209,29 +1467,188 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
     [commit]
   );
 
-  /** Reset box positions / rails / search chrome to factory defaults.
-   * Preserves themeModes (custom modes, palettes, hero media, enable flags). */
+  /** Reset box / header coordinates. Hidden and faded items stay hidden. */
   const resetLayout = React.useCallback(() => {
     const ok =
       typeof window === 'undefined'
         ? true
         : window.confirm(
-            'პოზიციები, ზომები, ჰედერი, სერჩი და რეილები ნაგულისხმევზე დაბრუნდება.\n\n' +
-              'შენი რეჟიმები (დამატებული რეჟიმები, ფერები, ფოტოები, ჩართვა/გამორთვა) არ წაიშლება.\n\n' +
+            'მხოლოდ პოზიციები და ზომები ნაგულისხმევზე დაბრუნდება.\n\n' +
+              'ჩამქრალი ან დამალული ელემენტები ჩამქრალი რჩება.\n' +
+              'რეჟიმები, ფერები და ტექსტები არ იცვლება.\n\n' +
               'გავაგრძელოთ?'
           );
     if (!ok) return;
     pushHistory();
-    const keptModes = JSON.parse(
-      JSON.stringify(layoutRef.current.themeModes || [])
-    ) as ThemeModeDef[];
-    const defaults = cloneLayout(DEFAULT_HOME_DESIGN);
-    const next = syncLegacyThemeFields({
-      ...defaults,
-      themeModes: keptModes.length > 0 ? keptModes : defaults.themeModes,
-    });
+    const prev = layoutRef.current;
+    let next = applyDefaultGeometry(prev);
+
+    if (typeof document !== 'undefined') {
+      const host = document.querySelector('[data-header-canvas]');
+      if (host instanceof HTMLElement) {
+        const box = host.getBoundingClientRect();
+        if (box.width > 0) {
+          const widthsPx: Partial<Record<HeaderItemId, number>> = {};
+          host.querySelectorAll<HTMLElement>('[data-header-item]').forEach((el) => {
+            const id = el.getAttribute('data-header-item') as HeaderItemId | null;
+            if (!id || !HEADER_ITEM_IDS.includes(id)) return;
+            widthsPx[id] = el.getBoundingClientRect().width;
+          });
+          const skip = new Set<HeaderItemId>([
+            'messages',
+            ...headerItemIdsHiddenByStyle(prev.header.itemStyles),
+          ]);
+          if (widthsPx.profile) skip.add('login');
+          else skip.add('profile');
+          if (!widthsPx.admin) skip.add('admin');
+          const packed = packHeaderItemPositions({
+            barW: box.width,
+            widthsPx,
+            skipIds: skip,
+          });
+          const merged = { ...packed };
+          const prevPos = prev.header.itemPositions || {};
+          for (const id of skip) {
+            if (id === 'messages' || id === 'login') continue;
+            if (prevPos[id]) merged[id] = { ...prevPos[id] };
+          }
+          next = {
+            ...next,
+            header: { ...next.header, itemPositions: merged },
+          };
+        }
+      }
+    }
+
     setLayout(next);
   }, [pushHistory]);
+
+  /** სრული factory default — პოზიციები + რეჟიმები/ფერები კოდის საწყისზე */
+  const resetToFactoryDefault = React.useCallback(() => {
+    const ok =
+      typeof window === 'undefined'
+        ? true
+        : window.confirm(
+            'მთელი ვიზუალი დაბრუნდება კოდის ნაგულისხმევზე (პოზიციები, რეჟიმები, ფერები).\n\n' +
+              'შენახული დეფაულტები (პრესეტები) არ წაიშლება.\n\n' +
+              'გავაგრძელოთ?'
+          );
+    if (!ok) return;
+    pushHistory();
+    setLayout(cloneLayout(DEFAULT_HOME_DESIGN));
+  }, [pushHistory]);
+
+  const refreshDesignPresets = React.useCallback(async () => {
+    if (!canDesignModeRef.current) return;
+    setDesignPresetsLoading(true);
+    try {
+      const res = await listHomeDesignPresets();
+      setDesignPresets(Array.isArray(res.presets) ? res.presets : []);
+      if (typeof res.maxPresets === 'number' && res.maxPresets > 0) {
+        setDesignPresetsMax(res.maxPresets);
+      }
+    } catch {
+      /* ignore — inspector shows empty list */
+    } finally {
+      setDesignPresetsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!canDesignMode || !designMode) return;
+    void refreshDesignPresets();
+  }, [canDesignMode, designMode, refreshDesignPresets]);
+
+  const saveCurrentAsPreset = React.useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return false;
+      try {
+        const res = await createHomeDesignPreset(trimmed, cloneLayout(layoutRef.current));
+        setDesignPresets(Array.isArray(res.presets) ? res.presets : []);
+        if (typeof res.maxPresets === 'number') setDesignPresetsMax(res.maxPresets);
+        return true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'დეფაულტის შენახვა ვერ მოხერხდა';
+        if (typeof window !== 'undefined') window.alert(msg);
+        return false;
+      }
+    },
+    []
+  );
+
+  const applyDesignPreset = React.useCallback(
+    async (presetId: string) => {
+      let preset = designPresets.find((p) => p.id === presetId);
+      if (!preset?.layout) {
+        try {
+          const res = await listHomeDesignPresets();
+          setDesignPresets(Array.isArray(res.presets) ? res.presets : []);
+          preset = (res.presets || []).find((p) => p.id === presetId);
+        } catch {
+          if (typeof window !== 'undefined') window.alert('პრესეტების ჩატვირთვა ვერ მოხერხდა');
+          return false;
+        }
+      }
+      if (!preset?.layout) {
+        if (typeof window !== 'undefined') window.alert('დეფაულტი ვერ მოიძებნა');
+        return false;
+      }
+      const ok =
+        typeof window === 'undefined'
+          ? true
+          : window.confirm(
+              `გამოვიყენოთ დეფაულტი „${preset.name}"?\n\n` +
+                'მიმდინარე ვიზუალი შეიცვლება. გამოქვეყნებისთვის დააჭირე შენახვას.'
+            );
+      if (!ok) return false;
+      pushHistory();
+      setLayout(normalizeHomeDesignInput(preset.layout as Partial<HomeDesignLayout>));
+      return true;
+    },
+    [designPresets, pushHistory]
+  );
+
+  const overwriteDesignPreset = React.useCallback(async (presetId: string) => {
+    const preset = designPresets.find((p) => p.id === presetId);
+    const label = preset?.name || 'დეფაულტი';
+    const ok =
+      typeof window === 'undefined'
+        ? true
+        : window.confirm(
+            `განვაახლოთ „${label}" მიმდინარე ვიზუალით?\n\nძველი ვერსია ამ პრესეტში ჩანაცვლდება.`
+          );
+    if (!ok) return false;
+    try {
+      const res = await updateHomeDesignPreset(presetId, {
+        layout: cloneLayout(layoutRef.current),
+      });
+      setDesignPresets(Array.isArray(res.presets) ? res.presets : []);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'განახლება ვერ მოხერხდა';
+      if (typeof window !== 'undefined') window.alert(msg);
+      return false;
+    }
+  }, [designPresets]);
+
+  const removeDesignPreset = React.useCallback(async (presetId: string) => {
+    const preset = designPresets.find((p) => p.id === presetId);
+    const ok =
+      typeof window === 'undefined'
+        ? true
+        : window.confirm(`წავშალოთ დეფაულტი „${preset?.name || presetId}"?`);
+    if (!ok) return false;
+    try {
+      const res = await deleteHomeDesignPreset(presetId);
+      setDesignPresets(Array.isArray(res.presets) ? res.presets : []);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'წაშლა ვერ მოხერხდა';
+      if (typeof window !== 'undefined') window.alert(msg);
+      return false;
+    }
+  }, [designPresets]);
 
   const value = React.useMemo(
     () => ({
@@ -1245,8 +1662,14 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       setSelectedRailItemId,
       selectedTypeItemId,
       setSelectedTypeItemId,
+      selectedSearchControlId,
+      setSelectedSearchControlId,
+      selectedDealChipId,
+      setSelectedDealChipId,
       selectedHeaderItemId,
       setSelectedHeaderItemId,
+      activeEditParams,
+      setActiveEditParams,
       isDirty,
       saving,
       saveDesignChanges,
@@ -1259,6 +1682,8 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       endHistoryGesture,
       updateBox,
       updateSearch,
+      updateSearchControl,
+      updateDealChip,
       updateHero,
       updateHeader,
       updateHeroText,
@@ -1281,6 +1706,7 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       removeThemeToggleIconMedia,
       updateServiceRail,
       updateQuickRail,
+      updateSocialLinks,
       addRailItem,
       removeRailItem,
       updateRailItem,
@@ -1292,6 +1718,15 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       setTypePanelItemMediaUrl,
       removeTypePanelItemImage,
       resetLayout,
+      resetToFactoryDefault,
+      designPresets,
+      designPresetsMax,
+      designPresetsLoading,
+      refreshDesignPresets,
+      saveCurrentAsPreset,
+      applyDesignPreset,
+      overwriteDesignPreset,
+      removeDesignPreset,
     }),
     [
       designMode,
@@ -1301,7 +1736,10 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       selectedId,
       selectedRailItemId,
       selectedTypeItemId,
+      selectedSearchControlId,
+      selectedDealChipId,
       selectedHeaderItemId,
+      activeEditParams,
       isDirty,
       saving,
       saveDesignChanges,
@@ -1314,6 +1752,8 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       endHistoryGesture,
       updateBox,
       updateSearch,
+      updateSearchControl,
+      updateDealChip,
       updateHero,
       updateHeader,
       updateHeroText,
@@ -1336,6 +1776,7 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       removeThemeToggleIconMedia,
       updateServiceRail,
       updateQuickRail,
+      updateSocialLinks,
       addRailItem,
       removeRailItem,
       updateRailItem,
@@ -1347,6 +1788,15 @@ export function HomeDesignProvider({ children }: { children: React.ReactNode }) 
       setTypePanelItemMediaUrl,
       removeTypePanelItemImage,
       resetLayout,
+      resetToFactoryDefault,
+      designPresets,
+      designPresetsMax,
+      designPresetsLoading,
+      refreshDesignPresets,
+      saveCurrentAsPreset,
+      applyDesignPreset,
+      overwriteDesignPreset,
+      removeDesignPreset,
     ]
   );
 

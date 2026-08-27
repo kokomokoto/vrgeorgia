@@ -103,7 +103,7 @@ export default function AgentPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {properties.filter(Boolean).map((p) => (
-              <PropertyCard key={p._id} p={p} />
+              <PropertyCard key={p._id} p={p} denseMeta />
             ))}
           </div>
         )}

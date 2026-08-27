@@ -378,6 +378,17 @@ export function resolveActiveThemeMode(
   return enabled[0] || modes[0] || createDefaultThemeModes()[0];
 }
 
+/**
+ * Slideshow ids for one theme mode only.
+ * Never borrow another mode's gallery — empty mode uses the default hero photo.
+ */
+export function heroSlideshowIdsForMode(mode: ThemeModeDef | null | undefined): string[] {
+  if (!mode) return [];
+  const selectedRot = mode.imageIds.filter((id) => mode.rotationIds.includes(id));
+  if (selectedRot.length > 0) return selectedRot;
+  return mode.imageIds.length > 0 ? [mode.imageIds[0]] : [];
+}
+
 export function allThemeModeImageIds(modes: ThemeModeDef[]): string[] {
   const ids: string[] = [];
   for (const mode of modes) {

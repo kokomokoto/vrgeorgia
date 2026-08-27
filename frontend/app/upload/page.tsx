@@ -62,6 +62,7 @@ import {
   saveUploadSession,
   type UploadSession,
 } from '@/lib/uploadSessionStorage';
+import { scheduleScrollFormStepIntoView } from '@/lib/scrollFormStep';
 
 // საქართველოს რეგიონები
 const GEORGIAN_REGIONS = [
@@ -169,6 +170,30 @@ export default function UploadPage() {
 
   // ეტაპი
   const [currentStep, setCurrentStep] = React.useState(1);
+  const stepCardRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
+  const scrollAfterStepChangeRef = React.useRef(false);
+
+  const goToStep = React.useCallback((step: number) => {
+    scrollAfterStepChangeRef.current = step >= 1;
+    setCurrentStep(step);
+  }, []);
+
+  const toggleStep = React.useCallback((step: number) => {
+    setCurrentStep((prev) => {
+      if (prev === step) {
+        scrollAfterStepChangeRef.current = false;
+        return 0;
+      }
+      scrollAfterStepChangeRef.current = true;
+      return step;
+    });
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (currentStep < 1 || !scrollAfterStepChangeRef.current) return;
+    scrollAfterStepChangeRef.current = false;
+    return scheduleScrollFormStepIntoView(stepCardRefs.current[currentStep]);
+  }, [currentStep]);
 
   // ფორმის მონაცემები
   const [title, setTitle] = React.useState('');
@@ -244,6 +269,8 @@ export default function UploadPage() {
   >('public');
 
   const [error, setError] = React.useState<string | null>(null);
+  /** გამოქვეყნების მცდელობის შემდეგ — გამოტოვებული სავალდებულო ეტაპები წითლად */
+  const [showRequiredErrors, setShowRequiredErrors] = React.useState(false);
   const [photoFailures, setPhotoFailures] = React.useState<PhotoUploadFailure[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [uploadPhase, setUploadPhase] = React.useState<
@@ -610,7 +637,10 @@ export default function UploadPage() {
     setTbilisiSubdistricts(parsed.tbilisiSubdistricts);
     if (parsed.label) setAddressMapFill((s) => ({ key: s.key + 1, text: parsed.label }));
   }, []);
-  const isStep4Complete = title !== '' && price !== '';
+  const isTitleValid = title.trim().length >= 2;
+  const priceNum = Number(price);
+  const isPriceValid = price.trim() !== '' && Number.isFinite(priceNum) && priceNum > 0;
+  const isStep4Complete = isTitleValid && isPriceValid;
   const isLand = isLandType(type);
   const isStep5Filled = isLand
     ? landStatus !== '' ||
@@ -656,6 +686,21 @@ export default function UploadPage() {
     isStep7Complete,
   ].filter(Boolean).length;
 
+  /** გამოქვეყნებისთვის სავალდებულო: ტიპი/გარიგება, რუკა, მდებარეობა, სათაური+ფასი, ფოტო */
+  const canPublish =
+    isStep1Complete &&
+    isStep2Complete &&
+    isStep3Complete &&
+    isStep4Complete &&
+    isStep6Complete;
+
+  const stepCardClass = (stepNum: number, complete: boolean, required: boolean) => {
+    if (currentStep === stepNum) return 'border-blue-500 shadow-lg';
+    if (complete) return 'border-green-300 bg-green-50/50';
+    if (showRequiredErrors && required && !complete) return 'border-red-400 bg-red-50/50';
+    return 'border-slate-200';
+  };
+
   if (!draftHydrated) {
     return <div className="flex items-center justify-center min-h-[400px] text-slate-500">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -696,13 +741,13 @@ export default function UploadPage() {
 
   // ეტაპების კონფიგურაცია
   const steps = [
-    { num: 1, title: t('type_and_deal_step'), icon: '🏠', complete: isStep1Complete },
-    { num: 2, title: t('map_marking'), icon: '🗺️', complete: isStep2Complete },
-    { num: 3, title: t('location_step'), icon: '📍', complete: isStep3Complete },
-    { num: 4, title: t('details_step'), icon: '📝', complete: isStep4Complete },
-    { num: 5, title: t('detailed_info_step'), icon: '🔧', complete: isStep5Complete },
-    { num: 6, title: t('photos_step'), icon: '📷', complete: isStep6Complete },
-    { num: 7, title: t('private_notes'), icon: '🔒', complete: isStep7Complete },
+    { num: 1, title: t('type_and_deal_step'), icon: '🏠', complete: isStep1Complete, required: true },
+    { num: 2, title: t('map_marking'), icon: '🗺️', complete: isStep2Complete, required: true },
+    { num: 3, title: t('location_step'), icon: '📍', complete: isStep3Complete, required: true },
+    { num: 4, title: t('details_step'), icon: '📝', complete: isStep4Complete, required: true },
+    { num: 5, title: t('detailed_info_step'), icon: '🔧', complete: isStep5Complete, required: false },
+    { num: 6, title: t('photos_step'), icon: '📷', complete: isStep6Complete, required: true },
+    { num: 7, title: t('private_notes'), icon: '🔒', complete: isStep7Complete, required: false },
   ];
 
   const handleSubmit = async () => {
@@ -727,6 +772,9 @@ export default function UploadPage() {
       if (lat === null || lng === null) throw new Error(t('choose_location_map'));
       if (!type) throw new Error(t('choose_property_type'));
       if (!dealType) throw new Error(t('choose_deal_type'));
+      if (!isTitleValid) throw new Error(t('error_title_required'));
+      if (!isPriceValid) throw new Error(t('error_price_required'));
+      if (photoItems.length === 0) throw new Error(t('error_photos_required'));
 
       const detailError = isLandType(type)
         ? null
@@ -917,6 +965,18 @@ export default function UploadPage() {
     }
   };
 
+  const tryPublish = () => {
+    if (loading || submittingRef.current) return;
+    if (!canPublish) {
+      setShowRequiredErrors(true);
+      const firstMissing = steps.find((s) => s.required && !s.complete);
+      if (firstMissing) goToStep(firstMissing.num);
+      setError(t('upload_required_missing'));
+      return;
+    }
+    void handleSubmit();
+  };
+
   return (
     <div className="w-full min-w-0">
       {/* Header */}
@@ -966,12 +1026,15 @@ export default function UploadPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        {/* მთავარი ფორმა */}
-        <div className="space-y-4">
+        {/* მთავარი ფორმა — ქვედა ადგილი, რომ ბოლო ეტაპებიც ჰედერთან ამოვიდეს */}
+        <div className="space-y-4 pb-[45vh]">
           {/* ეტაპი 1: გარიგების და ქონების ტიპი */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 1 ? 'border-blue-500 shadow-lg' : isStep1Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          <div
+            ref={(el) => { stepCardRefs.current[1] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${stepCardClass(1, isStep1Complete, true)} bg-white p-5`}
+          >
             <button 
-              onClick={() => setCurrentStep(prev => prev === 1 ? 0 : 1)}
+              onClick={() => toggleStep(1)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -995,8 +1058,16 @@ export default function UploadPage() {
             {currentStep === 1 && (
               <div className="mt-4 space-y-6">
                 <div>
-                  <h4 className="mb-3 text-sm font-semibold text-slate-800">💼 {t('deal_type_select')}</h4>
+                  <h4 className="mb-3 text-sm font-semibold text-slate-800">
+                    💼 {t('deal_type_select')}{' '}
+                    <span className="text-red-500" aria-hidden>
+                      *
+                    </span>
+                  </h4>
                   <p className="mb-3 text-sm text-slate-500">{t('what_deal')}</p>
+                  {showRequiredErrors && !dealType && (
+                    <p className="mb-2 text-xs font-medium text-red-600">{t('error_select_deal_type')}</p>
+                  )}
                   <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
                     {DEAL_TYPES.map((item) => (
                       <button
@@ -1025,8 +1096,16 @@ export default function UploadPage() {
 
                 {dealType !== '' && (
                   <div className="border-t border-slate-200 pt-6">
-                    <h4 className="mb-3 text-sm font-semibold text-slate-800">🏠 {t('property_type_select')}</h4>
+                    <h4 className="mb-3 text-sm font-semibold text-slate-800">
+                      🏠 {t('property_type_select')}{' '}
+                      <span className="text-red-500" aria-hidden>
+                        *
+                      </span>
+                    </h4>
                     <p className="mb-3 text-sm text-slate-500">{t('what_selling')}</p>
+                    {showRequiredErrors && !type && (
+                      <p className="mb-2 text-xs font-medium text-red-600">{t('error_select_type')}</p>
+                    )}
                     <div className="grid grid-cols-3 gap-3">
                       {PROPERTY_TYPES.map((item) => (
                         <button
@@ -1050,7 +1129,7 @@ export default function UploadPage() {
                 {isStep1Complete && (
                   <button
                     type="button"
-                    onClick={() => setCurrentStep(2)}
+                    onClick={() => goToStep(2)}
                     className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white transition-colors hover:bg-blue-700"
                   >
                     {t('next_step')}
@@ -1061,9 +1140,12 @@ export default function UploadPage() {
           </div>
 
           {/* ეტაპი 2: რუკაზე მონიშვნა */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 2 ? 'border-blue-500 shadow-lg' : isStep2Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          <div
+            ref={(el) => { stepCardRefs.current[2] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${stepCardClass(2, isStep2Complete, true)} bg-white p-5`}
+          >
             <button 
-              onClick={() => setCurrentStep(prev => prev === 2 ? 0 : 2)}
+              onClick={() => toggleStep(2)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -1173,7 +1255,7 @@ export default function UploadPage() {
 
                 {isStep2Complete && (
                   <button 
-                    onClick={() => setCurrentStep(3)}
+                    onClick={() => goToStep(3)}
                     className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                   >
                     {t('next_step')}
@@ -1184,9 +1266,12 @@ export default function UploadPage() {
           </div>
 
           {/* ეტაპი 3: მდებარეობა */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 3 ? 'border-blue-500 shadow-lg' : isStep3Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          <div
+            ref={(el) => { stepCardRefs.current[3] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${stepCardClass(3, isStep3Complete, true)} bg-white p-5`}
+          >
             <button 
-              onClick={() => setCurrentStep(prev => prev === 3 ? 0 : 3)}
+              onClick={() => toggleStep(3)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -1268,7 +1353,7 @@ export default function UploadPage() {
 
                 {isStep3Complete && (
                   <button 
-                    onClick={() => setCurrentStep(4)}
+                    onClick={() => goToStep(4)}
                     className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                   >
                     {t('next_step')}
@@ -1279,9 +1364,12 @@ export default function UploadPage() {
           </div>
 
           {/* ეტაპი 4: ძირითადი ინფორმაცია */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 4 ? 'border-blue-500 shadow-lg' : isStep4Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          <div
+            ref={(el) => { stepCardRefs.current[4] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${stepCardClass(4, isStep4Complete, true)} bg-white p-5`}
+          >
             <button 
-              onClick={() => setCurrentStep(prev => prev === 4 ? 0 : 4)}
+              onClick={() => toggleStep(4)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -1310,13 +1398,25 @@ export default function UploadPage() {
             {currentStep === 4 && (
               <div className="space-y-4 mt-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">✏️ {t('title_label_icon')}</label>
-                  <input 
-                    className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" 
-                    placeholder={t('title_example')} 
-                    value={title} 
-                    onChange={(e) => setTitle(e.target.value)} 
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    ✏️ {t('title_label_icon')}{' '}
+                    <span className="text-red-500" aria-hidden>
+                      *
+                    </span>
+                  </label>
+                  <input
+                    className={`w-full rounded-lg border px-4 py-3 text-sm focus:ring-2 ${
+                      showRequiredErrors && !isTitleValid
+                        ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                        : 'border-slate-300 focus:border-blue-500 focus:ring-blue-200'
+                    }`}
+                    placeholder={t('title_example')}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
                   />
+                  {showRequiredErrors && !isTitleValid && (
+                    <p className="mt-1 text-xs font-medium text-red-600">{t('error_title_required')}</p>
+                  )}
                 </div>
 
                 <div>
@@ -1330,21 +1430,32 @@ export default function UploadPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <LinkedPriceInputs
-                    price={price}
-                    priceType={priceType}
-                    priceCurrency={priceCurrency}
-                    areaSqm={
-                      !isLand && Number(houseSqm) > 0
-                        ? Number(houseSqm)
-                        : Number(sqm) > 0
-                          ? Number(sqm)
-                          : 0
+                  <div
+                    className={
+                      showRequiredErrors && !isPriceValid
+                        ? 'rounded-lg ring-2 ring-red-300 ring-offset-2'
+                        : undefined
                     }
-                    onPriceChange={setPrice}
-                    onPriceTypeChange={setPriceType}
-                    onCurrencyChange={setPriceCurrency}
-                  />
+                  >
+                    <LinkedPriceInputs
+                      price={price}
+                      priceType={priceType}
+                      priceCurrency={priceCurrency}
+                      areaSqm={
+                        !isLand && Number(houseSqm) > 0
+                          ? Number(houseSqm)
+                          : Number(sqm) > 0
+                            ? Number(sqm)
+                            : 0
+                      }
+                      onPriceChange={setPrice}
+                      onPriceTypeChange={setPriceType}
+                      onCurrencyChange={setPriceCurrency}
+                    />
+                  </div>
+                  {showRequiredErrors && !isPriceValid && (
+                    <p className="-mt-2 text-xs font-medium text-red-600">{t('error_price_required')}</p>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     {!isLand && (
                     <div>
@@ -1409,7 +1520,7 @@ export default function UploadPage() {
 
                 {isStep4Complete && (
                   <button 
-                    onClick={() => setCurrentStep(5)}
+                    onClick={() => goToStep(5)}
                     className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                   >
                     {t('next_step')}
@@ -1420,9 +1531,12 @@ export default function UploadPage() {
           </div>
 
           {/* ეტაპი 5: დეტალური ინფორმაცია */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          <div
+            ref={(el) => { stepCardRefs.current[5] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${stepCardClass(5, isStep5Complete, false)} bg-white p-5`}
+          >
             <button 
-              onClick={() => setCurrentStep(prev => prev === 5 ? 0 : 5)}
+              onClick={() => toggleStep(5)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -1739,9 +1853,9 @@ export default function UploadPage() {
                 </>
                 )}
 
-                {/* შემდეგი ეტაპი - ყოველთვის ხელმისაწვდომია რადგან Step 6 არასავალდებულოა */}
+                {/* შემდეგი ეტაპი — დეტალური ინფო არასავალდებულოა; ფოტოები სავალდებულოა გამოქვეყნებისთვის */}
                 <button 
-                  onClick={() => setCurrentStep(6)}
+                  onClick={() => goToStep(6)}
                   className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 >
                   {t('next_step')}
@@ -1751,9 +1865,12 @@ export default function UploadPage() {
           </div>
 
           {/* ეტაპი 6: ფოტოები */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          <div
+            ref={(el) => { stepCardRefs.current[6] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${stepCardClass(6, isStep6Complete, true)} bg-white p-5`}
+          >
             <button 
-              onClick={() => setCurrentStep(prev => prev === 6 ? 0 : 6)}
+              onClick={() => toggleStep(6)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -1761,10 +1878,18 @@ export default function UploadPage() {
                   {isStep6Complete ? '✓' : '6'}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800">📷 {t('photos_step')}</h3>
-                  <p className="text-sm text-slate-500">{t('photos_desc')}</p>
+                  <h3 className="text-lg font-semibold text-slate-800">
+                    📷 {t('photos_step')}{' '}
+                    <span className="text-red-500" aria-hidden>
+                      *
+                    </span>
+                  </h3>
+                  <p className="text-sm text-slate-500">{t('photos_desc_required')}</p>
                 </div>
                 {isStep6Complete && <span className="ml-auto text-green-600 font-medium">{photoItems.length} {t('photos_count')}</span>}
+                {showRequiredErrors && !isStep6Complete && (
+                  <span className="ml-auto text-sm font-medium text-red-600">{t('error_photos_required')}</span>
+                )}
               </div>
             </button>
             
@@ -1917,9 +2042,12 @@ export default function UploadPage() {
           </div>
 
           {/* ეტაპი 7: პირადი ჩანაწერი */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          <div
+            ref={(el) => { stepCardRefs.current[7] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${stepCardClass(7, isStep7Complete, false)} bg-white p-5`}
+          >
             <button 
-              onClick={() => setCurrentStep(prev => prev === 7 ? 0 : 7)}
+              onClick={() => toggleStep(7)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -1972,13 +2100,14 @@ export default function UploadPage() {
           )}
 
           <button
+            type="button"
             className={`w-full py-4 rounded-xl text-lg font-bold transition-all ${
-              completedSteps >= 6
+              canPublish
                 ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl'
-                : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
             }`}
-            disabled={loading || completedSteps < 6}
-            onClick={handleSubmit}
+            disabled={loading}
+            onClick={tryPublish}
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -2026,12 +2155,17 @@ export default function UploadPage() {
 
             {/* ეტაპების სია */}
             <div className="space-y-3">
-              {steps.map((step) => (
+              {steps.map((step) => {
+                const missingRequired = showRequiredErrors && step.required && !step.complete;
+                return (
                 <button
                   key={step.num}
-                  onClick={() => setCurrentStep(step.num)}
+                  type="button"
+                  onClick={() => goToStep(step.num)}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${
-                    currentStep === step.num
+                    missingRequired
+                      ? 'bg-red-50 border-2 border-red-400 hover:bg-red-100'
+                      : currentStep === step.num
                       ? 'bg-blue-50 border-2 border-blue-500'
                       : step.complete
                       ? 'bg-green-50 border border-green-200 hover:bg-green-100'
@@ -2041,6 +2175,8 @@ export default function UploadPage() {
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                     step.complete
                       ? 'bg-green-500 text-white'
+                      : missingRequired
+                      ? 'bg-red-500 text-white'
                       : currentStep === step.num
                       ? 'bg-blue-600 text-white'
                       : 'bg-slate-300 text-slate-600'
@@ -2048,13 +2184,31 @@ export default function UploadPage() {
                     {step.complete ? '✓' : step.num}
                   </div>
                   <div className="flex-1 text-left">
-                    <div className={`font-medium ${step.complete ? 'text-green-700' : 'text-slate-700'}`}>
+                    <div
+                      className={`font-medium ${
+                        step.complete
+                          ? 'text-green-700'
+                          : missingRequired
+                            ? 'text-red-700'
+                            : 'text-slate-700'
+                      }`}
+                    >
                       {step.icon} {step.title}
+                      {step.required && !step.complete && (
+                        <span className="ml-1 text-red-500" aria-hidden>
+                          *
+                        </span>
+                      )}
                     </div>
+                    {missingRequired && (
+                      <div className="text-xs font-medium text-red-600">{t('upload_required_badge')}</div>
+                    )}
                   </div>
                   {step.complete && <span className="text-green-500">✅</span>}
+                  {missingRequired && <span className="text-red-500">!</span>}
                 </button>
-              ))}
+                );
+              })}
             </div>
 
             {canSetListingVisibility && (

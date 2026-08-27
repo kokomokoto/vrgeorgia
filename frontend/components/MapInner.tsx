@@ -237,10 +237,18 @@ export default function MapInner({
   };
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    let cancelled = false;
+    let createdMap: any = null;
 
-    import('leaflet').then((L) => {
-      if (mapInstanceRef.current) return;
+    const initMap = async () => {
+      const L = await import('leaflet');
+      if (cancelled || mapInstanceRef.current) return;
+
+      const container = mapRef.current;
+      if (!container || !container.isConnected) return;
+      if ((container as HTMLElement & { _leaflet_id?: number })._leaflet_id) {
+        delete (container as HTMLElement & { _leaflet_id?: number })._leaflet_id;
+      }
 
       const DefaultIcon = L.icon({
         iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -251,7 +259,12 @@ export default function MapInner({
       });
       L.Marker.prototype.options.icon = DefaultIcon;
 
-      const map = L.map(mapRef.current!).setView([defaultCenter.lat, defaultCenter.lng], defaultZoom);
+      const map = L.map(container).setView([defaultCenter.lat, defaultCenter.lng], defaultZoom);
+      if (cancelled) {
+        map.remove();
+        return;
+      }
+      createdMap = map;
 
       const initialTile = resolveMapTileUrl(currentMapTileStyle(), document.documentElement.classList.contains('dark'));
       const attribution =
@@ -281,15 +294,20 @@ export default function MapInner({
 
       mapInstanceRef.current = map;
       setReady(true);
-    });
+    };
+
+    void initMap();
 
     return () => {
+      cancelled = true;
       if (boundsReportTimerRef.current) clearTimeout(boundsReportTimerRef.current);
       listHoverPulseRef.current = null;
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+      const map = createdMap || mapInstanceRef.current;
+      if (map) {
+        map.remove();
       }
+      mapInstanceRef.current = null;
+      tileLayerRef.current = null;
     };
   }, []);
 

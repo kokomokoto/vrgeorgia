@@ -6,6 +6,13 @@ import {
   DESIGNABLE_HINTS,
   DESIGNABLE_LABELS,
   DEFAULT_SEARCH,
+  SEARCH_CONTROL_IDS,
+  SEARCH_CONTROL_LABELS,
+  DEAL_CHIP_IDS,
+  DEAL_CHIP_LABELS,
+  DEFAULT_DEAL_BAR,
+  resolveSearchControl,
+  normalizeDealBar,
   HEADER_ITEM_IDS,
   HEADER_ITEM_LABELS,
   HERO_TRANSITIONS,
@@ -16,16 +23,29 @@ import {
   RAIL_RADIUS_ROUNDED,
   RAIL_RADIUS_SQUARE,
   TYPE_PANEL_COUNT_FONT_DEFAULT,
+  TYPE_PANEL_COUNT_POS_DEFAULT,
   TYPE_PANEL_ICON_FONT_DEFAULT,
+  TYPE_PANEL_ICON_POS_DEFAULT,
   TYPE_PANEL_LABEL_FONT_DEFAULT,
+  TYPE_PANEL_LABEL_POS_DEFAULT,
+  TYPE_PANEL_MEDIA_POS_DEFAULT,
+  TYPE_PANEL_MEDIA_SCALE_DEFAULT,
   TYPE_PANEL_RADIUS_DEFAULT,
   clampFontSize,
   clampFontWeight,
+  clampMediaScale,
+  clampOpacity,
   clampPx,
   clampRailPercent,
   clampRailRadius,
+  clampTypeLabelMaxW,
+  HEADER_ITEM_GAP_PX_DEFAULT,
+  HEADER_ITEM_GAP_PX_MAX,
+  clampHeaderItemGapPx,
   headerItemLabelKey,
+  resolveHeaderItemNoOverlap,
   resolveHeaderItemPos,
+  spreadHeaderItemPositions,
   resolveRailItemsForMode,
   resolveTypePanelItemsForMode,
   isRailSectionHiddenForMode,
@@ -48,7 +68,16 @@ import {
 } from '@/lib/themeModes';
 import { hexToRgba, parseColorWithOpacity, MAP_TILE_OPTIONS } from '@/lib/themePalettes';
 import type { MapTileStyle } from '@/lib/themePalettes';
+import {
+  EMPTY_SITE_SOCIAL_LINKS,
+  SITE_SOCIAL_FIELD_LABELS,
+  SITE_SOCIAL_NETWORKS,
+  SITE_SOCIAL_PLACEHOLDERS,
+  siteSocialChatUrl,
+  type SiteSocialLinks,
+} from '@/lib/siteSocialLinks';
 import { useTheme } from '@/components/ThemeProvider';
+import { useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
 import {
   MAX_HERO_IMAGES_PER_MODE,
   resolveHeroImageUrls,
@@ -60,6 +89,7 @@ import {
   parseExternalMediaId,
   type DesignMediaKind,
 } from '@/lib/designMedia';
+import { headerOverlapOptsForEditor, queryHeaderCanvas, seedVisibleHeaderPositions } from '@/lib/headerCanvasMeasure';
 
 const SELECT_ORDER: DesignableId[] = [
   'header',
@@ -73,6 +103,7 @@ const SELECT_ORDER: DesignableId[] = [
   'listings',
   'quickRail',
   'theme',
+  'social',
 ];
 
 const INSPECTOR_UI_KEY = 'vhome-design-inspector-ui-v2';
@@ -112,11 +143,14 @@ function clampInspectorSize(
       h: collapsed ? 48 : Math.max(INSPECTOR_MIN_H, Math.round(h)),
     };
   }
-  const maxW = Math.max(INSPECTOR_MIN_W, Math.min(INSPECTOR_MAX_W, window.innerWidth - 16));
-  const maxH = Math.max(INSPECTOR_MIN_H, Math.floor(window.innerHeight * 0.92));
+  const viewportW = Math.max(0, window.innerWidth - 16);
+  const minW = Math.min(INSPECTOR_MIN_W, Math.max(200, viewportW));
+  const maxW = Math.max(minW, Math.min(INSPECTOR_MAX_W, viewportW));
+  const maxH = Math.max(180, Math.floor(window.innerHeight * 0.92));
+  const minH = Math.min(INSPECTOR_MIN_H, maxH);
   return {
-    w: Math.max(INSPECTOR_MIN_W, Math.min(maxW, Math.round(w))),
-    h: collapsed ? 48 : Math.max(INSPECTOR_MIN_H, Math.min(maxH, Math.round(h))),
+    w: Math.max(minW, Math.min(maxW, Math.round(w))),
+    h: collapsed ? 48 : Math.max(minH, Math.min(maxH, Math.round(h))),
   };
 }
 
@@ -165,6 +199,7 @@ function loadInspectorUi(): InspectorUiState {
 /** Floating inspector — only visible in Design Mode on the home page */
 export function DesignInspector() {
   const ctx = useHomeDesignOptional();
+  const isDesktopLayout = useIsDesignDesktop();
   const [saveFlash, setSaveFlash] = React.useState(false);
   const [ui, setUi] = React.useState<InspectorUiState>(() => loadInspectorUi());
   const [hydratedUi, setHydratedUi] = React.useState(false);
@@ -184,10 +219,13 @@ export function DesignInspector() {
     origW: number;
     origH: number;
   } | null>(null);
+  const bodyRef = React.useRef<HTMLDivElement | null>(null);
   const { activeModeId, modeInfos, setActiveModeId } = useTheme();
   const activeModeLabel =
     modeInfos.find((m) => m.id === activeModeId)?.label || activeModeId || 'დღის რეჟიმი';
   const [showDangerMenu, setShowDangerMenu] = React.useState(false);
+  const [presetName, setPresetName] = React.useState('');
+  const [presetBusy, setPresetBusy] = React.useState(false);
 
   React.useEffect(() => {
     setUi(loadInspectorUi());
@@ -211,7 +249,61 @@ export function DesignInspector() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // Hooks must run before any early return (Rules of Hooks).
+  const selectedId = ctx?.selectedId ?? null;
+  const selectedHeaderItemId = ctx?.selectedHeaderItemId ?? null;
+  const selectedRailItemId = ctx?.selectedRailItemId ?? null;
+  const selectedTypeItemId = ctx?.selectedTypeItemId ?? null;
+  const activeEditParams = ctx?.activeEditParams ?? [];
+
+  React.useEffect(() => {
+    if (!ctx?.designMode || !ctx.canDesignMode) return;
+    if (!selectedId) return;
+    setUi((prev) => (prev.collapsed ? { ...prev, collapsed: false } : prev));
+  }, [
+    ctx?.designMode,
+    ctx?.canDesignMode,
+    selectedId,
+    selectedHeaderItemId,
+    selectedRailItemId,
+    selectedTypeItemId,
+  ]);
+
+  React.useEffect(() => {
+    if (!ctx?.designMode || !ctx.canDesignMode) return;
+    if (!selectedId || ui.collapsed) return;
+    const t = window.setTimeout(() => {
+      const body = bodyRef.current;
+      if (!body) return;
+      if (activeEditParams.length > 0) {
+        const key = activeEditParams[0];
+        const el = body.querySelector<HTMLElement>(`[data-edit-param="${key}"]`);
+        if (el) {
+          el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          return;
+        }
+      }
+      const focused = body.querySelector<HTMLElement>('[data-inspector-focused="true"]');
+      if (focused) {
+        focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+      body.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 40);
+    return () => window.clearTimeout(t);
+  }, [
+    ctx?.designMode,
+    ctx?.canDesignMode,
+    selectedId,
+    selectedHeaderItemId,
+    selectedRailItemId,
+    selectedTypeItemId,
+    activeEditParams,
+    ui.collapsed,
+  ]);
+
   const onTitlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDesktopLayout) return;
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest('button, a, input, select, textarea, label')) return;
@@ -301,13 +393,9 @@ export function DesignInspector() {
 
   const {
     layout,
-    selectedId,
     setSelectedId,
-    selectedRailItemId,
     setSelectedRailItemId,
-    selectedTypeItemId,
     setSelectedTypeItemId,
-    selectedHeaderItemId,
     setSelectedHeaderItemId,
     updateBox,
     updateSearch,
@@ -333,6 +421,7 @@ export function DesignInspector() {
     removeThemeToggleIconMedia,
     updateServiceRail,
     updateQuickRail,
+    updateSocialLinks,
     addRailItem,
     removeRailItem,
     updateRailItem,
@@ -344,6 +433,14 @@ export function DesignInspector() {
     setTypePanelItemMediaUrl,
     removeTypePanelItemImage,
     resetLayout,
+    resetToFactoryDefault,
+    designPresets,
+    designPresetsMax,
+    designPresetsLoading,
+    saveCurrentAsPreset,
+    applyDesignPreset,
+    overwriteDesignPreset,
+    removeDesignPreset,
     setDesignMode,
     isDirty,
     saving,
@@ -362,6 +459,7 @@ export function DesignInspector() {
   };
 
   const collapsed = ui.collapsed;
+
   const typeItemsForMode = resolveTypePanelItemsForMode(
     layout.typePanel.items || [],
     activeModeId || 'day'
@@ -386,16 +484,30 @@ export function DesignInspector() {
           ? DESIGNABLE_LABELS[selectedId]
           : null;
 
+  const mobileDock = !isDesktopLayout;
+
   return (
     <div
       data-design-inspector
       className="fixed z-[400] flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl dark:border-zinc-600 dark:bg-zinc-900"
-      style={{
-        left: ui.x,
-        top: ui.y,
-        width: ui.w,
-        height: collapsed ? 'auto' : ui.h,
-      }}
+      style={
+        mobileDock
+          ? {
+              left: 8,
+              right: 8,
+              bottom: 8,
+              top: 'auto',
+              width: 'auto',
+              height: collapsed ? 'auto' : 'min(46vh, 420px)',
+              maxHeight: '46vh',
+            }
+          : {
+              left: ui.x,
+              top: ui.y,
+              width: ui.w,
+              height: collapsed ? 'auto' : ui.h,
+            }
+      }
     >
       <div
         className="flex shrink-0 cursor-grab touch-none select-none items-center gap-2 border-b border-slate-200 bg-slate-50 px-2.5 py-2 active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-950"
@@ -444,7 +556,7 @@ export function DesignInspector() {
       </div>
 
       {collapsed ? null : (
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-3">
           <div className="mb-2 flex gap-1">
             <button
               type="button"
@@ -532,13 +644,182 @@ export function DesignInspector() {
 
           <p className="mb-3 text-[10px] leading-snug text-slate-400">
             ცვლილებები ინახება რეჟიმში: <strong className="text-slate-600 dark:text-zinc-300">{activeModeLabel}</strong>
-            {editingLabel ? (
-              <>
-                {' '}
-                · ახლა: <strong className="text-slate-600 dark:text-zinc-300">{editingLabel}</strong>
-              </>
-            ) : null}
           </p>
+
+          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-zinc-700 dark:bg-zinc-950/60">
+            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              დეფაულტები
+            </div>
+            <div className="mb-2 flex flex-wrap gap-1">
+              <button
+                type="button"
+                onClick={resetToFactoryDefault}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold text-slate-800 hover:bg-slate-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                title="კოდის საწყისი ვიზუალი — ყველაფერი, მათ შორის რეჟიმები"
+              >
+                Default
+              </button>
+              <button
+                type="button"
+                onClick={resetLayout}
+                className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-950 hover:bg-amber-100 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200"
+                title="მხოლოდ პოზიციები და ზომები — ჩამქრალი რჩება ჩამქრალი"
+              >
+                პოზიციები ↺
+              </button>
+            </div>
+            <div className="mb-1.5 flex gap-1">
+              <input
+                type="text"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                maxLength={48}
+                placeholder="ახალი დეფაულტის სახელი…"
+                className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+              />
+              <button
+                type="button"
+                disabled={presetBusy || !presetName.trim() || designPresets.length >= designPresetsMax}
+                onClick={() => {
+                  void (async () => {
+                    setPresetBusy(true);
+                    const ok = await saveCurrentAsPreset(presetName);
+                    setPresetBusy(false);
+                    if (ok) setPresetName('');
+                  })();
+                }}
+                className="shrink-0 rounded-md bg-blue-600 px-2 py-1 text-[11px] font-bold text-white enabled:hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                title="მიმდინარე ვიზუალი შეინახე როგორც დეფაულტი"
+              >
+                შენახვა
+              </button>
+            </div>
+            <p className="mb-1.5 text-[9px] leading-snug text-slate-400">
+              შეგიძლია რამდენიმე დეფაულტი ({designPresets.length}/{designPresetsMax}). გამოყენების შემდეგ დააჭირე
+              „შენახვა“ გამოქვეყნებისთვის.
+            </p>
+            {designPresetsLoading ? (
+              <p className="text-[10px] text-slate-400">იტვირთება…</p>
+            ) : designPresets.length === 0 ? (
+              <p className="text-[10px] text-slate-400">ჯერ არც ერთი შენახული დეფაულტი არაა.</p>
+            ) : (
+              <ul className="max-h-36 space-y-1 overflow-y-auto">
+                {designPresets.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-800 dark:text-zinc-100" title={p.name}>
+                      {p.name}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={presetBusy}
+                      onClick={() => {
+                        void (async () => {
+                          setPresetBusy(true);
+                          await applyDesignPreset(p.id);
+                          setPresetBusy(false);
+                        })();
+                      }}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                    >
+                      გამოყენება
+                    </button>
+                    <button
+                      type="button"
+                      disabled={presetBusy}
+                      onClick={() => {
+                        void (async () => {
+                          setPresetBusy(true);
+                          await overwriteDesignPreset(p.id);
+                          setPresetBusy(false);
+                        })();
+                      }}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      title="განაახლე ეს დეფაულტი მიმდინარე ვიზუალით"
+                    >
+                      განახლება
+                    </button>
+                    <button
+                      type="button"
+                      disabled={presetBusy}
+                      onClick={() => {
+                        void (async () => {
+                          setPresetBusy(true);
+                          await removeDesignPreset(p.id);
+                          setPresetBusy(false);
+                        })();
+                      }}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {editingLabel ? (
+            <div
+              data-inspector-focused="true"
+              className="mb-3 rounded-lg border border-blue-400 bg-blue-50 px-2.5 py-2 dark:border-blue-500 dark:bg-blue-950/50"
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                მონიშნული ეკრანზე
+              </div>
+              <div className="mt-0.5 text-[13px] font-bold text-blue-900 dark:text-blue-100">
+                {editingLabel}
+              </div>
+              {activeEditParams.length > 0 ? (
+                <div className="mt-1 text-[11px] font-medium text-blue-800 dark:text-blue-200">
+                  იცვლება:{' '}
+                  {activeEditParams
+                    .map((p) =>
+                      p === 'posX'
+                        ? 'X (%)'
+                        : p === 'posY'
+                          ? 'Y (%)'
+                          : p === 'headerH'
+                            ? 'სიმაღლე (H)'
+                            : p === 'itemW'
+                              ? 'Item W'
+                              : p === 'itemH'
+                                ? 'Item H'
+                                : p === 'mobileX'
+                                  ? 'Mobile X'
+                                  : p === 'mobileY'
+                                    ? 'Mobile Y'
+                                    : p === 'labelX'
+                                      ? 'Label X'
+                                      : p === 'labelY'
+                                        ? 'Label Y'
+                                        : p === 'countX'
+                                          ? 'რაოდენობა X'
+                                          : p === 'countY'
+                                            ? 'რაოდენობა Y'
+                                            : p === 'iconX'
+                                              ? 'იკონი X'
+                                              : p === 'iconY'
+                                                ? 'იკონი Y'
+                                                : p === 'mediaX'
+                                                  ? 'ფოტო X'
+                                                  : p === 'mediaY'
+                                                    ? 'ფოტო Y'
+                                                    : p === 'mediaScale'
+                                                      ? 'ფოტოს ზომა'
+                                        : p.toUpperCase()
+                    )
+                    .join(' · ')}
+                </div>
+              ) : (
+                <div className="mt-1 text-[10px] text-blue-700/80 dark:text-blue-300/80">
+                  ქვემოთ გამოჩნდება ამ ბლოკის პარამეტრები.
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {!selectedId ? (
             <p className="mb-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-2.5 py-3 text-center text-[11px] text-slate-500 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-400">
@@ -558,6 +839,13 @@ export function DesignInspector() {
           onSetBgImage={setHeaderBgImage}
           onSetBgMediaUrl={setHeaderBgMediaUrl}
           onRemoveBgMedia={removeHeaderBgMedia}
+        />
+      ) : null}
+
+      {selectedId === 'social' ? (
+        <SocialLinksEditor
+          links={layout.socialLinks ?? EMPTY_SITE_SOCIAL_LINKS}
+          onChange={updateSocialLinks}
         />
       ) : null}
 
@@ -604,6 +892,28 @@ export function DesignInspector() {
             }}
             onChange={(patch) => updateBox('heroText', patch)}
           />
+          <LayerOpacityField
+            value={layout.heroText.opacity}
+            onChange={(opacity) => updateHeroText({ opacity })}
+          />
+          <div className="grid grid-cols-2 gap-2">
+              <NumField
+                label="ტელეფონი X"
+                value={layout.heroText.mobileX ?? 16}
+                min={-120}
+                max={360}
+                paramKey="mobileX"
+                onCommit={(mobileX) => updateHeroText({ mobileX })}
+              />
+              <NumField
+                label="ტელეფონი Y"
+                value={layout.heroText.mobileY ?? 16}
+                min={-80}
+                max={520}
+                paramKey="mobileY"
+                onCommit={(mobileY) => updateHeroText({ mobileY })}
+              />
+          </div>
           <TextField
             label="მთავარი სათაური"
             value={layout.heroText.title ?? ''}
@@ -684,9 +994,29 @@ export function DesignInspector() {
                   max={40}
                   onCommit={(gap) => updateBox('typePanel', { gap })}
                 />
+                <NumField
+                  label="ტელეფონი X"
+                  value={layout.typePanel.mobileX ?? 0}
+                  min={-24}
+                  max={24}
+                  paramKey="mobileX"
+                  onCommit={(mobileX) => updateBox('typePanel', { mobileX })}
+                />
+                <NumField
+                  label="ტელეფონი Y"
+                  value={layout.typePanel.mobileY ?? 0}
+                  min={-48}
+                  max={64}
+                  paramKey="mobileY"
+                  onCommit={(mobileY) => updateBox('typePanel', { mobileY })}
+                />
               </div>
+              <LayerOpacityField
+                value={layout.typePanel.opacity}
+                onChange={(opacity) => updateBox('typePanel', { opacity })}
+              />
               <p className="text-[11px] leading-snug text-slate-500 dark:text-zinc-400">
-                თუ მონიშვნისას/hover-ზე ლურჯი საზღვარი იჭრება — გაზარდე H ან pad.
+                თუ მონიშვნისას/hover-ზე ლურჯი საზღვარი იჭრება — გაზარდე H ან pad. ტელეფონზე გადაათრიე პანელი.
               </p>
               <TypePanelItemsEditor
                 items={typeItemsForMode}
@@ -704,16 +1034,47 @@ export function DesignInspector() {
             <SearchEditor search={layout.search} onUpdate={updateSearch} />
           ) : null}
 
+          {selectedId === 'dealBar' ? (
+            <DealBarChipsEditor />
+          ) : null}
+
           {selectedId === 'map' || selectedId === 'dealBar' || selectedId === 'listings' ? (
-            <NumGrid
-              values={{
-                x: layout[selectedId].x,
-                y: layout[selectedId].y,
-                w: layout[selectedId].w,
-                h: layout[selectedId].h,
-              }}
-              onChange={(patch) => updateBox(selectedId, patch)}
-            />
+            <div className="space-y-2">
+              <NumGrid
+                values={{
+                  x: layout[selectedId].x,
+                  y: layout[selectedId].y,
+                  w: layout[selectedId].w,
+                  h: layout[selectedId].h,
+                }}
+                onChange={(patch) => updateBox(selectedId, patch)}
+              />
+              <LayerOpacityField
+                value={layout[selectedId].opacity}
+                onChange={(opacity) => updateBox(selectedId, { opacity })}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <NumField
+                  label="ტელეფონი X"
+                  value={layout[selectedId].mobileX ?? 0}
+                  min={-24}
+                  max={24}
+                  paramKey="mobileX"
+                  onCommit={(mobileX) => updateBox(selectedId, { mobileX })}
+                />
+                <NumField
+                  label="ტელეფონი Y"
+                  value={layout[selectedId].mobileY ?? 0}
+                  min={-48}
+                  max={64}
+                  paramKey="mobileY"
+                  onCommit={(mobileY) => updateBox(selectedId, { mobileY })}
+                />
+              </div>
+              <p className="text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+                ტელეფონზე გადაათრიე ბლოკი ან აქ ჩაწერე. უარყოფითი Y = უფრო მაღლა / ნაკლები დაშორება.
+              </p>
+            </div>
           ) : null}
 
       {selectedId === 'serviceRail' ? (
@@ -746,18 +1107,20 @@ export function DesignInspector() {
           />
           <InspectorFold title="პოზიცია / ზომა">
           <div className="grid grid-cols-2 gap-2">
-            <NumField label="X" value={layout.serviceRail.x} onCommit={(x) => updateServiceRail({ x })} />
-            <NumField label="Y" value={layout.serviceRail.y} onCommit={(y) => updateServiceRail({ y })} />
+            <NumField label="X" value={layout.serviceRail.x} paramKey="x" onCommit={(x) => updateServiceRail({ x })} />
+            <NumField label="Y" value={layout.serviceRail.y} paramKey="y" onCommit={(y) => updateServiceRail({ y })} />
             <NumField
               label="სიგანე (W)"
               value={layout.serviceRail.itemW}
               min={40}
+              paramKey="itemW"
               onCommit={(itemW) => updateServiceRail({ itemW })}
             />
             <NumField
               label="სიმაღლე (H)"
               value={layout.serviceRail.itemH}
               min={40}
+              paramKey="itemH"
               onCommit={(itemH) => updateServiceRail({ itemH })}
             />
             <NumField
@@ -768,6 +1131,10 @@ export function DesignInspector() {
             />
           </div>
           </InspectorFold>
+          <LayerOpacityField
+            value={layout.serviceRail.opacity}
+            onChange={(opacity) => updateServiceRail({ opacity })}
+          />
           <p className="text-[10px] leading-snug text-slate-400">
             {DESIGNABLE_HINTS.serviceRail}
           </p>
@@ -819,18 +1186,20 @@ export function DesignInspector() {
           />
           <InspectorFold title="პოზიცია / ზომა">
           <div className="grid grid-cols-2 gap-2">
-            <NumField label="X" value={layout.quickRail.x} onCommit={(x) => updateQuickRail({ x })} />
-            <NumField label="Y" value={layout.quickRail.y} onCommit={(y) => updateQuickRail({ y })} />
+            <NumField label="X" value={layout.quickRail.x} paramKey="x" onCommit={(x) => updateQuickRail({ x })} />
+            <NumField label="Y" value={layout.quickRail.y} paramKey="y" onCommit={(y) => updateQuickRail({ y })} />
             <NumField
               label="სიგანე (W)"
               value={layout.quickRail.w}
               min={80}
+              paramKey="itemW"
               onCommit={(w) => updateQuickRail({ w })}
             />
             <NumField
               label="ბარათის H"
               value={layout.quickRail.itemH}
               min={40}
+              paramKey="itemH"
               onCommit={(itemH) => updateQuickRail({ itemH })}
             />
             <NumField
@@ -841,6 +1210,10 @@ export function DesignInspector() {
             />
           </div>
           </InspectorFold>
+          <LayerOpacityField
+            value={layout.quickRail.opacity}
+            onChange={(opacity) => updateQuickRail({ opacity })}
+          />
           <p className="text-[10px] leading-snug text-slate-400">
             {DESIGNABLE_HINTS.quickRail}
           </p>
@@ -872,16 +1245,17 @@ export function DesignInspector() {
         </button>
         {showDangerMenu ? (
           <div className="mt-1 space-y-1.5">
+            <p className="text-[10px] leading-snug text-slate-400">
+              დეფაულტები და Default ზემოთაა. აქ იგივე პოზიციების ↺აა სწრაფი წვდომისთვის.
+              პოზიციები ჩამქრალ ელემენტებს აღარ რთავს.
+            </p>
             <button
               type="button"
               onClick={resetLayout}
               className="w-full rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/70"
             >
-              ლეიაუტის ნაგულისხმევზე დაბრუნება
+              მხოლოდ პოზიციები ნაგულისხმევზე
             </button>
-            <p className="text-center text-[10px] leading-snug text-slate-400">
-              პოზიციები/ზომები. რეჟიმები რჩება. საჭიროებს შენახვას.
-            </p>
           </div>
         ) : null}
       </div>
@@ -889,6 +1263,7 @@ export function DesignInspector() {
       )}
 
       {/* Resize: right edge (width) */}
+      {!mobileDock ? (
       <div
         className="absolute bottom-3 right-0 top-10 z-50 w-2 cursor-ew-resize touch-none"
         onPointerDown={onResizePointerDown('e')}
@@ -898,7 +1273,8 @@ export function DesignInspector() {
         title="სიგანის შეცვლა"
         aria-label="სიგანის შეცვლა"
       />
-      {!collapsed ? (
+      ) : null}
+      {!mobileDock && !collapsed ? (
         <>
           {/* bottom edge (height) */}
           <div
@@ -947,14 +1323,20 @@ function HeroEditor({
 }: {
   hero: {
     h: number;
+    mobileH?: number;
+    mobileStackGap?: number;
     intervalSec: number;
     transition: HeroTransition;
+    opacity?: number;
   };
   modes: ThemeModeDef[];
   onUpdate: (patch: {
     h?: number;
+    mobileH?: number;
+    mobileStackGap?: number;
     intervalSec?: number;
     transition?: HeroTransition;
+    opacity?: number;
   }) => void;
   onAdd: (modeId: string, files: File[]) => Promise<void>;
   onAddUrl: (modeId: string, url: string) => boolean;
@@ -972,16 +1354,18 @@ function HeroEditor({
   const { setActiveModeId } = useTheme();
   const [expandedModes, setExpandedModes] = React.useState<Record<string, boolean>>({});
   const [uploading, setUploading] = React.useState(false);
-  const [uploadMode, setUploadMode] = React.useState('');
   const [urlDraftByMode, setUrlDraftByMode] = React.useState<Record<string, string>>({});
   const [urlErrorByMode, setUrlErrorByMode] = React.useState<Record<string, string>>({});
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const uploadModeRef = React.useRef('');
 
   const onPickFiles = async (list: FileList | null) => {
     if (!list?.length) return;
+    const modeId = uploadModeRef.current;
+    if (!modeId) return;
     setUploading(true);
     try {
-      await onAdd(uploadMode, Array.from(list));
+      await onAdd(modeId, Array.from(list));
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
@@ -1007,11 +1391,83 @@ function HeroEditor({
 
   return (
     <div className="space-y-3">
-      <NumField
-        label="სიმაღლე (H) — 1920×H"
-        value={hero.h}
-        min={160}
-        onCommit={(h) => onUpdate({ h })}
+      <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-2.5 dark:border-blue-900/50 dark:bg-blue-950/30">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-blue-800 dark:text-blue-200">
+            ტელეფონის ფოტოს სიმაღლე
+          </span>
+          <span className="text-xs font-bold text-blue-900 dark:text-blue-100">
+            {hero.mobileH ?? 220}px
+          </span>
+        </div>
+        <input
+          type="range"
+          min={80}
+          max={520}
+          step={4}
+          value={hero.mobileH ?? 220}
+          onChange={(e) => onUpdate({ mobileH: Number(e.target.value) })}
+          className="w-full accent-blue-600"
+          aria-label="ტელეფონის ფოტოს სიმაღლე"
+        />
+        <p className="mt-1 text-[10px] leading-snug text-blue-900/70 dark:text-blue-200/70">
+          სლაიდერი ან ფოტოს ქვედა ლურჯი ზოლი — მხოლოდ ფოტო იცვლება, არა მთელი გვერდი.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-zinc-700 dark:bg-zinc-950">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-zinc-300">
+            ტელეფონი — ბლოკების დაშორება
+          </span>
+          <span className="text-xs font-bold text-slate-800 dark:text-zinc-100">
+            {hero.mobileStackGap ?? 4}px
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={24}
+          step={1}
+          value={hero.mobileStackGap ?? 4}
+          onChange={(e) => onUpdate({ mobileStackGap: Number(e.target.value) })}
+          className="w-full accent-blue-600"
+          aria-label="ტელეფონზე ბლოკების დაშორება"
+        />
+        <p className="mt-1 text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+          ყველა მობილური ბლოკის დაშორება (გარიგება, ძიება, ფილტრები, ტიპი, რუკა). Design Mode-ში
+          ბლოკს ზემოთ/ქვემოთ გადაათრიე უფრო მჭიდროდ ან უფრო შორს მოსაწევად.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-zinc-700 dark:bg-zinc-950">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-zinc-300">
+            დესკტოპის სიმაღლე
+          </span>
+          <span className="text-xs font-bold text-slate-800 dark:text-zinc-100">{hero.h}px</span>
+        </div>
+        <input
+          type="range"
+          min={80}
+          max={900}
+          step={4}
+          value={hero.h}
+          onChange={(e) => onUpdate({ h: Number(e.target.value) })}
+          className="w-full accent-blue-600"
+          aria-label="დესკტოპის ჰეროს სიმაღლე"
+        />
+        <NumField
+          label="ზუსტი (1920×H)"
+          value={hero.h}
+          min={80}
+          max={900}
+          onCommit={(h) => onUpdate({ h })}
+        />
+      </div>
+      <LayerOpacityField
+        value={hero.opacity}
+        onChange={(opacity) => onUpdate({ opacity })}
       />
 
       <label className="block text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-zinc-400">
@@ -1045,6 +1501,9 @@ function HeroEditor({
       </label>
 
       <div className="space-y-2">
+        <p className="text-[11px] leading-snug text-slate-500 dark:text-zinc-400">
+          თითოეულ რეჟიმს ცალკე გალერეა აქვს. ღამის ფოტოები დღის რეჟიმში არ გამოჩნდება — და პირიქით.
+        </p>
         <input
           ref={fileRef}
           type="file"
@@ -1131,7 +1590,7 @@ function HeroEditor({
                     type="button"
                     disabled={uploading || mode.imageIds.length >= MAX_HERO_IMAGES_PER_MODE}
                     onClick={() => {
-                      setUploadMode(mode.id);
+                      uploadModeRef.current = mode.id;
                       fileRef.current?.click();
                     }}
                     className="w-full rounded-lg bg-blue-600 px-2 py-2 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1303,11 +1762,35 @@ function HeaderEditor({
         value={header.h}
         min={44}
         max={120}
+        paramKey="headerH"
         onCommit={(h) => onUpdate({ h })}
       />
+      <LayerOpacityField
+        value={header.opacity}
+        onChange={(opacity) => onUpdate({ opacity })}
+      />
+      <NumField
+        label="სიტყვების ზღვარი (px)"
+        value={header.itemGapPx ?? HEADER_ITEM_GAP_PX_DEFAULT}
+        min={0}
+        max={HEADER_ITEM_GAP_PX_MAX}
+        onCommit={(itemGapPx) => {
+          const gap = clampHeaderItemGapPx(itemGapPx);
+          const nextHeader = { ...header, itemGapPx: gap };
+          const opts = headerOverlapOptsForEditor(nextHeader);
+          const seeded = seedVisibleHeaderPositions(
+            header.itemPositions,
+            queryHeaderCanvas()
+          );
+          const next = spreadHeaderItemPositions(seeded, { ...opts, gapPx: gap });
+          onUpdate({ itemGapPx: gap, itemPositions: next });
+        }}
+      />
       <p className="text-[10px] leading-snug text-slate-400">
-        ჰედერის ქვედა ლურჯ ზოლზე გადაათრიე — სიმაღლე იცვლება. ცარიელ ადგილზე კლიკი = ჰედერის
-        ფოლდერი; ლოგო/მენიუზე კლიკი = ქვეფოლდერი.
+        ჰედერის ქვედა ლურჯ ზოლზე გადაათრიე — სიმაღლე იცვლება. ლოგო/მენიუს ტექსტს ჰედერში
+        გადაათრიე (Shift = მხოლოდ ჰორიზონტალურად, Alt = მხოლოდ ვერტიკალურად). სიტყვები
+        ერთმანეთს არ გადაეფარებიან — ზღვარი აქ იცვლება. ცარიელ ადგილზე კლიკი = ჰედერის
+        ფოლდერი; ელემენტზე კლიკი = ქვეფოლდერი.
       </p>
 
       <div className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-zinc-700 dark:bg-zinc-950">
@@ -1558,9 +2041,15 @@ function HeaderItemEditor({
     itemStyle?.color ||
     (isBrand ? header.brandColor || brandFallbackColor : header.navColor || navFallbackColor);
 
-  const patchItemStyle = (patch: { fontSize?: number; color?: string }) => {
+  const patchItemStyle = (patch: {
+    fontSize?: number;
+    color?: string;
+    opacity?: number;
+    padPx?: number;
+  }) => {
     const prev = header.itemStyles?.[itemId] || {};
     const nextStyle = { ...prev, ...patch };
+    if (patch.padPx === 0) delete nextStyle.padPx;
     if (isBrand) {
       // Keep legacy brand fields in sync when editing logo folder
       const legacy: Partial<HeaderLayout> = {};
@@ -1633,34 +2122,125 @@ function HeaderItemEditor({
             value={pos.x}
             min={0}
             max={100}
-            onCommit={(x) =>
-              onUpdate({
-                itemPositions: {
+            decimals={1}
+            paramKey="posX"
+            onCommit={(x) => {
+              const opts = headerOverlapOptsForEditor(header);
+              const nextPos = resolveHeaderItemNoOverlap(
+                itemId,
+                { x, y: pos.y },
+                {
                   ...(header.itemPositions || {}),
                   [itemId]: { x, y: pos.y },
                 },
-              })
-            }
+                opts
+              );
+              onUpdate({
+                itemPositions: {
+                  ...(header.itemPositions || {}),
+                  [itemId]: nextPos,
+                },
+              });
+            }}
           />
           <NumField
             label="Y (%)"
             value={pos.y}
             min={0}
             max={100}
-            onCommit={(y) =>
-              onUpdate({
-                itemPositions: {
+            decimals={1}
+            paramKey="posY"
+            onCommit={(y) => {
+              const opts = headerOverlapOptsForEditor(header);
+              const nextPos = resolveHeaderItemNoOverlap(
+                itemId,
+                { x: pos.x, y },
+                {
                   ...(header.itemPositions || {}),
                   [itemId]: { x: pos.x, y },
                 },
-              })
-            }
+                opts
+              );
+              onUpdate({
+                itemPositions: {
+                  ...(header.itemPositions || {}),
+                  [itemId]: nextPos,
+                },
+              });
+            }}
           />
         </div>
+        <NumField
+          label="ზღვარი გარშემო (px)"
+          value={itemStyle?.padPx ?? 0}
+          min={0}
+          max={HEADER_ITEM_GAP_PX_MAX}
+          onCommit={(padPx) => {
+            const nextPad = clampHeaderItemGapPx(padPx, 0);
+            const prev = header.itemStyles?.[itemId] || {};
+            const nextStyle = { ...prev, padPx: nextPad };
+            if (nextPad === 0) delete nextStyle.padPx;
+            const nextStyles = {
+              ...(header.itemStyles || {}),
+              [itemId]: nextStyle,
+            };
+            const opts = headerOverlapOptsForEditor({ ...header, itemStyles: nextStyles });
+            const nextPositions = header.itemPositions
+              ? spreadHeaderItemPositions(header.itemPositions, opts)
+              : header.itemPositions;
+            onUpdate({
+              itemStyles: nextStyles,
+              ...(nextPositions ? { itemPositions: nextPositions } : {}),
+            });
+          }}
+        />
+        <LayerOpacityField
+          value={itemStyle?.opacity}
+          onChange={(opacity) => patchItemStyle({ opacity })}
+        />
         <p className="text-[10px] leading-snug text-slate-400">
-          ჰედერზე გადაათრიე იგივე ელემენტი — პოზიცია აქაც განახლდება.
+          ჰედერზე გადაათრიე იგივე ელემენტი — პოზიცია აქაც განახლდება. Shift = მხოლოდ
+          ჰორიზონტალურად, Alt = მხოლოდ ვერტიკალურად. „ზღვარი გარშემო“ ამ სიტყვას სხვებისგან
+          უფრო შორს აჩერებს.
         </p>
       </div>
+    </div>
+  );
+}
+
+function SocialLinksEditor({
+  links,
+  onChange,
+}: {
+  links: SiteSocialLinks;
+  onChange: (patch: Partial<SiteSocialLinks>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-snug text-slate-500 dark:text-zinc-400">
+        აქ ჩასვი საიტის ოფიციალური გვერდები. Messenger / Instagram / WhatsApp / Telegram იკონი
+        ჩათს ხსნის; YouTube, TikTok, X და LinkedIn — პროფილს.
+      </p>
+      {SITE_SOCIAL_NETWORKS.map((network) => {
+        const resolved = siteSocialChatUrl(network, links[network]);
+        return (
+          <div key={network}>
+            <TextField
+              label={SITE_SOCIAL_FIELD_LABELS[network]}
+              value={links[network]}
+              placeholder={SITE_SOCIAL_PLACEHOLDERS[network]}
+              onCommit={(v) => onChange({ [network]: v })}
+            />
+            {resolved ? (
+              <p className="mt-0.5 truncate text-[10px] text-emerald-600 dark:text-emerald-400" title={resolved}>
+                ბმული: {resolved}
+              </p>
+            ) : links[network].trim() ? (
+              <p className="mt-0.5 text-[10px] text-amber-600">ბმული ვერ ამოიცნო — შეამოწმე ფორმატი.</p>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2194,6 +2774,18 @@ function OpacityField({
   );
 }
 
+function LayerOpacityField({
+  value,
+  onChange,
+}: {
+  value: number | undefined;
+  onChange: (opacity: number) => void;
+}) {
+  return (
+    <OpacityField label="გამჭვირვალობა" value={clampOpacity(value)} onChange={onChange} />
+  );
+}
+
 function GlowField({
   label,
   color,
@@ -2388,7 +2980,9 @@ function TypePanelItemsEditor({
         კატეგორიები ({items.length})
       </div>
       <p className="text-[10px] leading-snug text-slate-400">
-        დააკლიკე სტრიქონს ან ბარათს ეკრანზე — გაიხსნება მხოლოდ ის.
+        დააკლიკე სტრიქონს ან ბარათს ეკრანზე. ფოტო გადაათრიე ნებისმიერ მხარეს, ბორბალი ან
+        ლურჯი კუთხე — გადიდება/დაპატარავება. სახელი, რაოდენობა და იკონი ცალ-ცალკე
+        გადაადგილდება.
       </p>
       {items.map((item, index) => {
         const preview = previewForItem(item);
@@ -2413,6 +3007,15 @@ function TypePanelItemsEditor({
           12,
           64
         );
+        const labelX = clampRailPercent(item.labelX, TYPE_PANEL_LABEL_POS_DEFAULT.x);
+        const labelY = clampRailPercent(item.labelY, TYPE_PANEL_LABEL_POS_DEFAULT.y);
+        const countX = clampRailPercent(item.countX, TYPE_PANEL_COUNT_POS_DEFAULT.x);
+        const countY = clampRailPercent(item.countY, TYPE_PANEL_COUNT_POS_DEFAULT.y);
+        const iconX = clampRailPercent(item.iconX, TYPE_PANEL_ICON_POS_DEFAULT.x);
+        const iconY = clampRailPercent(item.iconY, TYPE_PANEL_ICON_POS_DEFAULT.y);
+        const mediaScale = clampMediaScale(item.mediaScale);
+        const mediaX = clampRailPercent(item.mediaX, TYPE_PANEL_MEDIA_POS_DEFAULT.x);
+        const mediaY = clampRailPercent(item.mediaY, TYPE_PANEL_MEDIA_POS_DEFAULT.y);
         const labelColor = item.labelColor || '#1d4ed8';
         const countColor = item.countColor || '#64748b';
         const focused = focusItemId === item.id;
@@ -2427,6 +3030,7 @@ function TypePanelItemsEditor({
                 ? 'space-y-1.5 border-blue-500 bg-blue-50 ring-2 ring-blue-400/40 dark:border-blue-400 dark:bg-blue-950/40'
                 : 'border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-950'
             }`}
+            data-inspector-focused={focused ? 'true' : undefined}
           >
             <button
               type="button"
@@ -2470,6 +3074,52 @@ function TypePanelItemsEditor({
               value={item.label}
               onCommit={(label) => onUpdate(item.id, { label })}
             />
+            <LayerOpacityField
+              value={item.opacity}
+              onChange={(opacity) => onUpdate(item.id, { opacity })}
+            />
+            <div className="space-y-1">
+              <div className="text-[10px] font-medium text-slate-500">სახელის ხაზები</div>
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => onUpdate(item.id, { labelWrap: false })}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                    item.labelWrap !== true
+                      ? 'bg-blue-600 text-white'
+                      : 'border border-slate-300 text-slate-700 dark:border-zinc-600 dark:text-zinc-200'
+                  }`}
+                >
+                  ერთი ხაზი
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdate(item.id, { labelWrap: true })}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                    item.labelWrap === true
+                      ? 'bg-blue-600 text-white'
+                      : 'border border-slate-300 text-slate-700 dark:border-zinc-600 dark:text-zinc-200'
+                  }`}
+                >
+                  გადატანა
+                </button>
+              </div>
+              {item.labelWrap === true ? (
+                <NumField
+                  label="გადატანის სიგანე (%)"
+                  value={clampTypeLabelMaxW(item.labelMaxW)}
+                  min={40}
+                  max={220}
+                  onCommit={(n) =>
+                    onUpdate(item.id, { labelMaxW: clampTypeLabelMaxW(n) })
+                  }
+                />
+              ) : null}
+              <p className="text-[10px] leading-snug text-slate-400">
+                ნაგულისხმევად „კერძო სახლი“ ერთ ხაზზეა. გადატანა — სიტყვა იხლიჩება მხოლოდ
+                თუ შენ ჩართავ.
+              </p>
+            </div>
             <TextField
               label="იკონი (emoji)"
               value={item.icon}
@@ -2584,6 +3234,86 @@ function TypePanelItemsEditor({
                 min={0}
                 onCommit={(borderRadius) => onUpdate(item.id, { borderRadius })}
               />
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-[10px] font-medium text-slate-500">წარწერების პოზიცია (%)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <NumField
+                  label="სახელი X"
+                  value={labelX}
+                  min={0}
+                  max={100}
+                  decimals={1}
+                  paramKey="labelX"
+                  onCommit={(x) => onUpdate(item.id, { labelX: clampRailPercent(x, 50) })}
+                />
+                <NumField
+                  label="სახელი Y"
+                  value={labelY}
+                  min={0}
+                  max={100}
+                  decimals={1}
+                  paramKey="labelY"
+                  onCommit={(y) => onUpdate(item.id, { labelY: clampRailPercent(y, 50) })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <NumField
+                  label="რაოდენობა X"
+                  value={countX}
+                  min={0}
+                  max={100}
+                  decimals={1}
+                  paramKey="countX"
+                  onCommit={(x) => onUpdate(item.id, { countX: clampRailPercent(x, 50) })}
+                />
+                <NumField
+                  label="რაოდენობა Y"
+                  value={countY}
+                  min={0}
+                  max={100}
+                  decimals={1}
+                  paramKey="countY"
+                  onCommit={(y) => onUpdate(item.id, { countY: clampRailPercent(y, 50) })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <NumField
+                  label="იკონი X"
+                  value={iconX}
+                  min={0}
+                  max={100}
+                  decimals={1}
+                  paramKey="iconX"
+                  onCommit={(x) => onUpdate(item.id, { iconX: clampRailPercent(x, 50) })}
+                />
+                <NumField
+                  label="იკონი Y"
+                  value={iconY}
+                  min={0}
+                  max={100}
+                  decimals={1}
+                  paramKey="iconY"
+                  onCommit={(y) => onUpdate(item.id, { iconY: clampRailPercent(y, 50) })}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdate(item.id, {
+                    labelX: TYPE_PANEL_LABEL_POS_DEFAULT.x,
+                    labelY: TYPE_PANEL_LABEL_POS_DEFAULT.y,
+                    countX: TYPE_PANEL_COUNT_POS_DEFAULT.x,
+                    countY: TYPE_PANEL_COUNT_POS_DEFAULT.y,
+                    iconX: TYPE_PANEL_ICON_POS_DEFAULT.x,
+                    iconY: TYPE_PANEL_ICON_POS_DEFAULT.y,
+                  })
+                }
+                className="rounded-md border border-slate-300 px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-white dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                წარწერები ნაგულისხმევზე
+              </button>
             </div>
 
             <div className="space-y-1">
@@ -2703,6 +3433,52 @@ function TypePanelItemsEditor({
                   <p className="text-[10px] text-red-600">{urlErrorByItem[item.id]}</p>
                 ) : null}
               </div>
+              {hasMedia ? (
+                <div className="space-y-1 pt-1">
+                  <div className="text-[10px] font-medium text-slate-500">ფოტოს ზომა / პოზიცია</div>
+                  <NumField
+                    label="მასშტაბი (%)"
+                    value={mediaScale}
+                    min={50}
+                    max={400}
+                    paramKey="mediaScale"
+                    onCommit={(n) => onUpdate(item.id, { mediaScale: clampMediaScale(n) })}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <NumField
+                      label="ფოტო X"
+                      value={mediaX}
+                      min={0}
+                      max={100}
+                      decimals={1}
+                      paramKey="mediaX"
+                      onCommit={(x) => onUpdate(item.id, { mediaX: clampRailPercent(x, 50) })}
+                    />
+                    <NumField
+                      label="ფოტო Y"
+                      value={mediaY}
+                      min={0}
+                      max={100}
+                      decimals={1}
+                      paramKey="mediaY"
+                      onCommit={(y) => onUpdate(item.id, { mediaY: clampRailPercent(y, 50) })}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdate(item.id, {
+                        mediaScale: TYPE_PANEL_MEDIA_SCALE_DEFAULT,
+                        mediaX: TYPE_PANEL_MEDIA_POS_DEFAULT.x,
+                        mediaY: TYPE_PANEL_MEDIA_POS_DEFAULT.y,
+                      })
+                    }
+                    className="rounded-md border border-slate-300 px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-white dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    ფოტო ცენტრში · 100%
+                  </button>
+                </div>
+              ) : null}
             </div>
               </div>
             ) : null}
@@ -2840,6 +3616,7 @@ function RailItemsEditor({
                   ? 'border-amber-300 bg-amber-50/70 dark:border-amber-800/60 dark:bg-amber-950/30'
                   : 'border-slate-200 bg-slate-50 dark:border-zinc-700 dark:bg-zinc-950'
             }`}
+            data-inspector-focused={focused ? 'true' : undefined}
           >
             <div className="flex items-center gap-2">
               <button
@@ -2910,6 +3687,10 @@ function RailItemsEditor({
               label="სახელი"
               value={item.label}
               onCommit={(label) => onUpdate(item.id, { label })}
+            />
+            <LayerOpacityField
+              value={item.opacity}
+              onChange={(opacity) => onUpdate(item.id, { opacity })}
             />
             {showHint ? (
               <TextField
@@ -3035,6 +3816,8 @@ function RailItemsEditor({
                   value={labelX}
                   min={0}
                   max={100}
+                  decimals={1}
+                  paramKey="labelX"
                   onCommit={(x) => onUpdate(item.id, { labelX: clampRailPercent(x, 50) })}
                 />
                 <NumField
@@ -3042,6 +3825,8 @@ function RailItemsEditor({
                   value={labelY}
                   min={0}
                   max={100}
+                  decimals={1}
+                  paramKey="labelY"
                   onCommit={(y) => onUpdate(item.id, { labelY: clampRailPercent(y, 50) })}
                 />
               </div>
@@ -3214,6 +3999,80 @@ function InspectorFold({
   );
 }
 
+function DealBarChipsEditor() {
+  const design = useHomeDesignOptional();
+  if (!design) return null;
+  const deal = normalizeDealBar(design.layout.dealBar);
+  const selected = design.selectedDealChipId;
+
+  return (
+    <InspectorFold title="ჩიპები ცალ-ცალკე (W × H)" defaultOpen>
+      <NumField
+        label="ჩიპების gap"
+        value={deal.gap}
+        min={0}
+        max={32}
+        onCommit={(gap) =>
+          design.updateBox('dealBar', { gap } as Parameters<typeof design.updateBox>[1])
+        }
+      />
+      <p className="mb-2 text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+        დააკლიკე იყიდება/ქირავდება/გირავნობას ჰეროზე, ან აქ შეცვალე ზომები.
+      </p>
+      <div className="space-y-2">
+        {DEAL_CHIP_IDS.map((id) => {
+          const box = deal.chips[id];
+          const active = selected === id;
+          return (
+            <div
+              key={id}
+              className={`rounded-lg border p-2 ${
+                active
+                  ? 'border-blue-400 bg-blue-50/60 dark:border-blue-500 dark:bg-blue-950/30'
+                  : 'border-slate-200 dark:border-zinc-700'
+              }`}
+            >
+              <button
+                type="button"
+                className="mb-1.5 text-left text-[11px] font-bold text-slate-700 dark:text-zinc-200"
+                onClick={() => {
+                  design.setSelectedId('dealBar');
+                  design.setSelectedDealChipId(id);
+                }}
+              >
+                {DEAL_CHIP_LABELS[id]}
+                {active ? ' ← მონიშნული' : ''}
+              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <NumField
+                  label="სიგანე (W)"
+                  value={box.w}
+                  min={72}
+                  max={320}
+                  paramKey={active ? 'w' : undefined}
+                  onCommit={(w) => design.updateDealChip(id, { w })}
+                />
+                <NumField
+                  label="სიმაღლე (H)"
+                  value={box.h}
+                  min={28}
+                  max={72}
+                  paramKey={active ? 'h' : undefined}
+                  onCommit={(h) => design.updateDealChip(id, { h })}
+                />
+              </div>
+              <LayerOpacityField
+                value={box.opacity}
+                onChange={(opacity) => design.updateDealChip(id, { opacity })}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </InspectorFold>
+  );
+}
+
 function SearchEditor({
   search,
   onUpdate,
@@ -3221,7 +4080,9 @@ function SearchEditor({
   search: SearchLayout;
   onUpdate: (patch: Partial<SearchLayout>) => void;
 }) {
-  const s = { ...DEFAULT_SEARCH, ...search };
+  const design = useHomeDesignOptional();
+  const s = { ...DEFAULT_SEARCH, ...search, controls: search.controls || DEFAULT_SEARCH.controls };
+  const selectedControl = design?.selectedSearchControlId ?? null;
 
   const clearColor = (key: keyof SearchLayout) => {
     onUpdate({ [key]: undefined } as Partial<SearchLayout>);
@@ -3233,6 +4094,85 @@ function SearchEditor({
         values={{ x: s.x, y: s.y, w: s.w, h: s.h }}
         onChange={(patch) => onUpdate(patch)}
       />
+      <LayerOpacityField value={s.opacity} onChange={(opacity) => onUpdate({ opacity })} />
+      <div className="grid grid-cols-2 gap-2">
+        <NumField
+          label="ტელეფონი X"
+          value={s.mobileX ?? 0}
+          min={-120}
+          max={360}
+          paramKey="mobileX"
+          onCommit={(mobileX) => onUpdate({ mobileX })}
+        />
+        <NumField
+          label="ტელეფონი Y"
+          value={s.mobileY ?? 0}
+          min={-80}
+          max={400}
+          paramKey="mobileY"
+          onCommit={(mobileY) => onUpdate({ mobileY })}
+        />
+      </div>
+      <p className="text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+        ტელეფონზე გადაათრიე ძიების ბლოკი. უარყოფითი Y ამცირებს დაშორებას ზემოთა ბლოკთან.
+      </p>
+
+      <InspectorFold title="ელემენტები ცალ-ცალკე (W × H)" defaultOpen>
+        <p className="mb-2 text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+          დააკლიკე ჰეროზე ფასი/ფართობი/ქალაქი/ოთახები/ძიება/გაფართოებულს/ძიების ღილაკს, ან აქ შეცვალე
+          სიგანე და სიმაღლე. დაშორება — ქვემოთ „ელემენტების gap“.
+        </p>
+        <div className="space-y-2">
+          {SEARCH_CONTROL_IDS.map((id) => {
+            const box = resolveSearchControl(s, id);
+            const active = selectedControl === id;
+            return (
+              <div
+                key={id}
+                className={`rounded-lg border p-2 ${
+                  active
+                    ? 'border-blue-400 bg-blue-50/60 dark:border-blue-500 dark:bg-blue-950/30'
+                    : 'border-slate-200 dark:border-zinc-700'
+                }`}
+              >
+                <button
+                  type="button"
+                  className="mb-1.5 text-left text-[11px] font-bold text-slate-700 dark:text-zinc-200"
+                  onClick={() => {
+                    design?.setSelectedId('search');
+                    design?.setSelectedSearchControlId(id);
+                  }}
+                >
+                  {SEARCH_CONTROL_LABELS[id]}
+                  {active ? ' ← მონიშნული' : ''}
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <NumField
+                    label="სიგანე (W)"
+                    value={box.w}
+                    min={56}
+                    max={560}
+                    paramKey={active ? 'w' : undefined}
+                    onCommit={(w) => design?.updateSearchControl(id, { w })}
+                  />
+                  <NumField
+                    label="სიმაღლე (H)"
+                    value={box.h}
+                    min={28}
+                    max={120}
+                    paramKey={active ? 'h' : undefined}
+                    onCommit={(h) => design?.updateSearchControl(id, { h })}
+                  />
+                </div>
+                <LayerOpacityField
+                  value={box.opacity}
+                  onChange={(opacity) => design?.updateSearchControl(id, { opacity })}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </InspectorFold>
 
       <InspectorFold title="ჩარჩო (shell)" defaultOpen>
         <div className="grid grid-cols-2 gap-2">
@@ -3600,12 +4540,20 @@ function NumGrid({
 }) {
   return (
     <div className="grid grid-cols-2 gap-2">
-      <NumField label="X" value={values.x} onCommit={(x) => onChange({ x })} />
-      <NumField label="Y" value={values.y} onCommit={(y) => onChange({ y })} />
-      <NumField label="W" value={values.w} min={40} onCommit={(w) => onChange({ w })} />
-      <NumField label="H" value={values.h} min={40} onCommit={(h) => onChange({ h })} />
+      <NumField label="X" value={values.x} paramKey="x" onCommit={(x) => onChange({ x })} />
+      <NumField label="Y" value={values.y} paramKey="y" onCommit={(y) => onChange({ y })} />
+      <NumField label="W" value={values.w} min={40} paramKey="w" onCommit={(w) => onChange({ w })} />
+      <NumField label="H" value={values.h} min={40} paramKey="h" onCommit={(h) => onChange({ h })} />
     </div>
   );
+}
+
+function formatNumFieldValue(n: number, decimals: number): string {
+  if (!Number.isFinite(n)) return '0';
+  if (decimals <= 0) return String(Math.round(n));
+  const f = 10 ** decimals;
+  const rounded = Math.round(n * f) / f;
+  return String(rounded);
 }
 
 function NumField({
@@ -3614,42 +4562,75 @@ function NumField({
   onCommit,
   min,
   max,
+  decimals = 0,
+  paramKey,
 }: {
   label: string;
   value: number;
   onCommit: (n: number) => void;
   min?: number;
   max?: number;
+  /** Allow fractional input (e.g. 1 = tenths for %). Default 0 = integers only. */
+  decimals?: number;
+  /** When set, highlights while canvas drag touches this param */
+  paramKey?: import('@/components/home-design/HomeDesignContext').DesignEditParam;
 }) {
-  const [draft, setDraft] = React.useState(String(Math.round(value)));
+  const design = useHomeDesignOptional();
+  const active = Boolean(paramKey && design?.activeEditParams.includes(paramKey));
+  const [draft, setDraft] = React.useState(() => formatNumFieldValue(value, decimals));
   const [focused, setFocused] = React.useState(false);
 
   React.useEffect(() => {
-    if (!focused) setDraft(String(Math.round(value)));
-  }, [value, focused]);
+    if (!focused) setDraft(formatNumFieldValue(value, decimals));
+  }, [value, focused, decimals]);
 
   const commitFromRaw = (raw: string) => {
-    const parsed = Number(raw.trim());
+    const parsed = Number(raw.trim().replace(',', '.'));
     let next = Number.isFinite(parsed) ? parsed : value;
     if (min !== undefined) next = Math.max(min, next);
     if (max !== undefined) next = Math.min(max, next);
-    next = Math.round(next);
-    setDraft(String(next));
-    if (next !== Math.round(value)) onCommit(next);
+    if (decimals <= 0) next = Math.round(next);
+    else {
+      const f = 10 ** decimals;
+      next = Math.round(next * f) / f;
+    }
+    setDraft(formatNumFieldValue(next, decimals));
+    const prev =
+      decimals <= 0 ? Math.round(value) : Math.round(value * 10 ** decimals) / 10 ** decimals;
+    if (next !== prev) onCommit(next);
   };
 
+  const draftPattern =
+    decimals > 0 ? /^-?\d*(?:[.,]\d*)?$/ : /^-?\d*$/;
+
   return (
-    <label className="block text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-zinc-400">
+    <label
+      data-edit-param={paramKey || undefined}
+      className={`block text-[10px] font-medium uppercase tracking-wide transition-shadow ${
+        active
+          ? 'rounded-md bg-blue-50 p-1.5 text-blue-700 ring-2 ring-blue-500 dark:bg-blue-950/50 dark:text-blue-200'
+          : 'text-slate-500 dark:text-zinc-400'
+      }`}
+    >
       {label}
+      {active ? (
+        <span className="ml-1 text-[9px] font-bold normal-case text-blue-600 dark:text-blue-300">
+          ← იცვლება
+        </span>
+      ) : null}
       <input
         type="text"
-        inputMode="numeric"
-        className="mt-0.5 w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+        inputMode={decimals > 0 ? 'decimal' : 'numeric'}
+        className={`mt-0.5 w-full rounded-md border px-2 py-1 text-sm dark:bg-zinc-950 dark:text-zinc-100 ${
+          active
+            ? 'border-blue-400 text-blue-900 dark:border-blue-500 dark:text-blue-100'
+            : 'border-slate-200 text-slate-800 dark:border-zinc-600'
+        }`}
         value={draft}
         onFocus={() => setFocused(true)}
         onChange={(e) => {
           const raw = e.target.value;
-          if (raw === '' || raw === '-' || /^-?\d*$/.test(raw)) setDraft(raw);
+          if (raw === '' || raw === '-' || draftPattern.test(raw)) setDraft(raw);
         }}
         onBlur={(e) => {
           setFocused(false);
@@ -3667,10 +4648,12 @@ function TextField({
   label,
   value,
   onCommit,
+  placeholder,
 }: {
   label: string;
   value: string;
   onCommit: (v: string) => void;
+  placeholder?: string;
 }) {
   const safeValue = value ?? '';
   const [draft, setDraft] = React.useState(safeValue);
@@ -3695,6 +4678,7 @@ function TextField({
         type="text"
         className="mt-0.5 w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-800 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
         value={draft}
+        placeholder={placeholder}
         onFocus={() => {
           focusedRef.current = true;
         }}

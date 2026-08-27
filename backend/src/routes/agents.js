@@ -10,7 +10,7 @@ import { backfillMissingAgentProfiles } from '../services/agentProfile.js';
 import {
   applyPropertyQueryFilters,
   applyListingVisibilityFilter,
-  parsePropertySortOption,
+  queryPropertiesSorted,
   PUBLIC_LISTING_OR,
   PUBLIC_STATUS_OR,
 } from '../utils/propertyQueryFilters.js';
@@ -133,16 +133,15 @@ router.get('/:id/properties', async (req, res) => {
 
     await applyPropertyQueryFilters(agentFilter, req.query);
 
-    const finalSort = parsePropertySortOption(req.query.sort);
     const lang = pickLanguage(req);
+    const selectFields = adminView ? '-privateNotes' : '-privateNotes -shareToken';
 
     const countPromises = [
-      Property.find(agentFilter)
-        .select(adminView ? '-privateNotes' : '-privateNotes -shareToken')
-        .sort(finalSort)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
+      queryPropertiesSorted(Property, agentFilter, req.query.sort, {
+        skip,
+        limit: limitNum,
+        select: selectFields,
+      }),
       Property.countDocuments(agentFilter),
     ];
 

@@ -57,7 +57,12 @@ export function LinkedPriceInputs({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <label className="block text-sm font-medium text-slate-700">💵 {t('price_label_icon')}</label>
+        <label className="block text-sm font-medium text-slate-700">
+          💵 {t('price_label_icon')}{' '}
+          <span className="text-red-500" aria-hidden>
+            *
+          </span>
+        </label>
         <div className="flex overflow-hidden rounded-lg border border-slate-300">
           <button
             type="button"

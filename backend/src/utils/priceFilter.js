@@ -1,5 +1,5 @@
 /** ორივე ფართობი → houseSqm; მხოლოდ ერთი → ის (ბარათის ლოგიკას ემთხვევა) */
-function buildAreaSqmExpr() {
+export function buildAreaSqmExpr() {
   return {
     $let: {
       vars: {
@@ -15,6 +15,22 @@ function buildAreaSqmExpr() {
       },
     },
   };
+}
+
+/** სორტისთვის: უფრო დიდი ფართობი (ნაკვეთი ან სახლი) */
+export function buildSortAreaExpr() {
+  return {
+    $max: [{ $ifNull: ['$sqm', 0] }, { $ifNull: ['$houseSqm', 0] }],
+  };
+}
+
+/**
+ * სრული ფასი USD-ში (GEL→USD კურსით, per_sqm→total ფართობით).
+ * UI-ის ნაჩვენები ფასთან შესადარებლად.
+ */
+export function buildComparableTotalPriceUsdExpr(usdToGelRate) {
+  const baseExpr = buildBasePriceExpr('total');
+  return buildConvertedPriceExpr(baseExpr, 'USD', usdToGelRate);
 }
 
 /** ფასის ეფექტური მნიშვნელობა (სრული ან კვ.მ-ზე) MongoDB $expr-ისთვის */

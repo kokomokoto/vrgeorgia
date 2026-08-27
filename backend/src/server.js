@@ -177,6 +177,18 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+/** ერთი კურსი სორტისთვის და UI კონვერტაციისთვის */
+app.get('/api/currency/rate', async (_req, res) => {
+  try {
+    const { getUsdToGelRate } = await import('./utils/currency.js');
+    const usdToGel = await getUsdToGelRate();
+    res.json({ usdToGel });
+  } catch (err) {
+    console.error('currency rate error:', err);
+    res.status(500).json({ usdToGel: 2.75 });
+  }
+});
+
 // Rate limit on auth routes (login/register brute-force protection)
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);

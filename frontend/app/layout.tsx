@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { PageTracker } from '@/components/PageTracker';
 import { SiteChrome } from '@/components/SiteChrome';
 import { buildOrganizationJsonLd, jsonLdScript } from '@/lib/structuredData';
+import { fetchHomeDesignLayoutServer } from '@/lib/fetchHomeDesignServer';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
@@ -45,7 +46,9 @@ export const metadata: Metadata = {
 
 const orgJsonLd = buildOrganizationJsonLd();
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const initialHomeDesign = await fetchHomeDesignLayoutServer();
+
   return (
     <html lang="ka" suppressHydrationWarning>
       <head>
@@ -66,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <div className="relative flex min-h-screen flex-col">
             <PageTracker />
-            <SiteChrome>{children}</SiteChrome>
+            <SiteChrome initialHomeDesign={initialHomeDesign}>{children}</SiteChrome>
           </div>
         </Providers>
       </body>

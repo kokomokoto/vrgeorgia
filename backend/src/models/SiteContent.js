@@ -58,6 +58,8 @@ const siteContentSchema = new mongoose.Schema(
     },
     /** Homepage Design Mode layout (JSON) */
     layout: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    /** Named layout presets (admin-only; multiple “defaults”) */
+    presets: { type: mongoose.Schema.Types.Mixed, default: undefined },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }

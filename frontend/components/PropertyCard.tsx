@@ -17,10 +17,13 @@ import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 export function PropertyCard({
   p,
   compactPhoto = false,
+  denseMeta = false,
 }: {
   p: Property;
   /** უფრო დაბალი ფოტო (მთავარი გვერდი) */
   compactPhoto?: boolean;
+  /** ბეჯები და ფასი ერთ ხაზზე (აგენტის გვერდი) */
+  denseMeta?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const mainPhotoIndex = Math.min(p.mainPhoto ?? 0, Math.max(0, (p.photos?.length ?? 1) - 1));
@@ -197,11 +200,27 @@ export function PropertyCard({
             compactPhoto ? 'px-3 pb-2 pt-1.5' : 'px-3.5 pb-3 pt-2.5'
           }`}
         >
-          <div onClick={stopNav}>
-            <PropertyPriceRow p={p} />
-          </div>
+          {denseMeta ? (
+            <div
+              className="flex min-w-0 items-center gap-1.5"
+              onClick={stopNav}
+            >
+              <PropertySpecChips
+                p={p}
+                compact
+                nowrap
+                gapClass="gap-1"
+                className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              />
+              <PropertyPriceRow p={p} compact className="shrink-0" />
+            </div>
+          ) : (
+            <div onClick={stopNav}>
+              <PropertyPriceRow p={p} />
+            </div>
+          )}
 
-          <div className={`flex flex-col ${compactPhoto ? 'mt-1 gap-1.5' : 'mt-1.5 gap-2.5'}`}>
+          <div className={`flex flex-col ${compactPhoto || denseMeta ? 'mt-1 gap-1.5' : 'mt-1.5 gap-2.5'}`}>
           <h3
             data-property-title
             className={`line-clamp-1 break-words font-bold ${
@@ -224,9 +243,11 @@ export function PropertyCard({
             </div>
           )}
 
-          <div onClick={stopNav}>
-            <PropertySpecChips p={p} gapClass={compactPhoto ? 'gap-1.5' : 'gap-2'} />
-          </div>
+          {!denseMeta && (
+            <div onClick={stopNav}>
+              <PropertySpecChips p={p} gapClass={compactPhoto ? 'gap-1.5' : 'gap-2'} />
+            </div>
+          )}
           </div>
 
           <div

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/components/AuthProvider';
 import { Filters, type FiltersState } from '@/components/Filters';
 import { PropertyPriceRow } from '@/components/PropertyPriceRow';
+import { PropertySpecChips } from '@/components/PropertySpecChips';
 import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty, changePassword } from '@/lib/api';
 import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { isPanoramaPhoto } from '@/lib/panorama';
@@ -18,6 +19,7 @@ import {
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 import type { Property } from '@/lib/types';
 import { isAdminRole, isAgentRole } from '@/lib/userRoles';
+import { getPropertyOwnerLocationLine } from '@/lib/propertyDisplay';
 
 type BrokerListingMode = 'public' | 'unlisted' | 'private' | 'sold';
 
@@ -524,7 +526,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-slate-800">
             {t('myProperties')} ({allPropertiesCount})
@@ -611,103 +613,155 @@ export default function ProfilePage() {
               properties.map((property) => {
                 const mainPhotoIndex = property.mainPhoto || 0;
                 const mainImg = property.photos?.[mainPhotoIndex] || property.photos?.[0];
+                const locationLine = getPropertyOwnerLocationLine(property);
 
                 return (
                   <div
                     key={property._id}
-                    className="flex items-start gap-4 rounded-lg border border-slate-200 p-4 hover:bg-slate-50"
+                    className="rounded-lg border border-slate-200 p-3 hover:bg-slate-50 sm:p-4"
                   >
-                    <div className="h-20 w-28 flex-shrink-0 overflow-hidden rounded-md bg-slate-100">
-                      {mainImg ? (
-                        <img
-                          src={resolveImageUrl(mainImg, 'thumb', {
-                            isPanorama: isPanoramaPhoto(mainImg, property.panoramaPhotos),
-                          })}
-                          alt={property.title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-slate-400 text-xs">
-                          {t('no_photo')}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
+                    <div className="flex items-start gap-3">
                       <Link
                         href={`/property/${property._id}`}
-                        className="font-medium text-slate-800 hover:text-blue-600 line-clamp-1"
+                        className="block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-md bg-slate-100 ring-offset-2 hover:ring-2 hover:ring-blue-500 sm:h-20 sm:w-28"
+                        aria-label={property.title}
                       >
-                        {property.title}
+                        {mainImg ? (
+                          <img
+                            src={resolveImageUrl(mainImg, 'thumb', {
+                              isPanorama: isPanoramaPhoto(mainImg, property.panoramaPhotos),
+                            })}
+                            alt={property.title}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center px-1 text-center text-[11px] leading-tight text-slate-400">
+                            {t('no_photo')}
+                          </div>
+                        )}
                       </Link>
-                      <p className="text-sm text-slate-500 mt-1">
-                        {property.city}
-                        {property.region ? `, ${property.region}` : ''}
-                      </p>
-                      <div className="mt-1 flex items-center gap-3">
-                        <PropertyPriceRow p={property} compact className="min-w-0 flex-1" />
+
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/property/${property._id}`}
+                          className="line-clamp-2 font-medium text-slate-800 hover:text-blue-600"
+                        >
+                          {property.title}
+                        </Link>
+                        <p
+                          className="mt-1 line-clamp-2 text-sm text-slate-500"
+                          title={locationLine || undefined}
+                        >
+                          {locationLine || '—'}
+                        </p>
+                        <div className="mt-1.5 hidden min-w-0 items-center gap-2 md:flex">
+                          <PropertySpecChips
+                            p={property}
+                            compact
+                            nowrap
+                            gapClass="gap-1.5"
+                            className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                          />
+                          <PropertyPriceRow p={property} compact className="shrink-0" />
+                          {property.views !== undefined && (
+                            <span className="shrink-0 text-xs text-slate-400">👁 {property.views}</span>
+                          )}
+                          <span className="shrink-0 font-mono text-xs text-slate-400">
+                            ID: {property.numericId || property._id.slice(-6)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="hidden shrink-0 flex-col gap-2 md:flex">
+                        <Link
+                          href={`/property/${property._id}/edit`}
+                          className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          {t('edit')}
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(property._id)}
+                          disabled={deleting === property._id}
+                          className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {deleting === property._id ? '...' : t('delete')}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-col gap-2 md:hidden">
+                      <PropertySpecChips
+                        p={property}
+                        compact
+                        gapClass="gap-1.5"
+                        className="flex-wrap"
+                      />
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <PropertyPriceRow p={property} compact />
                         {property.views !== undefined && (
                           <span className="text-xs text-slate-400">👁 {property.views}</span>
                         )}
-                        <span className="text-xs text-slate-400 font-mono">
+                        <span className="font-mono text-xs text-slate-400">
                           ID: {property.numericId || property._id.slice(-6)}
                         </span>
                       </div>
-
-                      {canSetListingVisibility && (
-                        <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                          <p className="text-xs font-medium text-slate-600">{t('listingVisibilityLabel')}</p>
-                          <div className="flex flex-wrap gap-1">
-                            {(
-                              [
-                                ['public', t('listingMode_public')],
-                                ['unlisted', t('listingMode_unlisted')],
-                                ['private', t('listingMode_private')],
-                                ['sold', t('listingMode_sold')],
-                              ] as const
-                            ).map(([mode, label]) => {
-                              const active = brokerListingModeFromProperty(property) === mode;
-                              return (
-                                <button
-                                  key={mode}
-                                  type="button"
-                                  disabled={visibilitySavingId === property._id}
-                                  onClick={() => setBrokerListingMode(property, mode)}
-                                  className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                                    active
-                                      ? 'bg-blue-600 text-white'
-                                      : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                                  } disabled:opacity-50`}
-                                >
-                                  {label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {brokerListingModeFromProperty(property) === 'unlisted' && property.shareToken && (
-                            <button
-                              type="button"
-                              onClick={() => copyUnlistedLink(property)}
-                              className="text-xs font-medium text-blue-600 hover:underline"
-                            >
-                              {linkCopiedId === property._id ? t('linkCopied') : t('copyPrivateLink')}
-                            </button>
-                          )}
-                        </div>
-                      )}
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    {canSetListingVisibility && (
+                      <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                        <p className="text-xs font-medium text-slate-600">{t('listingVisibilityLabel')}</p>
+                        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
+                          {(
+                            [
+                              ['public', t('listingMode_public')],
+                              ['unlisted', t('listingMode_unlisted')],
+                              ['private', t('listingMode_private')],
+                              ['sold', t('listingMode_sold')],
+                            ] as const
+                          ).map(([mode, label]) => {
+                            const active = brokerListingModeFromProperty(property) === mode;
+                            return (
+                              <button
+                                key={mode}
+                                type="button"
+                                disabled={visibilitySavingId === property._id}
+                                onClick={() => setBrokerListingMode(property, mode)}
+                                className={`rounded-md px-2 py-1.5 text-center text-xs font-medium transition-colors ${
+                                  active
+                                    ? 'bg-blue-600 text-white'
+                                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                } disabled:opacity-50`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {brokerListingModeFromProperty(property) === 'unlisted' && property.shareToken && (
+                          <button
+                            type="button"
+                            onClick={() => copyUnlistedLink(property)}
+                            className="text-xs font-medium text-blue-600 hover:underline"
+                          >
+                            {linkCopiedId === property._id ? t('linkCopied') : t('copyPrivateLink')}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 md:hidden">
                       <Link
                         href={`/property/${property._id}/edit`}
-                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        className="rounded-md border border-slate-300 px-3 py-2 text-center text-xs font-medium text-slate-700 hover:bg-slate-100"
                       >
                         {t('edit')}
                       </Link>
                       <button
+                        type="button"
                         onClick={() => handleDelete(property._id)}
                         disabled={deleting === property._id}
-                        className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        className="rounded-md border border-red-300 px-3 py-2 text-center text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                       >
                         {deleting === property._id ? '...' : t('delete')}
                       </button>

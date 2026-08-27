@@ -11,7 +11,7 @@ import { getTourBuilderPublicBase, normalizeTourLink } from '../utils/tourLink.j
 import { TourModel, SceneModel } from '../models/tourModels.js';
 import { deleteTour } from '../services/tour/tourDb.js';
 import { syncAgentProfileForUser, backfillMissingAgentProfiles } from '../services/agentProfile.js';
-import { applyPropertyQueryFilters, parsePropertySortOption, applyListingVisibilityFilter } from '../utils/propertyQueryFilters.js';
+import { applyPropertyQueryFilters, applyListingVisibilityFilter, queryPropertiesSorted } from '../utils/propertyQueryFilters.js';
 import { getSearchAnalyticsStats } from '../utils/searchAnalyticsAgg.js';
 import { getAgentPortfolioStats } from '../utils/agentPortfolioStats.js';
 import { parseAnalyticsPeriodDays, analyticsPeriodStartDate } from '../utils/analyticsPeriod.js';
@@ -31,10 +31,13 @@ import {
   ensureHomeDesignContent,
   faqPublicPayload,
   aboutPublicPayload,
-  homeDesignPublicPayload,
+  homeDesignAdminPayload,
   normalizeFaqItems,
   normalizeAboutByLang,
   normalizeHomeDesignLayout,
+  normalizeHomeDesignPresets,
+  MAX_HOME_DESIGN_PRESETS,
+  PRESET_NAME_MAX,
 } from '../utils/siteContentService.js';
 import multer from 'multer';
 import { cloudinary } from '../services/cloudinary.js';
@@ -524,14 +527,17 @@ router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
     await applyPropertyQueryFilters(filter, filterQuery);
     const activeFilter = withNotDeleted(filter);
 
-    const finalSort = parsePropertySortOption(req.query.sort);
-
     const total = await Property.countDocuments(activeFilter);
-    const properties = await Property.find(activeFilter)
-      .populate('userId', 'name email')
-      .sort(finalSort)
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+    const sortedRows = await queryPropertiesSorted(Property, activeFilter, req.query.sort, {
+      skip: (pageNum - 1) * limitNum,
+      limit: limitNum,
+    });
+    const ids = sortedRows.map((p) => p._id);
+    const populated = ids.length
+      ? await Property.find({ _id: { $in: ids } }).populate('userId', 'name email')
+      : [];
+    const byId = new Map(populated.map((p) => [String(p._id), p]));
+    const properties = ids.map((id) => byId.get(String(id))).filter(Boolean);
 
     res.json({
       properties,
@@ -961,18 +967,34 @@ router.get('/tours', requireAuth, adminMiddleware, async (req, res) => {
     };
     await applyPropertyQueryFilters(filter, filterQuery);
 
-    const finalSort = req.query.sort
-      ? parsePropertySortOption(req.query.sort)
-      : { updatedAt: -1 };
-
     const total = await Property.countDocuments(filter);
-    const properties = await Property.find(filter)
-      .select('title city tbilisiDistrict type dealType price priceCurrency photos status tourLink exteriorLink interiorLink userId createdAt updatedAt')
-      .populate('userId', 'name email')
-      .sort(finalSort)
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
-      .lean();
+    const selectFields =
+      'title city tbilisiDistrict type dealType price priceCurrency photos status tourLink exteriorLink interiorLink userId createdAt updatedAt';
+    let properties;
+    if (req.query.sort) {
+      const sortedRows = await queryPropertiesSorted(Property, filter, req.query.sort, {
+        skip: (pageNum - 1) * limitNum,
+        limit: limitNum,
+        select: selectFields,
+      });
+      const ids = sortedRows.map((p) => p._id);
+      const populated = ids.length
+        ? await Property.find({ _id: { $in: ids } })
+            .select(selectFields)
+            .populate('userId', 'name email')
+            .lean()
+        : [];
+      const byId = new Map(populated.map((p) => [String(p._id), p]));
+      properties = ids.map((id) => byId.get(String(id))).filter(Boolean);
+    } else {
+      properties = await Property.find(filter)
+        .select(selectFields)
+        .populate('userId', 'name email')
+        .sort({ updatedAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean();
+    }
 
     // ძველი localhost ბმულების ავტომატური გასწორება MongoDB-ში
     for (const p of properties) {
@@ -1354,7 +1376,7 @@ const uploadHomeDesignMedia = multer({
 router.get('/content/home-design', requireAuth, adminMiddleware, async (_req, res) => {
   try {
     const doc = await ensureHomeDesignContent();
-    res.json(homeDesignPublicPayload(doc));
+    res.json(homeDesignAdminPayload(doc));
   } catch (error) {
     console.error('GET /api/admin/content/home-design:', error);
     res.status(500).json({ message: 'მთავარი გვერდის დიზაინის მიღება ვერ მოხერხდა' });
@@ -1376,10 +1398,146 @@ router.put('/content/home-design', requireAuth, adminMiddleware, async (req, res
     await writeAudit(req.user.id, 'update_site_content', 'site_content', 'home-design', {
       version: layout.version ?? null,
     });
-    res.json(homeDesignPublicPayload(doc));
+    res.json(homeDesignAdminPayload(doc));
   } catch (error) {
     console.error('PUT /api/admin/content/home-design:', error);
     res.status(500).json({ message: 'მთავარი გვერდის დიზაინის შენახვა ვერ მოხერხდა' });
+  }
+});
+
+/** შენახული დეფაულტები (პრესეტები) */
+router.get('/content/home-design/presets', requireAuth, adminMiddleware, async (_req, res) => {
+  try {
+    const doc = await ensureHomeDesignContent();
+    res.json({
+      presets: normalizeHomeDesignPresets(doc.presets),
+      maxPresets: MAX_HOME_DESIGN_PRESETS,
+    });
+  } catch (error) {
+    console.error('GET /api/admin/content/home-design/presets:', error);
+    res.status(500).json({ message: 'პრესეტების მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.post('/content/home-design/presets', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const layout = normalizeHomeDesignLayout(req.body?.layout);
+    if (!layout) {
+      return res.status(400).json({ message: 'layout საჭიროა' });
+    }
+    const name = String(req.body?.name || '').trim().slice(0, PRESET_NAME_MAX);
+    if (!name) {
+      return res.status(400).json({ message: 'სახელი საჭიროა' });
+    }
+
+    const doc = await ensureHomeDesignContent();
+    const presets = normalizeHomeDesignPresets(doc.presets);
+    if (presets.length >= MAX_HOME_DESIGN_PRESETS) {
+      return res.status(400).json({
+        message: `მაქსიმუმ ${MAX_HOME_DESIGN_PRESETS} დეფაულტი. წაშალე ძველი და სცადე თავიდან.`,
+      });
+    }
+
+    const now = new Date().toISOString();
+    const preset = {
+      id: `preset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      layout,
+      createdAt: now,
+      updatedAt: now,
+    };
+    presets.push(preset);
+    doc.presets = presets;
+    doc.updatedBy = req.user.id;
+    doc.markModified('presets');
+    await doc.save();
+    await writeAudit(req.user.id, 'create_home_design_preset', 'site_content', 'home-design', {
+      presetId: preset.id,
+      name: preset.name,
+    });
+    res.status(201).json({
+      preset,
+      presets,
+      maxPresets: MAX_HOME_DESIGN_PRESETS,
+    });
+  } catch (error) {
+    console.error('POST /api/admin/content/home-design/presets:', error);
+    res.status(500).json({ message: 'დეფაულტის შენახვა ვერ მოხერხდა' });
+  }
+});
+
+router.put('/content/home-design/presets/:id', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const presetId = String(req.params.id || '').trim();
+    if (!presetId) return res.status(400).json({ message: 'preset id საჭიროა' });
+
+    const doc = await ensureHomeDesignContent();
+    const presets = normalizeHomeDesignPresets(doc.presets);
+    const idx = presets.findIndex((p) => p.id === presetId);
+    if (idx < 0) return res.status(404).json({ message: 'დეფაულტი ვერ მოიძებნა' });
+
+    const nextName =
+      req.body?.name !== undefined
+        ? String(req.body.name || '').trim().slice(0, PRESET_NAME_MAX)
+        : presets[idx].name;
+    if (!nextName) {
+      return res.status(400).json({ message: 'სახელი ცარიელი არ შეიძლება' });
+    }
+
+    const nextLayout =
+      req.body?.layout !== undefined
+        ? normalizeHomeDesignLayout(req.body.layout)
+        : presets[idx].layout;
+    if (!nextLayout) {
+      return res.status(400).json({ message: 'layout არასწორია' });
+    }
+
+    presets[idx] = {
+      ...presets[idx],
+      name: nextName,
+      layout: nextLayout,
+      updatedAt: new Date().toISOString(),
+    };
+    doc.presets = presets;
+    doc.updatedBy = req.user.id;
+    doc.markModified('presets');
+    await doc.save();
+    await writeAudit(req.user.id, 'update_home_design_preset', 'site_content', 'home-design', {
+      presetId,
+    });
+    res.json({
+      preset: presets[idx],
+      presets,
+      maxPresets: MAX_HOME_DESIGN_PRESETS,
+    });
+  } catch (error) {
+    console.error('PUT /api/admin/content/home-design/presets/:id:', error);
+    res.status(500).json({ message: 'დეფაულტის განახლება ვერ მოხერხდა' });
+  }
+});
+
+router.delete('/content/home-design/presets/:id', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const presetId = String(req.params.id || '').trim();
+    if (!presetId) return res.status(400).json({ message: 'preset id საჭიროა' });
+
+    const doc = await ensureHomeDesignContent();
+    const presets = normalizeHomeDesignPresets(doc.presets);
+    const next = presets.filter((p) => p.id !== presetId);
+    if (next.length === presets.length) {
+      return res.status(404).json({ message: 'დეფაულტი ვერ მოიძებნა' });
+    }
+    doc.presets = next;
+    doc.updatedBy = req.user.id;
+    doc.markModified('presets');
+    await doc.save();
+    await writeAudit(req.user.id, 'delete_home_design_preset', 'site_content', 'home-design', {
+      presetId,
+    });
+    res.json({ presets: next, maxPresets: MAX_HOME_DESIGN_PRESETS });
+  } catch (error) {
+    console.error('DELETE /api/admin/content/home-design/presets/:id:', error);
+    res.status(500).json({ message: 'დეფაულტის წაშლა ვერ მოხერხდა' });
   }
 });
 

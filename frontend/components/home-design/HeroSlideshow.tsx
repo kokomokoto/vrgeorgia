@@ -113,7 +113,17 @@ export function HeroSlideshow({
   height: number;
 }) {
   const [urls, setUrls] = React.useState<ResolvedHeroMedia[]>([]);
-  const [layers, setLayers] = React.useState<Layer[]>([]);
+  /** SSR + first paint: always show default photo (avoids dark empty flash) */
+  const [layers, setLayers] = React.useState<Layer[]>([
+    {
+      key: 'default',
+      src: DEFAULT_HERO_IMAGE,
+      kind: 'image',
+      opacity: 1,
+      blur: 0,
+      z: 1,
+    },
+  ]);
   const transitioning = React.useRef(false);
   const indexRef = React.useRef(0);
 

@@ -1,8 +1,9 @@
-// ვალუტის კურსის მოპოვება რეალურ დროში
+// ვალუტის კურსი — ჯერ backend (იგივე რაც ფასის სორტი), მერე გარე API
 import React from 'react';
+import { getApiBase } from './config';
 
-const FALLBACK_RATE = 2.75; // თუ API არ მუშაობს
-const CACHE_DURATION = 60 * 60 * 1000; // 1 საათი მილისეკუნდებში
+const FALLBACK_RATE = 2.75;
+const CACHE_DURATION = 60 * 60 * 1000;
 
 interface CacheData {
   rate: number;
@@ -12,18 +13,18 @@ interface CacheData {
 let cache: CacheData | null = null;
 
 export async function getUsdToGelRate(): Promise<number> {
-  // შევამოწმოთ ქეში
   if (cache && Date.now() - cache.timestamp < CACHE_DURATION) {
     return cache.rate;
   }
 
   try {
-    // ვცდილობთ რამდენიმე API-ს
-    const rate = await fetchFromExchangeRateApi() 
-      || await fetchFromFrankfurter()
-      || FALLBACK_RATE;
-    
-    // ვინახავთ ქეშში
+    const rate =
+      (await fetchFromBackend()) ||
+      (await fetchFromExchangeRateApi()) ||
+      (await fetchFromFrankfurter()) ||
+      cache?.rate ||
+      FALLBACK_RATE;
+
     cache = { rate, timestamp: Date.now() };
     return rate;
   } catch (error) {
@@ -32,35 +33,45 @@ export async function getUsdToGelRate(): Promise<number> {
   }
 }
 
-// ExchangeRate-API (უფასო, 1500 მოთხოვნა თვეში)
+/** Backend-ის კურსი = ფასის სორტის კურსი → სია და ჩვენება ემთხვევა */
+async function fetchFromBackend(): Promise<number | null> {
+  try {
+    const res = await fetch(`${getApiBase()}/api/currency/rate`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const rate = Number(data?.usdToGel);
+    return Number.isFinite(rate) && rate > 0 ? rate : null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchFromExchangeRateApi(): Promise<number | null> {
   try {
-    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD', {
-      next: { revalidate: 3600 } // Next.js cache 1 საათით
-    });
+    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
     if (!res.ok) return null;
     const data = await res.json();
-    return data.rates?.GEL || null;
+    const rate = Number(data.rates?.GEL);
+    return Number.isFinite(rate) && rate > 0 ? rate : null;
   } catch {
     return null;
   }
 }
 
-// Frankfurter API (უფასო, შეუზღუდავი) - მხარს უჭერს GEL-ს
 async function fetchFromFrankfurter(): Promise<number | null> {
   try {
-    const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=GEL', {
-      next: { revalidate: 3600 }
-    });
+    const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=GEL');
     if (!res.ok) return null;
     const data = await res.json();
-    return data.rates?.GEL || null;
+    const rate = Number(data.rates?.GEL);
+    return Number.isFinite(rate) && rate > 0 ? rate : null;
   } catch {
     return null;
   }
 }
 
-// React hook კლიენტის მხრიდან
 export function useCurrencyRate() {
   const [rate, setRate] = React.useState(FALLBACK_RATE);
   const [loading, setLoading] = React.useState(true);
@@ -74,7 +85,6 @@ export function useCurrencyRate() {
   return { rate, loading };
 }
 
-/** სიის ბარათებზე ფასის ჩვენების ვალუტა — ერთი არჩევანი მთელი საიტისთვის */
 export type DisplayCurrency = 'GEL' | 'USD';
 
 export function convertDisplayMoney(

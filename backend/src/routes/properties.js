@@ -22,7 +22,10 @@ import {
   withNotDeleted,
   softDeletePropertyDoc,
 } from '../utils/propertySoftDelete.js';
-import { applyPropertyQueryFilters, parsePropertySortOption } from '../utils/propertyQueryFilters.js';
+import {
+  applyPropertyQueryFilters,
+  queryPropertiesSorted,
+} from '../utils/propertyQueryFilters.js';
 import {
   TRANSLATABLE_FIELDS,
   applyTranslation,
@@ -499,12 +502,16 @@ router.get(
     const filter = withNotDeleted({ userId: req.user.id });
     applyBrokerListingModeFilter(filter, req.query.brokerListingMode || req.query.listingVisibility);
     await applyPropertyQueryFilters(filter, req.query);
-    const sort = parsePropertySortOption(req.query.sort);
+
+    const limitRaw = Number(req.query.limit);
+    const limitNum = Number.isFinite(limitRaw)
+      ? Math.min(Math.max(Math.trunc(limitRaw), 1), 500)
+      : 200;
 
     const [totalAll, total, rows] = await Promise.all([
       Property.countDocuments(baseFilter),
       Property.countDocuments(filter),
-      Property.find(filter).sort(sort).lean(),
+      queryPropertiesSorted(Property, filter, req.query.sort, { limit: limitNum }),
     ]);
 
     const properties = rows.map((p) => {
@@ -783,34 +790,11 @@ router.get(
       }
     }
 
-    // სორტირება (მრავალი კრიტერიუმი, მძიმით გამოყოფილი: "price_asc,date_desc")
-    let sortOption = {};
-    const SORT_MAP = {
-      date_asc: { createdAt: 1 },
-      date_desc: { createdAt: -1 },
-      price_asc: { price: 1 },
-      price_desc: { price: -1 },
-      area_asc: { sqm: 1 },
-      area_desc: { sqm: -1 },
-      views_asc: { views: 1 },
-      views_desc: { views: -1 },
-    };
-    if (req.query.sort) {
-      const parts = req.query.sort.split(',').map(s => s.trim());
-      for (const part of parts) {
-        if (SORT_MAP[part]) {
-          Object.assign(sortOption, SORT_MAP[part]);
-        }
-      }
-    }
-    if (Object.keys(sortOption).length === 0) {
-      sortOption = { createdAt: -1 }; // default
-    }
-
-    // ადმინის მიერ აპინული ობიექტები ყოველთვის პირველ რიგში, მერე არჩეული სორტი
-    const finalSort = { pinned: -1, pinnedAt: -1, ...sortOption };
-
-    const findQuery = Property.find(filter).sort(finalSort).skip(skip).limit(limitNum).lean();
+    // სორტირება: ფასი/ფართობი ნორმალიზებულია (ვალუტა, per_sqm, houseSqm); pinned პირველ რიგში
+    const findQuery = queryPropertiesSorted(Property, filter, req.query.sort, {
+      skip,
+      limit: limitNum,
+    });
     const countQuery = Property.countDocuments(filter);
     const typeCountsQuery = wantTypeCounts
       ? Property.aggregate([

@@ -476,15 +476,66 @@ export async function getHomeDesignLayout() {
   );
 }
 
+export type HomeDesignPresetMeta = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  layout?: unknown;
+};
+
 /** Homepage Design Mode — ადმინის შენახვა (MongoDB) */
 export async function saveHomeDesignLayout(layout: unknown) {
-  return request<{ layout: unknown | null; updatedAt: string | null }>(
-    '/api/admin/content/home-design',
-    {
-      method: 'PUT',
-      body: JSON.stringify({ layout }),
-      timeoutMs: 90_000,
-    }
+  return request<{
+    layout: unknown | null;
+    presets?: HomeDesignPresetMeta[];
+    updatedAt: string | null;
+    maxPresets?: number;
+  }>('/api/admin/content/home-design', {
+    method: 'PUT',
+    body: JSON.stringify({ layout }),
+    timeoutMs: 90_000,
+  });
+}
+
+export async function listHomeDesignPresets() {
+  return request<{ presets: HomeDesignPresetMeta[]; maxPresets: number }>(
+    '/api/admin/content/home-design/presets',
+    { timeoutMs: 30_000 }
+  );
+}
+
+export async function createHomeDesignPreset(name: string, layout: unknown) {
+  return request<{
+    preset: HomeDesignPresetMeta;
+    presets: HomeDesignPresetMeta[];
+    maxPresets: number;
+  }>('/api/admin/content/home-design/presets', {
+    method: 'POST',
+    body: JSON.stringify({ name, layout }),
+    timeoutMs: 90_000,
+  });
+}
+
+export async function updateHomeDesignPreset(
+  id: string,
+  patch: { name?: string; layout?: unknown }
+) {
+  return request<{
+    preset: HomeDesignPresetMeta;
+    presets: HomeDesignPresetMeta[];
+    maxPresets: number;
+  }>(`/api/admin/content/home-design/presets/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+    timeoutMs: 90_000,
+  });
+}
+
+export async function deleteHomeDesignPreset(id: string) {
+  return request<{ presets: HomeDesignPresetMeta[]; maxPresets: number }>(
+    `/api/admin/content/home-design/presets/${encodeURIComponent(id)}`,
+    { method: 'DELETE', timeoutMs: 30_000 }
   );
 }
 

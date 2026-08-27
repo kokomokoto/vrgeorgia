@@ -5,12 +5,13 @@ import { useHomeDesign } from '@/components/home-design/HomeDesignContext';
 import { DesignableBadge } from '@/components/home-design/DesignableBadge';
 import {
   railStackHeight,
+  clampOpacity,
   type DesignableId,
 } from '@/lib/homeDesignLayout';
-import { useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
+import { scaleDesignPx, scaleDesignOffset, useHomeDesignScale, useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
 
 type DesignableProps = {
-  id: Exclude<DesignableId, 'hero' | 'header' | 'theme'>;
+  id: Exclude<DesignableId, 'hero' | 'header' | 'theme' | 'social'>;
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
@@ -18,10 +19,24 @@ type DesignableProps = {
 
 const DRAG_THRESHOLD_PX = 3;
 
+/** Phone absolute nudge — title on the photo band. */
+const MOBILE_ABS_NUDGE_IDS = new Set<DesignableId>(['heroText']);
+
+/**
+ * Phone stack nudge — vertical spacing via margin (not relative top),
+ * so dragging closer does not leave an empty hole in the flex flow.
+ */
+const MOBILE_STACK_NUDGE_IDS = new Set<DesignableId>([
+  'dealBar',
+  'search',
+  'typePanel',
+  'map',
+]);
+
 /**
  * When Design Mode is on: drag to move, SE handle to resize (W and H independently).
  * History (Ctrl+Z) starts only after real movement — not on mere click/select.
- * Below md: design x/y/w are ignored so phones stay fluid full-width.
+ * Below md: most geometry stays fluid; selected blocks still nudge via mobileX/Y.
  */
 export function Designable({
   id,
@@ -36,19 +51,41 @@ export function Designable({
     setSelectedId,
     setSelectedRailItemId,
     setSelectedTypeItemId,
+    setActiveEditParams,
     updateBox,
     updateServiceRail,
     updateQuickRail,
+    updateHeroText,
     beginHistoryGesture,
     endHistoryGesture,
   } = useHomeDesign();
   const isDesktop = useIsDesignDesktop();
-  /** Design canvas geometry only on desktop; mobile always fluid */
+  const designCanvasW = Math.max(
+    layout.map?.w ?? 0,
+    layout.typePanel?.w ?? 0,
+    layout.listings?.w ?? 0,
+    layout.search?.w ?? 0,
+    1280
+  );
+  const designScale = useHomeDesignScale(designCanvasW);
+  /** Desktop canvas: offsets + max widths. Heights stay auto/scaled so shrink is uniform. */
   const applyGeometry = isDesktop;
+  const canSelectDesign = designMode;
+  const canNudgeMobile =
+    designMode &&
+    !isDesktop &&
+    (MOBILE_ABS_NUDGE_IDS.has(id) || MOBILE_STACK_NUDGE_IDS.has(id));
+  const canMoveDesign = (designMode && applyGeometry) || canNudgeMobile;
+  /**
+   * Phone: SE-resize must not write into shared desktop `h` (search/dealBar).
+   */
+  const mobileBlocksDesktopHeight =
+    !isDesktop && (id === 'heroText' || id === 'search' || id === 'dealBar');
+  const canResizeDesign = designMode && !mobileBlocksDesktopHeight;
 
   const box = React.useMemo(() => {
     if (id === 'serviceRail') {
-      const { itemW, itemH, gap, items, x, y } = layout.serviceRail;
+      const { itemW, itemH, gap, items, x, y, opacity } = layout.serviceRail;
       return {
         x,
         y,
@@ -56,10 +93,13 @@ export function Designable({
         h: railStackHeight(itemH, gap, items.length),
         itemW,
         itemH,
+        mobileX: 0,
+        mobileY: 0,
+        opacity,
       };
     }
     if (id === 'quickRail') {
-      const { w, itemH, gap, items, x, y } = layout.quickRail;
+      const { w, itemH, gap, items, x, y, opacity } = layout.quickRail;
       return {
         x,
         y,
@@ -67,9 +107,19 @@ export function Designable({
         h: railStackHeight(itemH, gap, items.length),
         itemW: w,
         itemH,
+        mobileX: 0,
+        mobileY: 0,
+        opacity,
       };
     }
-    return { ...layout[id], itemW: layout[id].w, itemH: layout[id].h };
+    const b = layout[id];
+    return {
+      ...b,
+      itemW: b.w,
+      itemH: b.h,
+      mobileX: b.mobileX ?? (id === 'heroText' ? 16 : 0),
+      mobileY: b.mobileY ?? (id === 'heroText' ? 16 : 0),
+    };
   }, [id, layout]);
 
   const selected = selectedId === id;
@@ -130,12 +180,24 @@ export function Designable({
     e: React.PointerEvent,
     mode: 'move' | 'resize'
   ) => {
-    if (!designMode || !applyGeometry) return;
+    if (!designMode) return;
+    if (mode === 'move' && !canMoveDesign) return;
     e.preventDefault();
     e.stopPropagation();
     setSelectedId(id);
     setSelectedRailItemId(null);
     setSelectedTypeItemId(null);
+    if (mode === 'move') {
+      setActiveEditParams(canNudgeMobile ? ['mobileX', 'mobileY'] : ['x', 'y']);
+    } else if (id === 'serviceRail' || id === 'quickRail') {
+      setActiveEditParams(['itemW', 'itemH']);
+    } else if (!applyGeometry && (id === 'search' || id === 'dealBar' || id === 'heroText')) {
+      setActiveEditParams([]);
+    } else if (!applyGeometry) {
+      setActiveEditParams(['h']);
+    } else {
+      setActiveEditParams(['w', 'h']);
+    }
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -145,8 +207,8 @@ export function Designable({
       mode,
       startX: e.clientX,
       startY: e.clientY,
-      origX: box.x,
-      origY: box.y,
+      origX: canNudgeMobile ? box.mobileX : box.x,
+      origY: canNudgeMobile ? box.mobileY : box.y,
       origItemW: box.itemW,
       origItemH: box.itemH,
       historyStarted: false,
@@ -168,7 +230,38 @@ export function Designable({
     }
 
     if (d.mode === 'move') {
+      if (canNudgeMobile) {
+        const next = MOBILE_STACK_NUDGE_IDS.has(id)
+          ? {
+              // Stack blocks: mostly vertical spacing; keep X near 0
+              mobileX: Math.max(-24, Math.min(24, Math.round(d.origX + dx))),
+              // Allow pulling up enough to close the flex gap between cards
+              mobileY: Math.max(-48, Math.min(64, Math.round(d.origY + dy))),
+            }
+          : {
+              mobileX: Math.round(d.origX + dx),
+              mobileY: Math.round(d.origY + dy),
+            };
+        if (id === 'heroText') {
+          updateHeroText(next);
+        } else if (
+          id === 'dealBar' ||
+          id === 'search' ||
+          id === 'typePanel' ||
+          id === 'map' ||
+          id === 'listings'
+        ) {
+          updateBox(id, next);
+        }
+        return;
+      }
       applyPatch({ x: d.origX + dx, y: d.origY + dy });
+      return;
+    }
+    if (!applyGeometry) {
+      // Never let phone height-drag mutate desktop search/dealBar/heroText `h`
+      if (id === 'search' || id === 'dealBar' || id === 'heroText') return;
+      applyPatch({ h: d.origItemH + dy });
       return;
     }
     if (id === 'serviceRail' || id === 'quickRail') {
@@ -186,6 +279,7 @@ export function Designable({
     if (!dragRef.current) return;
     const started = dragRef.current.historyStarted;
     dragRef.current = null;
+    setActiveEditParams([]);
     if (started) endHistoryGesture();
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -194,71 +288,80 @@ export function Designable({
     }
   };
 
-  const sizeStyle: React.CSSProperties = !applyGeometry
-    ? {
-        width: '100%',
-        maxWidth: '100%',
-        height: 'auto',
-        ...(id === 'map' ? { minHeight: 220 } : {}),
-        ...(id === 'search' ? { minHeight: 52 } : {}),
-      }
-    : id === 'serviceRail'
-      ? { width: layout.serviceRail.itemW, height: box.h }
+  const dX = scaleDesignOffset(box.x, designScale);
+  const dY = scaleDesignOffset(box.y, designScale);
+  const dW =
+    id === 'serviceRail'
+      ? scaleDesignPx(layout.serviceRail.itemW, designScale, 40)
       : id === 'quickRail'
-        ? { width: layout.quickRail.w, height: box.h }
-        : id === 'listings'
-          ? {
-              width: box.w,
-              minHeight: box.h,
-              height: 'auto',
-              maxWidth: '100%',
-              overflow: 'visible' as const,
-            }
-          : {
-              width: box.w,
-              height: box.h,
-              maxWidth: '100%',
-              ...(id === 'typePanel' || id === 'map'
-                ? { overflow: 'visible' as const }
-                : {}),
-            };
+        ? scaleDesignPx(layout.quickRail.w, designScale, 80)
+        : box.w;
+  const dH = scaleDesignPx(
+    box.h,
+    designScale,
+    id === 'listings' ? 200 : id === 'map' ? 160 : 40
+  );
+  const dMinH = scaleDesignPx(box.h, designScale, id === 'listings' ? 200 : 40);
 
-  // Leaflet ირღვევა CSS transform-იან მშობელში — desktop-ზე left/top
-  const offsetStyle: React.CSSProperties = applyGeometry
-    ? {
-        position: 'relative',
-        left: box.x,
-        top: box.y,
-      }
-    : {
-        position: 'relative',
-        left: 0,
-        top: 0,
-      };
-
-  const canInteractDesign = designMode && applyGeometry;
+  const geometryClass =
+    id === 'heroText'
+      ? 'max-md:absolute max-md:left-[var(--m-x)] max-md:top-[var(--m-y)] max-md:right-auto max-md:z-[35] max-md:!h-auto max-md:!w-auto max-md:!max-w-[calc(100%-24px)] md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:min-h-[var(--d-min-h)]'
+      : id === 'search' || id === 'dealBar'
+        ? `${id === 'search' ? 'max-md:min-h-[52px] ' : ''}max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:overflow-visible`
+        : id === 'typePanel'
+          ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:overflow-visible'
+          : id === 'map'
+            ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:overflow-visible'
+            : id === 'listings'
+              ? 'max-md:relative max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:overflow-visible'
+              : id === 'serviceRail' || id === 'quickRail'
+                ? 'max-md:relative md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-[var(--d-h)] md:w-[var(--d-w)]'
+                : 'max-md:relative md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-[var(--d-h)] md:w-full md:max-w-[var(--d-max-w)]';
 
   return (
     <div
-      className={`group/designable relative ${canInteractDesign ? 'z-20' : ''} ${className}`}
-      style={{
-        ...style,
-        ...sizeStyle,
-        ...offsetStyle,
-        outline: canInteractDesign
-          ? selected
-            ? '2px solid #2563eb'
-            : undefined
-          : undefined,
-        outlineOffset: canInteractDesign && selected ? 2 : undefined,
-        cursor: canInteractDesign ? 'move' : undefined,
-        touchAction: canInteractDesign ? 'none' : undefined,
-      }}
+      className={`group/designable relative ${geometryClass} ${canSelectDesign ? 'z-20' : ''} ${className}`}
+      style={
+        {
+          ...style,
+          '--d-x': `${dX}px`,
+          '--d-y': `${dY}px`,
+          '--d-w': `${dW}px`,
+          '--d-h': `${dH}px`,
+          '--d-max-w': `${box.w}px`,
+          '--d-min-h': `${dMinH}px`,
+          '--m-x': `${box.mobileX}px`,
+          '--m-y': `${box.mobileY}px`,
+          ...(id === 'serviceRail' || id === 'quickRail'
+            ? {
+                width: dW,
+                height: dH,
+              }
+            : {
+                width: '100%',
+                maxWidth: box.w,
+                ...(id === 'map' ? { height: dH } : null),
+                ...(id === 'search' || id === 'dealBar' || id === 'heroText'
+                  ? { minHeight: dMinH, height: 'auto' }
+                  : null),
+                ...(id === 'listings' ? { minHeight: dMinH, height: 'auto' } : null),
+                ...(id === 'typePanel' ? { height: 'auto' } : null),
+              }),
+          outline: canSelectDesign
+            ? selected
+              ? '2px solid #2563eb'
+              : '1px dashed #94a3b8'
+            : undefined,
+          // Inset outline so Design Mode box matches public layout size
+          outlineOffset: canSelectDesign ? -1 : undefined,
+          cursor: canMoveDesign ? 'move' : canSelectDesign ? 'pointer' : undefined,
+          touchAction: canMoveDesign || (canResizeDesign && selected) ? 'none' : undefined,
+        } as React.CSSProperties
+      }
       data-designable={id}
       onClick={
-        canInteractDesign
+        canSelectDesign
           ? (e) => {
-              e.preventDefault();
               e.stopPropagation();
               setSelectedId(id);
               setSelectedRailItemId(null);
@@ -266,37 +369,44 @@ export function Designable({
             }
           : undefined
       }
-      onPointerDown={canInteractDesign ? (e) => startDrag(e, 'move') : undefined}
-      onPointerMove={canInteractDesign ? onPointerMove : undefined}
-      onPointerUp={canInteractDesign ? onPointerUp : undefined}
-      onPointerCancel={canInteractDesign ? onPointerUp : undefined}
+      onPointerDown={canMoveDesign ? (e) => startDrag(e, 'move') : undefined}
+      onPointerMove={canMoveDesign || canResizeDesign ? onPointerMove : undefined}
+      onPointerUp={canMoveDesign || canResizeDesign ? onPointerUp : undefined}
+      onPointerCancel={canMoveDesign || canResizeDesign ? onPointerUp : undefined}
     >
-      {canInteractDesign && !selected ? (
+      {canSelectDesign && !selected ? (
         <span
           className="pointer-events-none absolute inset-0 rounded opacity-0 ring-1 ring-dashed ring-slate-400/70 transition group-hover/designable:opacity-100"
           aria-hidden
         />
       ) : null}
-      {canInteractDesign ? <DesignableBadge id={id} selected={selected} /> : null}
+      {canSelectDesign ? <DesignableBadge id={id} selected={selected} /> : null}
       <div
         className={
-          canInteractDesign
-            ? id === 'serviceRail' ||
-              id === 'quickRail' ||
-              id === 'typePanel' ||
-              id === 'listings'
-              ? 'h-full w-full'
-              : 'pointer-events-none h-full w-full'
+          canMoveDesign
+            ? // Phone stack + abs nudge: children must not steal the drag gesture
+              !isDesktop &&
+              (MOBILE_STACK_NUDGE_IDS.has(id) || MOBILE_ABS_NUDGE_IDS.has(id))
+              ? 'pointer-events-none h-full w-full'
+              : id === 'serviceRail' ||
+                  id === 'quickRail' ||
+                  id === 'typePanel' ||
+                  id === 'listings' ||
+                  id === 'search' ||
+                  id === 'dealBar'
+                ? 'h-full w-full'
+                : 'pointer-events-none h-full w-full'
             : 'h-full w-full'
         }
+        style={{ opacity: clampOpacity(box.opacity) }}
       >
         {children}
       </div>
 
-      {canInteractDesign && selected ? (
+      {canResizeDesign && selected ? (
         <div
-          className="absolute bottom-0 right-0 z-30 h-4 w-4 translate-x-1/3 translate-y-1/3 cursor-se-resize rounded-sm bg-blue-600 shadow"
-          title="სიგანე და სიმაღლე"
+          className="absolute bottom-0 right-0 z-30 h-5 w-5 translate-x-1/3 translate-y-1/3 cursor-se-resize rounded-sm bg-blue-600 shadow"
+          title={applyGeometry ? 'სიგანე და სიმაღლე' : 'სიმაღლე'}
           onPointerDown={(e) => startDrag(e, 'resize')}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}

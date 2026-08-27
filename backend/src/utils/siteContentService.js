@@ -106,7 +106,13 @@ export async function ensureHomeDesignContent() {
     doc = await SiteContent.create({
       key: 'home-design',
       layout: null,
+      presets: [],
     });
+  }
+  if (!Array.isArray(doc.presets)) {
+    doc.presets = [];
+    doc.markModified('presets');
+    await doc.save();
   }
   return doc;
 }
@@ -120,9 +126,53 @@ export function normalizeHomeDesignLayout(layout) {
   return layout;
 }
 
+const MAX_HOME_DESIGN_PRESETS = 12;
+const PRESET_NAME_MAX = 48;
+
+function newPresetId() {
+  return `preset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{ id: string, name: string, layout: object, createdAt: string, updatedAt: string }[]}
+ */
+export function normalizeHomeDesignPresets(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const layout = normalizeHomeDesignLayout(item.layout);
+    if (!layout) continue;
+    const id = slugifyId(item.id, newPresetId());
+    const name = String(item.name || 'დეფაულტი').trim().slice(0, PRESET_NAME_MAX) || 'დეფაულტი';
+    const createdAt =
+      typeof item.createdAt === 'string' && item.createdAt
+        ? item.createdAt
+        : new Date().toISOString();
+    const updatedAt =
+      typeof item.updatedAt === 'string' && item.updatedAt ? item.updatedAt : createdAt;
+    out.push({ id, name, layout, createdAt, updatedAt });
+    if (out.length >= MAX_HOME_DESIGN_PRESETS) break;
+  }
+  return out;
+}
+
 export function homeDesignPublicPayload(doc) {
   return {
     layout: normalizeHomeDesignLayout(doc.layout) || null,
     updatedAt: doc.updatedAt || null,
   };
 }
+
+/** Admin payload includes named presets */
+export function homeDesignAdminPayload(doc) {
+  return {
+    layout: normalizeHomeDesignLayout(doc.layout) || null,
+    presets: normalizeHomeDesignPresets(doc.presets),
+    updatedAt: doc.updatedAt || null,
+    maxPresets: MAX_HOME_DESIGN_PRESETS,
+  };
+}
+
+export { MAX_HOME_DESIGN_PRESETS, PRESET_NAME_MAX };

@@ -13,6 +13,7 @@ import {
   clampFontSize,
   clampRailPercent,
   clampRailRadius,
+  clampOpacity,
   isRailSectionHiddenForMode,
   resolveVisibleRailItemsForMode,
   type RailItem,
@@ -136,6 +137,7 @@ function useRailLabelDrag(
       design.beginHistoryGesture();
       design.setSelectedId(rail);
       design.setSelectedRailItemId(itemId);
+      design.setActiveEditParams(['labelX', 'labelY']);
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     },
     [design, enabled]
@@ -161,6 +163,7 @@ function useRailLabelDrag(
       e.preventDefault();
       e.stopPropagation();
       dragRef.current = null;
+      design.setActiveEditParams([]);
       design.endHistoryGesture();
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -260,29 +263,13 @@ export function HomeServiceRail({
     const raw = design?.layout.serviceRail.items?.length
       ? design.layout.serviceRail.items
       : itemsProp || [];
-    return resolveVisibleRailItemsForMode(raw, modeId, { includeHidden: designMode });
-  }, [design?.layout.serviceRail.items, itemsProp, modeId, designMode]);
+    // WYSIWYG: same visible items as public (edit hidden items in the inspector)
+    return resolveVisibleRailItemsForMode(raw, modeId, { includeHidden: false });
+  }, [design?.layout.serviceRail.items, itemsProp, modeId]);
   const imageUrls = useRailMedia(items);
   const drag = useRailLabelDrag('serviceRail', designMode);
 
-  if (sectionHidden && !designMode) return null;
-
-  if (sectionHidden && designMode) {
-    return (
-      <aside
-        className="flex min-h-[120px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-amber-400/80 bg-amber-50/80 px-3 py-6 text-center dark:border-amber-600/70 dark:bg-amber-950/30"
-        style={{ width: itemW, gap }}
-        aria-label={`${title} (დამალული)`}
-      >
-        <span className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">
-          სერვისის წრეები დამალულია
-        </span>
-        <span className="mt-1 text-[10px] leading-snug text-amber-800/90 dark:text-amber-300/90">
-          ამ რეჟიმში მომხმარებელს არ ეჩვენება. ჩართე ინსპექტორში.
-        </span>
-      </aside>
-    );
-  }
+  if (sectionHidden) return null;
 
   return (
     <aside className="flex flex-col items-center" style={{ gap }} aria-label={title}>
@@ -297,7 +284,7 @@ export function HomeServiceRail({
             href={item.href || '#'}
             data-rail-item={item.id}
             className={`group relative block overflow-hidden border transition ${
-              itemHidden ? 'opacity-40 ring-2 ring-dashed ring-amber-400' : ''
+              itemHidden ? 'ring-2 ring-dashed ring-amber-400' : ''
             }`}
             data-theme-surface
             style={{
@@ -307,6 +294,7 @@ export function HomeServiceRail({
               backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
+              opacity: itemHidden ? 0.4 : clampOpacity(item.opacity),
             }}
             onPointerDown={
               designMode
@@ -373,28 +361,13 @@ export function HomeQuickRail({
     const raw = design?.layout.quickRail.items?.length
       ? design.layout.quickRail.items
       : itemsProp || [];
-    return resolveVisibleRailItemsForMode(raw, modeId, { includeHidden: designMode });
-  }, [design?.layout.quickRail.items, itemsProp, modeId, designMode]);
+    // WYSIWYG: same visible items as public (edit hidden items in the inspector)
+    return resolveVisibleRailItemsForMode(raw, modeId, { includeHidden: false });
+  }, [design?.layout.quickRail.items, itemsProp, modeId]);
   const imageUrls = useRailMedia(items);
   const drag = useRailLabelDrag('quickRail', designMode);
 
-  if (sectionHidden && !designMode) return null;
-
-  if (sectionHidden && designMode) {
-    return (
-      <aside
-        className="flex min-h-[120px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-amber-400/80 bg-amber-50/80 px-3 py-6 text-center dark:border-amber-600/70 dark:bg-amber-950/30"
-        aria-label={`${title} (დამალული)`}
-      >
-        <span className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">
-          სწრაფი ბმულები დამალულია
-        </span>
-        <span className="mt-1 text-[10px] leading-snug text-amber-800/90 dark:text-amber-300/90">
-          ამ რეჟიმში მომხმარებელს არ ეჩვენება. ჩართე ინსპექტორში.
-        </span>
-      </aside>
-    );
-  }
+  if (sectionHidden) return null;
 
   return (
     <aside className="flex w-full flex-col" style={{ gap }} aria-label={title}>
@@ -409,7 +382,7 @@ export function HomeQuickRail({
             href={item.href || '#'}
             data-rail-item={item.id}
             className={`relative block overflow-hidden border transition ${
-              itemHidden ? 'opacity-40 ring-2 ring-dashed ring-amber-400' : ''
+              itemHidden ? 'ring-2 ring-dashed ring-amber-400' : ''
             }`}
             data-theme-surface
             style={{
@@ -418,6 +391,7 @@ export function HomeQuickRail({
               backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
+              opacity: itemHidden ? 0.4 : clampOpacity(item.opacity),
             }}
             onPointerDown={
               designMode

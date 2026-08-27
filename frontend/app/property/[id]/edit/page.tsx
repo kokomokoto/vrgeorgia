@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
@@ -49,6 +49,7 @@ import { FormattedNumberInput } from '@/components/FormattedNumberInput';
 import { LinkedPriceInputs } from '@/components/LinkedPriceInputs';
 import { formatNumberForDisplay } from '@/lib/formatNumberInput';
 import type { Property } from '@/lib/types';
+import { scheduleScrollFormStepIntoView } from '@/lib/scrollFormStep';
 
 // საქართველოს რეგიონები
 const GEORGIAN_REGIONS = [
@@ -118,6 +119,30 @@ export default function EditPropertyPage() {
 
   // ეტაპი
   const [currentStep, setCurrentStep] = useState(1);
+  const stepCardRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const scrollAfterStepChangeRef = useRef(false);
+
+  const goToStep = useCallback((step: number) => {
+    scrollAfterStepChangeRef.current = step >= 1;
+    setCurrentStep(step);
+  }, []);
+
+  const toggleStep = useCallback((step: number) => {
+    setCurrentStep((prev) => {
+      if (prev === step) {
+        scrollAfterStepChangeRef.current = false;
+        return 0;
+      }
+      scrollAfterStepChangeRef.current = true;
+      return step;
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (currentStep < 1 || !scrollAfterStepChangeRef.current) return;
+    scrollAfterStepChangeRef.current = false;
+    return scheduleScrollFormStepIntoView(stepCardRefs.current[currentStep]);
+  }, [currentStep]);
 
   // ფორმის მონაცემები
   const [title, setTitle] = useState('');
@@ -801,11 +826,14 @@ export default function EditPropertyPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        {/* მთავარი ფორმა */}
-        <div className="space-y-4">
+        {/* მთავარი ფორმა — ქვედა ადგილი, რომ ბოლო ეტაპებიც ჰედერთან ამოვიდეს */}
+        <div className="space-y-4 pb-[45vh]">
           {/* ეტაპი 1: გარიგების და ქონების ტიპი */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 1 ? 'border-blue-500 shadow-lg' : isStep1Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 1 ? 0 : 1)} className="w-full text-left">
+          <div
+            ref={(el) => { stepCardRefs.current[1] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${currentStep === 1 ? 'border-blue-500 shadow-lg' : isStep1Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}
+          >
+            <button onClick={() => toggleStep(1)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep1Complete ? 'bg-green-500 text-white' : currentStep === 1 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep1Complete ? '✓' : '1'}
@@ -879,7 +907,7 @@ export default function EditPropertyPage() {
                 {isStep1Complete && (
                   <button
                     type="button"
-                    onClick={() => setCurrentStep(2)}
+                    onClick={() => goToStep(2)}
                     className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white transition-colors hover:bg-blue-700"
                   >
                     {t('next_step')}
@@ -890,8 +918,11 @@ export default function EditPropertyPage() {
           </div>
 
           {/* ეტაპი 2: რუკაზე მონიშვნა */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 2 ? 'border-blue-500 shadow-lg' : isStep2Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 2 ? 0 : 2)} className="w-full text-left">
+          <div
+            ref={(el) => { stepCardRefs.current[2] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${currentStep === 2 ? 'border-blue-500 shadow-lg' : isStep2Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}
+          >
+            <button onClick={() => toggleStep(2)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep2Complete ? 'bg-green-500 text-white' : currentStep === 2 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep2Complete ? '✓' : '2'}
@@ -985,7 +1016,7 @@ export default function EditPropertyPage() {
                   </div>
                 )}
                 {isStep2Complete && (
-                  <button onClick={() => setCurrentStep(3)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                  <button onClick={() => goToStep(3)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                     {t('next_step')}
                   </button>
                 )}
@@ -994,8 +1025,11 @@ export default function EditPropertyPage() {
           </div>
 
           {/* ეტაპი 3: მდებარეობა */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 3 ? 'border-blue-500 shadow-lg' : isStep3Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 3 ? 0 : 3)} className="w-full text-left">
+          <div
+            ref={(el) => { stepCardRefs.current[3] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${currentStep === 3 ? 'border-blue-500 shadow-lg' : isStep3Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}
+          >
+            <button onClick={() => toggleStep(3)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep3Complete ? 'bg-green-500 text-white' : currentStep === 3 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep3Complete ? '✓' : '3'}
@@ -1068,7 +1102,7 @@ export default function EditPropertyPage() {
                   />
                 )}
                 {isStep3Complete && (
-                  <button onClick={() => setCurrentStep(4)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                  <button onClick={() => goToStep(4)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                     {t('next_step')}
                   </button>
                 )}
@@ -1077,8 +1111,11 @@ export default function EditPropertyPage() {
           </div>
 
           {/* ეტაპი 4: ძირითადი ინფორმაცია */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 4 ? 'border-blue-500 shadow-lg' : isStep4Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 4 ? 0 : 4)} className="w-full text-left">
+          <div
+            ref={(el) => { stepCardRefs.current[4] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${currentStep === 4 ? 'border-blue-500 shadow-lg' : isStep4Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}
+          >
+            <button onClick={() => toggleStep(4)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep4Complete ? 'bg-green-500 text-white' : currentStep === 4 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep4Complete ? '✓' : '4'}
@@ -1197,7 +1234,7 @@ export default function EditPropertyPage() {
                   hasPhotos={existingPhotos.length > 0}
                 />
                 {isStep4Complete && (
-                  <button onClick={() => setCurrentStep(5)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                  <button onClick={() => goToStep(5)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                     {t('next_step')}
                   </button>
                 )}
@@ -1206,8 +1243,11 @@ export default function EditPropertyPage() {
           </div>
 
           {/* ეტაპი 5: დეტალური ინფორმაცია */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 5 ? 0 : 5)} className="w-full text-left">
+          <div
+            ref={(el) => { stepCardRefs.current[5] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${currentStep === 5 ? 'border-blue-500 shadow-lg' : isStep5Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}
+          >
+            <button onClick={() => toggleStep(5)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep5Complete ? 'bg-green-500 text-white' : currentStep === 5 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep5Complete ? '✓' : '5'}
@@ -1498,7 +1538,7 @@ export default function EditPropertyPage() {
                 </>
                 )}
 
-                <button onClick={() => setCurrentStep(6)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                <button onClick={() => goToStep(6)} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
                   {t('next_step')}
                 </button>
               </div>
@@ -1506,8 +1546,11 @@ export default function EditPropertyPage() {
           </div>
 
           {/* ეტაპი 6: ფოტოები */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
-            <button onClick={() => setCurrentStep(prev => prev === 6 ? 0 : 6)} className="w-full text-left">
+          <div
+            ref={(el) => { stepCardRefs.current[6] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${currentStep === 6 ? 'border-blue-500 shadow-lg' : isStep6Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}
+          >
+            <button onClick={() => toggleStep(6)} className="w-full text-left">
               <div className="flex items-center gap-3 mb-4">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${isStep6Complete ? 'bg-green-500 text-white' : currentStep === 6 ? 'bg-blue-600 text-white' : 'bg-slate-200'}`}>
                   {isStep6Complete ? '✓' : '6'}
@@ -1680,9 +1723,12 @@ export default function EditPropertyPage() {
           </div>
 
           {/* ეტაპი 7: პირადი ჩანაწერი */}
-          <div className={`rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}>
+          <div
+            ref={(el) => { stepCardRefs.current[7] = el; }}
+            className={`scroll-mt-24 rounded-xl border-2 transition-all ${currentStep === 7 ? 'border-blue-500 shadow-lg' : isStep7Complete ? 'border-green-300 bg-green-50/50' : 'border-slate-200'} bg-white p-5`}
+          >
             <button 
-              onClick={() => setCurrentStep(prev => prev === 7 ? 0 : 7)}
+              onClick={() => toggleStep(7)}
               className="w-full text-left"
             >
               <div className="flex items-center gap-3 mb-4">
@@ -1781,7 +1827,7 @@ export default function EditPropertyPage() {
               {steps.map((step) => (
                 <button
                   key={step.num}
-                  onClick={() => setCurrentStep(step.num)}
+                  onClick={() => goToStep(step.num)}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${
                     currentStep === step.num
                       ? 'bg-blue-50 border-2 border-blue-500'

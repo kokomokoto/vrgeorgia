@@ -51,7 +51,8 @@ export function getApiBase(): string {
     }
 
     if (fromEnv && !isLocalApiUrl(fromEnv)) return normalizeApiBase(fromEnv);
-    return normalizeApiBase(`${window.location.protocol}//${host}:5000`);
+    // LAN IP / Cloudflare tunnel: იგივე origin — Next.js /api-ს backend-ზე გადაამისამართებს
+    return normalizeApiBase(window.location.origin);
   }
 
   const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();

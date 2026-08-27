@@ -7,6 +7,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { deleteProperty, getProperty, listProperties, resolveImageUrl } from '@/lib/api';
+import { getUsdToGelRate } from '@/lib/currency';
+import { mergePropertyPools, pickSimilarProperties } from '@/lib/similarProperties';
 import { getApiBase } from '@/lib/config';
 import { getPropertyAddressLine } from '@/lib/propertyDisplay';
 import { apiLang } from '@/lib/apiLang';
@@ -268,6 +270,7 @@ function PropertyDetailInner() {
   const [view3dMode, setView3dMode] = useState<
     'exterior' | 'interior' | 'tour' | 'photos'
   >('exterior');
+  const [idCopied, setIdCopied] = useState(false);
   const propertyMapSectionRef = React.useRef<HTMLDivElement>(null);
 
   // ენის დეტექცია - hooks ყოველთვის ერთნაირად უნდა გამოიძახონ
@@ -358,22 +361,43 @@ function PropertyDetailInner() {
         if (!alive) return;
         setProperty(r.property);
 
-        // ქალაქი თარგმნილია — filter-ში region კოდი (tbilisi), არა "Тбилиси"
-        const similarQuery: Parameters<typeof listProperties>[0] = {
-          type: [r.property.type],
+        const similarBase: Parameters<typeof listProperties>[0] = {
+          dealType: [r.property.dealType],
           lang,
           page: 1,
-          limit: 20,
+          limit: 40,
         };
-        if (r.property.region) {
-          similarQuery.region = r.property.region;
-        }
+        const sameTypeQuery = {
+          ...similarBase,
+          type: [r.property.type],
+        };
 
-        return listProperties(similarQuery).then((res) => {
+        return Promise.all([
+          listProperties(
+            r.property.region
+              ? { ...sameTypeQuery, region: r.property.region }
+              : sameTypeQuery
+          ),
+          getUsdToGelRate(),
+        ]).then(async ([localRes, usdToGel]) => {
           if (!alive) return;
-          const similar = res.properties
-            .filter((p) => p._id !== r.property._id)
-            .slice(0, 6);
+          let pool = localRes.properties;
+          let similar = pickSimilarProperties(r.property, pool, { usdToGel });
+
+          if (similar.length < 6 && r.property.region) {
+            const widerSameType = await listProperties(sameTypeQuery);
+            if (!alive) return;
+            pool = mergePropertyPools(pool, widerSameType.properties);
+            similar = pickSimilarProperties(r.property, pool, { usdToGel });
+          }
+
+          if (similar.length < 6) {
+            const sameDeal = await listProperties(similarBase);
+            if (!alive) return;
+            pool = mergePropertyPools(pool, sameDeal.properties);
+            similar = pickSimilarProperties(r.property, pool, { usdToGel });
+          }
+
           setSimilarProperties(similar);
         });
       })
@@ -703,6 +727,32 @@ function PropertyDetailInner() {
       )
     : null;
   const displayId = property.numericId ?? property._id;
+  const displayIdText = String(displayId);
+
+  const copyPropertyId = async () => {
+    const writeId = async () => {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(displayIdText);
+        return;
+      }
+      throw new Error('clipboard');
+    };
+    try {
+      await writeId();
+    } catch {
+      const field = document.createElement('textarea');
+      field.value = displayIdText;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.left = '-9999px';
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand('copy');
+      field.remove();
+    }
+    setIdCopied(true);
+    window.setTimeout(() => setIdCopied(false), 2000);
+  };
 
   const sharePageUrl =
     typeof window !== 'undefined'
@@ -711,8 +761,36 @@ function PropertyDetailInner() {
 
   const idMetaPanel = (
     <div className="flex flex-col justify-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
-      <div className="font-mono text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
-        ID: {displayId}
+      <div className="flex items-center gap-2">
+        <div className="font-mono text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
+          ID: {displayId}
+        </div>
+        <button
+          type="button"
+          onClick={copyPropertyId}
+          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
+            idCopied
+              ? 'bg-green-500 text-white'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+          title={idCopied ? t('copied') : t('copyId')}
+          aria-label={idCopied ? t('copied') : t('copyId')}
+        >
+          {idCopied ? (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+          )}
+        </button>
       </div>
       {(listedDateLabel || typeof property.views === 'number') && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">

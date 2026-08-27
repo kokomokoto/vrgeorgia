@@ -12,6 +12,10 @@ import { Filters, type FiltersState } from '@/components/Filters';
 import {
   clearHomeFiltersStorage,
   HOME_FILTERS_INITIAL,
+  consumeHomeSearchOnMount,
+  markHomeFiltersDocumentUnloading,
+  markHomeFiltersForRestore,
+  saveHomeSearchSnapshot,
 } from '@/lib/homeFiltersStorage';
 import { MapView } from '@/components/MapView';
 import { PropertyCard } from '@/components/PropertyCard';
@@ -25,14 +29,16 @@ import { Designable } from '@/components/home-design/Designable';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { useTheme } from '@/components/ThemeProvider';
 import { isRailSectionHiddenForMode } from '@/lib/homeDesignLayout';
-import { useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
+import {
+  scaleDesignPx,
+  useHomeDesignScale,
+} from '@/lib/useIsDesignDesktop';
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const homeDesign = useHomeDesignOptional();
   const { activeModeId } = useTheme();
   const designMode = homeDesign?.designMode ?? false;
-  const isDesktopLayout = useIsDesignDesktop();
   const modeId = activeModeId || 'day';
   const serviceItemW = homeDesign?.layout.serviceRail.itemW ?? 200;
   const mapW = homeDesign?.layout.map.w ?? 1280;
@@ -40,11 +46,12 @@ export default function HomePage() {
   const listingsW = homeDesign?.layout.listings?.w ?? 1280;
   const listingsMinH = homeDesign?.layout.listings?.h ?? 480;
   const typePanelW = homeDesign?.layout.typePanel.w ?? 1280;
-  const typePanelH = homeDesign?.layout.typePanel.h ?? 164;
   const typePanelPad = homeDesign?.layout.typePanel.pad ?? 10;
   const typePanelGap = homeDesign?.layout.typePanel.gap ?? 12;
   const quickW = homeDesign?.layout.quickRail.w ?? 200;
   const centerW = Math.max(mapW, typePanelW, listingsW);
+  const designScale = useHomeDesignScale(centerW);
+  const mapHScaled = scaleDesignPx(mapH, designScale, 180);
   const serviceSectionHidden = isRailSectionHiddenForMode(
     homeDesign?.layout.serviceRail,
     modeId
@@ -53,8 +60,9 @@ export default function HomePage() {
     homeDesign?.layout.quickRail,
     modeId
   );
-  const showServiceCol = designMode || !serviceSectionHidden;
-  const showQuickCol = designMode || !quickSectionHidden;
+  // WYSIWYG: Design Mode must use the same visibility as the public page for the active mode
+  const showServiceCol = !serviceSectionHidden;
+  const showQuickCol = !quickSectionHidden;
   const sideCol = Math.max(
     showServiceCol ? serviceItemW : 0,
     showQuickCol ? quickW : 0
@@ -86,13 +94,41 @@ export default function HomePage() {
 
   React.useEffect(() => {
     setMounted(true);
-    clearHomeFiltersStorage();
+    const saved = consumeHomeSearchOnMount();
+    if (saved) {
+      setFilters(saved.filters);
+      setSortBy(saved.sort);
+      setCurrentPage(saved.page);
+    } else {
+      setFilters({ ...HOME_FILTERS_INITIAL });
+      setSortBy('date_desc');
+      setCurrentPage(1);
+    }
     setFiltersHydrated(true);
   }, []);
+
+  // SPA-ით გასვლა (ობიექტი და სხვა) → უკან დაბრუნებისას აღდგეს;
+  // რეფრეშზე beforeunload მონიშნავს unloading-ს და restore არ დაისმება.
+  React.useEffect(() => {
+    const onBeforeUnload = () => {
+      markHomeFiltersDocumentUnloading();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      markHomeFiltersForRestore();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!filtersHydrated) return;
+    saveHomeSearchSnapshot({ filters, sort: sortBy, page: currentPage });
+  }, [filters, sortBy, currentPage, filtersHydrated]);
 
   const clearAllFilters = React.useCallback(() => {
     clearHomeFiltersStorage();
     setCurrentPage(1);
+    setSortBy('date_desc');
     setFilters({ ...HOME_FILTERS_INITIAL });
   }, []);
 
@@ -251,45 +287,51 @@ export default function HomePage() {
         />
       </HomeHero>
 
-      {/* ქვედა ბლოკი — მობილური fluid; desktop-ზე Design Mode სიგანე */}
+      {/* ქვედა ბლოკი — იგივე ცენტრის სიგანე რაც ჰეროს სერჩს; rail-ები გვერდით, ცენტრს არ ავიწროებენ */}
       <div
-        className="mx-auto w-full max-w-full px-3 py-4 sm:px-4 xl:px-0"
+        className="relative mx-auto w-full max-w-full px-3 pb-3 sm:px-0 sm:py-4 max-md:pt-[var(--mobile-stack)] md:max-w-[var(--home-max)]"
         style={
-          isDesktopLayout
-            ? { maxWidth: `calc(${centerW}px + ${sideCol * 2}px + 2.5rem)` }
-            : undefined
+          {
+            '--mobile-stack': `${homeDesign?.layout.hero.mobileStackGap ?? 4}px`,
+            '--home-max':
+              sideCol > 0
+                ? `calc(${centerW}px + ${sideCol * 2}px + 2.5rem)`
+                : `${centerW}px`,
+          } as React.CSSProperties
         }
       >
-        <div className="flex items-start justify-center gap-5">
+        {showServiceCol ? (
           <aside
-            className={`sticky top-28 hidden shrink-0 justify-end xl:flex ${
-              showServiceCol ? '' : '!hidden'
-            }`}
-            style={{ width: showServiceCol ? sideCol || serviceItemW : 0 }}
+            className="absolute left-0 top-0 z-[1] hidden w-[var(--home-side-col)] justify-end xl:flex"
+            style={
+              {
+                '--home-side-col': `${sideCol || serviceItemW}px`,
+                width: sideCol || serviceItemW,
+              } as React.CSSProperties
+            }
           >
-            {showServiceCol ? (
+            <div className="sticky top-28">
               <Designable id="serviceRail">
                 <HomeServiceRail />
               </Designable>
-            ) : null}
+            </div>
           </aside>
+        ) : null}
 
-          <div
-            className="min-w-0 w-full shrink"
-            style={
-              isDesktopLayout
-                ? { maxWidth: centerW, width: centerW }
-                : { maxWidth: '100%', width: '100%' }
-            }
-          >
-            <div className="w-full space-y-4">
+        <div
+          className="relative z-0 mx-auto min-w-0 w-full max-w-full md:max-w-[var(--center-w)]"
+          style={{ '--center-w': `${centerW}px` } as React.CSSProperties}
+        >
+            <div className="flex w-full flex-col max-md:[gap:var(--mobile-stack)] sm:space-y-4 md:block">
               <Designable id="typePanel">
                 <div
-                  className="mx-auto w-full"
+                  className="mx-auto w-full max-w-full md:max-w-[var(--type-w)]"
                   style={
-                    isDesktopLayout
-                      ? { maxWidth: typePanelW, width: '100%', height: typePanelH }
-                      : { maxWidth: '100%', width: '100%', height: 'auto' }
+                    {
+                      width: '100%',
+                      height: 'auto',
+                      '--type-w': `${typePanelW}px`,
+                    } as React.CSSProperties
                   }
                 >
                   <HomeTypePanel
@@ -300,6 +342,7 @@ export default function HomePage() {
                     designMode={designMode}
                     pad={typePanelPad}
                     gap={typePanelGap}
+                    designScale={1}
                   />
                 </div>
               </Designable>
@@ -310,51 +353,85 @@ export default function HomePage() {
                 tr={tr}
               />
 
-              <div className="md:hidden rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMapOpen(!mapOpen)}
-                    className="flex min-w-0 flex-1 items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
-                  >
-                    <span>{tr('map', 'რუკა')}</span>
-                    <svg
-                      className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${mapOpen ? 'rotate-180' : ''}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+              <Designable id="map">
+                {/* Mobile accordion */}
+                <div className="rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 md:hidden">
+                  <div className="flex min-h-11 items-center gap-2 px-3 py-2">
+                    <span className="min-w-0 flex-1 text-sm font-semibold text-slate-700 dark:text-zinc-200">
+                      {tr('map', 'რუკა')}
+                    </span>
+                    <Link
+                      href={mapHref}
+                      className="pointer-events-auto shrink-0 whitespace-nowrap rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400"
+                      onPointerDown={(e) => e.stopPropagation()}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  <Link
-                    href={mapHref}
-                    className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400"
-                  >
-                    {tr('map_open_full_view', 'რუკაზე ძებნა')}
-                  </Link>
-                </div>
-                {mapOpen && (
-                  <div className="mt-3 border-t border-slate-100 pt-3 dark:border-zinc-700">
-                    <MapView {...homeMapProps} heightClassName="h-[360px]" />
+                      {tr('map_open_full_view', 'რუკაზე ძებნა')}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setMapOpen(!mapOpen)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      className="pointer-events-auto flex shrink-0 items-center justify-center rounded-md p-1 text-slate-400"
+                      aria-expanded={mapOpen}
+                      aria-label={tr('map', 'რუკა')}
+                    >
+                      <svg
+                        className={`h-5 w-5 transition-transform ${mapOpen ? 'rotate-180' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
                   </div>
-                )}
-              </div>
+                  {mapOpen && (
+                    <div
+                      className="pointer-events-auto relative mt-2 border-t border-slate-100 pt-2 dark:border-zinc-700"
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <Link
+                        href={mapHref}
+                        aria-label={tr('map_open_full_view', 'რუკაზე ძებნა')}
+                        title={tr('map_open_full_view', 'რუკაზე ძებნა')}
+                        className="absolute bottom-3 right-3 z-[1000] flex h-10 w-10 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
+                      >
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                        </svg>
+                      </Link>
+                      <MapView {...homeMapProps} heightClassName="h-[360px]" />
+                    </div>
+                  )}
+                </div>
 
-              <Designable id="map" className="hidden md:block">
+                {/* Desktop map */}
                 <div
-                  className="relative mx-auto w-full overflow-hidden rounded-lg"
-                  style={{
-                    maxWidth: isDesktopLayout ? mapW : '100%',
-                    width: '100%',
-                    height: Math.max(160, isDesktopLayout ? mapH : 280),
-                  }}
+                  className="relative mx-auto hidden h-[var(--map-h)] w-full max-w-full overflow-hidden rounded-lg md:block md:max-w-[var(--map-w)]"
+                  style={
+                    {
+                      width: '100%',
+                      '--map-w': `${mapW}px`,
+                      '--map-h': `${Math.max(160, mapHScaled)}px`,
+                    } as React.CSSProperties
+                  }
                 >
                   <Link
                     href={mapHref}
                     className="absolute right-3 top-3 z-[400] rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-zinc-900 dark:text-amber-400 dark:ring-zinc-600 dark:hover:bg-zinc-800"
                   >
                     {tr('map_open_full_view', 'რუკაზე ძებნა')}
+                  </Link>
+                  <Link
+                    href={mapHref}
+                    aria-label={tr('map_open_full_view', 'რუკაზე ძებნა')}
+                    title={tr('map_open_full_view', 'რუკაზე ძებნა')}
+                    className="absolute bottom-3 right-3 z-[1000] flex h-10 w-10 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                    </svg>
                   </Link>
                   <MapView
                     key={`home-map-${mapW}x${Math.max(160, mapH)}`}
@@ -365,27 +442,29 @@ export default function HomePage() {
                 </div>
               </Designable>
 
-              <div className="mt-4 space-y-4 xl:hidden">
-                {!serviceSectionHidden || designMode ? (
+              <div className="space-y-3 xl:hidden sm:mt-4">
+                {!serviceSectionHidden ? (
                   <div className="flex justify-center overflow-x-auto pb-1">
                     <HomeServiceRail />
                   </div>
                 ) : null}
-                {!quickSectionHidden || designMode ? (
+                {!quickSectionHidden ? (
                   <div className="overflow-x-auto pb-1">
                     <HomeQuickRail />
                   </div>
                 ) : null}
               </div>
 
-              <Designable id="listings" className="mt-6">
+              <Designable id="listings" className="sm:mt-6">
                 <div
-                  className="grid w-full gap-4"
-                  style={{
-                    maxWidth: isDesktopLayout ? listingsW : '100%',
-                    width: '100%',
-                    minHeight: isDesktopLayout ? listingsMinH : undefined,
-                  }}
+                  className="grid w-full gap-4 max-w-full md:max-w-[var(--listings-w)] md:min-h-[var(--listings-min-h)]"
+                  style={
+                    {
+                      width: '100%',
+                      '--listings-w': `${listingsW}px`,
+                      '--listings-min-h': `${scaleDesignPx(listingsMinH, designScale, 240)}px`,
+                    } as React.CSSProperties
+                  }
                 >
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200">
@@ -418,7 +497,7 @@ export default function HomePage() {
           ) : null}
 
           {!showSkeleton && totalCount > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
               <div className="text-sm text-slate-600 dark:text-zinc-300">
                 {tr('found', 'ნაპოვნია')}:{' '}
                 <span className="font-semibold text-slate-900 dark:text-amber-400">{totalCount}</span>{' '}
@@ -429,10 +508,10 @@ export default function HomePage() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 dark:text-zinc-500">{tr('sorting', 'სორტირება')}:</span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-xs text-slate-500 dark:text-zinc-500">{tr('sorting', 'სორტირება')}:</span>
                 <select
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm sm:flex-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
                   value={sortBy}
                   onChange={(e) => handleSortChange(e.target.value)}
                 >
@@ -510,21 +589,20 @@ export default function HomePage() {
                 </div>
               </Designable>
             </div>
-          </div>
+        </div>
 
+        {showQuickCol ? (
           <aside
-            className={`sticky top-28 hidden shrink-0 xl:block ${
-              showQuickCol ? '' : '!hidden'
-            }`}
-            style={{ width: showQuickCol ? sideCol || quickW : 0 }}
+            className="absolute right-0 top-0 z-[1] hidden xl:block"
+            style={{ width: sideCol || quickW }}
           >
-            {showQuickCol ? (
+            <div className="sticky top-28">
               <Designable id="quickRail">
                 <HomeQuickRail />
               </Designable>
-            ) : null}
+            </div>
           </aside>
-        </div>
+        ) : null}
       </div>
     </div>
   );

@@ -12,7 +12,13 @@ import {
   type ThemeModeDef,
 } from '@/lib/themeModes';
 
-export type { ThemeModeId, ThemePalette, ThemePalettes } from '@/lib/themePalettes';
+import {
+  EMPTY_SITE_SOCIAL_LINKS,
+  normalizeSiteSocialLinks,
+  type SiteSocialLinks,
+} from '@/lib/siteSocialLinks';
+
+export type { SiteSocialLinks } from '@/lib/siteSocialLinks';
 export { DEFAULT_THEME_PALETTES, THEME_MODE_LABELS } from '@/lib/themePalettes';
 export type { ThemeBaseTone, ThemeModeDef } from '@/lib/themeModes';
 export {
@@ -31,7 +37,83 @@ export type BoxLayout = {
   y: number;
   w: number;
   h: number;
+  /** Phone-only nudge from natural flow (px). Negative Y pulls blocks closer. */
+  mobileX?: number;
+  mobileY?: number;
+  /** Layer opacity 0–1. Default 1 (fully visible). */
+  opacity?: number;
 };
+
+export const OPACITY_DEFAULT = 1;
+
+/** Element/layer opacity — 0 = invisible, 1 = solid. */
+export function clampOpacity(n: number | undefined, fallback = OPACITY_DEFAULT): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, Math.round(n * 100) / 100));
+}
+
+export const MOBILE_NUDGE_X_MIN = -120;
+export const MOBILE_NUDGE_X_MAX = 360;
+export const MOBILE_NUDGE_Y_MIN = -80;
+export const MOBILE_NUDGE_Y_MAX = 400;
+
+export function clampMobileNudgeX(n: number | undefined, fallback = 0): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : fallback;
+  return Math.max(MOBILE_NUDGE_X_MIN, Math.min(MOBILE_NUDGE_X_MAX, v));
+}
+
+export function clampMobileNudgeY(n: number | undefined, fallback = 0): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : fallback;
+  return Math.max(MOBILE_NUDGE_Y_MIN, Math.min(MOBILE_NUDGE_Y_MAX, v));
+}
+
+/**
+ * Phone flex-stack spacing tweaks only.
+ * Legacy designs stored large mobileY for absolute `top` pull — those become
+ * overlapping margins in the stack model, so wipe values outside a small range.
+ */
+export const STACK_MOBILE_Y_MIN = -48;
+export const STACK_MOBILE_Y_MAX = 64;
+export const STACK_MOBILE_Y_LEGACY_ABS = 40;
+
+export function clampStackMobileNudgeY(n: number | undefined, fallback = 0): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : fallback;
+  if (Math.abs(v) > STACK_MOBILE_Y_LEGACY_ABS) return 0;
+  return Math.max(STACK_MOBILE_Y_MIN, Math.min(STACK_MOBILE_Y_MAX, v));
+}
+
+export function clampStackMobileNudgeX(n: number | undefined, fallback = 0): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : fallback;
+  if (Math.abs(v) > 40) return 0;
+  return Math.max(-24, Math.min(24, v));
+}
+
+export function normalizeBoxLayout(
+  raw: Partial<BoxLayout> | null | undefined,
+  fallback: BoxLayout,
+  opts?: { maxH?: number; stackMobile?: boolean }
+): BoxLayout {
+  let h = Math.max(40, Math.round(raw?.h ?? fallback.h));
+  if (opts?.maxH != null) {
+    // Phone SE-resize used to inflate shared desktop height — snap back
+    if (h > opts.maxH * 1.75) h = fallback.h;
+    else h = Math.min(opts.maxH, h);
+  }
+  const stack = opts?.stackMobile === true;
+  return {
+    x: Math.round(raw?.x ?? fallback.x),
+    y: Math.round(raw?.y ?? fallback.y),
+    w: Math.max(40, Math.round(raw?.w ?? fallback.w)),
+    h,
+    mobileX: stack
+      ? clampStackMobileNudgeX(raw?.mobileX, fallback.mobileX ?? 0)
+      : clampMobileNudgeX(raw?.mobileX, fallback.mobileX ?? 0),
+    mobileY: stack
+      ? clampStackMobileNudgeY(raw?.mobileY, fallback.mobileY ?? 0)
+      : clampMobileNudgeY(raw?.mobileY, fallback.mobileY ?? 0),
+    opacity: clampOpacity(raw?.opacity, fallback.opacity ?? OPACITY_DEFAULT),
+  };
+}
 
 /** Homepage hero search bar — frame + filter / input / button styles */
 export type SearchLayout = BoxLayout & {
@@ -77,6 +159,60 @@ export type SearchLayout = BoxLayout & {
   buttonColor?: string;
   buttonFontSize: number;
   buttonFontWeight: number;
+
+  /**
+   * Per-control box sizes (ფასი / ფართობი / ქალაქი / ოთახები / ძიება / გაფართოებული / ძიების ღილაკი).
+   * Falls back to triggerWidth / triggerMinHeight / inputHeight / buttonHeight when missing.
+   */
+  controls: Record<SearchControlId, SearchControlLayout>;
+};
+
+export const SEARCH_CONTROL_IDS = [
+  'price',
+  'area',
+  'city',
+  'rooms',
+  'query',
+  'advanced',
+  'submit',
+] as const;
+export type SearchControlId = (typeof SEARCH_CONTROL_IDS)[number];
+
+export type SearchControlLayout = {
+  w: number;
+  h: number;
+  opacity?: number;
+};
+
+export const SEARCH_CONTROL_LABELS: Record<SearchControlId, string> = {
+  price: 'ფასი',
+  area: 'ფართობი',
+  city: 'ქალაქი',
+  rooms: 'ოთახები',
+  query: 'ტექსტური ძიება',
+  advanced: 'გაფართოებული ძიება',
+  submit: 'ძიების ღილაკი',
+};
+
+export const DEAL_CHIP_IDS = ['sale', 'rent', 'mortgage'] as const;
+export type DealChipId = (typeof DEAL_CHIP_IDS)[number];
+
+export type DealChipLayout = {
+  w: number;
+  h: number;
+  opacity?: number;
+};
+
+export type DealBarLayout = BoxLayout & {
+  /** Gap between deal chips (px) */
+  gap: number;
+  chips: Record<DealChipId, DealChipLayout>;
+};
+
+export const DEAL_CHIP_LABELS: Record<DealChipId, string> = {
+  sale: 'იყიდება',
+  rent: 'ქირავდება',
+  mortgage: 'გირავდება',
 };
 
 /** Property-type grid frame — BoxLayout + inner spacing so borders/hover aren’t clipped */
@@ -107,6 +243,26 @@ export type TypePanelItem = {
   countFontSize?: number;
   countColor?: string;
   iconFontSize?: number;
+  /** Label position as % of the card (0–100). Default 50 / 54 */
+  labelX?: number;
+  labelY?: number;
+  /** Count number position as % of the card */
+  countX?: number;
+  countY?: number;
+  /** Icon position as % of the card (shown when there is no cover media) */
+  iconX?: number;
+  iconY?: number;
+  /** Cover media size as % of the card. 100 = fill, >100 = zoom in */
+  mediaScale?: number;
+  /** Cover media focal point as % of the card (50 = centered) */
+  mediaX?: number;
+  mediaY?: number;
+  /** When true, the category name wraps. Default: one line. */
+  labelWrap?: boolean;
+  /** Wrap box width as % of the card (only when labelWrap). */
+  labelMaxW?: number;
+  /** Card opacity 0–1. Default 1. */
+  opacity?: number;
   /**
    * Per theme-mode visual overrides (day / night / …).
    * Resolved as `{ …item, …byMode[modeId] }` — edits in one mode don’t affect others.
@@ -127,6 +283,18 @@ export type TypePanelItemModeVisual = {
   countFontSize?: number;
   countColor?: string | null;
   iconFontSize?: number;
+  labelX?: number;
+  labelY?: number;
+  countX?: number;
+  countY?: number;
+  iconX?: number;
+  iconY?: number;
+  mediaScale?: number;
+  mediaX?: number;
+  mediaY?: number;
+  labelWrap?: boolean;
+  labelMaxW?: number;
+  opacity?: number;
 };
 
 export const TYPE_PANEL_LABEL_FONT_DEFAULT = 12;
@@ -134,6 +302,24 @@ export const TYPE_PANEL_COUNT_FONT_DEFAULT = 11;
 export const TYPE_PANEL_ICON_FONT_DEFAULT = 22;
 /** Matches RAIL_RADIUS_ROUNDED */
 export const TYPE_PANEL_RADIUS_DEFAULT = 16;
+export const TYPE_PANEL_LABEL_POS_DEFAULT = { x: 50, y: 54 } as const;
+export const TYPE_PANEL_COUNT_POS_DEFAULT = { x: 50, y: 76 } as const;
+export const TYPE_PANEL_ICON_POS_DEFAULT = { x: 50, y: 32 } as const;
+export const TYPE_PANEL_MEDIA_POS_DEFAULT = { x: 50, y: 50 } as const;
+export const TYPE_PANEL_MEDIA_SCALE_DEFAULT = 100;
+export const TYPE_PANEL_LABEL_MAX_W_DEFAULT = 140;
+
+/** Cover zoom inside a type card — 50% = shrink, 100% = fill, 400% = tight crop. */
+export function clampMediaScale(n: number | undefined, fallback = TYPE_PANEL_MEDIA_SCALE_DEFAULT): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
+  return Math.max(50, Math.min(400, Math.round(n)));
+}
+
+/** Label wrap box as % of the card. Can exceed 100 so a long name stays on one wrap-line. */
+export function clampTypeLabelMaxW(n: number | undefined, fallback = TYPE_PANEL_LABEL_MAX_W_DEFAULT): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
+  return Math.max(40, Math.min(220, Math.round(n)));
+}
 
 export const DEFAULT_TYPE_PANEL_ITEMS: TypePanelItem[] = [
   { id: 'apartment', label: 'ბინა', icon: '🏢', borderRadius: TYPE_PANEL_RADIUS_DEFAULT },
@@ -171,6 +357,8 @@ export type RailItem = {
   hintFontSize?: number;
   /** Hint text color (#RRGGBB) */
   hintColor?: string;
+  /** Card opacity 0–1. Default 1. */
+  opacity?: number;
   /**
    * Resolved/runtime: hidden for the active theme mode.
    * Stored per-mode under `byMode[modeId].hidden` — not a shared base field.
@@ -194,6 +382,7 @@ export type RailItemModeVisual = {
   labelColor?: string | null;
   hintFontSize?: number;
   hintColor?: string | null;
+  opacity?: number;
   /** When true, item is not shown for this mode (still editable in Design Mode) */
   hidden?: boolean;
 };
@@ -204,6 +393,8 @@ export type RailSectionLayout = {
   gap: number;
   title: string;
   items: RailItem[];
+  /** Section opacity 0–1. Default 1. */
+  opacity?: number;
   /** Theme mode ids for which this whole section is hidden from end users */
   hiddenModeIds?: string[];
 };
@@ -216,9 +407,18 @@ export const RAIL_RADIUS_CIRCLE = 9999;
 export const RAIL_RADIUS_ROUNDED = 16;
 export const RAIL_RADIUS_SQUARE = 0;
 
+/** Round to `decimals` places (default 1 for smooth % drag: tenths). */
+export function roundToDecimals(n: number, decimals = 1): number {
+  if (!Number.isFinite(n)) return n;
+  if (decimals <= 0) return Math.round(n);
+  const f = 10 ** decimals;
+  return Math.round(n * f) / f;
+}
+
 export function clampRailPercent(n: number | undefined, fallback: number): number {
   if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
-  return Math.max(0, Math.min(100, Math.round(n)));
+  // Tenths of a percent — whole integers make header/rail labels jump too coarsely
+  return Math.max(0, Math.min(100, roundToDecimals(n, 1)));
 }
 
 export function clampRailRadius(n: number | undefined, fallback: number): number {
@@ -286,6 +486,18 @@ export function resolveTypePanelItemForMode(
   if (ov.labelFontSize !== undefined) next.labelFontSize = ov.labelFontSize;
   if (ov.countFontSize !== undefined) next.countFontSize = ov.countFontSize;
   if (ov.iconFontSize !== undefined) next.iconFontSize = ov.iconFontSize;
+  if (ov.labelX !== undefined) next.labelX = ov.labelX;
+  if (ov.labelY !== undefined) next.labelY = ov.labelY;
+  if (ov.countX !== undefined) next.countX = ov.countX;
+  if (ov.countY !== undefined) next.countY = ov.countY;
+  if (ov.iconX !== undefined) next.iconX = ov.iconX;
+  if (ov.iconY !== undefined) next.iconY = ov.iconY;
+  if (ov.mediaScale !== undefined) next.mediaScale = ov.mediaScale;
+  if (ov.mediaX !== undefined) next.mediaX = ov.mediaX;
+  if (ov.mediaY !== undefined) next.mediaY = ov.mediaY;
+  if (ov.labelWrap !== undefined) next.labelWrap = ov.labelWrap === true;
+  if (ov.labelMaxW !== undefined) next.labelMaxW = ov.labelMaxW;
+  if (ov.opacity !== undefined) next.opacity = ov.opacity;
   if (ov.labelColor !== undefined) {
     if (ov.labelColor === null) delete next.labelColor;
     else next.labelColor = ov.labelColor;
@@ -328,6 +540,7 @@ export function resolveRailItemForMode(item: RailItem, modeId: string): RailItem
     if (ov.hintColor === null) delete next.hintColor;
     else next.hintColor = ov.hintColor;
   }
+  if (ov.opacity !== undefined) next.opacity = ov.opacity;
   if (ov.imageId !== undefined || ov.mediaUrl !== undefined || ov.mediaKind !== undefined) {
     if (ov.imageId === null) delete next.imageId;
     else if (typeof ov.imageId === 'string') next.imageId = ov.imageId;
@@ -412,6 +625,18 @@ function typePanelVisualSnapshot(item: TypePanelItem): TypePanelItemModeVisual {
     countFontSize: item.countFontSize,
     countColor: item.countColor ?? null,
     iconFontSize: item.iconFontSize,
+    labelX: item.labelX,
+    labelY: item.labelY,
+    countX: item.countX,
+    countY: item.countY,
+    iconX: item.iconX,
+    iconY: item.iconY,
+    mediaScale: item.mediaScale,
+    mediaX: item.mediaX,
+    mediaY: item.mediaY,
+    labelWrap: item.labelWrap === true,
+    labelMaxW: item.labelMaxW,
+    opacity: clampOpacity(item.opacity),
   };
 }
 
@@ -429,6 +654,7 @@ function railVisualSnapshot(item: RailItem): RailItemModeVisual {
     labelColor: item.labelColor ?? null,
     hintFontSize: item.hintFontSize,
     hintColor: item.hintColor ?? null,
+    opacity: clampOpacity(item.opacity),
     hidden: item.hidden === true,
   };
 }
@@ -521,6 +747,18 @@ function normalizeTypePanelModeVisual(
   if (typeof raw.iconFontSize === 'number') {
     out.iconFontSize = clampFontSize(raw.iconFontSize, TYPE_PANEL_ICON_FONT_DEFAULT, 12, 64);
   }
+  if (typeof raw.labelX === 'number') out.labelX = clampRailPercent(raw.labelX, TYPE_PANEL_LABEL_POS_DEFAULT.x);
+  if (typeof raw.labelY === 'number') out.labelY = clampRailPercent(raw.labelY, TYPE_PANEL_LABEL_POS_DEFAULT.y);
+  if (typeof raw.countX === 'number') out.countX = clampRailPercent(raw.countX, TYPE_PANEL_COUNT_POS_DEFAULT.x);
+  if (typeof raw.countY === 'number') out.countY = clampRailPercent(raw.countY, TYPE_PANEL_COUNT_POS_DEFAULT.y);
+  if (typeof raw.iconX === 'number') out.iconX = clampRailPercent(raw.iconX, TYPE_PANEL_ICON_POS_DEFAULT.x);
+  if (typeof raw.iconY === 'number') out.iconY = clampRailPercent(raw.iconY, TYPE_PANEL_ICON_POS_DEFAULT.y);
+  if (typeof raw.mediaScale === 'number') out.mediaScale = clampMediaScale(raw.mediaScale);
+  if (typeof raw.mediaX === 'number') out.mediaX = clampRailPercent(raw.mediaX, TYPE_PANEL_MEDIA_POS_DEFAULT.x);
+  if (typeof raw.mediaY === 'number') out.mediaY = clampRailPercent(raw.mediaY, TYPE_PANEL_MEDIA_POS_DEFAULT.y);
+  if (typeof raw.labelWrap === 'boolean') out.labelWrap = raw.labelWrap;
+  if (typeof raw.labelMaxW === 'number') out.labelMaxW = clampTypeLabelMaxW(raw.labelMaxW);
+  if (typeof raw.opacity === 'number') out.opacity = clampOpacity(raw.opacity);
   const labelColor = asNullableHexColor(raw.labelColor);
   if (labelColor !== undefined) out.labelColor = labelColor;
   const countColor = asNullableHexColor(raw.countColor);
@@ -562,6 +800,7 @@ function normalizeRailModeVisual(
   const mediaKind = asNullableMediaKind(raw.mediaKind);
   if (mediaKind !== undefined) out.mediaKind = mediaKind;
   if (typeof raw.hidden === 'boolean') out.hidden = raw.hidden;
+  if (typeof raw.opacity === 'number') out.opacity = clampOpacity(raw.opacity);
   return Object.keys(out).length ? out : null;
 }
 
@@ -612,6 +851,10 @@ export const HERO_TRANSITIONS: {
 export type HeroLayout = {
   /** design height at 1920-wide reference (matches aspect ratio) */
   h: number;
+  /** Phone hero photo height in CSS px (independent of desktop `h`) */
+  mobileH?: number;
+  /** Phone gap between deal bar / search under the photo (px) */
+  mobileStackGap?: number;
   /** Which theme modes are available to end users */
   enabledModes: Array<'day' | 'twilight' | 'night'>;
   /** IndexedDB blob ids OR external media ids (`ext:v1:…`) for light theme */
@@ -629,6 +872,8 @@ export type HeroLayout = {
   /** seconds between slides (when gallery has 2+) */
   intervalSec: number;
   transition: HeroTransition;
+  /** Slideshow / photo layer opacity 0–1. Does not fade search or deal bar. */
+  opacity?: number;
 };
 
 export type HeroTextLayout = BoxLayout & {
@@ -642,6 +887,9 @@ export type HeroTextLayout = BoxLayout & {
   titleColor: string;
   /** Subtitle color #RRGGBB */
   subtitleColor: string;
+  /** Phone-only offset of the title block */
+  mobileX?: number;
+  mobileY?: number;
 };
 
 /** Sticky site header — height, labels, typography */
@@ -672,6 +920,10 @@ export type HeaderItemStyle = {
   fontSize?: number;
   /** Text color #RRGGBB — empty/undefined = brand/nav default */
   color?: string;
+  /** Item opacity 0–1. Default 1. */
+  opacity?: number;
+  /** Extra exclusion padding around this item (px). Added to header itemGapPx. */
+  padPx?: number;
 };
 
 export const HEADER_ITEM_IDS: HeaderItemId[] = [
@@ -713,26 +965,177 @@ export const HEADER_ITEM_LABELS: Record<HeaderItemId, string> = {
   language: 'ენა',
 };
 
-/** Default free-layout spots — spread so right utilities don’t stack */
-export const DEFAULT_HEADER_ITEM_POSITIONS: Record<HeaderItemId, HeaderItemPos> = {
-  brand: { x: 5, y: 50 },
-  services: { x: 15, y: 50 },
-  about: { x: 24, y: 50 },
-  agents: { x: 33, y: 50 },
-  upload: { x: 44, y: 50 },
-  favorites: { x: 55, y: 50 },
-  compare: { x: 64, y: 50 },
-  login: { x: 73, y: 50 },
-  messages: { x: 73, y: 50 },
-  profile: { x: 82, y: 50 },
-  admin: { x: 89, y: 50 },
-  theme: { x: 94, y: 50 },
-  language: { x: 98.5, y: 50 },
+/**
+ * Pixel widths of Georgian xl labels — used to pack equal-gap default positions.
+ * Centers are stored as % so the same rhythm scales with the bar.
+ */
+export const HEADER_ITEM_WIDTH_PX: Record<HeaderItemId, number> = {
+  brand: 52,
+  services: 114,
+  about: 56,
+  agents: 85,
+  upload: 171,
+  favorites: 111,
+  compare: 89,
+  login: 70,
+  messages: 110,
+  profile: 75,
+  admin: 126,
+  theme: 36,
+  language: 56,
 };
+
+export const HEADER_LEFT_CLUSTER_IDS: HeaderItemId[] = [
+  'brand',
+  'services',
+  'about',
+  'agents',
+  'upload',
+];
+
+export const HEADER_RIGHT_CLUSTER_IDS: HeaderItemId[] = [
+  'favorites',
+  'compare',
+  'login',
+  'messages',
+  'profile',
+  'admin',
+  'theme',
+  'language',
+];
+
+/** Single row order: logo → nav → utilities */
+export const HEADER_ROW_IDS: HeaderItemId[] = [
+  ...HEADER_LEFT_CLUSTER_IDS,
+  ...HEADER_RIGHT_CLUSTER_IDS,
+];
+
+/** Matches `max-w-6xl` + `px-4` classic header so items aren’t glued to the viewport. */
+export const HEADER_CONTENT_MAX_PX = 1152;
+export const HEADER_CONTENT_INSET_PX = 16;
+export const HEADER_PACK_GAP_MIN_PX = 12;
+export const HEADER_PACK_GAP_MAX_PX = 24;
+export const HEADER_PACK_REF_WIDTH = 1920;
+
+function headerContentBand(barW: number): { left: number; width: number } {
+  const col = Math.min(HEADER_CONTENT_MAX_PX, barW);
+  const side = Math.max(0, (barW - col) / 2);
+  const left = side + HEADER_CONTENT_INSET_PX;
+  const right = barW - side - HEADER_CONTENT_INSET_PX;
+  return { left, width: Math.max(1, right - left) };
+}
+
+function packHeaderRow(
+  skip: Set<HeaderItemId>,
+  barW: number,
+  widthsPx: Partial<Record<HeaderItemId, number>> | undefined
+): Partial<Record<HeaderItemId, HeaderItemPos>> {
+  const widthOf = (id: HeaderItemId) => widthsPx?.[id] ?? HEADER_ITEM_WIDTH_PX[id];
+  const ids = HEADER_ROW_IDS.filter((id) => !skip.has(id));
+  const { left, width: innerW } = headerContentBand(barW);
+  const totalW = ids.reduce((sum, id) => sum + widthOf(id), 0);
+  const gapCount = Math.max(0, ids.length - 1);
+  const rawGap = gapCount > 0 ? (innerW - totalW) / gapCount : 0;
+  const gapPx = Math.max(HEADER_PACK_GAP_MIN_PX, Math.min(HEADER_PACK_GAP_MAX_PX, rawGap));
+  const used = totalW + gapPx * gapCount;
+  let cursor = left + Math.max(0, (innerW - used) / 2);
+  const out: Partial<Record<HeaderItemId, HeaderItemPos>> = {};
+  for (const id of ids) {
+    const w = widthOf(id);
+    const center = cursor + w / 2;
+    out[id] = { x: clampRailPercent((center / barW) * 100, 50), y: 50 };
+    cursor += w + gapPx;
+  }
+  return out;
+}
+
+/** One even row inside the content column — same gap between every label. */
+export function packHeaderItemPositions(opts?: {
+  barW?: number;
+  widthsPx?: Partial<Record<HeaderItemId, number>>;
+  gapPx?: number;
+  padPx?: number;
+  skipIds?: Iterable<HeaderItemId>;
+}): Record<HeaderItemId, HeaderItemPos> {
+  const barW = Math.max(640, opts?.barW ?? HEADER_PACK_REF_WIDTH);
+  const skip = new Set(opts?.skipIds ?? ['messages', 'login']);
+  const visible = packHeaderRow(skip, barW, opts?.widthsPx);
+  const typical = packHeaderRow(new Set<HeaderItemId>(['messages', 'login']), barW, opts?.widthsPx);
+  const out = {} as Record<HeaderItemId, HeaderItemPos>;
+  for (const id of HEADER_ITEM_IDS) {
+    out[id] = visible[id] || typical[id] || { x: 50, y: 50 };
+  }
+  if (typical.profile) {
+    if (!visible.login) out.login = { ...typical.profile };
+    if (!visible.messages && typical.compare && typical.profile) {
+      out.messages = {
+        x: clampRailPercent((typical.compare.x + typical.profile.x) / 2, 50),
+        y: 50,
+      };
+    }
+  }
+  return out;
+}
+
+export function headerItemIdsHiddenByStyle(
+  styles: Partial<Record<HeaderItemId, HeaderItemStyle>> | undefined
+): HeaderItemId[] {
+  if (!styles) return [];
+  return HEADER_ITEM_IDS.filter((id) => (styles[id]?.opacity ?? 1) <= 0.02);
+}
+
+/**
+ * Default free-layout spots: one even row in the max-w-6xl column.
+ */
+export const DEFAULT_HEADER_ITEM_POSITIONS: Record<HeaderItemId, HeaderItemPos> =
+  packHeaderItemPositions();
+
+/** Old even-spread across the whole bar (looked sparse / uneven). */
+const LEGACY_EVEN_HEADER_X: Partial<Record<HeaderItemId, number>> = {
+  brand: 5,
+  services: 15,
+  about: 24,
+  agents: 33,
+  upload: 44,
+  favorites: 55,
+  compare: 64,
+  login: 72,
+  messages: 78,
+  profile: 84,
+  admin: 90,
+  theme: 95,
+  language: 98.5,
+};
+
+function headerXNear(value: number | undefined, target: number, tol = 0.8): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && Math.abs(value - target) <= tol;
+}
+
+function isLegacyEvenHeaderSpread(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>>
+): boolean {
+  return (
+    headerXNear(positions.brand?.x, LEGACY_EVEN_HEADER_X.brand!) &&
+    headerXNear(positions.services?.x, LEGACY_EVEN_HEADER_X.services!) &&
+    headerXNear(positions.about?.x, LEGACY_EVEN_HEADER_X.about!) &&
+    headerXNear(positions.agents?.x, LEGACY_EVEN_HEADER_X.agents!) &&
+    headerXNear(positions.upload?.x, LEGACY_EVEN_HEADER_X.upload!)
+  );
+}
+
+export function copyDefaultHeaderItemPositions(): Record<HeaderItemId, HeaderItemPos> {
+  const out = {} as Record<HeaderItemId, HeaderItemPos>;
+  for (const id of HEADER_ITEM_IDS) {
+    out[id] = { ...DEFAULT_HEADER_ITEM_POSITIONS[id] };
+  }
+  return out;
+}
 
 export type HeaderLayout = {
   /** Bar height in px */
   h: number;
+  /** Whole header bar opacity 0–1. Default 1. */
+  opacity?: number;
   /** Logo / brand label. Empty = "Vhome" */
   brandLabel: string;
   brandFontSize: number;
@@ -759,10 +1162,15 @@ export type HeaderLayout = {
   itemPositions?: Partial<Record<HeaderItemId, HeaderItemPos>>;
   /** Per-item font size / color overrides */
   itemStyles?: Partial<Record<HeaderItemId, HeaderItemStyle>>;
+  /**
+   * Minimum gap between header label edges (px).
+   * Drag/inspector keep items from sitting closer than this.
+   */
+  itemGapPx?: number;
 };
 
 export type HomeDesignLayout = {
-  version: 2;
+  version: 3;
   header: HeaderLayout;
   hero: HeroLayout;
   heroText: HeroTextLayout;
@@ -772,7 +1180,7 @@ export type HomeDesignLayout = {
   themePalettes: ThemePalettes;
   search: SearchLayout;
   /** Deal type chips (იყიდება / ქირავდება / გირავდება) */
-  dealBar: BoxLayout;
+  dealBar: DealBarLayout;
   /** Property type chips (ბინა, სახლი, აგარაკი…) */
   typePanel: TypePanelLayout;
   serviceRail: RailSectionLayout & {
@@ -789,6 +1197,8 @@ export type HomeDesignLayout = {
     /** each card min-height */
     itemH: number;
   };
+  /** საიტის სოციალური პროფილები — ობიექტის გვერდზე ჩათის ბმულები */
+  socialLinks: SiteSocialLinks;
 };
 
 export const DEFAULT_SERVICE_ITEMS: RailItem[] = [
@@ -830,8 +1240,19 @@ export const DEFAULT_QUICK_ITEMS: RailItem[] = [
   },
 ];
 
+export const HERO_MOBILE_H_DEFAULT = 220;
+export const HERO_MOBILE_H_MIN = 80;
+export const HERO_MOBILE_H_MAX = 520;
+export const HERO_H_MIN = 80;
+export const HERO_H_MAX = 900;
+export const HERO_MOBILE_STACK_GAP_DEFAULT = 4;
+export const HERO_MOBILE_STACK_GAP_MIN = 0;
+export const HERO_MOBILE_STACK_GAP_MAX = 32;
+
 export const DEFAULT_HERO: HeroLayout = {
   h: 360,
+  mobileH: HERO_MOBILE_H_DEFAULT,
+  mobileStackGap: HERO_MOBILE_STACK_GAP_DEFAULT,
   enabledModes: ['day', 'twilight', 'night'],
   dayImageIds: [],
   dayRotationIds: [],
@@ -854,10 +1275,13 @@ export const DEFAULT_HERO_TEXT: HeroTextLayout = {
   subtitleFontSize: 14,
   titleColor: '#ffffff',
   subtitleColor: '#e5e5e5',
+  mobileX: 16,
+  mobileY: 16,
 };
 
 export const DEFAULT_HEADER: HeaderLayout = {
   h: 60,
+  itemGapPx: 8,
   brandLabel: '',
   brandFontSize: 16,
   brandColor: '',
@@ -873,13 +1297,130 @@ export const DEFAULT_HEADER: HeaderLayout = {
   messagesLabel: '',
   profileLabel: '',
   adminLabel: '',
+  itemPositions: packHeaderItemPositions(),
 };
+
+export const DEFAULT_SEARCH_CONTROLS: Record<SearchControlId, SearchControlLayout> = {
+  price: { w: 152, h: 48 },
+  area: { w: 152, h: 48 },
+  city: { w: 152, h: 48 },
+  rooms: { w: 152, h: 48 },
+  query: { w: 280, h: 48 },
+  advanced: { w: 180, h: 48 },
+  submit: { w: 128, h: 48 },
+};
+
+export const DEFAULT_DEAL_CHIPS: Record<DealChipId, DealChipLayout> = {
+  sale: { w: 140, h: 40 },
+  rent: { w: 140, h: 40 },
+  mortgage: { w: 140, h: 40 },
+};
+
+export function buildDefaultSearchControls(
+  from?: Partial<SearchLayout> | null
+): Record<SearchControlId, SearchControlLayout> {
+  const tw = clampPx(from?.triggerWidth, DEFAULT_SEARCH_CONTROLS.price.w, 72, 280);
+  const th = clampPx(from?.triggerMinHeight, DEFAULT_SEARCH_CONTROLS.price.h, 32, 96);
+  const ih = clampPx(from?.inputHeight, DEFAULT_SEARCH_CONTROLS.query.h, 32, 96);
+  const bh = clampPx(from?.buttonHeight, DEFAULT_SEARCH_CONTROLS.advanced.h, 32, 96);
+  const qw = clampPx(from?.controls?.query?.w, DEFAULT_SEARCH_CONTROLS.query.w, 120, 560);
+  const aw = clampPx(from?.controls?.advanced?.w, DEFAULT_SEARCH_CONTROLS.advanced.w, 96, 420);
+  const sw = clampPx(from?.controls?.submit?.w, DEFAULT_SEARCH_CONTROLS.submit.w, 72, 280);
+  return {
+    price: { w: tw, h: th },
+    area: { w: tw, h: th },
+    city: { w: tw, h: th },
+    rooms: { w: tw, h: th },
+    query: { w: qw, h: ih },
+    advanced: { w: aw, h: bh },
+    submit: { w: sw, h: bh },
+  };
+}
+
+export function normalizeSearchControl(
+  raw: Partial<SearchControlLayout> | null | undefined,
+  fallback: SearchControlLayout
+): SearchControlLayout {
+  return {
+    w: clampPx(raw?.w, fallback.w, 56, 560),
+    h: clampPx(raw?.h, fallback.h, 28, 120),
+    opacity: clampOpacity(raw?.opacity, fallback.opacity ?? OPACITY_DEFAULT),
+  };
+}
+
+export function normalizeSearchControls(
+  raw: Partial<Record<SearchControlId, Partial<SearchControlLayout>>> | null | undefined,
+  legacy?: Partial<SearchLayout> | null
+): Record<SearchControlId, SearchControlLayout> {
+  const defaults = buildDefaultSearchControls(legacy);
+  const out = { ...defaults };
+  for (const id of SEARCH_CONTROL_IDS) {
+    out[id] = normalizeSearchControl(raw?.[id], defaults[id]);
+  }
+  return out;
+}
+
+export function resolveSearchControl(
+  search: SearchLayout | null | undefined,
+  id: SearchControlId
+): SearchControlLayout {
+  if (search?.controls?.[id]) return normalizeSearchControl(search.controls[id], DEFAULT_SEARCH_CONTROLS[id]);
+  return buildDefaultSearchControls(search)[id];
+}
+
+export function normalizeDealChip(
+  raw: Partial<DealChipLayout> | null | undefined,
+  fallback: DealChipLayout
+): DealChipLayout {
+  return {
+    w: clampPx(raw?.w, fallback.w, 72, 320),
+    h: clampPx(raw?.h, fallback.h, 28, 72),
+    opacity: clampOpacity(raw?.opacity, fallback.opacity ?? OPACITY_DEFAULT),
+  };
+}
+
+export function normalizeDealChips(
+  raw: Partial<Record<DealChipId, Partial<DealChipLayout>>> | null | undefined
+): Record<DealChipId, DealChipLayout> {
+  const out = { ...DEFAULT_DEAL_CHIPS };
+  for (const id of DEAL_CHIP_IDS) {
+    out[id] = normalizeDealChip(raw?.[id], DEFAULT_DEAL_CHIPS[id]);
+  }
+  return out;
+}
+
+export const DEFAULT_DEAL_BAR: DealBarLayout = {
+  x: 0,
+  y: 0,
+  w: 480,
+  h: 48,
+  mobileX: 0,
+  mobileY: 0,
+  gap: 8,
+  chips: { ...DEFAULT_DEAL_CHIPS },
+};
+
+export function normalizeDealBar(
+  raw?: Partial<DealBarLayout> | null
+): DealBarLayout {
+  const base = normalizeBoxLayout(raw, DEFAULT_DEAL_BAR, {
+    maxH: 72,
+    stackMobile: true,
+  });
+  return {
+    ...base,
+    gap: clampPx(raw?.gap, DEFAULT_DEAL_BAR.gap, 0, 32),
+    chips: normalizeDealChips(raw?.chips),
+  };
+}
 
 export const DEFAULT_SEARCH: SearchLayout = {
   x: 0,
   y: 0,
   w: 1280,
   h: 88,
+  mobileX: 0,
+  mobileY: 0,
   padX: 10,
   padY: 8,
   gap: 8,
@@ -900,11 +1441,12 @@ export const DEFAULT_SEARCH: SearchLayout = {
   buttonBorderRadius: 8,
   buttonFontSize: 14,
   buttonFontWeight: 500,
+  controls: { ...DEFAULT_SEARCH_CONTROLS },
 };
 
 export const DEFAULT_HOME_DESIGN: HomeDesignLayout = {
-  version: 2,
-  header: { ...DEFAULT_HEADER },
+  version: 3,
+  header: { ...DEFAULT_HEADER, itemPositions: copyDefaultHeaderItemPositions() },
   hero: { ...DEFAULT_HERO },
   heroText: { ...DEFAULT_HERO_TEXT },
   themeModes: createDefaultThemeModes(),
@@ -913,8 +1455,8 @@ export const DEFAULT_HOME_DESIGN: HomeDesignLayout = {
     twilight: { ...DEFAULT_THEME_PALETTES.twilight },
     night: { ...DEFAULT_THEME_PALETTES.night },
   },
-  search: { ...DEFAULT_SEARCH },
-  dealBar: { x: 0, y: 0, w: 480, h: 48 },
+  search: { ...DEFAULT_SEARCH, controls: { ...DEFAULT_SEARCH_CONTROLS } },
+  dealBar: { ...DEFAULT_DEAL_BAR, chips: { ...DEFAULT_DEAL_CHIPS } },
   typePanel: {
     x: 0,
     y: 0,
@@ -922,6 +1464,8 @@ export const DEFAULT_HOME_DESIGN: HomeDesignLayout = {
     h: 164,
     pad: 10,
     gap: 12,
+    mobileX: 0,
+    mobileY: 0,
     items: DEFAULT_TYPE_PANEL_ITEMS.map((it) => ({ ...it })),
   },
   serviceRail: {
@@ -945,7 +1489,99 @@ export const DEFAULT_HOME_DESIGN: HomeDesignLayout = {
     title: 'სწრაფი ბმულები',
     items: DEFAULT_QUICK_ITEMS,
   },
+  socialLinks: { ...EMPTY_SITE_SOCIAL_LINKS },
 };
+
+function boxGeometryFrom(def: BoxLayout): Pick<BoxLayout, 'x' | 'y' | 'w' | 'h' | 'mobileX' | 'mobileY'> {
+  return {
+    x: def.x,
+    y: def.y,
+    w: def.w,
+    h: def.h,
+    mobileX: def.mobileX,
+    mobileY: def.mobileY,
+  };
+}
+
+/**
+ * Reset x/y/w/h (and header item spots) to code defaults.
+ * Keeps theme modes, colors, labels, opacities, and hidden flags.
+ */
+export function applyDefaultGeometry(current: HomeDesignLayout): HomeDesignLayout {
+  const d = DEFAULT_HOME_DESIGN;
+  const searchControls = { ...d.search.controls };
+  for (const id of SEARCH_CONTROL_IDS) {
+    const prev = current.search.controls?.[id];
+    searchControls[id] = {
+      w: d.search.controls[id].w,
+      h: d.search.controls[id].h,
+      ...(typeof prev?.opacity === 'number' ? { opacity: prev.opacity } : {}),
+    };
+  }
+  const dealChips = { ...d.dealBar.chips };
+  for (const id of DEAL_CHIP_IDS) {
+    const prev = current.dealBar.chips?.[id];
+    dealChips[id] = {
+      w: d.dealBar.chips[id].w,
+      h: d.dealBar.chips[id].h,
+      ...(typeof prev?.opacity === 'number' ? { opacity: prev.opacity } : {}),
+    };
+  }
+  return {
+    ...current,
+    header: {
+      ...current.header,
+      h: d.header.h,
+      itemGapPx: d.header.itemGapPx,
+      itemPositions: copyDefaultHeaderItemPositions(),
+    },
+    hero: {
+      ...current.hero,
+      h: d.hero.h,
+      mobileH: d.hero.mobileH,
+      mobileStackGap: d.hero.mobileStackGap,
+    },
+    heroText: {
+      ...current.heroText,
+      ...boxGeometryFrom(d.heroText),
+    },
+    search: {
+      ...current.search,
+      ...boxGeometryFrom(d.search),
+      controls: searchControls,
+    },
+    dealBar: {
+      ...current.dealBar,
+      ...boxGeometryFrom(d.dealBar),
+      gap: d.dealBar.gap,
+      chips: dealChips,
+    },
+    typePanel: {
+      ...current.typePanel,
+      ...boxGeometryFrom(d.typePanel),
+      pad: d.typePanel.pad,
+      gap: d.typePanel.gap,
+    },
+    serviceRail: {
+      ...current.serviceRail,
+      x: d.serviceRail.x,
+      y: d.serviceRail.y,
+      gap: d.serviceRail.gap,
+      itemW: d.serviceRail.itemW,
+      itemH: d.serviceRail.itemH,
+    },
+    map: { ...current.map, ...boxGeometryFrom(d.map) },
+    listings: { ...current.listings, ...boxGeometryFrom(d.listings) },
+    quickRail: {
+      ...current.quickRail,
+      x: d.quickRail.x,
+      y: d.quickRail.y,
+      w: d.quickRail.w,
+      gap: d.quickRail.gap,
+      itemH: d.quickRail.itemH,
+    },
+  };
+}
 
 export type DesignableId =
   | 'header'
@@ -958,7 +1594,8 @@ export type DesignableId =
   | 'map'
   | 'listings'
   | 'quickRail'
-  | 'theme';
+  | 'theme'
+  | 'social';
 
 export const DESIGNABLE_LABELS: Record<DesignableId, string> = {
   header: 'ჰედერი',
@@ -972,15 +1609,16 @@ export const DESIGNABLE_LABELS: Record<DesignableId, string> = {
   listings: 'ობიექტების სია',
   quickRail: 'სწრაფი ბმულები',
   theme: 'რეჟიმები და ფერები',
+  social: 'სოციალური ქსელები',
 };
 
 export const DESIGNABLE_HINTS: Record<DesignableId, string> = {
   header: 'ჰედერის სიმაღლე და ფონი; ლოგო/მენიუ — ცალკე ქვეფოლდერებში.',
-  hero: 'ჰეროს სიმაღლე, ფოტოები, სლაიდშოუ და რეჟიმების ჩართვა.',
+  hero: 'ჰეროს სიმაღლე და სლაიდშოუ. თითოეულ რეჟიმს (დღე/შუალედური/ღამე) თავისი ფოტოები აქვს — არ ირევა.',
   heroText: 'მთავარი სათაური / ქვესათაური — ტექსტი, ზომა და ფერი.',
   dealBar: 'იყიდება / ქირავდება / გირავდება — პოზიცია და ზომა.',
   search: 'ძიების ბლოკი — ჩარჩო, ფილტრები, სერჩი და გაფართოებული ღილაკი.',
-  typePanel: 'ქონების ტიპები — ჩარჩო და კატეგორიები; ფერი/ფოტო რეჟიმის მიხედვით.',
+  typePanel: 'ქონების ტიპები — ფოტო გადაათრიე/გაადიდე, წარწერები გადაადგილე; ფერი/ფოტო რეჟიმის მიხედვით.',
   serviceRail:
     'მარცხენა წრეები — ფორმა/სურათი/ტექსტი; ჩვენება/დამალვა რეჟიმის მიხედვით.',
   map: 'მთავარი გვერდის რუკის ზომა და პოზიცია.',
@@ -989,6 +1627,8 @@ export const DESIGNABLE_HINTS: Record<DesignableId, string> = {
   quickRail:
     'მარჯვენა სწრაფი ბმულები — ფორმა/სურათი/ტექსტი; ჩვენება/დამალვა რეჟიმის მიხედვით.',
   theme: 'რეჟიმები, ფერები და გადასართავი იკონი (emoji / მედია). ჰედერზე იკონზე კლიკი აქ გახსნის.',
+  social:
+    'საიტის Facebook, Instagram, X, WhatsApp, Telegram, YouTube, TikTok, LinkedIn ბმულები. ობიექტის გვერდზე იკონი ჩათს ან პროფილს ხსნის, არა გაზიარებას.',
 };
 
 function newId(prefix: string) {
@@ -1020,6 +1660,7 @@ export function createRailItem(
     labelColor: asOptionalHexColor(partial?.labelColor),
     hintFontSize: clampFontSize(partial?.hintFontSize, RAIL_HINT_FONT_DEFAULT, 9, 32),
     hintColor: asOptionalHexColor(partial?.hintColor),
+    opacity: clampOpacity(partial?.opacity),
     ...(byMode ? { byMode } : {}),
   };
 }
@@ -1048,6 +1689,7 @@ function normalizeRailItem(
     labelColor: asOptionalHexColor(it?.labelColor),
     hintFontSize: clampFontSize(it?.hintFontSize, RAIL_HINT_FONT_DEFAULT, 9, 32),
     hintColor: asOptionalHexColor(it?.hintColor),
+    opacity: clampOpacity(it?.opacity),
     ...(byMode ? { byMode } : {}),
   };
 }
@@ -1099,7 +1741,23 @@ function normalizeHero(raw?: Partial<HeroLayout> | null): HeroLayout {
   const normalizedEnabledModes = enabledModes.length > 0 ? enabledModes : DEFAULT_HERO.enabledModes;
 
   return {
-    h: Math.max(160, Math.min(900, Math.round(raw?.h ?? DEFAULT_HERO.h))),
+    h: Math.max(HERO_H_MIN, Math.min(HERO_H_MAX, Math.round(raw?.h ?? DEFAULT_HERO.h))),
+    mobileH: Math.max(
+      HERO_MOBILE_H_MIN,
+      Math.min(
+        HERO_MOBILE_H_MAX,
+        Math.round(raw?.mobileH ?? DEFAULT_HERO.mobileH ?? HERO_MOBILE_H_DEFAULT)
+      )
+    ),
+    mobileStackGap: Math.max(
+      HERO_MOBILE_STACK_GAP_MIN,
+      Math.min(
+        HERO_MOBILE_STACK_GAP_MAX,
+        Math.round(
+          raw?.mobileStackGap ?? DEFAULT_HERO.mobileStackGap ?? HERO_MOBILE_STACK_GAP_DEFAULT
+        )
+      )
+    ),
     enabledModes: normalizedEnabledModes,
     dayImageIds,
     dayRotationIds: dayImageIds.filter((id) => dayRotationIds.includes(id)),
@@ -1112,6 +1770,7 @@ function normalizeHero(raw?: Partial<HeroLayout> | null): HeroLayout {
       Math.min(120, Math.round(raw?.intervalSec ?? DEFAULT_HERO.intervalSec))
     ),
     transition: validTransition,
+    opacity: clampOpacity(raw?.opacity),
   };
 }
 
@@ -1151,14 +1810,25 @@ function normalizeHeroText(raw?: Partial<HeroTextLayout> | null): HeroTextLayout
     ),
     titleColor: asOptionalHexColor(raw?.titleColor) || DEFAULT_HERO_TEXT.titleColor,
     subtitleColor: asOptionalHexColor(raw?.subtitleColor) || DEFAULT_HERO_TEXT.subtitleColor,
+    mobileX: Math.max(
+      0,
+      Math.min(360, Math.round(raw?.mobileX ?? DEFAULT_HERO_TEXT.mobileX ?? 16))
+    ),
+    mobileY: Math.max(
+      0,
+      Math.min(520, Math.round(raw?.mobileY ?? DEFAULT_HERO_TEXT.mobileY ?? 16))
+    ),
+    opacity: clampOpacity(raw?.opacity, DEFAULT_HERO_TEXT.opacity),
   };
 }
 
 export function normalizeSearch(raw?: Partial<SearchLayout> | null): SearchLayout {
   const d = DEFAULT_SEARCH;
-  let h = Math.max(56, Math.min(240, Math.round(raw?.h ?? d.h)));
+  const SEARCH_H_MAX = 120;
+  let h = Math.max(56, Math.min(SEARCH_H_MAX, Math.round(raw?.h ?? d.h)));
   // ძველი ერთხაზიანი (70) ან ორხაზიანი სერჩი გარიგებით (128) → ახალი სერჩი
-  if (!raw?.h || raw.h === 70 || raw.h === 128) {
+  // ასევე მობილური resize-ით გაბერილი desktop h (მაგ. 200+) → default
+  if (!raw?.h || raw.h === 70 || raw.h === 128 || raw.h > 140) {
     h = d.h;
   }
   return {
@@ -1166,6 +1836,8 @@ export function normalizeSearch(raw?: Partial<SearchLayout> | null): SearchLayou
     y: Math.round(raw?.y ?? d.y),
     w: Math.max(320, Math.min(1600, Math.round(raw?.w ?? d.w))),
     h,
+    mobileX: clampStackMobileNudgeX(raw?.mobileX, d.mobileX ?? 0),
+    mobileY: clampStackMobileNudgeY(raw?.mobileY, d.mobileY ?? 0),
     padX: clampPx(raw?.padX, d.padX, 0, 48),
     padY: clampPx(raw?.padY, d.padY, 0, 48),
     gap: clampPx(raw?.gap, d.gap, 0, 40),
@@ -1197,6 +1869,8 @@ export function normalizeSearch(raw?: Partial<SearchLayout> | null): SearchLayou
     buttonColor: asOptionalHexColor(raw?.buttonColor),
     buttonFontSize: clampFontSize(raw?.buttonFontSize, d.buttonFontSize, 10, 24),
     buttonFontWeight: clampFontWeight(raw?.buttonFontWeight, d.buttonFontWeight),
+    controls: normalizeSearchControls(raw?.controls, raw ?? d),
+    opacity: clampOpacity(raw?.opacity, d.opacity),
   };
 }
 
@@ -1236,6 +1910,18 @@ function normalizeTypePanelItem(
       12,
       64
     ),
+    labelX: clampRailPercent(it?.labelX, fallback.labelX ?? TYPE_PANEL_LABEL_POS_DEFAULT.x),
+    labelY: clampRailPercent(it?.labelY, fallback.labelY ?? TYPE_PANEL_LABEL_POS_DEFAULT.y),
+    countX: clampRailPercent(it?.countX, fallback.countX ?? TYPE_PANEL_COUNT_POS_DEFAULT.x),
+    countY: clampRailPercent(it?.countY, fallback.countY ?? TYPE_PANEL_COUNT_POS_DEFAULT.y),
+    iconX: clampRailPercent(it?.iconX, fallback.iconX ?? TYPE_PANEL_ICON_POS_DEFAULT.x),
+    iconY: clampRailPercent(it?.iconY, fallback.iconY ?? TYPE_PANEL_ICON_POS_DEFAULT.y),
+    mediaScale: clampMediaScale(it?.mediaScale, fallback.mediaScale ?? TYPE_PANEL_MEDIA_SCALE_DEFAULT),
+    mediaX: clampRailPercent(it?.mediaX, fallback.mediaX ?? TYPE_PANEL_MEDIA_POS_DEFAULT.x),
+    mediaY: clampRailPercent(it?.mediaY, fallback.mediaY ?? TYPE_PANEL_MEDIA_POS_DEFAULT.y),
+    labelWrap: it?.labelWrap === true || fallback.labelWrap === true,
+    labelMaxW: clampTypeLabelMaxW(it?.labelMaxW, fallback.labelMaxW ?? TYPE_PANEL_LABEL_MAX_W_DEFAULT),
+    opacity: clampOpacity(it?.opacity, fallback.opacity),
     ...(byMode ? { byMode } : {}),
   };
 }
@@ -1259,8 +1945,11 @@ function normalizeTypePanel(raw?: Partial<TypePanelLayout> | null): TypePanelLay
     y: Math.round(raw?.y ?? d.y),
     w: Math.max(280, Math.min(2400, Math.round(raw?.w ?? d.w))),
     h: Math.max(80, Math.min(480, h)),
+    mobileX: clampStackMobileNudgeX(raw?.mobileX, d.mobileX ?? 0),
+    mobileY: clampStackMobileNudgeY(raw?.mobileY, d.mobileY ?? 0),
     pad: Math.max(0, Math.min(48, Math.round(raw?.pad ?? d.pad))),
     gap: Math.max(0, Math.min(40, Math.round(raw?.gap ?? d.gap))),
+    opacity: clampOpacity(raw?.opacity, d.opacity),
     items: DEFAULT_TYPE_PANEL_ITEMS.map((fallback) =>
       normalizeTypePanelItem(savedById.get(fallback.id), fallback)
     ),
@@ -1276,6 +1965,7 @@ export function normalizeHeader(raw?: Partial<HeaderLayout> | null): HeaderLayou
   const itemStyles = normalizeHeaderItemStyles(raw?.itemStyles);
   return {
     h: Math.max(44, Math.min(120, Math.round(raw?.h ?? DEFAULT_HEADER.h))),
+    opacity: clampOpacity(raw?.opacity, DEFAULT_HEADER.opacity),
     brandLabel: asOptionalString(raw?.brandLabel),
     brandFontSize: clampFontSize(raw?.brandFontSize, DEFAULT_HEADER.brandFontSize, 12, 40),
     brandColor: asOptionalHexColor(raw?.brandColor) || '',
@@ -1291,6 +1981,7 @@ export function normalizeHeader(raw?: Partial<HeaderLayout> | null): HeaderLayou
     messagesLabel: asOptionalString(raw?.messagesLabel),
     profileLabel: asOptionalString(raw?.profileLabel),
     adminLabel: asOptionalString(raw?.adminLabel),
+    itemGapPx: clampHeaderItemGapPx(raw?.itemGapPx, DEFAULT_HEADER.itemGapPx),
     ...(itemPositions ? { itemPositions } : {}),
     ...(itemStyles ? { itemStyles } : {}),
   };
@@ -1332,7 +2023,38 @@ function normalizeHeaderItemPositions(
       if (!out[id]) out[id] = { ...DEFAULT_HEADER_ITEM_POSITIONS[id] };
     }
   }
+
+  if (isLegacyEvenHeaderSpread(out)) {
+    return copyDefaultHeaderItemPositions();
+  }
+
   return out;
+}
+
+/** True when free-layout X positions collide / cluster too tightly for a readable nav. */
+export function headerFreeLayoutIsCramped(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
+): boolean {
+  if (!positions) return false;
+  const hasProfile = Boolean(positions.profile);
+  const xs = HEADER_ITEM_IDS.map((id) => {
+    if (id === 'messages') return undefined;
+    if (id === 'login' && hasProfile) return undefined;
+    return positions[id]?.x;
+  })
+    .filter((x): x is number => typeof x === 'number' && Number.isFinite(x))
+    .sort((a, b) => a - b);
+  if (xs.length < 5) return false;
+
+  let exactDupes = 0;
+  for (let i = 1; i < xs.length; i++) {
+    const gap = xs[i]! - xs[i - 1]!;
+    if (gap < 0.75) exactDupes += 1;
+  }
+  const span = xs[xs.length - 1]! - xs[0]!;
+  // Exact stacked labels, or everything piled in a narrow band.
+  // Tight equal-gap clusters are intentional — not cramped.
+  return exactDupes >= 1 || span < 40;
 }
 
 function normalizeHeaderItemStyles(
@@ -1349,7 +2071,20 @@ function normalizeHeaderItemStyles(
     }
     const color = asOptionalHexColor(style.color);
     if (color) next.color = color;
-    if (next.fontSize !== undefined || next.color) out[id] = next;
+    if (typeof style.opacity === 'number' && Number.isFinite(style.opacity)) {
+      next.opacity = clampOpacity(style.opacity);
+    }
+    if (typeof style.padPx === 'number' && Number.isFinite(style.padPx) && style.padPx > 0) {
+      next.padPx = clampHeaderItemGapPx(style.padPx, 0);
+    }
+    if (
+      next.fontSize !== undefined ||
+      next.color ||
+      next.opacity !== undefined ||
+      next.padPx !== undefined
+    ) {
+      out[id] = next;
+    }
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }
@@ -1365,6 +2100,240 @@ export function resolveHeaderItemPos(
   id: HeaderItemId
 ): HeaderItemPos {
   return positions?.[id] || DEFAULT_HEADER_ITEM_POSITIONS[id];
+}
+
+/** Fallback AABB size (% of header bar) when DOM measurement is unavailable. */
+export const DEFAULT_HEADER_ITEM_SIZE_PCT: Record<HeaderItemId, { wPct: number; hPct: number }> = {
+  brand: { wPct: 5.2, hPct: 40 },
+  services: { wPct: 9.0, hPct: 40 },
+  about: { wPct: 4.5, hPct: 40 },
+  agents: { wPct: 6.7, hPct: 40 },
+  upload: { wPct: 13.5, hPct: 40 },
+  favorites: { wPct: 8.8, hPct: 40 },
+  compare: { wPct: 7.0, hPct: 40 },
+  login: { wPct: 5.5, hPct: 40 },
+  messages: { wPct: 9.0, hPct: 40 },
+  profile: { wPct: 6.0, hPct: 40 },
+  admin: { wPct: 10.0, hPct: 44 },
+  theme: { wPct: 2.9, hPct: 44 },
+  language: { wPct: 4.4, hPct: 44 },
+};
+
+export type HeaderItemSizePct = { wPct: number; hPct: number };
+
+export const HEADER_ITEM_GAP_PX_DEFAULT = 8;
+export const HEADER_ITEM_GAP_PX_MIN = 0;
+export const HEADER_ITEM_GAP_PX_MAX = 72;
+
+export function clampHeaderItemGapPx(
+  n: number | undefined,
+  fallback = HEADER_ITEM_GAP_PX_DEFAULT
+): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
+  return Math.max(HEADER_ITEM_GAP_PX_MIN, Math.min(HEADER_ITEM_GAP_PX_MAX, Math.round(n)));
+}
+
+export function headerItemPadPxById(
+  styles: Partial<Record<HeaderItemId, HeaderItemStyle>> | undefined
+): Partial<Record<HeaderItemId, number>> {
+  const out: Partial<Record<HeaderItemId, number>> = {};
+  if (!styles) return out;
+  for (const id of HEADER_ITEM_IDS) {
+    const pad = styles[id]?.padPx;
+    if (typeof pad === 'number' && pad > 0) out[id] = clampHeaderItemGapPx(pad, 0);
+  }
+  return out;
+}
+
+export type HeaderOverlapOpts = {
+  sizes?: Partial<Record<HeaderItemId, HeaderItemSizePct>>;
+  /** When set, only these items participate in collision (skip hidden login/messages/…). */
+  visibleIds?: readonly HeaderItemId[];
+  gapPx?: number;
+  padPxById?: Partial<Record<HeaderItemId, number>>;
+  barW?: number;
+  barH?: number;
+  axisLock?: 'x' | 'y' | null;
+};
+
+/**
+ * Keep free-layout header centers from stacking (AABB + edge gap).
+ * Positions are centers (`translate(-50%, -50%)`).
+ * Push direction follows the desired (pointer) side so items don’t flicker
+ * around a neighbor while dragging.
+ * `axisLock: 'x'` = horizontal only (Shift); `'y'` = vertical only (Alt).
+ */
+export function resolveHeaderItemNoOverlap(
+  itemId: HeaderItemId,
+  proposed: HeaderItemPos,
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
+  opts?: HeaderOverlapOpts
+): HeaderItemPos {
+  const desiredX = clampRailPercent(proposed.x, proposed.x);
+  const desiredY = clampRailPercent(proposed.y, proposed.y);
+  let x = desiredX;
+  let y = desiredY;
+  const axisLock = opts?.axisLock ?? null;
+  const barW = Math.max(1, opts?.barW ?? 1280);
+  const barH = Math.max(1, opts?.barH ?? 60);
+  const baseGapPx = clampHeaderItemGapPx(opts?.gapPx);
+
+  const visible: HeaderItemId[] = opts?.visibleIds
+    ? [...opts.visibleIds]
+    : opts?.sizes
+      ? HEADER_ITEM_IDS.filter((id) => Boolean(opts.sizes?.[id]))
+      : // Never collide with `messages` (not rendered). Prefer live `visibleIds`.
+        HEADER_ITEM_IDS.filter((id) => id !== 'messages' && Boolean(positions?.[id]));
+
+  const sizeOf = (id: HeaderItemId): HeaderItemSizePct =>
+    opts?.sizes?.[id] || DEFAULT_HEADER_ITEM_SIZE_PCT[id];
+
+  const gapXY = (a: HeaderItemId, b: HeaderItemId) => {
+    const extra =
+      clampHeaderItemGapPx(opts?.padPxById?.[a], 0) +
+      clampHeaderItemGapPx(opts?.padPxById?.[b], 0);
+    const px = baseGapPx + extra;
+    return { gx: (px / barW) * 100, gy: (px / barH) * 100 };
+  };
+
+  const overlaps = (
+    ax: number,
+    ay: number,
+    other: HeaderItemPos,
+    minDx: number,
+    minDy: number
+  ) => Math.abs(ax - other.x) < minDx && Math.abs(ay - other.y) < minDy;
+
+  const self = sizeOf(itemId);
+
+  for (let iter = 0; iter < 18; iter++) {
+    let moved = false;
+    for (const otherId of visible) {
+      if (otherId === itemId) continue;
+      const otherPos = positions?.[otherId];
+      if (!otherPos) continue;
+      const other = sizeOf(otherId);
+      const { gx, gy } = gapXY(itemId, otherId);
+      const minDx = (self.wPct + other.wPct) / 2 + gx;
+      const minDy = (self.hPct + other.hPct) / 2 + gy;
+      if (!overlaps(x, y, otherPos, minDx, minDy)) continue;
+
+      const dirX =
+        desiredX === otherPos.x
+          ? otherPos.x >= 50
+            ? -1
+            : 1
+          : Math.sign(desiredX - otherPos.x) || 1;
+      const dirY =
+        desiredY === otherPos.y
+          ? otherPos.y >= 50
+            ? -1
+            : 1
+          : Math.sign(desiredY - otherPos.y) || 1;
+
+      const candX: HeaderItemPos = {
+        x: clampRailPercent(otherPos.x + dirX * minDx, x),
+        y,
+      };
+      const candY: HeaderItemPos = {
+        x,
+        y: clampRailPercent(otherPos.y + dirY * minDy, y),
+      };
+
+      const distPx = (cand: HeaderItemPos) => {
+        const dx = ((cand.x - desiredX) / 100) * barW;
+        const dy = ((cand.y - desiredY) / 100) * barH;
+        return dx * dx + dy * dy;
+      };
+
+      let next: HeaderItemPos;
+      if (axisLock === 'x') {
+        next = overlaps(candX.x, candX.y, otherPos, minDx, minDy) ? candY : candX;
+      } else if (axisLock === 'y') {
+        next = overlaps(candY.x, candY.y, otherPos, minDx, minDy) ? candX : candY;
+      } else {
+        // Pixel space — % X/% Y are not comparable on a wide, short header.
+        // Prefer sliding beside a neighbor, not stacking on top of it.
+        next = distPx(candX) <= distPx(candY) ? candX : candY;
+      }
+
+      if (next.x !== x || next.y !== y) {
+        x = next.x;
+        y = next.y;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+
+  return { x, y };
+}
+
+export function headerPositionsEqual(
+  a: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
+  b: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
+): boolean {
+  const aKeys = a ? Object.keys(a) : [];
+  const bKeys = b ? Object.keys(b) : [];
+  if (aKeys.length !== bKeys.length) return false;
+  for (const id of HEADER_ITEM_IDS) {
+    const pa = a?.[id];
+    const pb = b?.[id];
+    if (!pa && !pb) continue;
+    if (!pa || !pb) return false;
+    if (pa.x !== pb.x || pa.y !== pb.y) return false;
+  }
+  return true;
+}
+
+/**
+ * Login and profile occupy the same header slot (only one is on screen).
+ * Keep the hidden one parked on the visible account item so logging in/out
+ * does not drop "შესვლა" onto leftover default coordinates.
+ */
+export function syncHeaderAccountSlotPositions(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
+  visibleIds?: readonly HeaderItemId[]
+): Partial<Record<HeaderItemId, HeaderItemPos>> {
+  const next: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...(positions || {}) };
+  const vis = visibleIds?.length ? new Set(visibleIds) : null;
+  const loginVisible = vis ? vis.has('login') : Boolean(next.login);
+  const profileVisible = vis ? vis.has('profile') : Boolean(next.profile);
+  if (profileVisible && next.profile && !loginVisible) {
+    next.login = { ...next.profile };
+  } else if (loginVisible && next.login && !profileVisible) {
+    next.profile = { ...next.login };
+  }
+  return next;
+}
+
+/**
+ * Push visible header labels apart until AABB + gap is satisfied.
+ * Right-hand items move first so the left of the nav stays put.
+ */
+export function spreadHeaderItemPositions(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
+  opts?: HeaderOverlapOpts
+): Partial<Record<HeaderItemId, HeaderItemPos>> {
+  const next: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...(positions || {}) };
+  const ids = (
+    opts?.visibleIds?.length ? [...opts.visibleIds] : HEADER_ITEM_IDS.filter((id) => id !== 'messages')
+  ).filter((id) => Boolean(next[id]));
+
+  for (let pass = 0; pass < 14; pass++) {
+    ids.sort((a, b) => next[b]!.x - next[a]!.x || next[b]!.y - next[a]!.y);
+    let changed = false;
+    for (const id of ids) {
+      const cur = next[id]!;
+      const resolved = resolveHeaderItemNoOverlap(id, cur, next, opts);
+      if (resolved.x !== cur.x || resolved.y !== cur.y) {
+        next[id] = resolved;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return syncHeaderAccountSlotPositions(next, ids);
 }
 
 export function headerItemLabelKey(
@@ -1479,13 +2448,22 @@ export function normalizeHomeDesignInput(
       : DEFAULT_HOME_DESIGN.quickRail.items;
 
   const legacyDiameter = (parsed.serviceRail as { diameter?: number } | undefined)?.diameter;
+  const rawVersion = typeof parsed.version === 'number' ? parsed.version : 2;
+  const hero = normalizeHero(parsed.hero);
+  // v3: tighten legacy phone stack gaps (old default 6 / gap-3 era ≥10)
+  if (rawVersion < 3) {
+    const g = hero.mobileStackGap ?? 6;
+    if (g === 6 || g >= 10) {
+      hero.mobileStackGap = HERO_MOBILE_STACK_GAP_DEFAULT;
+    }
+  }
 
   return syncLegacyThemeFields({
     ...DEFAULT_HOME_DESIGN,
     ...parsed,
-    version: 2,
+    version: 3,
     header: normalizeHeader(parsed.header),
-    hero: normalizeHero(parsed.hero),
+    hero,
     heroText: normalizeHeroText(parsed.heroText),
     themeModes: normalizeThemeModes(
       (parsed as { themeModes?: unknown }).themeModes,
@@ -1494,15 +2472,19 @@ export function normalizeHomeDesignInput(
     ),
     themePalettes: normalizeThemePalettes(parsed.themePalettes),
     search: normalizeSearch(parsed.search),
-    dealBar: { ...DEFAULT_HOME_DESIGN.dealBar, ...parsed.dealBar },
+    dealBar: normalizeDealBar(parsed.dealBar as Partial<DealBarLayout> | null | undefined),
     typePanel: normalizeTypePanel(parsed.typePanel),
-    map: { ...DEFAULT_HOME_DESIGN.map, ...parsed.map },
-    listings: { ...DEFAULT_HOME_DESIGN.listings, ...parsed.listings },
+    map: normalizeBoxLayout(parsed.map, DEFAULT_HOME_DESIGN.map, { stackMobile: true }),
+    listings: normalizeBoxLayout(parsed.listings, DEFAULT_HOME_DESIGN.listings),
     serviceRail: {
       ...DEFAULT_HOME_DESIGN.serviceRail,
       ...parsed.serviceRail,
       itemW: parsed.serviceRail?.itemW ?? legacyDiameter ?? DEFAULT_HOME_DESIGN.serviceRail.itemW,
       itemH: parsed.serviceRail?.itemH ?? legacyDiameter ?? DEFAULT_HOME_DESIGN.serviceRail.itemH,
+      opacity: clampOpacity(
+        parsed.serviceRail?.opacity,
+        DEFAULT_HOME_DESIGN.serviceRail.opacity
+      ),
       hiddenModeIds: normalizeHiddenModeIds(
         (parsed.serviceRail as { hiddenModeIds?: unknown } | undefined)?.hiddenModeIds
       ),
@@ -1511,11 +2493,15 @@ export function normalizeHomeDesignInput(
     quickRail: {
       ...DEFAULT_HOME_DESIGN.quickRail,
       ...parsed.quickRail,
+      opacity: clampOpacity(parsed.quickRail?.opacity, DEFAULT_HOME_DESIGN.quickRail.opacity),
       hiddenModeIds: normalizeHiddenModeIds(
         (parsed.quickRail as { hiddenModeIds?: unknown } | undefined)?.hiddenModeIds
       ),
       items: quickItems.map((it) => normalizeRailItem(it, 'quick')),
     },
+    socialLinks: normalizeSiteSocialLinks(
+      (parsed as { socialLinks?: Partial<SiteSocialLinks> }).socialLinks
+    ),
   });
 }
 

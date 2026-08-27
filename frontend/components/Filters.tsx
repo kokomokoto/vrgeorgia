@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { CityCombobox } from './CityCombobox';
 import TbilisiDistrictSelector, { CITIES_WITH_DISTRICTS } from './TbilisiDistrictSelector';
@@ -23,8 +24,14 @@ import type { Property } from '@/lib/types';
 import { parseSearchInputValue } from '@/lib/searchInput';
 import { LAND_STATUS_OPTIONS } from '@/lib/propertyTypeUi';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
-import { DEFAULT_SEARCH, type SearchLayout } from '@/lib/homeDesignLayout';
-import { useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
+import { SearchControlShell } from '@/components/home-design/SearchControlShell';
+import {
+  DEFAULT_SEARCH,
+  SEARCH_CONTROL_IDS,
+  resolveSearchControl,
+  type SearchLayout,
+} from '@/lib/homeDesignLayout';
+import { useHomeDesignScale, scaleDesignPx } from '@/lib/useIsDesignDesktop';
 
 export const DEAL_TYPES = [
   { value: 'sale', key: 'deal_sale', icon: '💰' },
@@ -80,6 +87,30 @@ export type FiltersState = {
   propertyId: string;
 };
 
+function cloneFiltersState(f: FiltersState): FiltersState {
+  return {
+    ...f,
+    type: [...(f.type || [])],
+    dealType: [...(f.dealType || [])],
+    tbilisiSubdistricts: [...(f.tbilisiSubdistricts || [])],
+    rooms: [...(f.rooms || [])],
+    bedrooms: [...(f.bedrooms || [])],
+    balconies: [...(f.balconies || [])],
+    amenities: [...(f.amenities || [])],
+    buildingProject: [...(f.buildingProject || [])],
+    renovationStatus: [...(f.renovationStatus || [])],
+    buildingStatus: [...(f.buildingStatus || [])],
+    landStatus: [...(f.landStatus || [])],
+  };
+}
+
+function sameFilterField(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => v === b[i]);
+  }
+  return a === b;
+}
+
 /** mapSidebar: ჩამოსაშლელები document flow-ში — არ იჭრება overflow-y aside-ში */
 const FilterDropdownLayoutContext = React.createContext<{ inline: boolean; spacious?: boolean }>({
   inline: false,
@@ -89,8 +120,79 @@ const FilterDropdownLayoutContext = React.createContext<{ inline: boolean; spaci
 /** Hero search bar visual styles from Design Mode */
 const HeroSearchStyleContext = React.createContext<SearchLayout | null>(null);
 
+/** Per-control height override (from SearchControlShell / design layout) */
+const SearchControlMetricsContext = React.createContext<{ h?: number }>({});
+
 function useHeroSearchStyle(): SearchLayout | null {
   return React.useContext(HeroSearchStyleContext);
+}
+
+function useSearchControlMetrics(): { h?: number } {
+  return React.useContext(SearchControlMetricsContext);
+}
+
+function HeroSearchField({
+  wrapperClassName,
+  heroCompact,
+  heroSearchStyle,
+  placeholder,
+  value,
+  onChange,
+  onSearch,
+}: {
+  wrapperClassName: string;
+  heroCompact: boolean;
+  heroSearchStyle: SearchLayout | null;
+  placeholder: string;
+  value: string;
+  onChange: (patch: Partial<FiltersState>) => void;
+  onSearch?: () => void;
+}) {
+  const metrics = useSearchControlMetrics();
+  const inputH =
+    metrics.h ?? heroSearchStyle?.inputHeight ?? (heroCompact ? 48 : undefined);
+  return (
+    <div className={wrapperClassName}>
+      <svg
+        className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-zinc-500"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        aria-hidden
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        />
+      </svg>
+      <input
+        className={`w-full min-w-0 border border-slate-200 bg-white pl-10 pr-3 leading-none text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
+          heroCompact || heroSearchStyle ? 'py-0' : 'rounded-lg py-2.5 text-sm'
+        } ${heroSearchStyle ? '' : heroCompact ? 'h-12 rounded-lg text-sm' : ''}`}
+        style={
+          heroSearchStyle || metrics.h
+            ? {
+                height: inputH,
+                borderRadius: heroSearchStyle?.inputBorderRadius,
+                borderColor: heroSearchStyle?.inputBorderColor,
+                backgroundColor: heroSearchStyle?.inputBackground,
+                fontSize: heroSearchStyle?.inputFontSize,
+              }
+            : undefined
+        }
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(parseSearchInputValue(e.target.value))}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || !onSearch) return;
+          e.preventDefault();
+          onSearch();
+        }}
+      />
+    </div>
+  );
 }
 
 // Dropdown wrapper component
@@ -112,33 +214,73 @@ function FilterDropdown({
   const { t } = useTranslation();
   const { inline, spacious } = React.useContext(FilterDropdownLayoutContext);
   const heroStyle = useHeroSearchStyle();
+  const metrics = useSearchControlMetrics();
   const [open, setOpen] = React.useState(defaultOpen);
   const ref = React.useRef<HTMLDivElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const [panelPos, setPanelPos] = React.useState<{ top: number; left: number; minWidth: number }>({
+    top: 0,
+    left: 0,
+    minWidth: 280,
+  });
+  const usePortal = !inline;
+
+  const updatePanelPos = React.useCallback(() => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const minWidth = Math.max(280, Math.round(r.width));
+    const left = Math.min(
+      Math.max(8, r.left),
+      Math.max(8, window.innerWidth - minWidth - 8)
+    );
+    setPanelPos({
+      top: Math.round(r.bottom + 4),
+      left: Math.round(left),
+      minWidth,
+    });
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (!open || !usePortal) return;
+    updatePanelPos();
+    window.addEventListener('resize', updatePanelPos);
+    // capture scroll from any ancestor (hero, page, etc.)
+    window.addEventListener('scroll', updatePanelPos, true);
+    return () => {
+      window.removeEventListener('resize', updatePanelPos);
+      window.removeEventListener('scroll', updatePanelPos, true);
+    };
+  }, [open, usePortal, updatePanelPos]);
 
   React.useEffect(() => {
     if (inline && spacious) return;
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [inline, spacious]);
 
   const triggerPad = spacious ? 'px-4 py-3.5 sm:px-5' : 'px-3.5 py-3';
-  const minH = heroStyle?.triggerMinHeight ?? 48;
+  const minH = metrics.h ?? heroStyle?.triggerMinHeight ?? 48;
   const triggerStyle: React.CSSProperties | undefined = heroStyle
     ? {
         minHeight: minH,
+        height: metrics.h ? minH : undefined,
         borderRadius: heroStyle.triggerBorderRadius,
         borderColor: isActive ? undefined : heroStyle.triggerBorderColor,
         backgroundColor: isActive ? undefined : heroStyle.triggerBackground,
       }
-    : undefined;
+    : metrics.h
+      ? { minHeight: metrics.h, height: metrics.h }
+      : undefined;
   const triggerBtnStyle: React.CSSProperties | undefined = heroStyle
     ? {
         minHeight: minH,
+        height: metrics.h ? '100%' : undefined,
         paddingLeft: heroStyle.triggerPadX,
         paddingRight: heroStyle.triggerPadX,
         paddingTop: heroStyle.triggerPadY,
@@ -224,7 +366,28 @@ function FilterDropdown({
 
   const panelClass = inline
     ? `relative z-10 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900`
-    : 'absolute top-full left-0 z-[200] mt-1 min-w-[280px] rounded-lg border border-slate-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/50';
+    : 'rounded-lg border border-slate-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/50';
+
+  const portalPanel =
+    open && usePortal && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={panelRef}
+            className={panelClass}
+            style={{
+              position: 'fixed',
+              top: panelPos.top,
+              left: panelPos.left,
+              minWidth: panelPos.minWidth,
+              zIndex: 5000,
+            }}
+            data-filter-dropdown-portal
+          >
+            {children}
+          </div>,
+          document.body
+        )
+      : null;
 
   const triggerClass = `flex w-full items-center gap-1 rounded-xl border transition-all text-sm ${
     heroStyle ? '' : 'min-h-12'
@@ -301,7 +464,8 @@ function FilterDropdown({
           </button>
         ) : null}
       </div>
-      {open && <div className={panelClass}>{children}</div>}
+      {open && inline ? <div className={panelClass}>{children}</div> : null}
+      {portalPanel}
     </div>
   );
 }
@@ -321,18 +485,23 @@ function LocationFilterTrigger({
 }) {
   const { t } = useTranslation();
   const heroStyle = useHeroSearchStyle();
-  const minH = heroStyle?.triggerMinHeight ?? 48;
+  const metrics = useSearchControlMetrics();
+  const minH = metrics.h ?? heroStyle?.triggerMinHeight ?? 48;
   const boxStyle: React.CSSProperties | undefined = heroStyle
     ? {
         minHeight: minH,
+        height: metrics.h ? minH : undefined,
         borderRadius: heroStyle.triggerBorderRadius,
         borderColor: isActive ? undefined : heroStyle.triggerBorderColor,
         backgroundColor: isActive ? undefined : heroStyle.triggerBackground,
       }
-    : undefined;
+    : metrics.h
+      ? { minHeight: metrics.h, height: metrics.h }
+      : undefined;
   const btnStyle: React.CSSProperties | undefined = heroStyle
     ? {
         minHeight: minH,
+        height: metrics.h ? '100%' : undefined,
         paddingLeft: heroStyle.triggerPadX,
         paddingRight: heroStyle.triggerPadX,
         paddingTop: heroStyle.triggerPadY,
@@ -451,47 +620,113 @@ export function Filters({
   const { t } = useTranslation();
   const { rate: usdToGel } = useCurrencyRate();
   const design = useHomeDesignOptional();
-  const heroSearchStyle =
+  const heroSearchStyleRaw =
     variant === 'heroCompact'
       ? ({ ...DEFAULT_SEARCH, ...(design?.layout.search || {}) } as SearchLayout)
       : null;
+  const searchCanvasW = heroSearchStyleRaw?.w ?? 1280;
+  const designScale = useHomeDesignScale(searchCanvasW);
+  /** Desktop keeps designed search chrome; mobile stack ignores sizes via CSS `max-md:` */
+  const heroSearchStyle = React.useMemo(() => {
+    if (!heroSearchStyleRaw) return null;
+    if (designScale >= 0.999) return heroSearchStyleRaw;
+    const s = designScale;
+    const controls = { ...(heroSearchStyleRaw.controls || {}) } as SearchLayout['controls'];
+    for (const id of SEARCH_CONTROL_IDS) {
+      const c = resolveSearchControl(heroSearchStyleRaw, id);
+      controls[id] = {
+        w: scaleDesignPx(c.w, s, 56),
+        h: scaleDesignPx(c.h, s, 28),
+      };
+    }
+    return {
+      ...heroSearchStyleRaw,
+      triggerWidth: scaleDesignPx(heroSearchStyleRaw.triggerWidth, s, 72),
+      triggerMinHeight: scaleDesignPx(heroSearchStyleRaw.triggerMinHeight, s, 36),
+      triggerPadX: scaleDesignPx(heroSearchStyleRaw.triggerPadX, s, 4),
+      triggerPadY: scaleDesignPx(heroSearchStyleRaw.triggerPadY, s, 4),
+      labelFontSize: scaleDesignPx(heroSearchStyleRaw.labelFontSize, s, 10),
+      summaryFontSize: scaleDesignPx(heroSearchStyleRaw.summaryFontSize, s, 9),
+      inputHeight: scaleDesignPx(heroSearchStyleRaw.inputHeight, s, 36),
+      inputFontSize: scaleDesignPx(heroSearchStyleRaw.inputFontSize, s, 11),
+      buttonHeight: scaleDesignPx(heroSearchStyleRaw.buttonHeight, s, 36),
+      buttonFontSize: scaleDesignPx(
+        heroSearchStyleRaw.buttonFontSize || heroSearchStyleRaw.labelFontSize,
+        s,
+        10
+      ),
+      gap: scaleDesignPx(heroSearchStyleRaw.gap, s, 4),
+      controls,
+    } as SearchLayout;
+  }, [heroSearchStyleRaw, designScale]);
   const [mounted, setMounted] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(forceExpanded);
   const [extendedOpen, setExtendedOpen] = React.useState(false);
   /** გაფართოებული ძიების დრაფტი — API-ზე იგზავნება მხოლოდ გამოყენებისას */
   const [extendedDraft, setExtendedDraft] = React.useState<FiltersState | null>(null);
   const [locationModalOpen, setLocationModalOpen] = React.useState(false);
+  const [heroDraft, setHeroDraft] = React.useState<FiltersState>(() => cloneFiltersState(committed));
+  const prevCommittedRef = React.useRef(committed);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
-  const value = extendedOpen && extendedDraft ? extendedDraft : committed;
+  React.useEffect(() => {
+    const prev = prevCommittedRef.current;
+    prevCommittedRef.current = committed;
+    if (variant !== 'heroCompact') return;
+    setHeroDraft((d) => {
+      const next = cloneFiltersState(d);
+      let changed = false;
+      (Object.keys(committed) as (keyof FiltersState)[]).forEach((key) => {
+        if (sameFilterField(committed[key], prev[key])) return;
+        const val = committed[key];
+        (next as Record<string, unknown>)[key] = Array.isArray(val) ? [...val] : val;
+        changed = true;
+      });
+      return changed ? next : d;
+    });
+  }, [committed, variant]);
+
+  const heroCompact = variant === 'heroCompact';
+  const value =
+    extendedOpen && extendedDraft
+      ? extendedDraft
+      : heroCompact
+        ? heroDraft
+        : committed;
   const onChange = React.useCallback(
     (next: FiltersState) => {
       if (extendedOpen) setExtendedDraft(next);
+      else if (variant === 'heroCompact') setHeroDraft(cloneFiltersState(next));
       else publish(next);
     },
-    [extendedOpen, publish]
+    [extendedOpen, publish, variant]
   );
 
-  const openExtendedSearch = React.useCallback(() => {
-    setExtendedDraft({
-      ...committed,
-      buildingStatus: [...(committed.buildingStatus || [])],
-      landStatus: [...(committed.landStatus || [])],
-      amenities: [...(committed.amenities || [])],
-      buildingProject: [...(committed.buildingProject || [])],
-      renovationStatus: [...(committed.renovationStatus || [])],
-    });
-    setExtendedOpen(true);
-  }, [committed]);
-
-  const applyExtendedSearch = React.useCallback(() => {
-    if (extendedDraft) publish(extendedDraft);
+  const publishHeroSearch = React.useCallback(() => {
+    const next = extendedOpen && extendedDraft ? extendedDraft : heroDraft;
+    publish(cloneFiltersState(next));
+    setHeroDraft(cloneFiltersState(next));
     setExtendedDraft(null);
     setExtendedOpen(false);
-  }, [extendedDraft, publish]);
+  }, [extendedDraft, extendedOpen, heroDraft, publish]);
+
+  const openExtendedSearch = React.useCallback(() => {
+    const source = variant === 'heroCompact' ? heroDraft : committed;
+    setExtendedDraft(cloneFiltersState(source));
+    setExtendedOpen(true);
+  }, [committed, heroDraft, variant]);
+
+  const applyExtendedSearch = React.useCallback(() => {
+    if (extendedDraft) {
+      publish(cloneFiltersState(extendedDraft));
+      if (variant === 'heroCompact') setHeroDraft(cloneFiltersState(extendedDraft));
+    }
+    setExtendedDraft(null);
+    setExtendedOpen(false);
+  }, [extendedDraft, publish, variant]);
 
   const discardExtendedSearch = React.useCallback(() => {
     setExtendedDraft(null);
@@ -499,9 +734,6 @@ export function Filters({
   }, []);
 
   const mapSidebar = variant === 'mapSidebar';
-  const heroCompact = variant === 'heroCompact';
-  const isDesktopLayout = useIsDesignDesktop();
-  const heroTriggerW = heroSearchStyle?.triggerWidth ?? 152;
 
   const filterRanges = React.useMemo(() => {
     if (!mapSidebar || !rangeProperties?.length) return null;
@@ -615,42 +847,27 @@ export function Filters({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- მხოლოდ საზღვრის შეცვლაზე
   }, [mapSidebar, mounted, areaBoundsKey]);
 
-  // Prevent hydration mismatches from i18n keys during SSR.
-  // Render a stable shell first, then render translated interactive UI after mount.
-  if (!mounted) {
+  // Prevent hydration mismatches from i18n keys during SSR (non-hero shells).
+  // Hero search must match the final UI on first paint — skeleton caused a visible flash.
+  if (!mounted && !heroCompact) {
     return (
       <div
-        className={
-          heroCompact
-            ? 'block'
-            : 'rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900'
-        }
+        className="rounded-lg border border-slate-200 bg-white p-3 md:p-4 dark:border-zinc-700 dark:bg-zinc-900"
         suppressHydrationWarning
       >
-        {heroCompact ? (
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center">
-            <div className="h-10 w-full rounded-lg bg-slate-100 dark:bg-zinc-800 sm:w-24" />
-            <div className="h-10 w-full rounded-lg bg-slate-100 dark:bg-zinc-800 sm:w-24" />
-            <div className="col-span-2 h-10 flex-1 rounded-lg bg-slate-100 dark:bg-zinc-800" />
-            <div className="col-span-2 h-10 w-full rounded-lg bg-slate-100 dark:bg-zinc-800 sm:col-span-1 sm:w-36" />
+        <button
+          type="button"
+          className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
+        >
+          <div className="flex items-center gap-2">
+            <span>🔍</span>
+            <span>ფილტრები</span>
           </div>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="md:hidden w-full flex items-center justify-between gap-2 text-sm font-semibold text-slate-700 dark:text-zinc-200"
-            >
-              <div className="flex items-center gap-2">
-                <span>🔍</span>
-                <span>ფილტრები</span>
-              </div>
-              <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            <div className="hidden md:block text-sm text-slate-500 dark:text-zinc-400">ფილტრები იტვირთება...</div>
-          </>
-        )}
+          <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div className="hidden md:block text-sm text-slate-500 dark:text-zinc-400">ფილტრები იტვირთება...</div>
       </div>
     );
   }
@@ -1109,6 +1326,18 @@ export function Filters({
           />
         </div>
       </div>
+      <div className="flex flex-wrap gap-1">
+        {[50, 100, 150, 200].map((sqm) => (
+          <button
+            key={sqm}
+            type="button"
+            onClick={() => set('maxSqm', String(sqm))}
+            className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-blue-100 hover:text-blue-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-amber-950/50 dark:hover:text-amber-300"
+          >
+            {sqm} {t('filter_sqm_up_to')}
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -1303,6 +1532,18 @@ export function Filters({
               />
             </div>
           </div>
+          <div className="flex flex-wrap gap-1">
+            {[50, 100, 150, 200].map((sqm) => (
+              <button
+                key={sqm}
+                type="button"
+                onClick={() => commitAreaField('maxSqm', String(sqm))}
+                className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-blue-100 hover:text-blue-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-amber-950/50 dark:hover:text-amber-300"
+              >
+                {sqm} {t('filter_sqm_up_to')}
+              </button>
+            ))}
+          </div>
         </>
       ) : (
         <p className="text-xs text-slate-500 dark:text-zinc-400">{labels.any}</p>
@@ -1338,42 +1579,64 @@ export function Filters({
     committed.buildingProject.length +
     committed.renovationStatus.length;
 
-  const renderSearchField = (wrapperClassName: string) => {
-    const inputH = heroSearchStyle?.inputHeight ?? (heroCompact ? 48 : undefined);
-    return (
-    <div className={wrapperClassName}>
-      <svg
-        className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-zinc-500"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        aria-hidden
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <input
-        className={`w-full min-w-0 border border-slate-200 bg-white pl-10 pr-3 leading-none text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
-          heroCompact || heroSearchStyle ? 'py-0' : 'rounded-lg py-2.5 text-sm'
-        } ${heroSearchStyle ? '' : heroCompact ? 'h-12 rounded-lg text-sm' : ''}`}
+  const renderSearchField = (wrapperClassName: string) => (
+    <HeroSearchField
+      wrapperClassName={wrapperClassName}
+      heroCompact={heroCompact}
+      heroSearchStyle={heroSearchStyle}
+      placeholder={labels.search_placeholder}
+      value={value.q || value.propertyId || ''}
+      onChange={(next) => onChange({ ...value, ...next })}
+      onSearch={heroCompact ? publishHeroSearch : undefined}
+    />
+  );
+
+  const renderHeroSearchButton = (fullWidth: boolean) => {
+    const sub = resolveSearchControl(
+      heroSearchStyle || heroSearchStyleRaw || DEFAULT_SEARCH,
+      'submit'
+    );
+    const button = (
+      <button
+        type="button"
+        onClick={publishHeroSearch}
+        className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold text-white transition-colors bg-blue-600 hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400 ${
+          fullWidth
+            ? 'min-h-11 w-full rounded-xl px-4 text-sm'
+            : heroSearchStyle
+              ? 'h-full w-full self-center'
+              : 'min-h-12 shrink-0 self-center rounded-lg px-4 text-sm'
+        }`}
         style={
-          heroSearchStyle
+          heroSearchStyle && !fullWidth
             ? {
-                height: inputH,
-                borderRadius: heroSearchStyle.inputBorderRadius,
-                borderColor: heroSearchStyle.inputBorderColor,
-                backgroundColor: heroSearchStyle.inputBackground,
-                fontSize: heroSearchStyle.inputFontSize,
+                minHeight: sub.h,
+                height: '100%',
+                paddingLeft: heroSearchStyle.buttonPadX,
+                paddingRight: heroSearchStyle.buttonPadX,
+                borderRadius: heroSearchStyle.buttonBorderRadius,
+                fontSize: heroSearchStyle.buttonFontSize || heroSearchStyle.labelFontSize,
+                fontWeight: heroSearchStyle.buttonFontWeight || 600,
               }
             : undefined
         }
-        placeholder={labels.search_placeholder}
-        value={value.q || value.propertyId || ''}
-        onChange={(e) => {
-          const patch = parseSearchInputValue(e.target.value);
-          onChange({ ...value, ...patch });
-        }}
-      />
-    </div>
+      >
+        <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          />
+        </svg>
+        <span>{labels.search}</span>
+      </button>
+    );
+    if (fullWidth) return button;
+    return (
+      <SearchControlShell id="submit" className="ml-auto hidden self-center md:block">
+        {button}
+      </SearchControlShell>
     );
   };
 
@@ -1526,54 +1789,61 @@ export function Filters({
         </div>
       )}
 
-      {/* ჰერო: desktop — ერთი რიგი; მობილური — სერჩი + შეკეცილი ფილტრები */}
+      {/* ჰერო: desktop — ერთი რიგი (CSS md:); მობილური — ერთნაირი ბარათები */}
       {!hideDealAndSearch && heroCompact && (
-        <div className="flex h-full w-full min-w-0 flex-col justify-center overflow-visible gap-2">
-          {!isDesktopLayout && (
-            <>
+        <div
+          className="flex w-full min-w-0 flex-col md:h-full md:justify-center md:overflow-visible md:gap-1.5 max-md:[gap:var(--stack-gap)]"
+          style={
+            {
+              '--stack-gap': `${design?.layout.hero.mobileStackGap ?? 4}px`,
+            } as React.CSSProperties
+          }
+        >
+          <div className="md:hidden">
+            <div className="rounded-xl border border-slate-200 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900">
               {renderSearchField('relative min-w-0 w-full')}
-              <button
-                type="button"
-                onClick={() => setMobileOpen(!mobileOpen)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
-                aria-expanded={mobileOpen}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="mt-1 flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+              aria-expanded={mobileOpen}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span aria-hidden>🔍</span>
+                <span>{labels.filters}</span>
+                {activeFilterCount > 0 && (
+                  <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold text-white dark:bg-amber-500 dark:text-black">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </div>
+              <svg
+                className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${mobileOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden
               >
-                <div className="flex min-w-0 items-center gap-2">
-                  <span aria-hidden>🔍</span>
-                  <span>{labels.filters}</span>
-                  {activeFilterCount > 0 && (
-                    <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold text-white dark:bg-amber-500 dark:text-black">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </div>
-                <svg
-                  className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${mobileOpen ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </>
-          )}
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
 
           <div
-            className={
-              isDesktopLayout
-                ? 'flex min-h-0 w-full min-w-0 flex-nowrap items-center overflow-visible'
-                : mobileOpen
-                  ? 'grid w-full min-w-0 grid-cols-2 gap-2 border-t border-slate-100 pt-2 dark:border-zinc-700'
-                  : 'hidden'
+            className={`${
+              mobileOpen ? 'max-md:grid' : 'max-md:hidden'
+            } max-md:w-full max-md:min-w-0 max-md:grid-cols-2 max-md:gap-2 max-md:rounded-xl max-md:border max-md:border-slate-200 max-md:bg-white max-md:p-3 dark:max-md:border-zinc-700 dark:max-md:bg-zinc-900 md:flex md:min-h-0 md:w-full md:min-w-0 md:flex-wrap md:items-center md:overflow-visible md:[gap:var(--search-gap)]`}
+            style={
+              {
+                '--search-gap': `${heroSearchStyle?.gap ?? 8}px`,
+              } as React.CSSProperties
             }
-            style={isDesktopLayout ? { gap: heroSearchStyle?.gap ?? 8 } : undefined}
           >
             {(
               [
                 {
-                  key: 'price',
+                  key: 'price' as const,
                   node: (
                     <FilterDropdown
                       label={t('filter_price')}
@@ -1586,7 +1856,7 @@ export function Filters({
                   ),
                 },
                 {
-                  key: 'area',
+                  key: 'area' as const,
                   node: (
                     <FilterDropdown
                       label={t('filter_area')}
@@ -1599,7 +1869,7 @@ export function Filters({
                   ),
                 },
                 {
-                  key: 'city',
+                  key: 'city' as const,
                   node: (
                     <LocationFilterTrigger
                       label={labels.city}
@@ -1611,7 +1881,7 @@ export function Filters({
                   ),
                 },
                 {
-                  key: 'rooms',
+                  key: 'rooms' as const,
                   node: (
                     <FilterDropdown
                       label={t('filter_rooms')}
@@ -1624,94 +1894,100 @@ export function Filters({
                   ),
                 },
               ] as const
-            ).map((item) => (
-              <div
-                key={item.key}
-                className={isDesktopLayout ? 'shrink-0' : 'min-w-0 w-full'}
-                style={
-                  isDesktopLayout
-                    ? {
-                        width: heroTriggerW,
-                        minWidth: heroTriggerW,
-                      }
-                    : { width: '100%', minWidth: 0 }
-                }
+            ).map((item) => {
+              const ctrl = resolveSearchControl(
+                heroSearchStyle || heroSearchStyleRaw || DEFAULT_SEARCH,
+                item.key
+              );
+              return (
+                <SearchControlShell key={item.key} id={item.key} className="max-md:min-w-0 max-md:w-full">
+                  <SearchControlMetricsContext.Provider value={{ h: ctrl.h }}>
+                    {item.node}
+                  </SearchControlMetricsContext.Provider>
+                </SearchControlShell>
+              );
+            })}
+            <SearchControlShell id="query" className="hidden self-center md:block">
+              <SearchControlMetricsContext.Provider
+                value={{
+                  h: resolveSearchControl(
+                    heroSearchStyle || heroSearchStyleRaw || DEFAULT_SEARCH,
+                    'query'
+                  ).h,
+                }}
               >
-                {item.node}
-              </div>
-            ))}
-            {isDesktopLayout && (
-              <div className="relative min-w-[10rem] flex-1 self-center">
-                {renderSearchField('relative min-w-0 w-full flex-1 self-center')}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={openExtendedSearch}
-              className={`inline-flex items-center justify-center gap-2 whitespace-nowrap border transition-all ${
-                isDesktopLayout
-                  ? 'shrink-0 self-center'
-                  : 'col-span-2 w-full'
-              } ${
-                heroSearchStyle
-                  ? 'overflow-visible leading-tight'
-                  : 'min-h-12 rounded-lg px-3 py-2.5 text-sm font-medium leading-tight'
-              } ${
-                extendedOnlyActiveCount > 0 || activeFilterCount > 0
-                  ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
-                  : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100'
-              }`}
-              style={
-                heroSearchStyle
-                  ? (() => {
-                      const fontSize = heroSearchStyle.buttonFontSize || heroSearchStyle.labelFontSize;
-                      const padY = Math.max(10, heroSearchStyle.triggerPadY ?? 12);
-                      const minH = Math.max(
-                        heroSearchStyle.buttonHeight,
-                        heroSearchStyle.triggerMinHeight ?? 48,
-                        Math.ceil(fontSize * 1.55) + padY * 2
-                      );
-                      return {
-                        minHeight: minH,
-                        height: 'auto',
-                        paddingLeft: heroSearchStyle.buttonPadX,
-                        paddingRight: heroSearchStyle.buttonPadX,
-                        paddingTop: padY,
-                        paddingBottom: padY,
-                        borderRadius: heroSearchStyle.buttonBorderRadius,
-                        borderColor:
-                          extendedOnlyActiveCount > 0 || activeFilterCount > 0
-                            ? undefined
-                            : heroSearchStyle.buttonBorderColor,
-                        backgroundColor:
-                          extendedOnlyActiveCount > 0 || activeFilterCount > 0
-                            ? undefined
-                            : heroSearchStyle.buttonBackground,
-                        color:
-                          extendedOnlyActiveCount > 0 || activeFilterCount > 0
-                            ? undefined
-                            : heroSearchStyle.buttonColor || heroSearchStyle.labelColor,
-                        fontSize,
-                        fontWeight:
-                          heroSearchStyle.buttonFontWeight || heroSearchStyle.labelFontWeight,
-                        lineHeight: 1.35,
-                        overflow: 'visible',
-                        width: isDesktopLayout ? undefined : '100%',
-                      } as React.CSSProperties;
-                    })()
-                  : undefined
-              }
-            >
-              <span className="block overflow-visible pb-[0.12em] leading-[1.35]">
-                {labels.extended_search}
-              </span>
-              {(extendedOnlyActiveCount > 0 || activeFilterCount > 0) && (
-                <span className="inline-flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold leading-none text-white dark:bg-amber-500 dark:text-black">
-                  {Math.max(extendedOnlyActiveCount, activeFilterCount)}
-                </span>
-              )}
-            </button>
+                {renderSearchField('relative min-w-0 h-full w-full self-center')}
+              </SearchControlMetricsContext.Provider>
+            </SearchControlShell>
+            {(() => {
+              const adv = resolveSearchControl(
+                heroSearchStyle || heroSearchStyleRaw || DEFAULT_SEARCH,
+                'advanced'
+              );
+              const button = (
+                <button
+                  type="button"
+                  onClick={openExtendedSearch}
+                  className={`inline-flex h-full w-full items-center justify-center gap-2 whitespace-nowrap border transition-all max-md:col-span-2 max-md:w-full md:shrink-0 md:self-center ${
+                    heroSearchStyle
+                      ? 'overflow-visible leading-tight'
+                      : 'min-h-12 rounded-lg px-3 py-2.5 text-sm font-medium leading-tight'
+                  } ${
+                    extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                      ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-amber-500/60 dark:bg-amber-950/35 dark:text-amber-300'
+                      : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100'
+                  }`}
+                  style={
+                    heroSearchStyle
+                      ? (() => {
+                          const fontSize =
+                            heroSearchStyle.buttonFontSize || heroSearchStyle.labelFontSize;
+                          const padY = Math.max(8, Math.round((heroSearchStyle.triggerPadY ?? 12) * 0.75));
+                          return {
+                            minHeight: adv.h,
+                            height: '100%',
+                            paddingLeft: heroSearchStyle.buttonPadX,
+                            paddingRight: heroSearchStyle.buttonPadX,
+                            paddingTop: padY,
+                            paddingBottom: padY,
+                            borderRadius: heroSearchStyle.buttonBorderRadius,
+                            borderColor:
+                              extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                                ? undefined
+                                : heroSearchStyle.buttonBorderColor,
+                            backgroundColor:
+                              extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                                ? undefined
+                                : heroSearchStyle.buttonBackground,
+                            color:
+                              extendedOnlyActiveCount > 0 || activeFilterCount > 0
+                                ? undefined
+                                : heroSearchStyle.buttonColor || heroSearchStyle.labelColor,
+                            fontSize,
+                            fontWeight:
+                              heroSearchStyle.buttonFontWeight || heroSearchStyle.labelFontWeight,
+                            lineHeight: 1.35,
+                            overflow: 'visible',
+                          } as React.CSSProperties;
+                        })()
+                      : undefined
+                  }
+                >
+                  <span className="block overflow-visible pb-[0.12em] leading-[1.35]">
+                    {labels.extended_search}
+                  </span>
+                  {(extendedOnlyActiveCount > 0 || activeFilterCount > 0) && (
+                    <span className="inline-flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold leading-none text-white dark:bg-amber-500 dark:text-black">
+                      {Math.max(extendedOnlyActiveCount, activeFilterCount)}
+                    </span>
+                  )}
+                </button>
+              );
+              return <SearchControlShell id="advanced">{button}</SearchControlShell>;
+            })()}
+            {renderHeroSearchButton(false)}
           </div>
+          <div className="mt-2 md:hidden">{renderHeroSearchButton(true)}</div>
         </div>
       )}
 
@@ -2012,6 +2288,18 @@ export function Filters({
                           value={value.maxSqm}
                           onChange={(e) => onChange({ ...value, maxSqm: e.target.value })}
                         />
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {[50, 100, 150, 200].map((sqm) => (
+                          <button
+                            key={sqm}
+                            type="button"
+                            onClick={() => onChange({ ...value, maxSqm: String(sqm) })}
+                            className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 hover:bg-blue-100 hover:text-blue-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-amber-950/50 dark:hover:text-amber-300"
+                          >
+                            {sqm} {t('filter_sqm_up_to')}
+                          </button>
+                        ))}
                       </div>
                     </FilterDropdown>
                   </div>

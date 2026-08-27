@@ -44,7 +44,7 @@ export function PropertyPriceRow({
         <span
           data-property-price
           className={`shrink-0 font-bold leading-none tracking-tight ${
-            compact ? 'text-base' : 'text-xl sm:text-2xl'
+            compact ? 'text-sm' : 'text-xl sm:text-2xl'
           }`}
         >
           {symbol}
@@ -59,7 +59,9 @@ export function PropertyPriceRow({
           e.stopPropagation();
           toggleDisplayCurrency();
         }}
-        className="inline-flex h-[1.25rem] shrink-0 cursor-pointer items-center gap-0.5 rounded-full bg-slate-100 px-0.5 transition-colors hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 sm:h-[1.5rem]"
+        className={`inline-flex h-[1.25rem] shrink-0 cursor-pointer items-center gap-0.5 rounded-full bg-slate-100 px-0.5 transition-colors hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 ${
+          compact ? '' : 'sm:h-[1.5rem]'
+        }`}
         aria-label={
           displayCurrency === 'GEL'
             ? 'ფასი ლარში. დააწკაპუნეთ დოლარზე გადასართავად'
@@ -67,7 +69,9 @@ export function PropertyPriceRow({
         }
       >
         <span
-          className={`flex aspect-square h-full max-h-full min-w-[1.25rem] items-center justify-center rounded-full text-[10px] font-bold leading-none transition-all sm:min-w-[1.5rem] sm:text-xs ${
+          className={`flex aspect-square h-full max-h-full min-w-[1.25rem] items-center justify-center rounded-full text-[10px] font-bold leading-none transition-all ${
+            compact ? '' : 'sm:min-w-[1.5rem] sm:text-xs'
+          } ${
             displayCurrency === 'GEL'
               ? 'bg-emerald-500 text-white shadow-sm'
               : 'text-slate-400 dark:text-zinc-500'
@@ -76,7 +80,9 @@ export function PropertyPriceRow({
           ₾
         </span>
         <span
-          className={`flex aspect-square h-full max-h-full min-w-[1.25rem] items-center justify-center rounded-full text-[10px] font-bold leading-none transition-all sm:min-w-[1.5rem] sm:text-xs ${
+          className={`flex aspect-square h-full max-h-full min-w-[1.25rem] items-center justify-center rounded-full text-[10px] font-bold leading-none transition-all ${
+            compact ? '' : 'sm:min-w-[1.5rem] sm:text-xs'
+          } ${
             displayCurrency === 'USD'
               ? 'bg-emerald-500 text-white shadow-sm'
               : 'text-slate-400 dark:text-zinc-500'
@@ -87,8 +93,12 @@ export function PropertyPriceRow({
       </button>
 
       {displayPerSqm != null && (
-        <span className="ml-auto inline-flex min-w-0 shrink items-center gap-0.5 whitespace-nowrap pl-0.5 text-xs text-slate-500 dark:text-zinc-400 sm:text-sm">
-          <span className="truncate font-medium text-slate-700 dark:text-zinc-300">
+        <span
+          className={`inline-flex items-center gap-0.5 whitespace-nowrap text-xs text-slate-500 dark:text-zinc-400 ${
+            compact ? 'shrink-0' : 'ml-auto min-w-0 shrink pl-0.5 sm:text-sm'
+          }`}
+        >
+          <span className={`${compact ? '' : 'truncate'} font-medium text-slate-700 dark:text-zinc-300`}>
             {symbol}
             {displayPerSqm.toLocaleString()}
           </span>

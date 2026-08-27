@@ -8,6 +8,7 @@ import { Footer } from '@/components/Footer';
 import { HomeDesignProvider } from '@/components/home-design/HomeDesignContext';
 import { DesignInspector } from '@/components/home-design/DesignInspector';
 import { ThemePaletteApplier } from '@/components/ThemePaletteApplier';
+import type { HomeDesignLayout } from '@/lib/homeDesignLayout';
 
 /** სრული ეკრანის რეჟიმი — რუკაზე ძებნა (ჰედერი/ფუტერი არ ჩანს) */
 export function isFullscreenMapRoute(pathname: string): boolean {
@@ -18,7 +19,13 @@ function isAdminRoute(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
-export function SiteChrome({ children }: { children: React.ReactNode }) {
+export function SiteChrome({
+  children,
+  initialHomeDesign = null,
+}: {
+  children: React.ReactNode;
+  initialHomeDesign?: HomeDesignLayout | null;
+}) {
   const pathname = usePathname();
   const mapFullscreen = isFullscreenMapRoute(pathname);
   const adminPanel = isAdminRoute(pathname);
@@ -29,7 +36,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <HomeDesignProvider>
+    <HomeDesignProvider initialLayout={initialHomeDesign}>
       <ThemePaletteApplier />
       <DesignBranchBanner />
       {!adminPanel && <Header />}

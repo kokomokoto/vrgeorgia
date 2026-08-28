@@ -31,6 +31,8 @@ import {
   TYPE_PANEL_MEDIA_POS_DEFAULT,
   TYPE_PANEL_MEDIA_SCALE_DEFAULT,
   TYPE_PANEL_OVERLAY_DEFAULT,
+  TYPE_PANEL_FRAME_COLOR_DEFAULT,
+  TYPE_PANEL_FRAME_WIDTH_DEFAULT,
   TYPE_PANEL_RADIUS_DEFAULT,
   clampFontSize,
   clampFontWeight,
@@ -41,6 +43,7 @@ import {
   clampRailRadius,
   clampTypeLabelMaxW,
   clampTypeOverlay,
+  clampTypeFrameWidth,
   HEADER_ITEM_GAP_PX_DEFAULT,
   HEADER_ITEM_GAP_PX_MAX,
   clampHeaderItemGapPx,
@@ -451,6 +454,7 @@ export function DesignInspector() {
     setRailItemMediaUrl,
     removeRailItemImage,
     updateTypePanelItem,
+    updateAllTypePanelItems,
     setTypePanelItemImage,
     setTypePanelItemMediaUrl,
     removeTypePanelItemImage,
@@ -1099,6 +1103,29 @@ export function DesignInspector() {
               <p className="text-[11px] leading-snug text-slate-500 dark:text-zinc-400">
                 თუ მონიშვნისას/hover-ზე ლურჯი საზღვარი იჭრება — გაზარდე H ან pad. ტელეფონზე გადაათრიე პანელი.
               </p>
+              <TypePanelFrameFields
+                title="ყველა ბარათის ჩარჩო"
+                hint={`იცვლება მხოლოდ ამ რეჟიმში (${activeModeLabel}). ცალკე კატეგორიაშიც შეგიძლია შეცვლა.`}
+                frameOn={
+                  typeItemsForMode.length > 0 &&
+                  typeItemsForMode.every((it) => it.frameOn === true)
+                }
+                mixed={
+                  typeItemsForMode.some((it) => it.frameOn === true) &&
+                  typeItemsForMode.some((it) => it.frameOn !== true)
+                }
+                frameColor={
+                  typeItemsForMode.find((it) => it.frameOn)?.frameColor ||
+                  typeItemsForMode[0]?.frameColor ||
+                  TYPE_PANEL_FRAME_COLOR_DEFAULT
+                }
+                frameWidth={
+                  typeItemsForMode.find((it) => it.frameOn)?.frameWidth ??
+                  typeItemsForMode[0]?.frameWidth ??
+                  TYPE_PANEL_FRAME_WIDTH_DEFAULT
+                }
+                onChange={updateAllTypePanelItems}
+              />
               <TypePanelItemsEditor
                 items={typeItemsForMode}
                 focusItemId={selectedTypeItemId}
@@ -2830,6 +2857,70 @@ function ColorField({
   );
 }
 
+function TypePanelFrameFields({
+  title,
+  hint,
+  frameOn,
+  frameColor,
+  frameWidth,
+  mixed,
+  onChange,
+}: {
+  title: string;
+  hint?: string;
+  frameOn: boolean;
+  frameColor?: string | null;
+  frameWidth?: number;
+  mixed?: boolean;
+  onChange: (patch: Partial<TypePanelItem>) => void;
+}) {
+  const color = /^#[0-9a-fA-F]{6}$/i.test(frameColor || '')
+    ? (frameColor as string)
+    : TYPE_PANEL_FRAME_COLOR_DEFAULT;
+  const width = clampTypeFrameWidth(frameWidth);
+  const checkRef = React.useRef<HTMLInputElement | null>(null);
+  React.useEffect(() => {
+    if (checkRef.current) checkRef.current.indeterminate = Boolean(mixed) && !frameOn;
+  }, [mixed, frameOn]);
+  return (
+    <div className="space-y-1.5 rounded-md border border-slate-200 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900">
+      <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 dark:text-zinc-200">
+        <input
+          ref={checkRef}
+          type="checkbox"
+          checked={frameOn}
+          onChange={(e) => {
+            const on = e.target.checked;
+            onChange(
+              on
+                ? { frameOn: true, frameColor: color, frameWidth: width }
+                : { frameOn: false }
+            );
+          }}
+        />
+        {title}
+      </label>
+      {hint ? <p className="text-[10px] leading-snug text-slate-400">{hint}</p> : null}
+      {frameOn ? (
+        <div className="grid grid-cols-2 gap-2">
+          <NumField
+            label="სისქე (px)"
+            value={width}
+            min={1}
+            max={16}
+            onCommit={(n) => onChange({ frameWidth: clampTypeFrameWidth(n) })}
+          />
+          <ColorField
+            label="ფერი"
+            value={color}
+            onChange={(c) => onChange({ frameColor: c })}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function OpacityField({
   label,
   value,
@@ -3314,6 +3405,15 @@ function TypePanelItemsEditor({
                 onCommit={(borderRadius) => onUpdate(item.id, { borderRadius })}
               />
             </div>
+
+            <TypePanelFrameFields
+              title="ჩარჩო"
+              hint="ამ კატეგორიისთვის, მხოლოდ მიმდინარე რეჟიმში."
+              frameOn={item.frameOn === true}
+              frameColor={item.frameColor || TYPE_PANEL_FRAME_COLOR_DEFAULT}
+              frameWidth={item.frameWidth ?? TYPE_PANEL_FRAME_WIDTH_DEFAULT}
+              onChange={(patch) => onUpdate(item.id, patch)}
+            />
 
             <div className="space-y-1">
               <div className="text-[10px] font-medium text-slate-500">წარწერების პოზიცია (%)</div>

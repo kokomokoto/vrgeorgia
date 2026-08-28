@@ -24,6 +24,7 @@ import {
   clampRailRadius,
   clampTypeLabelMaxW,
   clampOpacity,
+  typePanelItemFrameCss,
   resolveTypePanelItemsForMode,
   type TypePanelItem,
 } from '@/lib/homeDesignLayout';
@@ -546,6 +547,7 @@ function TypeCategoryCard({
   const mediaY = clampRailPercent(item.mediaY, TYPE_PANEL_MEDIA_POS_DEFAULT.y);
   const canEditMedia = designMode && hasMedia && !compact;
   const overlayCss = hasMedia ? typePanelOverlayGradient(item.overlayOpacity) : null;
+  const frameCss = typePanelItemFrameCss(item);
 
   React.useEffect(() => {
     if (!canEditMedia || !isDesignSelected || !design) return;
@@ -584,20 +586,28 @@ function TypeCategoryCard({
             }
           : onFilterToggle
       }
-      className={`relative min-w-0 overflow-visible border-2 transition-all ${
+      className={`relative min-w-0 overflow-visible transition-all ${
         compact ? 'min-h-[4rem] px-0.5 py-1.5' : 'h-full min-h-0'
-      } ${designMode || compact ? '' : 'hover:scale-105 hover:shadow-md'} ${
+      } ${frameCss ? 'border-solid' : 'border-2'} ${
+        designMode || compact ? '' : 'hover:scale-105 hover:shadow-md'
+      } ${
         isDesignSelected
-          ? 'border-blue-600 ring-2 ring-blue-400/50 dark:border-blue-400'
+          ? `${frameCss ? '' : 'border-blue-600 dark:border-blue-400 '}ring-2 ring-blue-400/50`
           : isFilterSelected
-            ? 'border-blue-500 bg-blue-50 shadow-md dark:border-amber-500 dark:bg-amber-950/40 dark:shadow-amber-900/20'
-            : 'border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-600/50'
+            ? `${frameCss ? '' : 'border-blue-500 dark:border-amber-500 '}ring-2 ring-blue-500 bg-blue-50 shadow-md dark:ring-amber-500 dark:bg-amber-950/40 dark:shadow-amber-900/20`
+            : frameCss
+              ? 'bg-white dark:bg-zinc-900'
+              : 'border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-600/50'
       }`}
-      style={{ borderRadius: radius, opacity: clampOpacity(item.opacity) }}
+      style={{
+        borderRadius: radius,
+        opacity: clampOpacity(item.opacity),
+        ...(frameCss || {}),
+      }}
     >
       <span
         className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-        style={{ borderRadius: Math.max(0, radius - 2) }}
+        style={{ borderRadius: Math.max(0, radius - (frameCss?.borderWidth ?? 2)) }}
         aria-hidden
       >
         <TypeCoverMedia media={media} scale={mediaScale} x={mediaX} y={mediaY} />
@@ -608,7 +618,7 @@ function TypeCategoryCard({
       {canEditMedia ? (
         <span
           className="absolute inset-0 z-[1] cursor-grab touch-none active:cursor-grabbing"
-          style={{ borderRadius: Math.max(0, radius - 2) }}
+          style={{ borderRadius: Math.max(0, radius - (frameCss?.borderWidth ?? 2)) }}
           onPointerDown={(e) => drag.onMediaDown(e, cat.value, mediaX, mediaY)}
           onPointerMove={drag.onMove}
           onPointerUp={drag.onUp}

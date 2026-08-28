@@ -270,6 +270,12 @@ export type TypePanelItem = {
    * 0 = no overlay. Default 0.55.
    */
   overlayOpacity?: number;
+  /** Decorative card outline. Default off — existing slate border stays. */
+  frameOn?: boolean;
+  /** Outline color (hex). Default #1d4ed8. */
+  frameColor?: string;
+  /** Outline thickness in px (1–16). Default 2. */
+  frameWidth?: number;
   /** Card opacity 0–1. Default 1. */
   opacity?: number;
   /**
@@ -306,6 +312,9 @@ export type TypePanelItemModeVisual = {
   labelHidden?: boolean;
   countHidden?: boolean;
   overlayOpacity?: number;
+  frameOn?: boolean;
+  frameColor?: string | null;
+  frameWidth?: number;
   opacity?: number;
 };
 
@@ -321,6 +330,8 @@ export const TYPE_PANEL_MEDIA_POS_DEFAULT = { x: 50, y: 50 } as const;
 export const TYPE_PANEL_MEDIA_SCALE_DEFAULT = 100;
 /** Dark fade on cover photos so white labels stay readable. 0 = off, 0.55 = current look. */
 export const TYPE_PANEL_OVERLAY_DEFAULT = 0.55;
+export const TYPE_PANEL_FRAME_COLOR_DEFAULT = '#1d4ed8';
+export const TYPE_PANEL_FRAME_WIDTH_DEFAULT = 2;
 export const TYPE_PANEL_LABEL_MAX_W_DEFAULT = 140;
 
 /** Cover zoom inside a type card — 50% = shrink, 100% = fill, 400% = tight crop. */
@@ -340,6 +351,31 @@ export function typePanelOverlayGradient(opacity: number | undefined): string | 
   if (a <= 0.005) return null;
   const mid = Math.round(a * 36) / 100;
   return `linear-gradient(to top, rgba(0,0,0,${a}) 0%, rgba(0,0,0,${mid}) 42%, transparent 100%)`;
+}
+
+export function clampTypeFrameWidth(
+  n: number | undefined,
+  fallback = TYPE_PANEL_FRAME_WIDTH_DEFAULT
+): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(16, Math.round(n)));
+}
+
+export function typePanelItemFrameCss(item: {
+  frameOn?: boolean;
+  frameColor?: string | null;
+  frameWidth?: number;
+}): { borderWidth: number; borderStyle: 'solid'; borderColor: string } | null {
+  if (item.frameOn !== true) return null;
+  const color =
+    typeof item.frameColor === 'string' && /^#[0-9a-fA-F]{6}$/i.test(item.frameColor)
+      ? item.frameColor
+      : TYPE_PANEL_FRAME_COLOR_DEFAULT;
+  return {
+    borderWidth: clampTypeFrameWidth(item.frameWidth),
+    borderStyle: 'solid',
+    borderColor: color,
+  };
 }
 
 /** Label wrap box as % of the card. Can exceed 100 so a long name stays on one wrap-line. */
@@ -527,6 +563,8 @@ export function resolveTypePanelItemForMode(
   if (ov.labelHidden !== undefined) next.labelHidden = ov.labelHidden === true;
   if (ov.countHidden !== undefined) next.countHidden = ov.countHidden === true;
   if (ov.overlayOpacity !== undefined) next.overlayOpacity = ov.overlayOpacity;
+  if (ov.frameOn !== undefined) next.frameOn = ov.frameOn === true;
+  if (ov.frameWidth !== undefined) next.frameWidth = ov.frameWidth;
   if (ov.opacity !== undefined) next.opacity = ov.opacity;
   if (ov.labelColor !== undefined) {
     if (ov.labelColor === null) delete next.labelColor;
@@ -535,6 +573,10 @@ export function resolveTypePanelItemForMode(
   if (ov.countColor !== undefined) {
     if (ov.countColor === null) delete next.countColor;
     else next.countColor = ov.countColor;
+  }
+  if (ov.frameColor !== undefined) {
+    if (ov.frameColor === null) delete next.frameColor;
+    else next.frameColor = ov.frameColor;
   }
   if (ov.imageId !== undefined || ov.mediaUrl !== undefined || ov.mediaKind !== undefined) {
     if (ov.imageId === null) delete next.imageId;
@@ -675,6 +717,9 @@ function typePanelVisualSnapshot(item: TypePanelItem): TypePanelItemModeVisual {
     labelHidden: item.labelHidden === true,
     countHidden: item.countHidden === true,
     overlayOpacity: clampTypeOverlay(item.overlayOpacity),
+    frameOn: item.frameOn === true,
+    frameColor: item.frameColor ?? null,
+    frameWidth: clampTypeFrameWidth(item.frameWidth),
     opacity: clampOpacity(item.opacity),
   };
 }
@@ -708,6 +753,7 @@ export function applyTypePanelItemModePatch(
     const next = { ...item, ...patch };
     if ('labelColor' in patch && patch.labelColor === undefined) delete next.labelColor;
     if ('countColor' in patch && patch.countColor === undefined) delete next.countColor;
+    if ('frameColor' in patch && patch.frameColor === undefined) delete next.frameColor;
     if ('imageId' in patch && patch.imageId === undefined) delete next.imageId;
     if ('mediaUrl' in patch && patch.mediaUrl === undefined) delete next.mediaUrl;
     if ('mediaKind' in patch && patch.mediaKind === undefined) delete next.mediaKind;
@@ -717,6 +763,7 @@ export function applyTypePanelItemModePatch(
   const merged: TypePanelItem = { ...resolved, ...patch };
   if ('labelColor' in patch && patch.labelColor === undefined) delete merged.labelColor;
   if ('countColor' in patch && patch.countColor === undefined) delete merged.countColor;
+  if ('frameColor' in patch && patch.frameColor === undefined) delete merged.frameColor;
   if ('imageId' in patch && patch.imageId === undefined) delete merged.imageId;
   if ('mediaUrl' in patch && patch.mediaUrl === undefined) delete merged.mediaUrl;
   if ('mediaKind' in patch && patch.mediaKind === undefined) delete merged.mediaKind;
@@ -805,11 +852,15 @@ function normalizeTypePanelModeVisual(
   if (typeof raw.labelHidden === 'boolean') out.labelHidden = raw.labelHidden;
   if (typeof raw.countHidden === 'boolean') out.countHidden = raw.countHidden;
   if (typeof raw.overlayOpacity === 'number') out.overlayOpacity = clampTypeOverlay(raw.overlayOpacity);
+  if (typeof raw.frameOn === 'boolean') out.frameOn = raw.frameOn;
+  if (typeof raw.frameWidth === 'number') out.frameWidth = clampTypeFrameWidth(raw.frameWidth);
   if (typeof raw.opacity === 'number') out.opacity = clampOpacity(raw.opacity);
   const labelColor = asNullableHexColor(raw.labelColor);
   if (labelColor !== undefined) out.labelColor = labelColor;
   const countColor = asNullableHexColor(raw.countColor);
   if (countColor !== undefined) out.countColor = countColor;
+  const frameColor = asNullableHexColor(raw.frameColor);
+  if (frameColor !== undefined) out.frameColor = frameColor;
   const imageId = asNullableString(raw.imageId);
   if (imageId !== undefined) out.imageId = imageId;
   const mediaUrl = asNullableString(raw.mediaUrl);
@@ -1974,6 +2025,9 @@ function normalizeTypePanelItem(
       it?.overlayOpacity,
       fallback.overlayOpacity ?? TYPE_PANEL_OVERLAY_DEFAULT
     ),
+    frameOn: it?.frameOn === true || fallback.frameOn === true,
+    frameColor: asOptionalHexColor(it?.frameColor) || asOptionalHexColor(fallback.frameColor),
+    frameWidth: clampTypeFrameWidth(it?.frameWidth, fallback.frameWidth ?? TYPE_PANEL_FRAME_WIDTH_DEFAULT),
     opacity: clampOpacity(it?.opacity, fallback.opacity),
     ...(byMode ? { byMode } : {}),
   };

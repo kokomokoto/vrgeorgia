@@ -247,6 +247,8 @@ type HomeDesignContextValue = {
   ) => boolean;
   removeRailItemImage: (rail: 'serviceRail' | 'quickRail', itemId: string) => void;
   updateTypePanelItem: (itemId: string, patch: Partial<TypePanelItem>) => void;
+  /** Patch every type-panel card in the current theme mode (one undo step). */
+  updateAllTypePanelItems: (patch: Partial<TypePanelItem>) => void;
   setTypePanelItemImage: (itemId: string, file: File) => Promise<void>;
   setTypePanelItemMediaUrl: (itemId: string, url: string) => boolean;
   removeTypePanelItemImage: (itemId: string) => void;
@@ -1427,6 +1429,22 @@ export function HomeDesignProvider({
     [commit]
   );
 
+  const updateAllTypePanelItems = React.useCallback(
+    (patch: Partial<TypePanelItem>) => {
+      const modeId = activeModeIdRef.current || 'day';
+      commit((prev) => ({
+        ...prev,
+        typePanel: {
+          ...prev.typePanel,
+          items: (prev.typePanel.items || []).map((it) =>
+            applyTypePanelItemModePatch(it, modeId, patch)
+          ),
+        },
+      }));
+    },
+    [commit]
+  );
+
   const setTypePanelItemImage = React.useCallback(
     async (itemId: string, file: File) => {
       try {
@@ -1753,6 +1771,7 @@ export function HomeDesignProvider({
       setRailItemMediaUrl,
       removeRailItemImage,
       updateTypePanelItem,
+      updateAllTypePanelItems,
       setTypePanelItemImage,
       setTypePanelItemMediaUrl,
       removeTypePanelItemImage,
@@ -1824,6 +1843,7 @@ export function HomeDesignProvider({
       setRailItemMediaUrl,
       removeRailItemImage,
       updateTypePanelItem,
+      updateAllTypePanelItems,
       setTypePanelItemImage,
       setTypePanelItemMediaUrl,
       removeTypePanelItemImage,

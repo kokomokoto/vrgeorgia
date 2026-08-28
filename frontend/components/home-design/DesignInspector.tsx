@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
+import { useHomeDesignOptional, FACTORY_DESIGN_PRESET_ID } from '@/components/home-design/HomeDesignContext';
 import {
   DESIGNABLE_HINTS,
   DESIGNABLE_LABELS,
@@ -30,6 +30,7 @@ import {
   TYPE_PANEL_LABEL_POS_DEFAULT,
   TYPE_PANEL_MEDIA_POS_DEFAULT,
   TYPE_PANEL_MEDIA_SCALE_DEFAULT,
+  TYPE_PANEL_OVERLAY_DEFAULT,
   TYPE_PANEL_RADIUS_DEFAULT,
   clampFontSize,
   clampFontWeight,
@@ -39,6 +40,7 @@ import {
   clampRailPercent,
   clampRailRadius,
   clampTypeLabelMaxW,
+  clampTypeOverlay,
   HEADER_ITEM_GAP_PX_DEFAULT,
   HEADER_ITEM_GAP_PX_MAX,
   clampHeaderItemGapPx,
@@ -196,6 +198,26 @@ function loadInspectorUi(): InspectorUiState {
   }
 }
 
+/** Scroll an inspector field/card inside the panel body (not the page). */
+function scrollInspectorTo(
+  container: HTMLElement,
+  el: HTMLElement,
+  align: 'start' | 'center'
+) {
+  const cRect = container.getBoundingClientRect();
+  const eRect = el.getBoundingClientRect();
+  const offset = eRect.top - cRect.top + container.scrollTop;
+  const next =
+    align === 'center'
+      ? offset - container.clientHeight / 2 + eRect.height / 2
+      : offset - 8;
+  const max = Math.max(0, container.scrollHeight - container.clientHeight);
+  container.scrollTo({
+    top: Math.max(0, Math.min(max, next)),
+    behavior: 'smooth',
+  });
+}
+
 /** Floating inspector — only visible in Design Mode on the home page */
 export function DesignInspector() {
   const ctx = useHomeDesignOptional();
@@ -279,17 +301,17 @@ export function DesignInspector() {
         const key = activeEditParams[0];
         const el = body.querySelector<HTMLElement>(`[data-edit-param="${key}"]`);
         if (el) {
-          el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          scrollInspectorTo(body, el, 'center');
           return;
         }
       }
       const focused = body.querySelector<HTMLElement>('[data-inspector-focused="true"]');
       if (focused) {
-        focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        scrollInspectorTo(body, focused, 'start');
         return;
       }
       body.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 40);
+    }, 80);
     return () => window.clearTimeout(t);
   }, [
     ctx?.designMode,
@@ -434,6 +456,7 @@ export function DesignInspector() {
     removeTypePanelItemImage,
     resetLayout,
     resetToFactoryDefault,
+    activeDesignPresetId,
     designPresets,
     designPresetsMax,
     designPresetsLoading,
@@ -556,7 +579,7 @@ export function DesignInspector() {
       </div>
 
       {collapsed ? null : (
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-3">
+        <div ref={bodyRef} data-inspector-body className="min-h-0 flex-1 overflow-y-auto p-3">
           <div className="mb-2 flex gap-1">
             <button
               type="button"
@@ -654,13 +677,29 @@ export function DesignInspector() {
             <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
               დეფაულტები
             </div>
-            <div className="mb-2 flex flex-wrap gap-1">
+            <div className="mb-2 flex flex-wrap gap-1" role="radiogroup" aria-label="აქტიური დეფაულტი">
               <button
                 type="button"
+                role="radio"
+                aria-checked={activeDesignPresetId === FACTORY_DESIGN_PRESET_ID}
                 onClick={resetToFactoryDefault}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold text-slate-800 hover:bg-slate-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-bold ${
+                  activeDesignPresetId === FACTORY_DESIGN_PRESET_ID
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800'
+                }`}
                 title="კოდის საწყისი ვიზუალი — ყველაფერი, მათ შორის რეჟიმები"
               >
+                <span
+                  className={`flex h-4 w-4 items-center justify-center rounded-full border text-[10px] leading-none ${
+                    activeDesignPresetId === FACTORY_DESIGN_PRESET_ID
+                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                      : 'border-slate-300 bg-white text-transparent dark:border-zinc-500 dark:bg-zinc-900'
+                  }`}
+                  aria-hidden
+                >
+                  ✓
+                </span>
                 Default
               </button>
               <button
@@ -707,14 +746,52 @@ export function DesignInspector() {
             ) : designPresets.length === 0 ? (
               <p className="text-[10px] text-slate-400">ჯერ არც ერთი შენახული დეფაულტი არაა.</p>
             ) : (
-              <ul className="max-h-36 space-y-1 overflow-y-auto">
-                {designPresets.map((p) => (
+              <ul className="max-h-36 space-y-1 overflow-y-auto" role="radiogroup" aria-label="შენახული დეფაულტები">
+                {designPresets.map((p) => {
+                  const active = activeDesignPresetId === p.id;
+                  return (
                   <li
                     key={p.id}
-                    className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+                    className={`flex items-center gap-1 rounded-md border px-1.5 py-1 ${
+                      active
+                        ? 'border-emerald-500 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-950/40'
+                        : 'border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
+                    }`}
                   >
-                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-800 dark:text-zinc-100" title={p.name}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={presetBusy}
+                      title={active ? 'აქტიური დეფაულტი' : `გამოიყენე „${p.name}"`}
+                      onClick={() => {
+                        if (active) return;
+                        void (async () => {
+                          setPresetBusy(true);
+                          await applyDesignPreset(p.id);
+                          setPresetBusy(false);
+                        })();
+                      }}
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold leading-none ${
+                        active
+                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                          : 'border-slate-300 bg-white text-transparent hover:border-emerald-400 dark:border-zinc-500 dark:bg-zinc-950'
+                      }`}
+                    >
+                      ✓
+                    </button>
+                    <span
+                      className={`min-w-0 flex-1 truncate text-[11px] font-semibold ${
+                        active ? 'text-emerald-800 dark:text-emerald-100' : 'text-slate-800 dark:text-zinc-100'
+                      }`}
+                      title={p.name}
+                    >
                       {p.name}
+                      {active ? (
+                        <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                          აქტიური
+                        </span>
+                      ) : null}
                     </span>
                     <button
                       type="button"
@@ -760,14 +837,14 @@ export function DesignInspector() {
                       ✕
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>
 
           {editingLabel ? (
             <div
-              data-inspector-focused="true"
               className="mb-3 rounded-lg border border-blue-400 bg-blue-50 px-2.5 py-2 dark:border-blue-500 dark:bg-blue-950/50"
             >
               <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
@@ -2954,12 +3031,6 @@ function TypePanelItemsEditor({
     };
   }, [imageIds.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  React.useEffect(() => {
-    if (!focusItemId) return;
-    const el = itemRefs.current[focusItemId];
-    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [focusItemId]);
-
   const thumbById = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const t of thumbs) map.set(t.id, t.url);
@@ -3138,6 +3209,8 @@ function TypePanelItemsEditor({
                   value={labelFontSize}
                   min={8}
                   max={48}
+                  visible={item.labelHidden !== true}
+                  onVisibleChange={(on) => onUpdate(item.id, { labelHidden: !on })}
                   onCommit={(n) =>
                     onUpdate(item.id, {
                       labelFontSize: clampFontSize(n, TYPE_PANEL_LABEL_FONT_DEFAULT, 8, 48),
@@ -3156,6 +3229,8 @@ function TypePanelItemsEditor({
                   value={countFontSize}
                   min={8}
                   max={32}
+                  visible={item.countHidden !== true}
+                  onVisibleChange={(on) => onUpdate(item.id, { countHidden: !on })}
                   onCommit={(n) =>
                     onUpdate(item.id, {
                       countFontSize: clampFontSize(n, TYPE_PANEL_COUNT_FONT_DEFAULT, 8, 32),
@@ -3377,6 +3452,16 @@ function TypePanelItemsEditor({
                   ) : null}
                 </div>
               </div>
+              <OpacityField
+                label="ფოტოს ჩრდილი"
+                value={clampTypeOverlay(item.overlayOpacity, TYPE_PANEL_OVERLAY_DEFAULT)}
+                onChange={(overlayOpacity) =>
+                  onUpdate(item.id, { overlayOpacity: clampTypeOverlay(overlayOpacity) })
+                }
+              />
+              <p className="text-[10px] leading-snug text-slate-400">
+                ქვემოდან შავი → ზემოთ გამჭვირვალე, რომ წარწერა იკითხებოდეს. 0% = ჩრდილი გამორთულია.
+              </p>
               <div className="space-y-1">
                 <div className="text-[10px] font-medium text-slate-500">
                   ან ლინკი (ფოტო / GIF / ვიდეო / YouTube)
@@ -3542,12 +3627,6 @@ function RailItemsEditor({
       revokeHeroUrls(loaded);
     };
   }, [imageIds.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  React.useEffect(() => {
-    if (!focusItemId) return;
-    const el = itemRefs.current[focusItemId];
-    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [focusItemId]);
 
   const thumbById = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -4568,6 +4647,8 @@ function NumField({
   max,
   decimals = 0,
   paramKey,
+  visible,
+  onVisibleChange,
 }: {
   label: string;
   value: number;
@@ -4578,6 +4659,9 @@ function NumField({
   decimals?: number;
   /** When set, highlights while canvas drag touches this param */
   paramKey?: import('@/components/home-design/HomeDesignContext').DesignEditParam;
+  /** Optional show/hide checkbox in the label row (type-panel name/count). */
+  visible?: boolean;
+  onVisibleChange?: (on: boolean) => void;
 }) {
   const design = useHomeDesignOptional();
   const active = Boolean(paramKey && design?.activeEditParams.includes(paramKey));
@@ -4606,9 +4690,10 @@ function NumField({
 
   const draftPattern =
     decimals > 0 ? /^-?\d*(?:[.,]\d*)?$/ : /^-?\d*$/;
+  const layerOff = Boolean(onVisibleChange) && visible === false;
 
   return (
-    <label
+    <div
       data-edit-param={paramKey || undefined}
       className={`block text-[10px] font-medium uppercase tracking-wide transition-shadow ${
         active
@@ -4616,19 +4701,33 @@ function NumField({
           : 'text-slate-500 dark:text-zinc-400'
       }`}
     >
-      {label}
-      {active ? (
-        <span className="ml-1 text-[9px] font-bold normal-case text-blue-600 dark:text-blue-300">
-          ← იცვლება
-        </span>
-      ) : null}
+      <div className="flex items-center gap-1.5">
+        {onVisibleChange ? (
+          <input
+            type="checkbox"
+            checked={visible !== false}
+            onChange={(e) => onVisibleChange(e.target.checked)}
+            title="ჩვენება"
+            className="h-3.5 w-3.5 shrink-0 accent-blue-600"
+          />
+        ) : null}
+        <span className={layerOff ? 'line-through opacity-50' : undefined}>{label}</span>
+        {active ? (
+          <span className="text-[9px] font-bold normal-case text-blue-600 dark:text-blue-300">
+            ← იცვლება
+          </span>
+        ) : null}
+      </div>
       <input
         type="text"
         inputMode={decimals > 0 ? 'decimal' : 'numeric'}
+        disabled={layerOff}
         className={`mt-0.5 w-full rounded-md border px-2 py-1 text-sm dark:bg-zinc-950 dark:text-zinc-100 ${
-          active
-            ? 'border-blue-400 text-blue-900 dark:border-blue-500 dark:text-blue-100'
-            : 'border-slate-200 text-slate-800 dark:border-zinc-600'
+          layerOff
+            ? 'cursor-not-allowed opacity-40'
+            : active
+              ? 'border-blue-400 text-blue-900 dark:border-blue-500 dark:text-blue-100'
+              : 'border-slate-200 text-slate-800 dark:border-zinc-600'
         }`}
         value={draft}
         onFocus={() => setFocused(true)}
@@ -4644,7 +4743,7 @@ function NumField({
           if (e.key === 'Enter') e.currentTarget.blur();
         }}
       />
-    </label>
+    </div>
   );
 }
 

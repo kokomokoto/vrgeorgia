@@ -253,6 +253,8 @@ type HomeDesignContextValue = {
   resetLayout: () => void;
   /** Factory default (კოდის ნაგულისხმევი) — სრული ვიზუალი */
   resetToFactoryDefault: () => void;
+  /** Last applied visual source: factory Default or a saved preset id */
+  activeDesignPresetId: string | null;
   designPresets: HomeDesignPresetMeta[];
   designPresetsMax: number;
   designPresetsLoading: boolean;
@@ -264,6 +266,20 @@ type HomeDesignContextValue = {
 };
 
 const HomeDesignContext = React.createContext<HomeDesignContextValue | null>(null);
+
+/** Sentinel id for the built-in factory Default (not a saved preset). */
+export const FACTORY_DESIGN_PRESET_ID = '__factory__';
+const ACTIVE_DESIGN_PRESET_KEY = 'vhome-active-design-preset-id';
+
+function readStoredActivePresetId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_DESIGN_PRESET_KEY);
+    return raw && raw.trim() ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 export function HomeDesignProvider({
   children,
@@ -327,6 +343,21 @@ export function HomeDesignProvider({
   const [designPresets, setDesignPresets] = React.useState<HomeDesignPresetMeta[]>([]);
   const [designPresetsMax, setDesignPresetsMax] = React.useState(12);
   const [designPresetsLoading, setDesignPresetsLoading] = React.useState(false);
+  const [activeDesignPresetId, setActiveDesignPresetId] = React.useState<string | null>(
+    readStoredActivePresetId
+  );
+
+  React.useEffect(() => {
+    try {
+      if (activeDesignPresetId) {
+        window.localStorage.setItem(ACTIVE_DESIGN_PRESET_KEY, activeDesignPresetId);
+      } else {
+        window.localStorage.removeItem(ACTIVE_DESIGN_PRESET_KEY);
+      }
+    } catch {
+      /* ignore quota */
+    }
+  }, [activeDesignPresetId]);
 
   const layoutRef = React.useRef(layout);
   const savedLayoutRef = React.useRef(savedLayout);
@@ -1539,6 +1570,7 @@ export function HomeDesignProvider({
     if (!ok) return;
     pushHistory();
     setLayout(cloneLayout(DEFAULT_HOME_DESIGN));
+    setActiveDesignPresetId(FACTORY_DESIGN_PRESET_ID);
   }, [pushHistory]);
 
   const refreshDesignPresets = React.useCallback(async () => {
@@ -1570,6 +1602,7 @@ export function HomeDesignProvider({
         const res = await createHomeDesignPreset(trimmed, cloneLayout(layoutRef.current));
         setDesignPresets(Array.isArray(res.presets) ? res.presets : []);
         if (typeof res.maxPresets === 'number') setDesignPresetsMax(res.maxPresets);
+        if (res.preset?.id) setActiveDesignPresetId(res.preset.id);
         return true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'დეფაულტის შენახვა ვერ მოხერხდა';
@@ -1607,6 +1640,7 @@ export function HomeDesignProvider({
       if (!ok) return false;
       pushHistory();
       setLayout(normalizeHomeDesignInput(preset.layout as Partial<HomeDesignLayout>));
+      setActiveDesignPresetId(preset.id);
       return true;
     },
     [designPresets, pushHistory]
@@ -1627,6 +1661,7 @@ export function HomeDesignProvider({
         layout: cloneLayout(layoutRef.current),
       });
       setDesignPresets(Array.isArray(res.presets) ? res.presets : []);
+      setActiveDesignPresetId(presetId);
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'განახლება ვერ მოხერხდა';
@@ -1645,6 +1680,7 @@ export function HomeDesignProvider({
     try {
       const res = await deleteHomeDesignPreset(presetId);
       setDesignPresets(Array.isArray(res.presets) ? res.presets : []);
+      setActiveDesignPresetId((prev) => (prev === presetId ? null : prev));
       return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'წაშლა ვერ მოხერხდა';
@@ -1722,6 +1758,7 @@ export function HomeDesignProvider({
       removeTypePanelItemImage,
       resetLayout,
       resetToFactoryDefault,
+      activeDesignPresetId,
       designPresets,
       designPresetsMax,
       designPresetsLoading,
@@ -1792,6 +1829,7 @@ export function HomeDesignProvider({
       removeTypePanelItemImage,
       resetLayout,
       resetToFactoryDefault,
+      activeDesignPresetId,
       designPresets,
       designPresetsMax,
       designPresetsLoading,

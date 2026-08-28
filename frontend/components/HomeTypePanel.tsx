@@ -19,6 +19,7 @@ import {
   TYPE_PANEL_RADIUS_DEFAULT,
   clampFontSize,
   clampMediaScale,
+  typePanelOverlayGradient,
   clampRailPercent,
   clampRailRadius,
   clampTypeLabelMaxW,
@@ -544,6 +545,7 @@ function TypeCategoryCard({
   const mediaX = clampRailPercent(item.mediaX, TYPE_PANEL_MEDIA_POS_DEFAULT.x);
   const mediaY = clampRailPercent(item.mediaY, TYPE_PANEL_MEDIA_POS_DEFAULT.y);
   const canEditMedia = designMode && hasMedia && !compact;
+  const overlayCss = hasMedia ? typePanelOverlayGradient(item.overlayOpacity) : null;
 
   React.useEffect(() => {
     if (!canEditMedia || !isDesignSelected || !design) return;
@@ -599,8 +601,8 @@ function TypeCategoryCard({
         aria-hidden
       >
         <TypeCoverMedia media={media} scale={mediaScale} x={mediaX} y={mediaY} />
-        {hasMedia ? (
-          <span className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent" />
+        {overlayCss ? (
+          <span className="absolute inset-0" style={{ background: overlayCss }} />
         ) : null}
       </span>
       {canEditMedia ? (
@@ -628,6 +630,7 @@ function TypeCategoryCard({
         </TypeTextChip>
       ) : null}
 
+      {item.labelHidden !== true ? (
       <TypeTextChip
         layer="label"
         itemId={cat.value}
@@ -651,7 +654,9 @@ function TypeCategoryCard({
       >
         {displayLabel}
       </TypeTextChip>
+      ) : null}
 
+      {item.countHidden !== true ? (
       <TypeTextChip
         layer="count"
         itemId={cat.value}
@@ -673,6 +678,7 @@ function TypeCategoryCard({
       >
         {count}
       </TypeTextChip>
+      ) : null}
 
       {canEditMedia && isDesignSelected ? (
         <span

@@ -28,7 +28,12 @@ import { HomeTypePanel, HomeLandStatusPanel } from '@/components/HomeTypePanel';
 import { Designable } from '@/components/home-design/Designable';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { useTheme } from '@/components/ThemeProvider';
-import { isRailSectionHiddenForMode } from '@/lib/homeDesignLayout';
+import {
+  DEFAULT_TYPE_PANEL_ITEMS,
+  isRailSectionHiddenForMode,
+  resolveTypePanelItemsForMode,
+  typePanelNeedsCountQuery,
+} from '@/lib/homeDesignLayout';
 import {
   scaleDesignPx,
   useHomeDesignScale,
@@ -173,8 +178,20 @@ export default function HomePage() {
     }
   }, [filtersHydrated]);
 
+  const needTypeCounts = React.useMemo(() => {
+    const fromLayout = homeDesign?.layout.typePanel.items;
+    const base = fromLayout?.length ? fromLayout : DEFAULT_TYPE_PANEL_ITEMS;
+    return typePanelNeedsCountQuery(
+      resolveTypePanelItemsForMode(base, activeModeId || 'day')
+    );
+  }, [homeDesign?.layout.typePanel.items, activeModeId]);
+
   React.useEffect(() => {
     if (!filtersHydrated) return;
+    if (!needTypeCounts) {
+      setCategoryCounts({});
+      return;
+    }
     listProperties({
       lang: apiLang(i18n.language),
       page: 1,
@@ -183,7 +200,7 @@ export default function HomePage() {
     })
       .then((r) => setCategoryCounts(r.typeCounts || {}))
       .catch(() => {});
-  }, [filtersHydrated, i18n.language]);
+  }, [filtersHydrated, i18n.language, needTypeCounts]);
 
   React.useEffect(() => {
     if (!filtersHydrated) return;

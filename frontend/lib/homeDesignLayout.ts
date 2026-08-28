@@ -261,6 +261,15 @@ export type TypePanelItem = {
   labelWrap?: boolean;
   /** Wrap box width as % of the card (only when labelWrap). */
   labelMaxW?: number;
+  /** Hide the category name on the card. Default false (shown). */
+  labelHidden?: boolean;
+  /** Hide the listing count on the card. Default false (shown). */
+  countHidden?: boolean;
+  /**
+   * Dark gradient over cover media (0–1). Bottom is strongest so labels stay readable.
+   * 0 = no overlay. Default 0.55.
+   */
+  overlayOpacity?: number;
   /** Card opacity 0–1. Default 1. */
   opacity?: number;
   /**
@@ -294,6 +303,9 @@ export type TypePanelItemModeVisual = {
   mediaY?: number;
   labelWrap?: boolean;
   labelMaxW?: number;
+  labelHidden?: boolean;
+  countHidden?: boolean;
+  overlayOpacity?: number;
   opacity?: number;
 };
 
@@ -307,12 +319,27 @@ export const TYPE_PANEL_COUNT_POS_DEFAULT = { x: 50, y: 76 } as const;
 export const TYPE_PANEL_ICON_POS_DEFAULT = { x: 50, y: 32 } as const;
 export const TYPE_PANEL_MEDIA_POS_DEFAULT = { x: 50, y: 50 } as const;
 export const TYPE_PANEL_MEDIA_SCALE_DEFAULT = 100;
+/** Dark fade on cover photos so white labels stay readable. 0 = off, 0.55 = current look. */
+export const TYPE_PANEL_OVERLAY_DEFAULT = 0.55;
 export const TYPE_PANEL_LABEL_MAX_W_DEFAULT = 140;
 
 /** Cover zoom inside a type card — 50% = shrink, 100% = fill, 400% = tight crop. */
 export function clampMediaScale(n: number | undefined, fallback = TYPE_PANEL_MEDIA_SCALE_DEFAULT): number {
   if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
   return Math.max(50, Math.min(400, Math.round(n)));
+}
+
+export function clampTypeOverlay(n: number | undefined, fallback = TYPE_PANEL_OVERLAY_DEFAULT): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, Math.round(n * 100) / 100));
+}
+
+/** CSS gradient for type-card photo shade (black at bottom → transparent at top). */
+export function typePanelOverlayGradient(opacity: number | undefined): string | null {
+  const a = clampTypeOverlay(opacity);
+  if (a <= 0.005) return null;
+  const mid = Math.round(a * 36) / 100;
+  return `linear-gradient(to top, rgba(0,0,0,${a}) 0%, rgba(0,0,0,${mid}) 42%, transparent 100%)`;
 }
 
 /** Label wrap box as % of the card. Can exceed 100 so a long name stays on one wrap-line. */
@@ -497,6 +524,9 @@ export function resolveTypePanelItemForMode(
   if (ov.mediaY !== undefined) next.mediaY = ov.mediaY;
   if (ov.labelWrap !== undefined) next.labelWrap = ov.labelWrap === true;
   if (ov.labelMaxW !== undefined) next.labelMaxW = ov.labelMaxW;
+  if (ov.labelHidden !== undefined) next.labelHidden = ov.labelHidden === true;
+  if (ov.countHidden !== undefined) next.countHidden = ov.countHidden === true;
+  if (ov.overlayOpacity !== undefined) next.overlayOpacity = ov.overlayOpacity;
   if (ov.opacity !== undefined) next.opacity = ov.opacity;
   if (ov.labelColor !== undefined) {
     if (ov.labelColor === null) delete next.labelColor;
@@ -558,6 +588,12 @@ export function resolveTypePanelItemsForMode(
   modeId: string
 ): TypePanelItem[] {
   return items.map((it) => resolveTypePanelItemForMode(it, modeId));
+}
+
+/** Skip the extra type-count aggregation when no card shows a listing count. */
+export function typePanelNeedsCountQuery(items: TypePanelItem[] | undefined | null): boolean {
+  if (!items?.length) return true;
+  return items.some((it) => it.countHidden !== true);
 }
 
 export function resolveRailItemsForMode(items: RailItem[], modeId: string): RailItem[] {
@@ -636,6 +672,9 @@ function typePanelVisualSnapshot(item: TypePanelItem): TypePanelItemModeVisual {
     mediaY: item.mediaY,
     labelWrap: item.labelWrap === true,
     labelMaxW: item.labelMaxW,
+    labelHidden: item.labelHidden === true,
+    countHidden: item.countHidden === true,
+    overlayOpacity: clampTypeOverlay(item.overlayOpacity),
     opacity: clampOpacity(item.opacity),
   };
 }
@@ -681,8 +720,13 @@ export function applyTypePanelItemModePatch(
   if ('imageId' in patch && patch.imageId === undefined) delete merged.imageId;
   if ('mediaUrl' in patch && patch.mediaUrl === undefined) delete merged.mediaUrl;
   if ('mediaKind' in patch && patch.mediaKind === undefined) delete merged.mediaKind;
+  const hidePatch: Partial<TypePanelItem> = {
+    ...(patch.labelHidden !== undefined ? { labelHidden: patch.labelHidden === true } : {}),
+    ...(patch.countHidden !== undefined ? { countHidden: patch.countHidden === true } : {}),
+  };
   return {
     ...item,
+    ...hidePatch,
     byMode: {
       ...(item.byMode || {}),
       [modeId]: typePanelVisualSnapshot(merged),
@@ -758,6 +802,9 @@ function normalizeTypePanelModeVisual(
   if (typeof raw.mediaY === 'number') out.mediaY = clampRailPercent(raw.mediaY, TYPE_PANEL_MEDIA_POS_DEFAULT.y);
   if (typeof raw.labelWrap === 'boolean') out.labelWrap = raw.labelWrap;
   if (typeof raw.labelMaxW === 'number') out.labelMaxW = clampTypeLabelMaxW(raw.labelMaxW);
+  if (typeof raw.labelHidden === 'boolean') out.labelHidden = raw.labelHidden;
+  if (typeof raw.countHidden === 'boolean') out.countHidden = raw.countHidden;
+  if (typeof raw.overlayOpacity === 'number') out.overlayOpacity = clampTypeOverlay(raw.overlayOpacity);
   if (typeof raw.opacity === 'number') out.opacity = clampOpacity(raw.opacity);
   const labelColor = asNullableHexColor(raw.labelColor);
   if (labelColor !== undefined) out.labelColor = labelColor;
@@ -1921,6 +1968,12 @@ function normalizeTypePanelItem(
     mediaY: clampRailPercent(it?.mediaY, fallback.mediaY ?? TYPE_PANEL_MEDIA_POS_DEFAULT.y),
     labelWrap: it?.labelWrap === true || fallback.labelWrap === true,
     labelMaxW: clampTypeLabelMaxW(it?.labelMaxW, fallback.labelMaxW ?? TYPE_PANEL_LABEL_MAX_W_DEFAULT),
+    labelHidden: it?.labelHidden === true || fallback.labelHidden === true,
+    countHidden: it?.countHidden === true || fallback.countHidden === true,
+    overlayOpacity: clampTypeOverlay(
+      it?.overlayOpacity,
+      fallback.overlayOpacity ?? TYPE_PANEL_OVERLAY_DEFAULT
+    ),
     opacity: clampOpacity(it?.opacity, fallback.opacity),
     ...(byMode ? { byMode } : {}),
   };

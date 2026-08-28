@@ -974,6 +974,11 @@ export type HeroLayout = {
   opacity?: number;
 };
 
+export type HeroTextModeVisual = {
+  titleColor?: string;
+  subtitleColor?: string;
+};
+
 export type HeroTextLayout = BoxLayout & {
   title: string;
   subtitle: string;
@@ -981,10 +986,12 @@ export type HeroTextLayout = BoxLayout & {
   titleFontSize: number;
   /** Subtitle font size in px */
   subtitleFontSize: number;
-  /** Title color #RRGGBB */
+  /** Title color #RRGGBB (fallback when a mode has no override) */
   titleColor: string;
-  /** Subtitle color #RRGGBB */
+  /** Subtitle color #RRGGBB (fallback when a mode has no override) */
   subtitleColor: string;
+  /** Per theme-mode color overrides (day / night / …). */
+  byMode?: Record<string, HeroTextModeVisual>;
   /** Phone-only offset of the title block */
   mobileX?: number;
   mobileY?: number;
@@ -1891,7 +1898,72 @@ export function syncLegacyThemeFields(layout: HomeDesignLayout): HomeDesignLayou
   };
 }
 
+function normalizeHeroTextModeVisual(
+  raw: Partial<HeroTextModeVisual> | null | undefined
+): HeroTextModeVisual | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const out: HeroTextModeVisual = {};
+  const titleColor = asOptionalHexColor(raw.titleColor);
+  if (titleColor) out.titleColor = titleColor;
+  const subtitleColor = asOptionalHexColor(raw.subtitleColor);
+  if (subtitleColor) out.subtitleColor = subtitleColor;
+  return Object.keys(out).length ? out : null;
+}
+
+/** Colors for the active theme mode; geometry/text stay on the shared base. */
+export function resolveHeroTextForMode(
+  heroText: HeroTextLayout,
+  modeId: string
+): HeroTextLayout {
+  const { byMode, ...base } = heroText;
+  const ov = modeId && byMode?.[modeId];
+  if (!ov) return { ...base };
+  const next: HeroTextLayout = { ...base };
+  if (typeof ov.titleColor === 'string' && ov.titleColor) next.titleColor = ov.titleColor;
+  if (typeof ov.subtitleColor === 'string' && ov.subtitleColor) {
+    next.subtitleColor = ov.subtitleColor;
+  }
+  return next;
+}
+
+/** Color patches go into byMode[modeId]; everything else stays on the base layout. */
+export function applyHeroTextModePatch(
+  heroText: HeroTextLayout,
+  modeId: string,
+  patch: Partial<HeroTextLayout>
+): HeroTextLayout {
+  const colorTouched = 'titleColor' in patch || 'subtitleColor' in patch;
+  const { byMode: _byMode, titleColor: _tc, subtitleColor: _sc, ...rest } = patch;
+  const base: HeroTextLayout = { ...heroText, ...rest };
+  if (!colorTouched) return base;
+
+  const titleColor = asOptionalHexColor(patch.titleColor);
+  const subtitleColor = asOptionalHexColor(patch.subtitleColor);
+
+  if (!modeId) {
+    return {
+      ...base,
+      ...(titleColor ? { titleColor } : {}),
+      ...(subtitleColor ? { subtitleColor } : {}),
+    };
+  }
+
+  const resolved = resolveHeroTextForMode(base, modeId);
+  const snapshot: HeroTextModeVisual = {
+    titleColor: titleColor || resolved.titleColor,
+    subtitleColor: subtitleColor || resolved.subtitleColor,
+  };
+  return {
+    ...base,
+    byMode: {
+      ...(base.byMode || {}),
+      [modeId]: snapshot,
+    },
+  };
+}
+
 function normalizeHeroText(raw?: Partial<HeroTextLayout> | null): HeroTextLayout {
+  const byMode = normalizeByModeMap(raw?.byMode, normalizeHeroTextModeVisual);
   return {
     x: Math.round(raw?.x ?? DEFAULT_HERO_TEXT.x),
     y: Math.round(raw?.y ?? DEFAULT_HERO_TEXT.y),
@@ -1917,6 +1989,7 @@ function normalizeHeroText(raw?: Partial<HeroTextLayout> | null): HeroTextLayout
       Math.min(520, Math.round(raw?.mobileY ?? DEFAULT_HERO_TEXT.mobileY ?? 16))
     ),
     opacity: clampOpacity(raw?.opacity, DEFAULT_HERO_TEXT.opacity),
+    ...(byMode ? { byMode } : {}),
   };
 }
 

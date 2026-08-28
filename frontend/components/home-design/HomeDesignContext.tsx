@@ -6,6 +6,7 @@ import {
   HOME_DESIGN_STORAGE_KEY,
   applyRailItemModePatch,
   applyTypePanelItemModePatch,
+  applyHeroTextModePatch,
   collectItemImageIds,
   createHeroImageId,
   createRailImageId,
@@ -834,29 +835,32 @@ export function HomeDesignProvider({
 
   const updateHeroText = React.useCallback(
     (patch: Partial<HeroTextLayout>) => {
-      commit((prev) => ({
-        ...prev,
-        heroText: {
-          ...prev.heroText,
-          ...patch,
-          w:
-            patch.w !== undefined
-              ? Math.max(240, Math.min(1200, Math.round(patch.w)))
-              : prev.heroText.w,
-          h:
-            patch.h !== undefined
-              ? Math.max(72, Math.min(360, Math.round(patch.h)))
-              : prev.heroText.h,
-          mobileX:
-            patch.mobileX !== undefined
-              ? Math.max(-120, Math.min(360, Math.round(patch.mobileX)))
-              : prev.heroText.mobileX,
-          mobileY:
-            patch.mobileY !== undefined
-              ? Math.max(-80, Math.min(520, Math.round(patch.mobileY)))
-              : prev.heroText.mobileY,
-        },
-      }));
+      const modeId = activeModeIdRef.current || 'day';
+      commit((prev) => {
+        const merged = applyHeroTextModePatch(prev.heroText, modeId, patch);
+        return {
+          ...prev,
+          heroText: {
+            ...merged,
+            w:
+              patch.w !== undefined
+                ? Math.max(240, Math.min(1200, Math.round(patch.w)))
+                : merged.w,
+            h:
+              patch.h !== undefined
+                ? Math.max(72, Math.min(360, Math.round(patch.h)))
+                : merged.h,
+            mobileX:
+              patch.mobileX !== undefined
+                ? Math.max(-120, Math.min(360, Math.round(patch.mobileX)))
+                : merged.mobileX,
+            mobileY:
+              patch.mobileY !== undefined
+                ? Math.max(-80, Math.min(520, Math.round(patch.mobileY)))
+                : merged.mobileY,
+          },
+        };
+      });
     },
     [commit]
   );

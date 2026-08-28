@@ -89,6 +89,8 @@ export default function HomePage() {
   const [selectedMapPropertyId, setSelectedMapPropertyId] = React.useState<string | null>(null);
   const ITEMS_PER_PAGE = 40;
   const MAP_FETCH_LIMIT = 5000;
+  const loadedMapQueryRef = React.useRef<string | null>(null);
+  const prevMapOpenRef = React.useRef(false);
 
   const homeMapProps = {
     properties: mapProperties,
@@ -245,7 +247,23 @@ export default function HomePage() {
   }, [filters, sortBy, i18n.language, filtersHydrated, currentPage]);
 
   React.useEffect(() => {
-    if (!filtersHydrated) return;
+    if (designMode) setMapOpen(true);
+  }, [designMode]);
+
+  const mapQueryKey = `${sortBy}|${i18n.language}|${JSON.stringify(filters)}`;
+
+  React.useEffect(() => {
+    if (!filtersHydrated || !mapOpen) {
+      prevMapOpenRef.current = mapOpen;
+      return;
+    }
+    if (loadedMapQueryRef.current === mapQueryKey) {
+      prevMapOpenRef.current = true;
+      return;
+    }
+
+    const justOpened = !prevMapOpenRef.current;
+    prevMapOpenRef.current = true;
 
     let alive = true;
     const timer = window.setTimeout(() => {
@@ -258,18 +276,19 @@ export default function HomePage() {
           if (!alive) return;
           setMapProperties(mapRes.properties);
           setSelectedMapPropertyId(null);
+          loadedMapQueryRef.current = mapQueryKey;
         })
         .catch(() => {
           if (!alive) return;
           setMapProperties([]);
         });
-    }, 400);
+    }, justOpened ? 0 : 400);
 
     return () => {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [filters, sortBy, i18n.language, filtersHydrated]);
+  }, [filters, sortBy, i18n.language, filtersHydrated, mapOpen, mapQueryKey]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -371,29 +390,33 @@ export default function HomePage() {
               />
 
               <Designable id="map">
-                {/* Mobile accordion */}
-                <div className="rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 md:hidden">
+                <div
+                  className="mx-auto w-full max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 md:max-w-[var(--map-w)]"
+                  style={
+                    {
+                      width: '100%',
+                      '--map-w': `${mapW}px`,
+                    } as React.CSSProperties
+                  }
+                >
                   <div className="flex min-h-11 items-center gap-2 px-3 py-2">
-                    <span className="min-w-0 flex-1 text-sm font-semibold text-slate-700 dark:text-zinc-200">
-                      {tr('map', 'რუკა')}
-                    </span>
-                    <Link
-                      href={mapHref}
-                      className="pointer-events-auto shrink-0 whitespace-nowrap rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400"
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      {tr('map_open_full_view', 'რუკაზე ძებნა')}
-                    </Link>
                     <button
                       type="button"
-                      onClick={() => setMapOpen(!mapOpen)}
+                      onClick={() => setMapOpen((open) => !open)}
                       onPointerDown={(e) => e.stopPropagation()}
-                      className="pointer-events-auto flex shrink-0 items-center justify-center rounded-md p-1 text-slate-400"
+                      className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left text-slate-700 dark:text-zinc-200"
                       aria-expanded={mapOpen}
-                      aria-label={tr('map', 'რუკა')}
+                      aria-label={
+                        mapOpen
+                          ? tr('map_collapse', 'რუკის ჩაკეცვა')
+                          : tr('map_expand', 'რუკის ჩამოშლა')
+                      }
                     >
+                      <span className="min-w-0 flex-1 text-sm font-semibold">
+                        {tr('map', 'რუკა')}
+                      </span>
                       <svg
-                        className={`h-5 w-5 transition-transform ${mapOpen ? 'rotate-180' : ''}`}
+                        className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${mapOpen ? 'rotate-180' : ''}`}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -402,60 +425,50 @@ export default function HomePage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
-                  </div>
-                  {mapOpen && (
-                    <div
-                      className="pointer-events-auto relative mt-2 border-t border-slate-100 pt-2 dark:border-zinc-700"
+                    <Link
+                      href={mapHref}
+                      className="pointer-events-auto shrink-0 whitespace-nowrap rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400 md:px-3 md:py-2 md:text-sm"
                       onPointerDown={(e) => e.stopPropagation()}
                     >
-                      <Link
-                        href={mapHref}
-                        aria-label={tr('map_open_full_view', 'რუკაზე ძებნა')}
-                        title={tr('map_open_full_view', 'რუკაზე ძებნა')}
-                        className="absolute bottom-3 right-3 z-[1000] flex h-10 w-10 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
+                      {tr('map_open_full_view', 'რუკაზე ძებნა')}
+                    </Link>
+                  </div>
+                  <div
+                    className={`overflow-hidden transition-[height] duration-300 ease-out ${
+                      mapOpen
+                        ? 'h-[360px] border-t border-slate-100 dark:border-zinc-700 md:h-[var(--map-h)]'
+                        : 'h-0'
+                    }`}
+                    style={
+                      {
+                        '--map-h': `${Math.max(160, mapHScaled)}px`,
+                      } as React.CSSProperties
+                    }
+                  >
+                    {mapOpen ? (
+                      <div
+                        className="pointer-events-auto relative h-full"
+                        onPointerDown={(e) => e.stopPropagation()}
                       >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-                        </svg>
-                      </Link>
-                      <MapView {...homeMapProps} heightClassName="h-[360px]" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Desktop map */}
-                <div
-                  className="relative mx-auto hidden h-[var(--map-h)] w-full max-w-full overflow-hidden rounded-lg md:block md:max-w-[var(--map-w)]"
-                  style={
-                    {
-                      width: '100%',
-                      '--map-w': `${mapW}px`,
-                      '--map-h': `${Math.max(160, mapHScaled)}px`,
-                    } as React.CSSProperties
-                  }
-                >
-                  <Link
-                    href={mapHref}
-                    className="absolute right-3 top-3 z-[400] rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-800 ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-zinc-900 dark:text-amber-400 dark:ring-zinc-600 dark:hover:bg-zinc-800"
-                  >
-                    {tr('map_open_full_view', 'რუკაზე ძებნა')}
-                  </Link>
-                  <Link
-                    href={mapHref}
-                    aria-label={tr('map_open_full_view', 'რუკაზე ძებნა')}
-                    title={tr('map_open_full_view', 'რუკაზე ძებნა')}
-                    className="absolute bottom-3 right-3 z-[1000] flex h-10 w-10 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
-                  >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-                    </svg>
-                  </Link>
-                  <MapView
-                    key={`home-map-${mapW}x${Math.max(160, mapH)}`}
-                    {...homeMapProps}
-                    heightClassName="h-full"
-                    className="h-full w-full"
-                  />
+                        <Link
+                          href={mapHref}
+                          aria-label={tr('map_open_full_view', 'რუკაზე ძებნა')}
+                          title={tr('map_open_full_view', 'რუკაზე ძებნა')}
+                          className="absolute bottom-3 right-3 z-[1000] flex h-10 w-10 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/80"
+                        >
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                          </svg>
+                        </Link>
+                        <MapView
+                          key={`home-map-${mapW}x${Math.max(160, mapH)}`}
+                          {...homeMapProps}
+                          heightClassName="h-full"
+                          className="h-full w-full"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </Designable>
 

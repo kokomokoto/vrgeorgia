@@ -53,6 +53,7 @@ import {
   spreadHeaderItemPositions,
   resolveRailItemsForMode,
   resolveTypePanelItemsForMode,
+  resolveHeroTextForMode,
   isRailSectionHiddenForMode,
   withRailSectionHidden,
   type DesignableId,
@@ -1014,7 +1015,9 @@ export function DesignInspector() {
             />
             <ColorField
               label="სათაურის ფერი"
-              value={layout.heroText.titleColor}
+              value={
+                resolveHeroTextForMode(layout.heroText, activeModeId || 'day').titleColor
+              }
               onChange={(titleColor) => updateHeroText({ titleColor })}
             />
           </div>
@@ -1033,10 +1036,16 @@ export function DesignInspector() {
             />
             <ColorField
               label="ქვესათაურის ფერი"
-              value={layout.heroText.subtitleColor}
+              value={
+                resolveHeroTextForMode(layout.heroText, activeModeId || 'day').subtitleColor
+              }
               onChange={(subtitleColor) => updateHeroText({ subtitleColor })}
             />
           </div>
+          <p className="text-[10px] leading-snug text-slate-400">
+            ფერები ინახება ამ რეჟიმში: <strong className="text-slate-600 dark:text-zinc-300">{activeModeLabel}</strong>.
+            სხვა რეჟიმზე გადართე და სხვა ფერი აირჩიე.
+          </p>
         </div>
       ) : null}
 

@@ -342,7 +342,7 @@ export function Designable({
         : id === 'typePanel'
           ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-[var(--d-h)] md:overflow-visible'
           : id === 'map'
-            ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:overflow-visible'
+            ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:overflow-visible'
             : id === 'listings'
               ? 'max-md:relative max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:overflow-visible'
               : id === 'serviceRail' || id === 'quickRail'
@@ -371,7 +371,8 @@ export function Designable({
             : {
                 width: '100%',
                 maxWidth: box.w,
-                ...(id === 'map' || id === 'typePanel' ? { height: dH } : null),
+                ...(id === 'typePanel' ? { height: dH } : null),
+                ...(id === 'map' ? { height: 'auto' } : null),
                 ...(id === 'search' || id === 'dealBar' || id === 'heroText'
                   ? { minHeight: dMinH, height: 'auto' }
                   : null),

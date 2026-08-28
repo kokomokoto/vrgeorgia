@@ -334,6 +334,8 @@ const resources = {
       // UI general
       categories: 'კატეგორიები',
       map: 'რუკა',
+      map_expand: 'რუკის ჩამოშლა',
+      map_collapse: 'რუკის ჩაკეცვა',
       map_open_full_view: 'რუკაზე ძებნა',
       map_full_view_title: 'ძიება რუკაზე',
       map_close_full: 'რუკის დახურვა',
@@ -1127,6 +1129,8 @@ const resources = {
       // UI general
       categories: 'Categories',
       map: 'Map',
+      map_expand: 'Show map',
+      map_collapse: 'Hide map',
       map_open_full_view: 'Full map view',
       map_full_view_title: 'Search on map',
       map_close_full: 'Close',
@@ -1906,6 +1910,8 @@ const resources = {
       // UI general
       categories: 'Категории',
       map: 'Карта',
+      map_expand: 'Показать карту',
+      map_collapse: 'Свернуть карту',
       map_open_full_view: 'Полный вид',
       map_full_view_title: 'Поиск на карте',
       map_close_full: 'Закрыть',

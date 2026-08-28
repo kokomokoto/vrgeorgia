@@ -1,6 +1,8 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Property } from '@/lib/types';
@@ -119,6 +121,72 @@ function closePinnedPropertyPopup(marker: any) {
   marker.closePopup?.();
 }
 
+type LeafletNS = typeof import('leaflet');
+
+function unwrapLeaflet(mod: LeafletNS | { default: LeafletNS }): LeafletNS {
+  return ((mod as { default?: LeafletNS }).default ?? mod) as LeafletNS;
+}
+
+async function loadLeaflet(): Promise<LeafletNS> {
+  return unwrapLeaflet(await import('leaflet'));
+}
+
+async function loadLeafletWithCluster(): Promise<LeafletNS> {
+  const L = await loadLeaflet();
+  if (typeof window !== 'undefined') {
+    (window as unknown as { L: LeafletNS }).L = L;
+  }
+  const clusterMod = (await import('leaflet.markercluster')) as {
+    MarkerClusterGroup?: new (options?: object) => unknown;
+    default?: { MarkerClusterGroup?: new (options?: object) => unknown };
+  };
+  const MarkerClusterGroup =
+    clusterMod.MarkerClusterGroup ||
+    clusterMod.default?.MarkerClusterGroup ||
+    (L as LeafletNS & { MarkerClusterGroup?: new (options?: object) => unknown }).MarkerClusterGroup;
+  if (typeof MarkerClusterGroup !== 'function') {
+    throw new Error('leaflet.markercluster failed to load MarkerClusterGroup');
+  }
+  const patched = L as LeafletNS & {
+    MarkerClusterGroup: typeof MarkerClusterGroup;
+    markerClusterGroup: (options?: object) => unknown;
+  };
+  patched.MarkerClusterGroup = MarkerClusterGroup;
+  patched.markerClusterGroup = (options?: object) => new MarkerClusterGroup(options);
+  return L;
+}
+
+function createPropertyClusterGroup(L: LeafletNS) {
+  const clusterGroup = (L as LeafletNS & { markerClusterGroup: (options: object) => any }).markerClusterGroup;
+  return clusterGroup({
+    chunkedLoading: true,
+    chunkDelay: 20,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+    zoomToBoundsOnClick: true,
+    disableClusteringAtZoom: 16,
+    maxClusterRadius: (zoom: number) => {
+      if (zoom <= 7) return 92;
+      if (zoom <= 10) return 72;
+      if (zoom <= 13) return 52;
+      return 40;
+    },
+    animate: true,
+    animateAddingMarkers: false,
+    iconCreateFunction: (cluster) => {
+      const n = cluster.getChildCount();
+      const sizeClass = n >= 100 ? 'lg' : n >= 25 ? 'md' : 'sm';
+      const px = n >= 100 ? 52 : n >= 25 ? 44 : 36;
+      return L.divIcon({
+        html: `<div class="map-cluster map-cluster--${sizeClass}"><span>${n}</span></div>`,
+        className: 'map-cluster-icon',
+        iconSize: [px, px],
+        iconAnchor: [Math.round(px / 2), Math.round(px / 2)],
+      });
+    },
+  });
+}
+
 interface MapInnerProps {
   properties: Property[];
   onPick?: (lat: number, lng: number) => void;
@@ -176,6 +244,7 @@ export default function MapInner({
   const onVisibleBoundsChangeRef = useRef(onVisibleBoundsChange);
   const selectedMarkerRef = useRef<any>(null);
   const propertyMarkersRef = useRef<Map<string, any>>(new Map());
+  const clusterGroupRef = useRef<any>(null);
   const listHoverPulseRef = useRef<any>(null);
   const propertiesRef = useRef(properties);
   const selectedPropertyIdRef = useRef(selectedPropertyId);
@@ -249,7 +318,7 @@ export default function MapInner({
     let createdMap: any = null;
 
     const initMap = async () => {
-      const L = await import('leaflet');
+      const L = await loadLeaflet();
       if (cancelled || mapInstanceRef.current) return;
 
       const container = mapRef.current;
@@ -316,6 +385,7 @@ export default function MapInner({
       }
       mapInstanceRef.current = null;
       tileLayerRef.current = null;
+      clusterGroupRef.current = null;
     };
   }, []);
 
@@ -336,9 +406,12 @@ export default function MapInner({
 
   useEffect(() => {
     if (!mapInstanceRef.current || !ready) return;
+    let cancelled = false;
 
-    import('leaflet').then((L) => {
+    void loadLeafletWithCluster().then((L) => {
+      if (cancelled) return;
       const map = mapInstanceRef.current;
+      if (!map) return;
 
       const markerColors: Record<string, string> = {
         apartment: 'blue',
@@ -368,16 +441,22 @@ export default function MapInner({
         listHoverPulseRef.current = null;
       }
 
-      map.eachLayer((layer: any) => {
-        if (layer instanceof L.Marker && layer !== selectedMarkerRef.current) {
-          map.removeLayer(layer);
-        }
-      });
+      let clusterGroup = clusterGroupRef.current;
+      if (!clusterGroup || !map.hasLayer(clusterGroup)) {
+        clusterGroup = createPropertyClusterGroup(L);
+        clusterGroupRef.current = clusterGroup;
+        map.addLayer(clusterGroup);
+      } else {
+        clusterGroup.clearLayers();
+      }
       propertyMarkersRef.current.clear();
 
       const openOnNavigate = Boolean(onPropertyNavigateRef.current);
 
       properties.forEach((p) => {
+        const lat = p.location?.lat;
+        const lng = p.location?.lng;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
         let marker: any;
 
         if (markerStyle === 'price') {
@@ -388,17 +467,18 @@ export default function MapInner({
             iconSize: [88, 28],
             iconAnchor: [44, 14]
           });
-          marker = L.marker([p.location.lat, p.location.lng], { icon, zIndexOffset: 0 }).addTo(map);
+          marker = L.marker([p.location.lat, p.location.lng], { icon, zIndexOffset: 0 });
         } else {
           const color = markerColors[p.type] || 'blue';
           const icon = createColoredIcon(color);
-          marker = L.marker([p.location.lat, p.location.lng], { icon, zIndexOffset: 0 }).addTo(map);
+          marker = L.marker([p.location.lat, p.location.lng], { icon, zIndexOffset: 0 });
         }
 
         const tooltipOffset: [number, number] = [0, markerStyle === 'price' ? -14 : -36];
         const richCardHtml = buildHoverTooltipHtml(p);
 
         propertyMarkersRef.current.set(p._id, marker);
+        clusterGroup.addLayer(marker);
 
         if (richHoverTooltips) {
           marker.bindTooltip(richCardHtml, {
@@ -552,12 +632,15 @@ export default function MapInner({
       });
       reportVisibleBounds();
     });
+    return () => {
+      cancelled = true;
+    };
   }, [properties, ready, markerStyle, richHoverTooltips]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || !ready || !richHoverTooltips) return;
 
-    import('leaflet').then((L) => {
+    loadLeaflet().then((L) => {
       const map = mapInstanceRef.current;
       const selected = selectedPropertyId;
       const hovered = hoveredPropertyId;
@@ -635,9 +718,15 @@ export default function MapInner({
             map.panTo(ll, { animate: true, duration: 0.35 });
           }
         }
-      } else if (selected) {
+      } else if (selected && selected !== prevSelected) {
         const p = propertiesRef.current.find((x) => x._id === selected);
-        if (p?.location) {
+        const marker = propertyMarkersRef.current.get(selected);
+        const group = clusterGroupRef.current;
+        if (marker && group && typeof group.zoomToShowLayer === 'function') {
+          group.zoomToShowLayer(marker, () => {
+            if (p) openPinnedPropertyPopup(marker, p);
+          });
+        } else if (p?.location) {
           const ll = L.latLng(p.location.lat, p.location.lng);
           if (!map.getBounds().pad(0.06).contains(ll)) {
             map.panTo(ll, { animate: true, duration: 0.35 });
@@ -650,7 +739,7 @@ export default function MapInner({
   useEffect(() => {
     if (!mapInstanceRef.current || !ready) return;
 
-    import('leaflet').then((L) => {
+    loadLeaflet().then((L) => {
       const map = mapInstanceRef.current;
 
       if (selectedMarkerRef.current) {

@@ -21,6 +21,7 @@ import {
   HERO_MOBILE_H_MIN,
   HERO_MOBILE_STACK_GAP_DEFAULT,
   clampOpacity,
+  resolveHeroTextForMode,
 } from '@/lib/homeDesignLayout';
 
 const DRAG_THRESHOLD_PX = 3;
@@ -45,6 +46,10 @@ export function HomeHero({
   const deal = design?.layout.dealBar;
   const hero = design?.layout.hero;
   const heroText = design?.layout.heroText;
+  const resolvedHeroText = React.useMemo(
+    () => (heroText ? resolveHeroTextForMode(heroText, activeModeId || 'day') : null),
+    [heroText, activeModeId]
+  );
   const searchW = search?.w ?? 1280;
   const searchHRaw = Math.min(120, search?.h ?? 88);
   const dealW = deal?.w ?? 480;
@@ -68,8 +73,8 @@ export function HomeHero({
   /** Desktop sizes via CSS `md:`; phone uses the stacked defaults below md. */
   const titleFontSize = scaleDesignPx(heroText?.titleFontSize ?? 32, designScale, 14);
   const subtitleFontSize = scaleDesignPx(heroText?.subtitleFontSize ?? 14, designScale, 10);
-  const titleColor = heroText?.titleColor ?? '#ffffff';
-  const subtitleColor = heroText?.subtitleColor ?? '#e5e5e5';
+  const titleColor = resolvedHeroText?.titleColor ?? '#ffffff';
+  const subtitleColor = resolvedHeroText?.subtitleColor ?? '#e5e5e5';
 
   const { slideshowModeId, imageIds } = React.useMemo(() => {
     const modes =

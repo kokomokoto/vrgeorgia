@@ -333,6 +333,8 @@ export function Designable({
     id === 'listings' ? 200 : id === 'map' ? 160 : id === 'typePanel' ? 80 : 40
   );
   const dMinH = scaleDesignPx(box.h, designScale, id === 'listings' ? 200 : 40);
+  /** Public stacked blocks: relative `top` overlaps neighbors (map vs listings). Design Mode keeps Y nudge. */
+  const stackTopClass = designMode ? 'md:top-[var(--d-y)]' : 'md:top-0';
 
   const geometryClass =
     id === 'heroText'
@@ -340,11 +342,11 @@ export function Designable({
       : id === 'search' || id === 'dealBar'
         ? `${id === 'search' ? 'max-md:min-h-[52px] ' : ''}max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:overflow-visible`
         : id === 'typePanel'
-          ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-[var(--d-h)] md:overflow-visible'
+          ? `max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] ${stackTopClass} md:h-[var(--d-h)] md:overflow-visible`
           : id === 'map'
-            ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:overflow-visible'
+            ? `max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] ${stackTopClass} md:h-auto md:overflow-visible`
             : id === 'listings'
-              ? 'max-md:relative max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:overflow-visible'
+              ? `max-md:relative max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] ${stackTopClass} md:overflow-visible`
               : id === 'serviceRail' || id === 'quickRail'
                 ? 'max-md:relative md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-[var(--d-h)] md:w-[var(--d-w)]'
                 : 'max-md:relative md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-[var(--d-h)] md:w-full md:max-w-[var(--d-max-w)]';

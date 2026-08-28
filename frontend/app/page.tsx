@@ -359,7 +359,7 @@ export default function HomePage() {
           className="relative z-0 mx-auto min-w-0 w-full max-w-full md:max-w-[var(--center-w)]"
           style={{ '--center-w': `${centerW}px` } as React.CSSProperties}
         >
-            <div className="flex w-full flex-col max-md:[gap:var(--mobile-stack)] sm:space-y-4 md:block">
+            <div className="flex w-full flex-col max-md:[gap:var(--mobile-stack)] md:gap-4">
               <Designable id="typePanel">
                 <div
                   className="mx-auto h-auto w-full max-w-full md:h-full md:max-w-[var(--type-w)]"
@@ -485,7 +485,7 @@ export default function HomePage() {
                 ) : null}
               </div>
 
-              <Designable id="listings" className="sm:mt-6">
+              <Designable id="listings">
                 <div
                   className="grid w-full gap-4 max-w-full md:max-w-[var(--listings-w)] md:min-h-[var(--listings-min-h)]"
                   style={

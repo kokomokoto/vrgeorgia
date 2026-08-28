@@ -819,7 +819,7 @@ export function HomeTypePanel({
   );
 }
 
-/** Land status chips — render outside the typePanel Designable box so it is not clipped */
+/** Land status chips — outside typePanel so Designable height does not clip them */
 export function HomeLandStatusPanel({
   filters,
   onPatch,
@@ -832,35 +832,37 @@ export function HomeLandStatusPanel({
   if (!filters.type.includes('land')) return null;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
-      <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
-        {tr('filter_land_status', 'მიწის სტატუსი')}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {LAND_STATUS_OPTIONS.map((item) => {
-          const selected = (filters.landStatus || []).includes(item.value);
-          return (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() =>
-                onPatch((prev) => ({
-                  ...prev,
-                  landStatus: selected
-                    ? (prev.landStatus || []).filter((s) => s !== item.value)
-                    : [...(prev.landStatus || []), item.value],
-                }))
-              }
-              className={`rounded-lg border px-3 py-2 text-xs font-medium transition-all ${
-                selected
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
-              }`}
-            >
-              {tr(item.labelKey, item.value)}
-            </button>
-          );
-        })}
+    <div className="relative z-10 mx-auto w-full max-w-full rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className="shrink-0 text-xs font-semibold text-slate-500 dark:text-zinc-400">
+          {tr('filter_land_status', 'მიწის სტატუსი')}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {LAND_STATUS_OPTIONS.map((item) => {
+            const selected = (filters.landStatus || []).includes(item.value);
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() =>
+                  onPatch((prev) => ({
+                    ...prev,
+                    landStatus: selected
+                      ? (prev.landStatus || []).filter((s) => s !== item.value)
+                      : [...(prev.landStatus || []), item.value],
+                  }))
+                }
+                className={`inline-flex min-h-9 items-center whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium leading-5 transition-colors ${
+                  selected
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300'
+                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50 dark:border-zinc-500 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-400'
+                }`}
+              >
+                {tr(item.labelKey, item.value)}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

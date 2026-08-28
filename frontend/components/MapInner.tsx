@@ -143,17 +143,14 @@ async function loadLeafletWithCluster(): Promise<LeafletNS> {
   const MarkerClusterGroup =
     clusterMod.MarkerClusterGroup ||
     clusterMod.default?.MarkerClusterGroup ||
-    (L as LeafletNS & { MarkerClusterGroup?: new (options?: object) => unknown }).MarkerClusterGroup;
+    (L as { MarkerClusterGroup?: new (options?: object) => unknown }).MarkerClusterGroup;
   if (typeof MarkerClusterGroup !== 'function') {
     throw new Error('leaflet.markercluster failed to load MarkerClusterGroup');
   }
-  const patched = L as LeafletNS & {
-    MarkerClusterGroup: typeof MarkerClusterGroup;
-    markerClusterGroup: (options?: object) => unknown;
-  };
-  patched.MarkerClusterGroup = MarkerClusterGroup;
-  patched.markerClusterGroup = (options?: object) => new MarkerClusterGroup(options);
-  return L;
+  const leafletAny = L as any;
+  leafletAny.MarkerClusterGroup = MarkerClusterGroup;
+  leafletAny.markerClusterGroup = (options?: object) => new MarkerClusterGroup(options);
+  return L as LeafletNS;
 }
 
 function createPropertyClusterGroup(L: LeafletNS) {

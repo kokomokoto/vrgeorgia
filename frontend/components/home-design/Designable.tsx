@@ -10,6 +10,15 @@ import {
 } from '@/lib/homeDesignLayout';
 import { scaleDesignPx, scaleDesignOffset, useHomeDesignScale, useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
 import { HERO_W } from '@/components/home-design/HeroSlideshow';
+import {
+  clearDesignSnapGuides,
+  collectDesignSnapTargets,
+  offsetRect,
+  rectFromDom,
+  setDesignSnapGuides,
+  snapRectToTargets,
+  type SnapRect,
+} from '@/lib/designSnap';
 
 type DesignableProps = {
   id: Exclude<DesignableId, 'hero' | 'header' | 'theme' | 'social'>;
@@ -133,6 +142,7 @@ export function Designable({
     origY: number;
     origItemW: number;
     origItemH: number;
+    origRect: SnapRect | null;
     historyStarted: boolean;
   } | null>(null);
 
@@ -218,6 +228,7 @@ export function Designable({
       origY: canNudgeMobile ? box.mobileY : box.y,
       origItemW: box.itemW,
       origItemH: box.itemH,
+      origRect: rectFromDom(e.currentTarget as HTMLElement, id),
       historyStarted: false,
     };
   };
@@ -262,7 +273,18 @@ export function Designable({
         }
         return;
       }
-      applyPatch({ x: d.origX + dx, y: d.origY + dy });
+      if (d.origRect && !e.ctrlKey) {
+        const proposed = offsetRect(d.origRect, dx, dy);
+        const snap = snapRectToTargets(
+          proposed,
+          collectDesignSnapTargets('blocks', { designable: id })
+        );
+        applyPatch({ x: d.origX + dx + snap.dx, y: d.origY + dy + snap.dy });
+        setDesignSnapGuides(snap.guides);
+      } else {
+        applyPatch({ x: d.origX + dx, y: d.origY + dy });
+        clearDesignSnapGuides();
+      }
       return;
     }
     if (!applyGeometry) {
@@ -287,6 +309,7 @@ export function Designable({
     const started = dragRef.current.historyStarted;
     dragRef.current = null;
     setActiveEditParams([]);
+    clearDesignSnapGuides();
     if (started) endHistoryGesture();
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);

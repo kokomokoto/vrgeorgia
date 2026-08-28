@@ -27,6 +27,12 @@ import {
   type TypePanelItem,
 } from '@/lib/homeDesignLayout';
 import { scaleDesignPx } from '@/lib/useIsDesignDesktop';
+import {
+  clearDesignSnapGuides,
+  collectDesignSnapTargets,
+  setDesignSnapGuides,
+  snapPointToTargets,
+} from '@/lib/designSnap';
 import { resolveHeroImageUrls, revokeHeroUrls } from '@/lib/heroImageStorage';
 import {
   externalMediaDisplayUrl,
@@ -322,8 +328,25 @@ function useTypePanelItemDrag(enabled: boolean) {
       const d = dragRef.current;
       if (d.kind === 'text') {
         if (d.box.width <= 0 || d.box.height <= 0) return;
-        const x = clampRailPercent(((e.clientX - d.box.left) / d.box.width) * 100, 50);
-        const y = clampRailPercent(((e.clientY - d.box.top) / d.box.height) * 100, 50);
+        let x = clampRailPercent(((e.clientX - d.box.left) / d.box.width) * 100, 50);
+        let y = clampRailPercent(((e.clientY - d.box.top) / d.box.height) * 100, 50);
+        if (!e.ctrlKey) {
+          const px = d.box.left + (x / 100) * d.box.width;
+          const py = d.box.top + (y / 100) * d.box.height;
+          const snapped = snapPointToTargets(
+            px,
+            py,
+            collectDesignSnapTargets('chips', {
+              chip: `${d.itemId}:${d.layer}`,
+              typeCard: d.itemId,
+            })
+          );
+          x = clampRailPercent(((snapped.x - d.box.left) / d.box.width) * 100, 50);
+          y = clampRailPercent(((snapped.y - d.box.top) / d.box.height) * 100, 50);
+          setDesignSnapGuides(snapped.guides);
+        } else {
+          clearDesignSnapGuides();
+        }
         if (d.layer === 'label') design.updateTypePanelItem(d.itemId, { labelX: x, labelY: y });
         else if (d.layer === 'count') design.updateTypePanelItem(d.itemId, { countX: x, countY: y });
         else design.updateTypePanelItem(d.itemId, { iconX: x, iconY: y });
@@ -331,8 +354,25 @@ function useTypePanelItemDrag(enabled: boolean) {
       }
       if (d.kind === 'media') {
         if (d.box.width <= 0 || d.box.height <= 0) return;
-        const x = clampRailPercent(d.origX + ((e.clientX - d.startX) / d.box.width) * 100, 50);
-        const y = clampRailPercent(d.origY + ((e.clientY - d.startY) / d.box.height) * 100, 50);
+        let x = clampRailPercent(d.origX + ((e.clientX - d.startX) / d.box.width) * 100, 50);
+        let y = clampRailPercent(d.origY + ((e.clientY - d.startY) / d.box.height) * 100, 50);
+        if (!e.ctrlKey) {
+          const px = d.box.left + (x / 100) * d.box.width;
+          const py = d.box.top + (y / 100) * d.box.height;
+          const snapped = snapPointToTargets(
+            px,
+            py,
+            collectDesignSnapTargets('chips', {
+              chip: `${d.itemId}:media`,
+              typeCard: d.itemId,
+            })
+          );
+          x = clampRailPercent(((snapped.x - d.box.left) / d.box.width) * 100, 50);
+          y = clampRailPercent(((snapped.y - d.box.top) / d.box.height) * 100, 50);
+          setDesignSnapGuides(snapped.guides);
+        } else {
+          clearDesignSnapGuides();
+        }
         design.updateTypePanelItem(d.itemId, { mediaX: x, mediaY: y });
         return;
       }
@@ -358,6 +398,7 @@ function useTypePanelItemDrag(enabled: boolean) {
       const scaleDrag = dragRef.current.kind === 'scale' ? dragRef.current : null;
       dragRef.current = null;
       design.setActiveEditParams([]);
+      clearDesignSnapGuides();
       if (!scaleDrag || scaleDrag.historyStarted) design.endHistoryGesture();
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -398,6 +439,7 @@ function TypeTextChip({
 }) {
   return (
     <span
+      data-design-chip={`${itemId}:${layer}`}
       className={`absolute z-[2] px-0.5 text-center leading-tight ${
         designMode
           ? 'pointer-events-auto cursor-grab touch-none select-none rounded-md ring-1 ring-blue-500/70 active:cursor-grabbing'

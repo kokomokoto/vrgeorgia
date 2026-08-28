@@ -595,6 +595,10 @@ export function DesignInspector() {
               ↪
             </button>
           </div>
+          <p className="mb-2 text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+            გადაათრიე — ვარდისფერი ხაზები აჩვენებს გასწორებას (ცენტრი, კიდეები, სხვა წარწერები).
+            Shift ჰორიზონტალი, Alt ვერტიკალი, Ctrl snap-ის გარეშე.
+          </p>
 
           <div className="mb-2 grid grid-cols-2 gap-1.5">
             <label className="block">

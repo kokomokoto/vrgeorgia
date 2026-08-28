@@ -23,6 +23,12 @@ import {
   externalMediaDisplayUrl,
   type DesignMediaKind,
 } from '@/lib/designMedia';
+import {
+  clearDesignSnapGuides,
+  collectDesignSnapTargets,
+  setDesignSnapGuides,
+  snapPointToTargets,
+} from '@/lib/designSnap';
 
 type RailMedia = {
   url?: string;
@@ -150,8 +156,22 @@ function useRailLabelDrag(
       e.stopPropagation();
       const { itemId, box } = dragRef.current;
       if (box.width <= 0 || box.height <= 0) return;
-      const labelX = clampRailPercent(((e.clientX - box.left) / box.width) * 100, 50);
-      const labelY = clampRailPercent(((e.clientY - box.top) / box.height) * 100, 50);
+      let labelX = clampRailPercent(((e.clientX - box.left) / box.width) * 100, 50);
+      let labelY = clampRailPercent(((e.clientY - box.top) / box.height) * 100, 50);
+      if (!e.ctrlKey) {
+        const px = box.left + (labelX / 100) * box.width;
+        const py = box.top + (labelY / 100) * box.height;
+        const snapped = snapPointToTargets(
+          px,
+          py,
+          collectDesignSnapTargets('rails', { railLabel: itemId, railItem: itemId })
+        );
+        labelX = clampRailPercent(((snapped.x - box.left) / box.width) * 100, 50);
+        labelY = clampRailPercent(((snapped.y - box.top) / box.height) * 100, 50);
+        setDesignSnapGuides(snapped.guides);
+      } else {
+        clearDesignSnapGuides();
+      }
       design.updateRailItem(rail, itemId, { labelX, labelY });
     },
     [design, enabled, rail]
@@ -164,6 +184,7 @@ function useRailLabelDrag(
       e.stopPropagation();
       dragRef.current = null;
       design.setActiveEditParams([]);
+      clearDesignSnapGuides();
       design.endHistoryGesture();
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -203,6 +224,7 @@ function RailLabel({
 
   return (
     <span
+      data-design-rail-label={item.id}
       className={`absolute z-[1] max-w-[82%] px-2 text-center leading-tight font-semibold ${
         designMode ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : 'pointer-events-none'
       } ${onImage ? 'drop-shadow' : ''} ${

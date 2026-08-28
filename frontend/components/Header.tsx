@@ -38,6 +38,13 @@ import {
   measureHeaderItemSizes,
   seedVisibleHeaderPositions,
 } from '@/lib/headerCanvasMeasure';
+import {
+  clearDesignSnapGuides,
+  collectDesignSnapTargets,
+  rectFromValues,
+  setDesignSnapGuides,
+  snapRectToTargets,
+} from '@/lib/designSnap';
 import { resolveActiveThemeMode } from '@/lib/themeModes';
 import { resolveHeroImageUrls, revokeHeroUrls } from '@/lib/heroImageStorage';
 import { clearHomeFiltersStorage } from '@/lib/homeFiltersStorage';
@@ -212,7 +219,8 @@ function useHeaderItemDrag(enabled: boolean) {
       clientX: number,
       clientY: number,
       shiftKey: boolean,
-      altKey: boolean
+      altKey: boolean,
+      ctrlKey: boolean
     ) => {
       const designNow = designRef.current;
       if (!designNow || !dragRef.current) return;
@@ -233,6 +241,24 @@ function useHeaderItemDrag(enabled: boolean) {
       let y = clampRailPercent(((clientY - box.top) / box.height) * 100 - drag.grabDyPct, 50);
       if (axisLock === 'x') y = drag.lockY;
       if (axisLock === 'y') x = drag.lockX;
+      if (!ctrlKey) {
+        const size = sizes[drag.itemId];
+        const w = size ? (size.wPct / 100) * box.width : 1;
+        const h = size ? (size.hPct / 100) * box.height : 1;
+        const cx = box.left + (x / 100) * box.width;
+        const cy = box.top + (y / 100) * box.height;
+        const snap = snapRectToTargets(
+          rectFromValues(drag.itemId, cx - w / 2, cy - h / 2, Math.max(w, 1), Math.max(h, 1)),
+          collectDesignSnapTargets('header', { headerItem: drag.itemId })
+        );
+        x = clampRailPercent(((cx + snap.dx - box.left) / box.width) * 100, 50);
+        y = clampRailPercent(((cy + snap.dy - box.top) / box.height) * 100, 50);
+        if (axisLock === 'x') y = drag.lockY;
+        if (axisLock === 'y') x = drag.lockX;
+        setDesignSnapGuides(snap.guides);
+      } else {
+        clearDesignSnapGuides();
+      }
       const seeded = seedVisibleHeaderPositions(
         designNow.layout.header.itemPositions,
         drag.host
@@ -283,12 +309,13 @@ function useHeaderItemDrag(enabled: boolean) {
       }
       dragRef.current = null;
       designNow.setActiveEditParams([]);
+      clearDesignSnapGuides();
     };
 
     const onMove = (e: PointerEvent) => {
       if (!dragRef.current || e.pointerId !== dragRef.current.pointerId) return;
       e.preventDefault();
-      applyDragPoint(e.clientX, e.clientY, e.shiftKey, e.altKey);
+      applyDragPoint(e.clientX, e.clientY, e.shiftKey, e.altKey, e.ctrlKey);
     };
     const onUp = (e: PointerEvent) => {
       finishDrag(e.pointerId);

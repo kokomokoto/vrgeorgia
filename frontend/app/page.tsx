@@ -319,6 +319,7 @@ export default function HomePage() {
         ) : null}
 
         <div
+          data-design-center
           className="relative z-0 mx-auto min-w-0 w-full max-w-full md:max-w-[var(--center-w)]"
           style={{ '--center-w': `${centerW}px` } as React.CSSProperties}
         >

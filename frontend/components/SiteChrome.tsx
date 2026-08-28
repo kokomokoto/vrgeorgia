@@ -7,6 +7,7 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { HomeDesignProvider } from '@/components/home-design/HomeDesignContext';
 import { DesignInspector } from '@/components/home-design/DesignInspector';
+import { DesignSnapGuides } from '@/components/home-design/DesignSnapGuides';
 import { ThemePaletteApplier } from '@/components/ThemePaletteApplier';
 import type { HomeDesignLayout } from '@/lib/homeDesignLayout';
 
@@ -52,7 +53,12 @@ export function SiteChrome({
         {children}
       </main>
       {!adminPanel && <Footer />}
-      {homePage ? <DesignInspector /> : null}
+      {homePage ? (
+        <>
+          <DesignSnapGuides />
+          <DesignInspector />
+        </>
+      ) : null}
     </HomeDesignProvider>
   );
 }

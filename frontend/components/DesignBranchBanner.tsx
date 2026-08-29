@@ -19,18 +19,20 @@ export function DesignBranchBanner() {
 
   if (designOn) {
     return (
-      <div
-        role="status"
-        className="sticky top-0 z-[300] flex items-center justify-center gap-2 border-b border-blue-800/30 bg-blue-700 px-3 py-1.5 text-center text-xs font-semibold text-white shadow-sm"
-      >
-        <span>რედაქტირების რეჟიმი{design?.isDirty ? ' · შეუნახავი' : ''}</span>
-        <button
-          type="button"
-          onClick={() => design?.setDesignMode(false)}
-          className="rounded-md bg-white/15 px-2.5 py-0.5 text-[11px] font-bold hover:bg-white/25"
+      <div className="pointer-events-none fixed inset-x-0 top-2 z-[300] flex justify-center">
+        <div
+          role="status"
+          className="pointer-events-auto flex items-center justify-center gap-2 rounded-full bg-blue-700 px-3 py-1.5 text-center text-xs font-semibold text-white shadow-lg"
         >
-          გამორთვა
-        </button>
+          <span>რედაქტირების რეჟიმი{design?.isDirty ? ' · შეუნახავი' : ''}</span>
+          <button
+            type="button"
+            onClick={() => design?.setDesignMode(false)}
+            className="rounded-md bg-white/15 px-2.5 py-0.5 text-[11px] font-bold hover:bg-white/25"
+          >
+            გამორთვა
+          </button>
+        </div>
       </div>
     );
   }

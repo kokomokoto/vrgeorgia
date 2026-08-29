@@ -246,10 +246,6 @@ export default function HomePage() {
     };
   }, [filters, sortBy, i18n.language, filtersHydrated, currentPage]);
 
-  React.useEffect(() => {
-    if (designMode) setMapOpen(true);
-  }, [designMode]);
-
   const mapQueryKey = `${sortBy}|${i18n.language}|${JSON.stringify(filters)}`;
 
   React.useEffect(() => {
@@ -320,6 +316,8 @@ export default function HomePage() {
           value={filters}
           onChange={handleFiltersChange}
           variant="heroCompact"
+          categoryCounts={categoryCounts}
+          designMode={designMode}
         />
       </HomeHero>
 
@@ -360,7 +358,7 @@ export default function HomePage() {
           style={{ '--center-w': `${centerW}px` } as React.CSSProperties}
         >
             <div className="flex w-full flex-col max-md:[gap:var(--mobile-stack)] md:gap-4">
-              <Designable id="typePanel">
+              <Designable id="typePanel" className="max-md:hidden">
                 <div
                   className="mx-auto h-auto w-full max-w-full md:h-full md:max-w-[var(--type-w)]"
                   style={
@@ -371,6 +369,7 @@ export default function HomePage() {
                   }
                 >
                   <HomeTypePanel
+                    hideMobile
                     filters={filters}
                     onPatch={patchFilters}
                     categoryCounts={categoryCounts}

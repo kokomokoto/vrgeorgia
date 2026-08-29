@@ -26,7 +26,6 @@ import {
   headerPositionsEqual,
   resolveHeaderItemNoOverlap,
   resolveHeaderItemPos,
-  spreadHeaderItemPositions,
   syncHeaderAccountSlotPositions,
   type HeaderItemId,
   type HeaderItemPos,
@@ -506,7 +505,7 @@ export function Header() {
   const headerHRaw = headerLayout?.h ?? DEFAULT_HEADER.h;
   const designScale = useHomeDesignScale(1280);
   const typeScale = useHomeDesignScale(HEADER_PACK_REF_WIDTH);
-  const fontScale = designMode ? designScale : typeScale;
+  const fontScale = typeScale;
   const headerH = scaleDesignPx(headerHRaw, designScale, 36);
   const itemPositions = headerLayout?.itemPositions;
   const freeLayoutUsable =
@@ -514,11 +513,10 @@ export function Header() {
   const [navOverflow, setNavOverflow] = React.useState(false);
   const navOverflowRef = React.useRef(false);
   /**
-   * Public page: free layout only when saved positions are readable and the
-   * live labels still fit this viewport (zoom / other monitor / OS DPI).
-   * Design Mode always uses free/absolute items so labels can be dragged.
+   * Same nav mode as the public page so Design Mode is WYSIWYG.
+   * Drag still works when free layout is what visitors see.
    */
-  const useFreeNav = designMode || (freeLayoutUsable && !navOverflow);
+  const useFreeNav = freeLayoutUsable && !navOverflow;
   const drag = useHeaderItemDrag(designMode);
   const itemPadKey = JSON.stringify(headerItemPadPxById(headerLayout?.itemStyles));
   const designRef = React.useRef(design);
@@ -526,37 +524,6 @@ export function Header() {
   const [publicPositions, setPublicPositions] = React.useState<
     Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
   >(undefined);
-
-  React.useEffect(() => {
-    if (!designMode) return;
-    let cancelled = false;
-    let raf = 0;
-    const run = () => {
-      const designNow = designRef.current;
-      if (cancelled || !designNow || drag.dragRef.current?.historyStarted) return;
-      const header = designNow.layout.header;
-      const opts = liveHeaderOverlapOpts(header);
-      if (!opts?.visibleIds?.length) return;
-      const host = document.querySelector('[data-header-canvas]');
-      if (!(host instanceof HTMLElement)) return;
-      const box = host.getBoundingClientRect();
-      if (box.width <= 0) return;
-      const seeded = seedVisibleHeaderPositions(header.itemPositions, host);
-      for (const id of opts.visibleIds) {
-        if (!seeded[id]) seeded[id] = resolveHeaderItemPos(header.itemPositions, id);
-      }
-      const next = spreadHeaderItemPositions(seeded, opts);
-      if (headerPositionsEqual(header.itemPositions, next)) return;
-      designNow.updateHeader({ itemPositions: next });
-    };
-    raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(run);
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-    };
-  }, [designMode, drag.dragRef, headerHRaw, headerLayout?.itemGapPx, itemPadKey]);
 
   const selectHeaderRoot = React.useCallback(() => {
     design?.setSelectedId('header');
@@ -668,7 +635,7 @@ export function Header() {
   const isAgent = profileLoaded && isAgentRole(user?.role);
 
   React.useLayoutEffect(() => {
-    if (designMode || !freeLayoutUsable) {
+    if (!freeLayoutUsable) {
       navOverflowRef.current = false;
       setNavOverflow(false);
       setPublicPositions(undefined);
@@ -679,6 +646,7 @@ export function Header() {
     let emptyTries = 0;
     const run = () => {
       if (cancelled) return;
+      if (designMode && drag.dragRef.current?.historyStarted) return;
       if (window.innerWidth < DESIGN_WIDE_MIN_WIDTH) return;
       const header = designRef.current?.layout.header;
       const opts = liveHeaderOverlapOpts(header);
@@ -794,7 +762,7 @@ export function Header() {
   };
 
   const pos = (id: HeaderItemId) => {
-    const source = designMode ? itemPositions : publicPositions || itemPositions;
+    const source = publicPositions || itemPositions;
     if (!designMode && !user && id === 'login') {
       const loginPos = resolveHeaderItemPos(source, 'login');
       const profilePos = source?.profile;
@@ -1293,7 +1261,7 @@ export function Header() {
 
       {designMode ? (
         <div
-          className="absolute bottom-0 left-0 right-0 z-30 flex h-3 cursor-ns-resize items-center justify-center bg-blue-600/80"
+          className="absolute bottom-0 left-1/2 z-30 flex h-3 w-12 -translate-x-1/2 cursor-ns-resize items-center justify-center rounded-t-md bg-blue-600/80"
           title="ჰედერის სიმაღლე"
           onPointerDown={onHeightPointerDown}
           onPointerMove={onHeightPointerMove}

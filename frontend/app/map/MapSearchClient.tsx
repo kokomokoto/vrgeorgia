@@ -145,7 +145,7 @@ export default function MapSearchClient() {
           className={`relative flex shrink-0 flex-col border-b border-slate-200 bg-white transition-[width,max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:border-b-0 lg:border-r ${
             filtersCollapsed
               ? 'max-h-12 lg:w-11 lg:max-w-11'
-              : 'max-h-[min(50vh,420px)] lg:w-[min(20.8rem,74vw)] lg:max-w-[20.8rem]'
+              : 'max-h-[min(62vh,560px)] lg:w-[min(20.8rem,74vw)] lg:max-w-[20.8rem]'
           }`}
         >
           {filtersCollapsed ? (
@@ -165,11 +165,11 @@ export default function MapSearchClient() {
             </button>
           ) : (
             <>
-              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-white px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
                 <button
                   type="button"
                   onClick={() => router.push('/')}
-                  className="flex h-8 items-center gap-1.5 rounded-md px-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   aria-label={tr('map_back', 'უკან')}
                   title={tr('map_back', 'უკან')}
                 >
@@ -181,7 +181,7 @@ export default function MapSearchClient() {
                 <button
                   type="button"
                   onClick={() => setFiltersCollapsed(true)}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                   aria-label={tr('map_collapse_filters', 'ფილტრების შეკეცვა')}
                   title={tr('map_collapse_filters', 'ფილტრების შეკეცვა')}
                 >

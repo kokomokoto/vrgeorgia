@@ -564,6 +564,63 @@ function TypeCategoryCard({
     return () => el.removeEventListener('wheel', onWheel);
   }, [canEditMedia, isDesignSelected, mediaScale, design, cat.value]);
 
+  if (compact) {
+    const thumbUrl = media?.url && media.kind !== 'video' ? media.url : undefined;
+    const selectedText =
+      isFilterSelected && !designMode
+        ? 'text-blue-700 dark:text-amber-400'
+        : 'text-slate-700 dark:text-zinc-200';
+    return (
+      <button
+        ref={cardRef}
+        type="button"
+        data-type-item={cat.value}
+        onClick={
+          designMode
+            ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                drag.selectCard(cat.value);
+              }
+            : onFilterToggle
+        }
+        className={`flex min-h-11 min-w-0 items-center gap-1.5 overflow-hidden rounded-xl border px-1.5 py-1.5 text-left transition-colors ${
+          isDesignSelected
+            ? 'border-blue-600 ring-2 ring-blue-400/50 dark:border-blue-400'
+            : isFilterSelected
+              ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500 dark:border-amber-500 dark:bg-amber-950/40 dark:ring-amber-500'
+              : 'border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
+        }`}
+        style={{ opacity: clampOpacity(item.opacity) }}
+      >
+        <span
+          className={`grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg ${
+            isFilterSelected ? 'bg-blue-100 dark:bg-amber-950/50' : 'bg-slate-100 dark:bg-zinc-800'
+          }`}
+          aria-hidden
+        >
+          {thumbUrl ? (
+            <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-base leading-none">{item.icon || fallbackIcon}</span>
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          {item.labelHidden !== true ? (
+            <span className={`block truncate text-[13px] font-medium leading-5 ${selectedText}`}>
+              {displayLabel}
+            </span>
+          ) : null}
+          {item.countHidden !== true ? (
+            <span className="block truncate text-[11px] leading-4 text-slate-400 dark:text-zinc-500">
+              {count}
+            </span>
+          ) : null}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <button
       ref={cardRef}
@@ -717,6 +774,10 @@ type HomeTypePanelProps = {
   gap?: number;
   /** Uniform shrink with the rest of the homepage design canvas */
   designScale?: number;
+  /** Phone accordion only — used inside homepage filters */
+  mobileOnly?: boolean;
+  /** Hide the phone accordion (desktop grid only) */
+  hideMobile?: boolean;
 };
 
 /** Homepage property-type grid only (land status is a sibling outside the sized box) */
@@ -729,6 +790,8 @@ export function HomeTypePanel({
   pad = 10,
   gap = 12,
   designScale = 1,
+  mobileOnly = false,
+  hideMobile = false,
 }: HomeTypePanelProps) {
   const design = useHomeDesignOptional();
   const { activeModeId } = useTheme();
@@ -781,33 +844,39 @@ export function HomeTypePanel({
       );
     });
 
+  const mobileAccordion = (
+    <div className={mobileOnly ? 'w-full min-w-0' : 'md:hidden'}>
+      <button
+        type="button"
+        onClick={() => setMobileOpen((v) => !v)}
+        className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+      >
+        <span>{tr('choose_property_type', 'აირჩიეთ ქონების ტიპი')}</span>
+        <svg
+          className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${mobileOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {mobileOpen ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+            {renderCards(true)}
+          </div>
+      ) : null}
+    </div>
+  );
+
+  if (mobileOnly) return mobileAccordion;
+
   return (
     <div
       className="box-border flex h-full w-full flex-col overflow-visible rounded-xl bg-transparent max-md:p-0 md:p-[var(--type-pad)]"
       style={{ '--type-pad': `${pad}px` } as React.CSSProperties}
     >
-      <div className="md:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileOpen((v) => !v)}
-          className="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-        >
-          <span>{tr('choose_property_type', 'აირჩიეთ ქონების ტიპი')}</span>
-          <svg
-            className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${mobileOpen ? 'rotate-180' : ''}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {mobileOpen ? (
-          <div className="mt-3 grid grid-cols-5 gap-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
-            {renderCards(true)}
-          </div>
-        ) : null}
-      </div>
+      {hideMobile ? null : mobileAccordion}
 
       <div
         className="hidden h-full min-h-0 grid-cols-5 content-stretch md:grid xl:grid-cols-10"

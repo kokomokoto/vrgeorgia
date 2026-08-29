@@ -25,6 +25,7 @@ import { parseSearchInputValue } from '@/lib/searchInput';
 import { LAND_STATUS_OPTIONS } from '@/lib/propertyTypeUi';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { SearchControlShell } from '@/components/home-design/SearchControlShell';
+import { HomeTypePanel } from '@/components/HomeTypePanel';
 import {
   DEFAULT_SEARCH,
   SEARCH_CONTROL_IDS,
@@ -135,6 +136,7 @@ function HeroSearchField({
   wrapperClassName,
   heroCompact,
   heroSearchStyle,
+  mapSidebar = false,
   placeholder,
   value,
   onChange,
@@ -143,6 +145,7 @@ function HeroSearchField({
   wrapperClassName: string;
   heroCompact: boolean;
   heroSearchStyle: SearchLayout | null;
+  mapSidebar?: boolean;
   placeholder: string;
   value: string;
   onChange: (patch: Partial<FiltersState>) => void;
@@ -169,7 +172,7 @@ function HeroSearchField({
       </svg>
       <input
         className={`w-full min-w-0 border border-slate-200 bg-white pl-10 pr-3 leading-none text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
-          heroCompact || heroSearchStyle ? 'py-0' : 'rounded-lg py-2.5 text-sm'
+          heroCompact || heroSearchStyle ? 'py-0' : mapSidebar ? 'min-h-11 rounded-xl py-2.5 text-sm' : 'rounded-lg py-2.5 text-sm'
         } ${heroSearchStyle ? '' : heroCompact ? 'h-12 rounded-lg text-sm' : ''}`}
         style={
           heroSearchStyle || metrics.h
@@ -366,7 +369,7 @@ function FilterDropdown({
 
   const panelClass = inline
     ? `relative z-10 mt-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900`
-    : 'rounded-lg border border-slate-200 bg-white p-3 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/50';
+    : 'rounded-xl border border-slate-200 bg-white p-3.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/50';
 
   const portalPanel =
     open && usePortal && typeof document !== 'undefined'
@@ -389,7 +392,7 @@ function FilterDropdown({
         )
       : null;
 
-  const triggerClass = `flex w-full items-center gap-1 rounded-xl border transition-all text-sm ${
+  const triggerClass = `flex w-full min-w-0 items-center gap-1 overflow-hidden rounded-xl border transition-all text-sm ${
     heroStyle ? '' : 'min-h-12'
   } ${
     isActive
@@ -398,7 +401,7 @@ function FilterDropdown({
   }`;
 
   return (
-    <div ref={ref} className={`relative ${open && !inline ? 'z-[200]' : ''}`}>
+    <div ref={ref} className={`relative min-w-0 ${open && !inline ? 'z-[200]' : ''}`}>
       <div className={triggerClass} style={triggerStyle}>
         <button
           type="button"
@@ -408,10 +411,12 @@ function FilterDropdown({
           }`}
           style={triggerBtnStyle}
         >
-          <div className={heroStyle ? 'overflow-visible' : 'min-w-0'}>
+          <div className={heroStyle ? 'min-w-0 max-md:overflow-hidden md:overflow-visible' : 'min-w-0'}>
             <div
               className={`leading-tight ${
-                heroStyle ? 'whitespace-nowrap overflow-visible pb-[0.12em]' : 'truncate'
+                heroStyle
+                  ? 'max-md:truncate max-md:overflow-hidden md:whitespace-nowrap md:overflow-visible md:pb-[0.12em]'
+                  : 'truncate'
               } ${
                 heroStyle
                   ? isActive
@@ -430,7 +435,9 @@ function FilterDropdown({
             {isActive ? (
               <div
                 className={`mt-0.5 font-medium text-blue-700 dark:text-amber-300 ${
-                  heroStyle ? 'whitespace-nowrap' : 'truncate text-xs'
+                  heroStyle
+                    ? 'max-md:truncate max-md:overflow-hidden md:whitespace-nowrap'
+                    : 'truncate text-xs'
                 }`}
                 style={summaryStyle}
               >
@@ -524,7 +531,7 @@ function LocationFilterTrigger({
 
   return (
     <div
-      className={`flex w-full items-center gap-1 rounded-xl border text-sm transition-all ${
+      className={`flex w-full min-w-0 items-center gap-1 overflow-hidden rounded-xl border text-sm transition-all ${
         heroStyle ? '' : 'min-h-12'
       } ${
         isActive
@@ -541,10 +548,12 @@ function LocationFilterTrigger({
         }`}
         style={btnStyle}
       >
-        <div className={heroStyle ? 'overflow-visible' : 'min-w-0'}>
+        <div className={heroStyle ? 'min-w-0 max-md:overflow-hidden md:overflow-visible' : 'min-w-0'}>
           <div
             className={`leading-tight ${
-              heroStyle ? 'whitespace-nowrap overflow-visible pb-[0.12em]' : 'truncate'
+              heroStyle
+                ? 'max-md:truncate max-md:overflow-hidden md:whitespace-nowrap md:overflow-visible md:pb-[0.12em]'
+                : 'truncate'
             } ${
               heroStyle
                 ? isActive
@@ -563,7 +572,9 @@ function LocationFilterTrigger({
           {isActive ? (
             <div
               className={`mt-0.5 font-medium text-blue-700 dark:text-amber-300 ${
-                heroStyle ? 'whitespace-nowrap' : 'truncate text-xs'
+                heroStyle
+                  ? 'max-md:truncate max-md:overflow-hidden md:whitespace-nowrap'
+                  : 'truncate text-xs'
               }`}
               style={summaryStyle}
             >
@@ -600,6 +611,8 @@ export function Filters({
   showCategories = false,
   hideDealAndSearch = false,
   forceExpanded = false,
+  categoryCounts,
+  designMode = false,
 }: {
   value: FiltersState;
   onChange: (v: FiltersState) => void;
@@ -616,6 +629,8 @@ export function Filters({
   hideDealAndSearch?: boolean;
   /** მობაილის აკორდეონის გარეშე ყოველთვის გახსნილი */
   forceExpanded?: boolean;
+  categoryCounts?: Record<string, number>;
+  designMode?: boolean;
 }) {
   const { t } = useTranslation();
   const { rate: usdToGel } = useCurrencyRate();
@@ -1104,6 +1119,102 @@ export function Filters({
     });
   const clearRoomsFilter = () =>
     onChange({ ...value, rooms: [], bedrooms: [], balconies: [] });
+  const applyTypes = (nextType: string[]) => {
+    const landOnly = nextType.length === 1 && nextType[0] === 'land';
+    const includesLand = nextType.includes('land');
+    const nextAmenities = landOnly
+      ? (value.amenities || []).filter((a) => a !== 'basement' && a !== 'attic')
+      : value.amenities;
+    onChange({
+      ...value,
+      type: nextType,
+      amenities: nextAmenities,
+      buildingStatus: landOnly ? [] : value.buildingStatus,
+      landStatus: includesLand ? value.landStatus || [] : [],
+    });
+  };
+  const typeActive = value.type.length > 0;
+  const typeSummary = () => {
+    if (!value.type.length) return labels.any;
+    if (value.type.length === 1) {
+      const chip = PROPERTY_TYPE_CHIPS.find((c) => c.value === value.type[0]);
+      return chip ? t(chip.key) : value.type[0];
+    }
+    return String(value.type.length);
+  };
+  const renderPropertyTypeDropdown = () => (
+    <FilterDropdown
+      label={mounted ? t('property_type_select') : 'ქონების ტიპი'}
+      summary={typeSummary()}
+      isActive={typeActive}
+      onClear={() => applyTypes([])}
+    >
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          {PROPERTY_TYPE_CHIPS.map((cat) => {
+            const isSelected = value.type.includes(cat.value);
+            return (
+              <button
+                key={cat.value}
+                type="button"
+                title={t(cat.key)}
+                onClick={() =>
+                  applyTypes(
+                    isSelected
+                      ? value.type.filter((x) => x !== cat.value)
+                      : [...value.type, cat.value]
+                  )
+                }
+                className={`flex min-h-12 min-w-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-medium leading-5 transition-colors ${
+                  isSelected
+                    ? 'border-blue-500 bg-blue-50 text-blue-800 shadow-sm dark:border-amber-400 dark:bg-amber-950/45 dark:text-amber-200'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-200 dark:hover:border-zinc-500'
+                }`}
+              >
+                <span className="shrink-0 text-base leading-none" aria-hidden>
+                  {cat.icon}
+                </span>
+                <span className="min-w-0 truncate">{t(cat.key)}</span>
+              </button>
+            );
+          })}
+        </div>
+        {value.type.includes('land') ? (
+          <div className="border-t border-slate-100 pt-3 dark:border-zinc-700">
+            <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-zinc-400">
+              {t('filter_land_status')}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {LAND_STATUS_OPTIONS.map((item) => {
+                const selected = (value.landStatus || []).includes(item.value);
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        landStatus: selected
+                          ? (value.landStatus || []).filter((s) => s !== item.value)
+                          : [...(value.landStatus || []), item.value],
+                      })
+                    }
+                    className={`min-h-11 min-w-0 truncate rounded-xl border px-3 py-2 text-sm font-medium leading-5 ${
+                      selected
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-200'
+                    }`}
+                  >
+                    {t(item.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </FilterDropdown>
+  );
   const clearYearFilter = () =>
     onChange({
       ...value,
@@ -1560,7 +1671,7 @@ export function Filters({
   const mainFiltersRowClass = mapSidebar
     ? 'mb-3 grid grid-cols-1 gap-2'
     : compactGridClass;
-  const compactFilterItemClass = mapSidebar ? '' : '';
+  const compactFilterItemClass = mapSidebar ? '' : 'min-w-0 overflow-hidden';
 
   const extendedOnlyActiveCount =
     (!!(
@@ -1584,6 +1695,7 @@ export function Filters({
       wrapperClassName={wrapperClassName}
       heroCompact={heroCompact}
       heroSearchStyle={heroSearchStyle}
+      mapSidebar={mapSidebar}
       placeholder={labels.search_placeholder}
       value={value.q || value.propertyId || ''}
       onChange={(next) => onChange({ ...value, ...next })}
@@ -1708,7 +1820,82 @@ export function Filters({
               : `${mobileOpen ? 'block mt-3 pt-3 border-t border-slate-100 dark:border-zinc-700' : 'hidden'} md:block md:mt-0 md:pt-0 md:border-0`
         }
       >
-      {(mapSidebar || showCategories) && (
+      {mapSidebar ? (
+        <div className="mb-3">
+          <div className="mb-2 text-xs font-semibold text-slate-600 dark:text-zinc-300">
+            {mounted ? t('choose_property_type') : 'აირჩიეთ ქონების ტიპი'}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {PROPERTY_TYPE_CHIPS.map((cat) => {
+              const isSelected = value.type.includes(cat.value);
+              return (
+                <button
+                  key={cat.value}
+                  type="button"
+                  title={t(cat.key)}
+                  onClick={() =>
+                    applyTypes(
+                      isSelected
+                        ? value.type.filter((x) => x !== cat.value)
+                        : [...value.type, cat.value]
+                    )
+                  }
+                  className={`flex min-h-11 min-w-0 items-center gap-1.5 overflow-hidden rounded-xl border px-1.5 py-1.5 text-left transition-colors ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50 text-blue-800 ring-2 ring-blue-500 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-500'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500'
+                  }`}
+                >
+                  <span
+                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-base leading-none ${
+                      isSelected ? 'bg-blue-100 dark:bg-amber-950/50' : 'bg-slate-100 dark:bg-zinc-800'
+                    }`}
+                    aria-hidden
+                  >
+                    {cat.icon}
+                  </span>
+                  <span className="min-w-0 truncate text-[13px] font-medium leading-5">
+                    {t(cat.key)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {value.type.includes('land') ? (
+            <div className="mt-2">
+              <div className="mb-1.5 text-xs font-semibold text-slate-500 dark:text-zinc-400">
+                {t('filter_land_status')}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {LAND_STATUS_OPTIONS.map((item) => {
+                  const selected = (value.landStatus || []).includes(item.value);
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() =>
+                        onChange({
+                          ...value,
+                          landStatus: selected
+                            ? (value.landStatus || []).filter((s) => s !== item.value)
+                            : [...(value.landStatus || []), item.value],
+                        })
+                      }
+                      className={`min-h-10 min-w-0 truncate rounded-xl border px-2 py-2 text-[13px] font-medium ${
+                        selected
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'
+                      }`}
+                    >
+                      {t(item.labelKey)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : showCategories ? (
         <div className="mb-4">
           <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
             {t('categories')}
@@ -1721,26 +1908,13 @@ export function Filters({
                   key={cat.value}
                   type="button"
                   title={t(cat.key)}
-                  onClick={() => {
-                    const nextType = isSelected
-                      ? value.type.filter((x) => x !== cat.value)
-                      : [...value.type, cat.value];
-                    const landOnly =
-                      nextType.length === 1 && nextType[0] === 'land';
-                    const includesLand = nextType.includes('land');
-                    const nextAmenities = landOnly
-                      ? (value.amenities || []).filter(
-                          (a) => a !== 'basement' && a !== 'attic'
-                        )
-                      : value.amenities;
-                    onChange({
-                      ...value,
-                      type: nextType,
-                      amenities: nextAmenities,
-                      buildingStatus: landOnly ? [] : value.buildingStatus,
-                      landStatus: includesLand ? value.landStatus || [] : [],
-                    });
-                  }}
+                  onClick={() =>
+                    applyTypes(
+                      isSelected
+                        ? value.type.filter((x) => x !== cat.value)
+                        : [...value.type, cat.value]
+                    )
+                  }
                   className={`flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-all ${
                     isSelected
                       ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-amber-500 dark:bg-amber-950/50 dark:text-amber-300'
@@ -1787,7 +1961,7 @@ export function Filters({
             </div>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* ჰერო: desktop — ერთი რიგი (CSS md:); მობილური — ერთნაირი ბარათები */}
       {!hideDealAndSearch && heroCompact && (
@@ -1907,6 +2081,24 @@ export function Filters({
                 </SearchControlShell>
               );
             })}
+            <div className="min-w-0 max-md:col-span-2 max-md:w-full md:hidden">
+              <HomeTypePanel
+                mobileOnly
+                filters={value}
+                onPatch={(updater) => {
+                  const next = updater(value);
+                  onChange(next);
+                  publish(cloneFiltersState(next));
+                }}
+                categoryCounts={categoryCounts || {}}
+                tr={(key, fallback) => {
+                  if (!mounted) return fallback;
+                  const translated = t(key);
+                  return !translated || translated === key ? fallback : translated;
+                }}
+                designMode={designMode}
+              />
+            </div>
             <SearchControlShell id="query" className="hidden self-center md:block">
               <SearchControlMetricsContext.Provider
                 value={{
@@ -1928,9 +2120,9 @@ export function Filters({
                 <button
                   type="button"
                   onClick={openExtendedSearch}
-                  className={`inline-flex h-full w-full items-center justify-center gap-2 whitespace-nowrap border transition-all max-md:col-span-2 max-md:w-full md:shrink-0 md:self-center ${
+                  className={`inline-flex h-full w-full min-w-0 items-center justify-center gap-2 overflow-hidden border transition-all md:shrink-0 md:self-center ${
                     heroSearchStyle
-                      ? 'overflow-visible leading-tight'
+                      ? 'leading-tight'
                       : 'min-h-12 rounded-lg px-3 py-2.5 text-sm font-medium leading-tight'
                   } ${
                     extendedOnlyActiveCount > 0 || activeFilterCount > 0
@@ -1967,13 +2159,12 @@ export function Filters({
                             fontWeight:
                               heroSearchStyle.buttonFontWeight || heroSearchStyle.labelFontWeight,
                             lineHeight: 1.35,
-                            overflow: 'visible',
                           } as React.CSSProperties;
                         })()
                       : undefined
                   }
                 >
-                  <span className="block overflow-visible pb-[0.12em] leading-[1.35]">
+                  <span className="min-w-0 truncate pb-[0.12em] leading-[1.35]">
                     {labels.extended_search}
                   </span>
                   {(extendedOnlyActiveCount > 0 || activeFilterCount > 0) && (
@@ -1983,7 +2174,11 @@ export function Filters({
                   )}
                 </button>
               );
-              return <SearchControlShell id="advanced">{button}</SearchControlShell>;
+              return (
+                <SearchControlShell id="advanced" className="max-md:col-span-2 max-md:min-w-0">
+                  {button}
+                </SearchControlShell>
+              );
             })()}
             {renderHeroSearchButton(false)}
           </div>
@@ -2000,11 +2195,11 @@ export function Filters({
         }`}
       >
         <div
-          className={`flex shrink-0 items-center gap-2 ${
+          className={
             mapSidebar
-              ? 'order-2 flex-wrap'
-              : 'order-2 flex-wrap md:order-1 md:flex-nowrap'
-          }`}
+              ? 'order-2 grid w-full grid-cols-3 gap-1.5'
+              : 'order-2 flex shrink-0 flex-wrap items-center gap-2 md:order-1 md:flex-nowrap'
+          }
         >
           {DEAL_TYPES.map((dt) => {
             const isSelected = value.dealType.includes(dt.value);
@@ -2018,16 +2213,26 @@ export function Filters({
                     : [...value.dealType, dt.value];
                   onChange({ ...value, dealType: newDealType });
                 }}
-                className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium leading-none transition-all sm:px-4 py-2 ${
-                  isSelected
-                    ? 'bg-blue-600 text-white dark:bg-amber-500 dark:text-black'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
-                }`}
+                className={
+                  mapSidebar
+                    ? `inline-flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-xl border px-1.5 text-[12px] font-medium leading-none transition-all ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-black'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                      }`
+                    : `inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium leading-none transition-all sm:px-4 py-2 ${
+                        isSelected
+                          ? 'bg-blue-600 text-white dark:bg-amber-500 dark:text-black'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700'
+                      }`
+                }
               >
                 <span className="inline-flex items-center leading-none" aria-hidden>
                   {dt.icon}
                 </span>
-                <span className="inline-flex items-center leading-none">{t(dt.key)}</span>
+                <span className={`inline-flex items-center leading-none ${mapSidebar ? 'truncate' : ''}`}>
+                  {t(dt.key)}
+                </span>
               </button>
             );
           })}
@@ -2181,6 +2386,10 @@ export function Filters({
           {renderRoomsDropdownContent()}
         </FilterDropdown>
         </div>
+
+        {!mapSidebar ? (
+          <div className={compactFilterItemClass}>{renderPropertyTypeDropdown()}</div>
+        ) : null}
 
         <div className={compactFilterItemClass}>
         <button

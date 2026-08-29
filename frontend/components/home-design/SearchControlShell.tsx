@@ -113,7 +113,7 @@ export function SearchControlShell({
 
   return (
     <div
-      className={`relative max-md:!h-auto max-md:!w-full max-md:!min-w-0 max-md:!max-w-full max-md:!flex-auto ${className}`}
+      className={`relative max-md:!h-auto max-md:!w-full max-md:!min-w-0 max-md:!max-w-full max-md:!flex-auto max-md:overflow-hidden ${className}`}
       data-search-control={id}
       title={canEdit ? SEARCH_CONTROL_LABELS[id] : undefined}
       style={
@@ -144,7 +144,11 @@ export function SearchControlShell({
       }
     >
       <div
-        className={canEdit ? 'pointer-events-none h-full w-full' : 'h-full w-full'}
+        className={
+          canEdit
+            ? 'pointer-events-none h-full w-full min-w-0 max-md:overflow-hidden'
+            : 'h-full w-full min-w-0 max-md:overflow-hidden'
+        }
         style={{
           height: '100%',
           opacity: clampOpacity(box.opacity),

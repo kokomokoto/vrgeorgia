@@ -101,7 +101,6 @@ export function HomeHero({
   const overlayRef = React.useRef<HTMLDivElement>(null);
 
   React.useLayoutEffect(() => {
-    if (designMode) return;
     const overlay = overlayRef.current;
     if (!overlay) return;
 
@@ -338,14 +337,14 @@ export function HomeHero({
 
           {designMode ? (
             <div
-              className="absolute bottom-0 left-0 right-0 z-50 hidden h-3 cursor-ns-resize items-center justify-center bg-blue-600/80 md:flex"
+              className="absolute bottom-0 left-1/2 z-50 hidden h-3 w-12 -translate-x-1/2 cursor-ns-resize items-center justify-center rounded-t-md bg-blue-600/80 md:flex"
               title="სიმაღლის შეცვლა"
               onPointerDown={(e) => onHeightPointerDown(e, 'desktop')}
               onPointerMove={onHeightPointerMove}
               onPointerUp={onHeightPointerUp}
               onPointerCancel={onHeightPointerUp}
             >
-              <span className="h-1 w-10 rounded-full bg-white/90" />
+              <span className="h-1 w-8 rounded-full bg-white/90" />
             </div>
           ) : null}
 

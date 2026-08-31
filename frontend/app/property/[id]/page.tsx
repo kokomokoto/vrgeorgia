@@ -36,6 +36,30 @@ import { useAuth } from '@/components/AuthProvider';
 import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 import type { Property } from '@/lib/types';
 
+/** Short landscape (phone rotated) — chrome must not steal the photo’s height. */
+function useShortLandscape() {
+  const [short, setShort] = React.useState(false);
+
+  React.useEffect(() => {
+    const update = () => {
+      const w = window.visualViewport?.width ?? window.innerWidth;
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      setShort(h < 560 && w > h);
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    window.visualViewport?.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+      window.visualViewport?.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return short;
+}
+
 // Lightbox — ჩვეულებრივი ფოტო ან 360° პანორამა
 function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, t }: {
   photos: string[];
@@ -57,6 +81,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
     setShow360Ui((prev) => (prev ? false : prev));
   }, []);
   const [portalReady, setPortalReady] = React.useState(false);
+  const shortLandscape = useShortLandscape();
 
   React.useEffect(() => {
     setShow360Ui(true);
@@ -117,7 +142,9 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         <button
           type="button"
           aria-label={t('previous_photo') || 'Previous photo'}
-          className="absolute left-0 top-16 z-[10000] flex h-[calc(100%-9rem)] w-10 cursor-pointer items-center justify-center bg-gradient-to-r from-black/35 to-transparent transition-colors hover:from-black/50 md:top-28 md:w-20"
+          className={`absolute left-0 z-[10000] flex w-10 cursor-pointer items-center justify-center bg-gradient-to-r from-black/35 to-transparent transition-colors hover:from-black/50 md:w-20 ${
+            shortLandscape ? 'top-0 h-full' : 'top-16 h-[calc(100%-9rem)] md:top-28'
+          }`}
           onClick={(e) => { e.stopPropagation(); goPrev(); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
@@ -133,7 +160,11 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         >
           <div
             ref={viewerWrapRef}
-            className="relative h-[min(94vh,1040px)] w-full min-h-[560px]"
+            className={
+              shortLandscape
+                ? 'relative h-[100dvh] w-full min-h-0'
+                : 'relative h-[min(94vh,1040px)] w-full min-h-[560px]'
+            }
           >
           <PanoramaViewer
             key={viewerUrl}
@@ -169,7 +200,11 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         </div>
       ) : (
         <div
-          className="flex h-[min(86vh,calc(100dvh-10rem))] w-[min(96vw,calc(100vw-3rem))] max-w-[1600px] items-center justify-center"
+          className={
+            shortLandscape
+              ? 'absolute inset-0 flex items-center justify-center'
+              : 'flex h-[min(86vh,calc(100dvh-10rem))] w-[min(96vw,calc(100vw-3rem))] max-w-[1600px] items-center justify-center'
+          }
           onClick={(e) => e.stopPropagation()}
         >
           <LightboxZoomImage
@@ -186,7 +221,9 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         <button
           type="button"
           aria-label={t('next_photo') || 'Next photo'}
-          className="absolute right-0 top-16 z-[10000] flex h-[calc(100%-9rem)] w-10 cursor-pointer items-center justify-center bg-gradient-to-l from-black/35 to-transparent transition-colors hover:from-black/50 md:top-28 md:w-20"
+          className={`absolute right-0 z-[10000] flex w-10 cursor-pointer items-center justify-center bg-gradient-to-l from-black/35 to-transparent transition-colors hover:from-black/50 md:w-20 ${
+            shortLandscape ? 'top-0 h-full' : 'top-16 h-[calc(100%-9rem)] md:top-28'
+          }`}
           onClick={(e) => { e.stopPropagation(); goNext(); }}
         >
           <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
@@ -195,11 +232,19 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
         </button>
       )}
       
-      <div className="absolute bottom-4 left-1/2 z-[10000] -translate-x-1/2 rounded-full bg-black/50 px-4 py-2 text-sm text-white">
+      <div
+        className={`absolute left-1/2 z-[10000] -translate-x-1/2 rounded-full bg-black/50 px-4 py-2 text-sm text-white ${
+          shortLandscape ? 'bottom-2' : 'bottom-4'
+        }`}
+      >
         {index + 1} / {photos.length}
       </div>
       <div
-        className="absolute bottom-16 left-1/2 z-[10000] flex max-w-[80vw] -translate-x-1/2 gap-1.5 overflow-x-auto p-2"
+        className={`absolute left-1/2 z-[10000] flex -translate-x-1/2 gap-1.5 overflow-x-auto p-2 ${
+          shortLandscape
+            ? 'bottom-10 max-w-[min(92vw,calc(100vw-5rem))]'
+            : 'bottom-16 max-w-[80vw]'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {photos.map((p, i) => (
@@ -207,7 +252,9 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
             key={i}
             type="button"
             onClick={() => onChangeIndex(i)}
-            className={`h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border-2 transition-all ${
+            className={`flex-shrink-0 overflow-hidden rounded-md border-2 transition-all ${
+              shortLandscape ? 'h-9 w-9' : 'h-12 w-12'
+            } ${
               i === index ? 'scale-110 border-white' : 'border-transparent opacity-60 hover:opacity-100'
             }`}
           >

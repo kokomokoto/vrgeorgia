@@ -135,6 +135,13 @@ const propertySchema = new mongoose.Schema(
      */
     clientRequestId: { type: String, trim: true, default: undefined },
 
+    /**
+     * ფოტო-პაკეტების იდემპოტენტობის გასაღებები — თუ პასუხი გზაში დაიკარგა და
+     * კლიენტმა იგივე პაკეტი გაიმეორა, ფოტოები მეორედ არ უნდა დაემატოს.
+     * ინახება ბოლო რამდენიმე გასაღები (ერთი ატვირთვა მაქს. 15 პაკეტია).
+     */
+    photoBatchKeys: { type: [String], default: [] },
+
     // ადმინის მიერ აპინული ობიექტი — მთავარ გვერდზე პირველ რიგში ჩანს
     pinned: { type: Boolean, default: false },
     pinnedAt: { type: Date, default: null },

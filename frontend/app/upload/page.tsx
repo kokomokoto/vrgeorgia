@@ -940,8 +940,14 @@ export default function UploadPage() {
         if (uploadResult.failures.length) setPhotoFailures(uploadResult.failures);
       }
 
+      // მთავარი ფოტოს ინდექსი კოსმეტიკურია და რედაქტირებაში ნებისმიერ დროს იცვლება —
+      // ამ ბოლო მოთხოვნის ჩავარდნამ უკვე შენახული ობიექტი შეცდომად არ უნდა აჩვენოს
       if (photoItems.length > 0 && mainPhotoIndex > 0) {
-        await updateProperty(propertyId, { mainPhoto: mainPhotoIndex });
+        try {
+          await updateProperty(propertyId, { mainPhoto: mainPhotoIndex });
+        } catch (mainPhotoErr) {
+          console.warn('main photo update failed (property is saved):', mainPhotoErr);
+        }
       }
 
       clearUploadDraftStorage();

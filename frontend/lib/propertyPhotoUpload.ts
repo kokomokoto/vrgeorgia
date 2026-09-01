@@ -1,14 +1,29 @@
-import { addPropertyPhotos } from './api';
+import { addPropertyPhotos, isRetriableApiError } from './api';
 import { compressPhotoForUpload } from './clientPhotoCompress';
 
-/** ერთ მოთხოვნაში — RAM/timeout-ის თავიდან ასაცილებლად (Render + Cloudinary) */
-export const PROPERTY_PHOTO_BATCH_SIZE = 4;
+/**
+ * ერთ მოთხოვნაში ატვირთული ფოტოების რაოდენობა.
+ *
+ * სერვერზე ერთი ფოტო თანმიმდევრობით მუშავდება (sharp შეკუმშვა + Cloudinary ატვირთვა
+ * 3 ცდამდე). 4 ფოტოზე ერთი მოთხოვნა ნელ ინსტანსზე წუთზე მეტს ჩუმად ატარებდა და
+ * Render-ის proxy კავშირს წყვეტდა პასუხის მიღებამდე. 2 ფოტო პაკეტს მოკლედ ინარჩუნებს.
+ */
+export const PROPERTY_PHOTO_BATCH_SIZE = 2;
 
 const BATCH_PAUSE_MS = 400;
 
 /** ერთი პაკეტის ცდები — ქსელის მოკლე ჩავარდნა მთელ ატვირთვას არ უნდა გააუქმოს */
-const BATCH_MAX_ATTEMPTS = 3;
-const BATCH_RETRY_BASE_MS = 1500;
+const BATCH_MAX_ATTEMPTS = 5;
+const BATCH_RETRY_BASE_MS = 2000;
+
+/** უნიკალური გასაღები პაკეტზე — სერვერი გამეორებაზე ფოტოებს არ დაადუბლირებს */
+function newBatchRequestId(): string {
+  const rand =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+  return `${Date.now().toString(36)}-${rand}`;
+}
 
 export type PhotoUploadProgress = {
   uploaded: number;
@@ -45,7 +60,8 @@ function isRetriableUploadError(err: unknown): boolean {
   if (/Forbidden|Not found|ძალიან დიდია|არასწორი ფაილის ველი|ძალიან ბევრი ფოტო/i.test(msg)) {
     return false;
   }
-  return true;
+  // ქსელი/დრო/5xx — ვიმეორებთ; დანარჩენ 4xx-ს აზრი არ აქვს
+  return isRetriableApiError(err);
 }
 
 /**
@@ -104,6 +120,8 @@ export async function uploadPropertyPhotosInBatches(
       batchFiles.push(await compressPhotoForUpload(entry.item.file, entry.isPanorama));
     }
     const batchFlags = batch.map((entry) => entry.isPanorama);
+    // ერთი გასაღები პაკეტის ყველა ცდაზე — გამეორება დუბლიკატს არ შექმნის
+    const batchRequestId = newBatchRequestId();
 
     let lastError: unknown = null;
     let uploaded = false;
@@ -118,7 +136,10 @@ export async function uploadPropertyPhotosInBatches(
         attempt,
       });
       try {
-        const res = await addPropertyPhotos(propertyId, batchFiles, batchFlags, opts);
+        const res = await addPropertyPhotos(propertyId, batchFiles, batchFlags, {
+          draft: opts?.draft,
+          batchRequestId,
+        });
         last = res;
         if (res.photoFailures?.length) failures.push(...res.photoFailures);
         const ids = batch.map((entry) => entry.item.id);

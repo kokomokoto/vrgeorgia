@@ -265,9 +265,21 @@ async function start() {
     });
   });
 
-  app.listen(PORT, HOST, () =>
+  const server = app.listen(PORT, HOST, () =>
     console.log(`Server listening on http://${HOST}:${PORT} (API + tour UI)`)
   );
+
+  // Render-ის reverse proxy keep-alive კავშირს ჩვენზე დიდხანს ინახავს. Node-ის
+  // ნაგულისხმევი keepAliveTimeout (5 წმ) ფოტო-პაკეტებს შორის პაუზაზე სოკეტს კეტავს,
+  // proxy კი იმავე სოკეტზე აგზავნის შემდეგ POST-ს → კავშირი წყდება პასუხის გარეშე
+  // და ბრაუზერი ხედავს "სერვერთან კავშირი ვერ მოხერხდა"-ს. headersTimeout ყოველთვის
+  // keepAliveTimeout-ზე მეტი უნდა იყოს.
+  server.keepAliveTimeout = 120_000;
+  server.headersTimeout = 125_000;
+  // ერთი ფოტო-პაკეტის დამუშავება (sharp + Cloudinary) ნელ ინსტანსზე წუთებს იღებს
+  server.requestTimeout = 300_000;
+  // სოკეტის უმოქმედობის ტაიმერი გამორთული — მოთხოვნის ლიმიტს requestTimeout წყვეტს
+  server.setTimeout(0);
 }
 
 start().catch((err) => {

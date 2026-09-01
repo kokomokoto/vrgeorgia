@@ -166,6 +166,37 @@ export function getNetworkErrorMessage(opts?: { upload?: boolean; timedOut?: boo
   return msg;
 }
 
+/** ტრანსპორტის დონის ჩავარდნა (კავშირი გაწყდა / დრო ამოიწურა) — გამეორება აზრიანია */
+export class ApiNetworkError extends Error {
+  readonly transport = true;
+  readonly timedOut: boolean;
+  constructor(message: string, timedOut = false) {
+    super(message);
+    this.name = 'ApiNetworkError';
+    this.timedOut = timedOut;
+  }
+}
+
+/** სერვერის HTTP პასუხი შეცდომით — `status` გვეუბნება გამეორება აზრი აქვს თუ არა */
+export class ApiHttpError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiHttpError';
+    this.status = status;
+  }
+}
+
+/**
+ * გამეორება აზრიანია? — კავშირის ჩავარდნა, ან Render-ის დროებითი 502/503/504.
+ * ვალიდაციის/უფლების შეცდომა (4xx) გამეორებით არ გამოსწორდება.
+ */
+export function isRetriableApiError(err: unknown): boolean {
+  if (err instanceof ApiNetworkError) return true;
+  if (err instanceof ApiHttpError) return err.status === 429 || err.status >= 500;
+  return false;
+}
+
 type RequestOptions = RequestInit & { timeoutMs?: number };
 
 async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
@@ -179,9 +210,11 @@ async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
 
   let res: Response;
   const controller = new AbortController();
+  // ფაილების ატვირთვა Render-ზე ნელია (sharp + Cloudinary პაკეტზე) — ადრეული abort
+  // ნიშნავს დაკარგულ სამუშაოს, ამიტომ ლიმიტი 5 წუთია (backend requestTimeout-ის ტოლი).
   const timeoutMs =
     timeoutOverride ??
-    (fetchInit.body instanceof FormData ? 120_000 : 45_000);
+    (fetchInit.body instanceof FormData ? 300_000 : 45_000);
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     res = await fetch(`${getApiBase()}${path}`, {
@@ -193,13 +226,14 @@ async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       const baseMsg = formatNetworkError(getApiBase(), fetchInit);
-      throw new Error(
+      throw new ApiNetworkError(
         canSeeTechnicalErrors()
           ? `${baseMsg} (დრო ამოიწურა — სცადეთ ხელახლა 1–2 წუთში)`
-          : PUBLIC_NETWORK_ERROR
+          : PUBLIC_NETWORK_ERROR,
+        true
       );
     }
-    throw new Error(formatNetworkError(getApiBase(), fetchInit));
+    throw new ApiNetworkError(formatNetworkError(getApiBase(), fetchInit));
   } finally {
     clearTimeout(timeoutId);
   }
@@ -221,7 +255,7 @@ async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
     ) {
       window.dispatchEvent(new CustomEvent('vr-auth-unauthorized'));
     }
-    throw new Error(formatApiErrorBody(json, text, res.status));
+    throw new ApiHttpError(formatApiErrorBody(json, text, res.status), res.status);
   }
 
   const raw = await res.text();
@@ -332,20 +366,49 @@ export async function getProperty(
 export type PhotoUploadFailure = { name: string; message: string };
 
 /**
+ * იდემპოტენტური მოთხოვნის გამეორება ქსელის/სერვერის დროებით ჩავარდნაზე.
+ * Render-ის ინსტანსის გაღვიძება ან proxy-ს გაწყვეტილი keep-alive კავშირი
+ * მთელ ატვირთვას არ უნდა აგდებდეს.
+ */
+async function withApiRetry<T>(
+  run: () => Promise<T>,
+  maxAttempts: number,
+  baseDelayMs = 2000
+): Promise<T> {
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await run();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxAttempts || !isRetriableApiError(err)) break;
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * attempt));
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * ობიექტის შექმნა. `form`-ში `clientRequestId` იდემპოტენტობის გასაღებია — იმავე
  * გასაღებით განმეორებითი მოთხოვნა ახალ ობიექტს არ ქმნის, არსებულს აბრუნებს
  * (`resumed: true`), ამიტომ ჩავარდნილი ატვირთვის ხელახლა დაჭერა დუბლიკატს არ იწვევს.
  */
 export async function createProperty(form: FormData) {
-  return request<{
-    property: Property;
-    resumed?: boolean;
-    resumeReason?: string;
-    photoFailures?: PhotoUploadFailure[];
-  }>('/api/properties', {
-    method: 'POST',
-    body: form
-  });
+  // clientRequestId-ის გარეშე გამეორება დუბლიკატს შექმნიდა — მაშინ ერთი ცდაა
+  const idempotent = Boolean(String(form.get('clientRequestId') ?? '').trim());
+  return withApiRetry(
+    () =>
+      request<{
+        property: Property;
+        resumed?: boolean;
+        resumeReason?: string;
+        photoFailures?: PhotoUploadFailure[];
+      }>('/api/properties', {
+        method: 'POST',
+        body: form,
+      }),
+    idempotent ? 4 : 1
+  );
 }
 
 export async function getPropertyForEdit(id: string) {
@@ -396,30 +459,41 @@ export async function updateProperty(
   opts?: { draft?: boolean }
 ) {
   const payload = opts?.draft ? { ...data, draft: true } : data;
-  return request<{ property: Property }>(`/api/properties/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-    // ფინალური შენახვა შეიძლება უფრო დიდხანს გაგრძელდეს (Render cold start / DB)
-    timeoutMs: opts?.draft ? 60_000 : 90_000,
-  });
+  // PUT იდემპოტენტურია — გაწყვეტილი კავშირის შემდეგ გამეორება უსაფრთხოა
+  return withApiRetry(
+    () =>
+      request<{ property: Property }>(`/api/properties/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+        // ფინალური შენახვა შეიძლება უფრო დიდხანს გაგრძელდეს (Render cold start / DB)
+        timeoutMs: opts?.draft ? 60_000 : 120_000,
+      }),
+    opts?.draft ? 1 : 3
+  );
 }
 
 export async function addPropertyPhotos(
   id: string,
   files: File[],
   panoramaFlags?: boolean[],
-  opts?: { draft?: boolean }
+  opts?: { draft?: boolean; batchRequestId?: string }
 ) {
   const form = new FormData();
   for (const f of files) form.append('photos', f);
   if (panoramaFlags?.length) {
     form.append('panoramaFlags', JSON.stringify(panoramaFlags));
   }
+  // იდემპოტენტობა: თუ პასუხი გზაში დაიკარგა და პაკეტი გამეორდა, სერვერი ფოტოებს
+  // მეორედ არ დაამატებს (დუბლიკატების გარეშე უსაფრთხო retry).
+  if (opts?.batchRequestId) {
+    form.append('batchRequestId', opts.batchRequestId);
+  }
   const q = opts?.draft ? '?draft=1' : '';
   return request<{
     photos: string[];
     panoramaPhotos?: string[];
     photoFailures?: PhotoUploadFailure[];
+    replayed?: boolean;
   }>(`/api/properties/${id}/photos${q}`, {
     method: 'POST',
     body: form,

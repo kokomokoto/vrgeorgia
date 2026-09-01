@@ -92,6 +92,17 @@ async function userCanManageProperty(requestUserId, property) {
   return isAdminRole(me?.role);
 }
 
+/** ბოლო დამუშავებული ფოტო-პაკეტების გასაღებები (მაქს. 40 — ~2 სრული ატვირთვა) */
+const PHOTO_BATCH_KEY_HISTORY = 40;
+
+/** პაკეტის გასაღების დამახსოვრება — იმავე გასაღებით გამეორება ფოტოებს აღარ დაამატებს */
+function rememberPhotoBatchKey(property, batchRequestId) {
+  if (!batchRequestId) return;
+  const keys = Array.isArray(property.photoBatchKeys) ? property.photoBatchKeys : [];
+  if (keys.includes(batchRequestId)) return;
+  property.photoBatchKeys = [...keys, batchRequestId].slice(-PHOTO_BATCH_KEY_HISTORY);
+}
+
 /** სართული ≤ სულ სართული; რემონტის წელი ≥ მშენებლობის წელი */
 function validatePropertyDetailNumbers(body) {
   const floor = Number(body.floor) || 0;
@@ -1028,6 +1039,19 @@ router.post(
       return res.status(403).json({ message: 'Forbidden' });
     }
 
+    // იდემპოტენტობა: თუ პასუხი გზაში დაიკარგა (proxy/keep-alive) და კლიენტმა იგივე
+    // პაკეტი გაიმეორა, ფოტოები მეორედ არ უნდა დაემატოს — ვაბრუნებთ არსებულ მდგომარეობას.
+    const batchRequestId = String(req.body.batchRequestId || '').trim().slice(0, 120);
+    if (batchRequestId && (existing.photoBatchKeys || []).includes(batchRequestId)) {
+      const isDraftReplay = req.query.draft === '1' || req.query.draft === 'true';
+      const source = isDraftReplay && existing.editDraft ? existing.editDraft : existing;
+      return res.json({
+        photos: source.photos || [],
+        panoramaPhotos: source.panoramaPhotos || [],
+        replayed: true,
+      });
+    }
+
     let panoramaFlags = [];
     try {
       panoramaFlags = req.body.panoramaFlags ? JSON.parse(req.body.panoramaFlags) : [];
@@ -1067,6 +1091,7 @@ router.post(
       draft.photos = next;
       draft.panoramaPhotos = [...new Set(nextPanorama)];
       existing.markModified('editDraft');
+      rememberPhotoBatchKey(existing, batchRequestId);
       await existing.save();
       return res.json({
         photos: draft.photos,
@@ -1079,6 +1104,7 @@ router.post(
     const nextPanorama = [...(existing.panoramaPhotos || []), ...newPanoramas].filter((u) => next.includes(u));
     existing.photos = next;
     existing.panoramaPhotos = [...new Set(nextPanorama)];
+    rememberPhotoBatchKey(existing, batchRequestId);
     await existing.save();
 
     res.json({

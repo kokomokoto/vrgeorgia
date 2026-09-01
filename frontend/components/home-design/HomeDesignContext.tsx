@@ -28,7 +28,10 @@ import {
   normalizeSearchControl,
   normalizeDealChip,
   clampOpacity,
+  clampFontSize,
   clampHeaderItemGapPx,
+  clampStackMobileNudgeX,
+  clampStackMobileNudgeY,
   DEFAULT_SEARCH_CONTROLS,
   DEFAULT_DEAL_CHIPS,
   type TypePanelItem,
@@ -705,9 +708,10 @@ export function HomeDesignProvider({
             id === 'dealBar' ||
             id === 'search' ||
             id === 'typePanel' ||
-            id === 'map';
+            id === 'map' ||
+            id === 'listings';
           nextPatch.mobileX = stack
-            ? Math.max(-24, Math.min(24, Math.round(patch.mobileX)))
+            ? clampStackMobileNudgeX(patch.mobileX)
             : Math.max(-120, Math.min(360, Math.round(patch.mobileX)));
         }
         if (patch.mobileY !== undefined) {
@@ -715,9 +719,10 @@ export function HomeDesignProvider({
             id === 'dealBar' ||
             id === 'search' ||
             id === 'typePanel' ||
-            id === 'map';
+            id === 'map' ||
+            id === 'listings';
           nextPatch.mobileY = stack
-            ? Math.max(-48, Math.min(64, Math.round(patch.mobileY)))
+            ? clampStackMobileNudgeY(patch.mobileY)
             : Math.max(-80, Math.min(400, Math.round(patch.mobileY)));
         }
         if (patch.opacity !== undefined) {
@@ -740,10 +745,10 @@ export function HomeDesignProvider({
       commit((prev) => {
         const next: SearchLayout = { ...prev.search, ...patch };
         if (patch.mobileX !== undefined) {
-          next.mobileX = Math.max(-24, Math.min(24, Math.round(patch.mobileX)));
+          next.mobileX = clampStackMobileNudgeX(patch.mobileX);
         }
         if (patch.mobileY !== undefined) {
-          next.mobileY = Math.max(-48, Math.min(64, Math.round(patch.mobileY)));
+          next.mobileY = clampStackMobileNudgeY(patch.mobileY);
         }
         if (patch.controls) {
           next.controls = { ...prev.search.controls, ...patch.controls };
@@ -858,6 +863,27 @@ export function HomeDesignProvider({
               patch.mobileY !== undefined
                 ? Math.max(-80, Math.min(520, Math.round(patch.mobileY)))
                 : merged.mobileY,
+            titleFontSize:
+              patch.titleFontSize !== undefined
+                ? clampFontSize(patch.titleFontSize, merged.titleFontSize, 12, 96)
+                : merged.titleFontSize,
+            subtitleFontSize:
+              patch.subtitleFontSize !== undefined
+                ? clampFontSize(patch.subtitleFontSize, merged.subtitleFontSize, 10, 48)
+                : merged.subtitleFontSize,
+            mobileTitleFontSize:
+              patch.mobileTitleFontSize !== undefined
+                ? clampFontSize(patch.mobileTitleFontSize, merged.mobileTitleFontSize, 10, 64)
+                : merged.mobileTitleFontSize,
+            mobileSubtitleFontSize:
+              patch.mobileSubtitleFontSize !== undefined
+                ? clampFontSize(
+                    patch.mobileSubtitleFontSize,
+                    merged.mobileSubtitleFontSize,
+                    8,
+                    36
+                  )
+                : merged.mobileSubtitleFontSize,
           },
         };
       });

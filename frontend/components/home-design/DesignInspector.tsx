@@ -44,6 +44,10 @@ import {
   clampTypeLabelMaxW,
   clampTypeOverlay,
   clampTypeFrameWidth,
+  STACK_MOBILE_X_MAX,
+  STACK_MOBILE_X_MIN,
+  STACK_MOBILE_Y_MAX,
+  STACK_MOBILE_Y_MIN,
   HEADER_ITEM_GAP_PX_DEFAULT,
   HEADER_ITEM_GAP_PX_MAX,
   clampHeaderItemGapPx,
@@ -54,6 +58,8 @@ import {
   resolveRailItemsForMode,
   resolveTypePanelItemsForMode,
   resolveHeroTextForMode,
+  HERO_TEXT_MOBILE_TITLE_FS_DEFAULT,
+  HERO_TEXT_MOBILE_SUBTITLE_FS_DEFAULT,
   isRailSectionHiddenForMode,
   withRailSectionHidden,
   type DesignableId,
@@ -236,6 +242,7 @@ export function DesignInspector() {
     origX: number;
     origY: number;
     moved: boolean;
+    mobile: boolean;
   } | null>(null);
   const resizeRef = React.useRef<{
     pointerId: number;
@@ -252,6 +259,10 @@ export function DesignInspector() {
   const [showDangerMenu, setShowDangerMenu] = React.useState(false);
   const [presetName, setPresetName] = React.useState('');
   const [presetBusy, setPresetBusy] = React.useState(false);
+  const [mobilePanelPos, setMobilePanelPos] = React.useState<{
+    left: number;
+    top: number;
+  } | null>(null);
 
   React.useEffect(() => {
     setUi(loadInspectorUi());
@@ -285,6 +296,7 @@ export function DesignInspector() {
   React.useEffect(() => {
     if (!ctx?.designMode || !ctx.canDesignMode) return;
     if (!selectedId) return;
+    if (!isDesktopLayout) return;
     setUi((prev) => (prev.collapsed ? { ...prev, collapsed: false } : prev));
   }, [
     ctx?.designMode,
@@ -293,7 +305,17 @@ export function DesignInspector() {
     selectedHeaderItemId,
     selectedRailItemId,
     selectedTypeItemId,
+    isDesktopLayout,
   ]);
+
+  React.useEffect(() => {
+    if (!ctx?.designMode || isDesktopLayout) return;
+    setUi((prev) => ({ ...prev, collapsed: true }));
+  }, [ctx?.designMode, isDesktopLayout]);
+
+  React.useEffect(() => {
+    if (!ctx?.designMode) setMobilePanelPos(null);
+  }, [ctx?.designMode]);
 
   React.useEffect(() => {
     if (!ctx?.designMode || !ctx.canDesignMode) return;
@@ -329,18 +351,24 @@ export function DesignInspector() {
   ]);
 
   const onTitlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDesktopLayout) return;
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest('button, a, input, select, textarea, label')) return;
     e.preventDefault();
+    const panel = e.currentTarget.parentElement;
+    const rect = panel?.getBoundingClientRect();
     dragRef.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      origX: ui.x,
-      origY: ui.y,
+      origX: !isDesktopLayout
+        ? mobilePanelPos?.left ?? rect?.left ?? 8
+        : ui.x,
+      origY: !isDesktopLayout
+        ? mobilePanelPos?.top ?? rect?.top ?? 8
+        : ui.y,
       moved: false,
+      mobile: !isDesktopLayout,
     };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -352,6 +380,17 @@ export function DesignInspector() {
     const dy = e.clientY - d.startY;
     if (!d.moved && Math.hypot(dx, dy) < 3) return;
     d.moved = true;
+    if (d.mobile) {
+      const w = typeof window !== 'undefined' ? window.innerWidth : 390;
+      const h = typeof window !== 'undefined' ? window.innerHeight : 844;
+      const panelW = Math.min(w - 16, 420);
+      const panelH = ui.collapsed ? 48 : Math.min(h * 0.46, 420);
+      setMobilePanelPos({
+        left: Math.max(8, Math.min(w - panelW - 8, Math.round(d.origX + dx))),
+        top: Math.max(8, Math.min(h - panelH - 8, Math.round(d.origY + dy))),
+      });
+      return;
+    }
     setUi((prev) =>
       clampInspectorUi({
         ...prev,
@@ -414,6 +453,20 @@ export function DesignInspector() {
       /* already released */
     }
   };
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const on = Boolean(ctx?.designMode && ctx?.canDesignMode && !isDesktopLayout);
+    if (!on) {
+      document.documentElement.style.removeProperty('--design-inspector-pad');
+      return;
+    }
+    const pad = ui.collapsed ? '56px' : 'min(46vh, 428px)';
+    document.documentElement.style.setProperty('--design-inspector-pad', pad);
+    return () => {
+      document.documentElement.style.removeProperty('--design-inspector-pad');
+    };
+  }, [ctx?.designMode, ctx?.canDesignMode, isDesktopLayout, ui.collapsed]);
 
   if (!ctx?.designMode || !ctx.canDesignMode) return null;
 
@@ -520,15 +573,26 @@ export function DesignInspector() {
       className="fixed z-[400] flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl dark:border-zinc-600 dark:bg-zinc-900"
       style={
         mobileDock
-          ? {
-              left: 8,
-              right: 8,
-              bottom: 8,
-              top: 'auto',
-              width: 'auto',
-              height: collapsed ? 'auto' : 'min(46vh, 420px)',
-              maxHeight: '46vh',
-            }
+          ? mobilePanelPos
+            ? {
+                left: mobilePanelPos.left,
+                top: mobilePanelPos.top,
+                right: 'auto',
+                bottom: 'auto',
+                width: 'calc(100vw - 16px)',
+                maxWidth: 420,
+                height: collapsed ? 'auto' : 'min(46vh, 420px)',
+                maxHeight: '46vh',
+              }
+            : {
+                left: 8,
+                right: 8,
+                bottom: 8,
+                top: 'auto',
+                width: 'auto',
+                height: collapsed ? 'auto' : 'min(46vh, 420px)',
+                maxHeight: '46vh',
+              }
           : {
               left: ui.x,
               top: ui.y,
@@ -1007,20 +1071,29 @@ export function DesignInspector() {
           />
           <div className="grid grid-cols-2 gap-2">
             <NumField
-              label="სათაურის ზომა"
+              label="ვები — სათაური"
               value={layout.heroText.titleFontSize}
               min={12}
               max={96}
               onCommit={(titleFontSize) => updateHeroText({ titleFontSize })}
             />
-            <ColorField
-              label="სათაურის ფერი"
+            <NumField
+              label="ტელეფონი — სათაური"
               value={
-                resolveHeroTextForMode(layout.heroText, activeModeId || 'day').titleColor
+                layout.heroText.mobileTitleFontSize ?? HERO_TEXT_MOBILE_TITLE_FS_DEFAULT
               }
-              onChange={(titleColor) => updateHeroText({ titleColor })}
+              min={10}
+              max={64}
+              onCommit={(mobileTitleFontSize) => updateHeroText({ mobileTitleFontSize })}
             />
           </div>
+          <ColorField
+            label="სათაურის ფერი"
+            value={
+              resolveHeroTextForMode(layout.heroText, activeModeId || 'day').titleColor
+            }
+            onChange={(titleColor) => updateHeroText({ titleColor })}
+          />
           <TextAreaField
             label="ქვესათაური"
             value={layout.heroText.subtitle ?? ''}
@@ -1028,22 +1101,36 @@ export function DesignInspector() {
           />
           <div className="grid grid-cols-2 gap-2">
             <NumField
-              label="ქვესათაურის ზომა"
+              label="ვები — ქვესათაური"
               value={layout.heroText.subtitleFontSize}
               min={10}
               max={48}
               onCommit={(subtitleFontSize) => updateHeroText({ subtitleFontSize })}
             />
-            <ColorField
-              label="ქვესათაურის ფერი"
+            <NumField
+              label="ტელეფონი — ქვესათაური"
               value={
-                resolveHeroTextForMode(layout.heroText, activeModeId || 'day').subtitleColor
+                layout.heroText.mobileSubtitleFontSize ??
+                HERO_TEXT_MOBILE_SUBTITLE_FS_DEFAULT
               }
-              onChange={(subtitleColor) => updateHeroText({ subtitleColor })}
+              min={8}
+              max={36}
+              onCommit={(mobileSubtitleFontSize) =>
+                updateHeroText({ mobileSubtitleFontSize })
+              }
             />
           </div>
+          <ColorField
+            label="ქვესათაურის ფერი"
+            value={
+              resolveHeroTextForMode(layout.heroText, activeModeId || 'day').subtitleColor
+            }
+            onChange={(subtitleColor) => updateHeroText({ subtitleColor })}
+          />
           <p className="text-[10px] leading-snug text-slate-400">
-            ფერები ინახება ამ რეჟიმში: <strong className="text-slate-600 dark:text-zinc-300">{activeModeLabel}</strong>.
+            ვებისა და ტელეფონის ზომები ცალ-ცალკე ინახება — ერთის შეცვლა მეორეს არ ცვლის.
+            ფერები ინახება ამ რეჟიმში:{' '}
+            <strong className="text-slate-600 dark:text-zinc-300">{activeModeLabel}</strong>.
             სხვა რეჟიმზე გადართე და სხვა ფერი აირჩიე.
           </p>
         </div>
@@ -1091,16 +1178,16 @@ export function DesignInspector() {
                 <NumField
                   label="ტელეფონი X"
                   value={layout.typePanel.mobileX ?? 0}
-                  min={-24}
-                  max={24}
+                  min={STACK_MOBILE_X_MIN}
+                  max={STACK_MOBILE_X_MAX}
                   paramKey="mobileX"
                   onCommit={(mobileX) => updateBox('typePanel', { mobileX })}
                 />
                 <NumField
                   label="ტელეფონი Y"
                   value={layout.typePanel.mobileY ?? 0}
-                  min={-48}
-                  max={64}
+                  min={STACK_MOBILE_Y_MIN}
+                  max={STACK_MOBILE_Y_MAX}
                   paramKey="mobileY"
                   onCommit={(mobileY) => updateBox('typePanel', { mobileY })}
                 />
@@ -1174,22 +1261,23 @@ export function DesignInspector() {
                 <NumField
                   label="ტელეფონი X"
                   value={layout[selectedId].mobileX ?? 0}
-                  min={-24}
-                  max={24}
+                  min={STACK_MOBILE_X_MIN}
+                  max={STACK_MOBILE_X_MAX}
                   paramKey="mobileX"
                   onCommit={(mobileX) => updateBox(selectedId, { mobileX })}
                 />
                 <NumField
                   label="ტელეფონი Y"
                   value={layout[selectedId].mobileY ?? 0}
-                  min={-48}
-                  max={64}
+                  min={STACK_MOBILE_Y_MIN}
+                  max={STACK_MOBILE_Y_MAX}
                   paramKey="mobileY"
                   onCommit={(mobileY) => updateBox(selectedId, { mobileY })}
                 />
               </div>
               <p className="text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
-                ტელეფონზე გადაათრიე ბლოკი ან აქ ჩაწერე. უარყოფითი Y = უფრო მაღლა / ნაკლები დაშორება.
+                ტელეფონზე ბლოკი გადაათრიე (სიაზე — ზედა ღილაკი «გადაადგილება»). უარყოფითი Y =
+                უფრო მაღლა / ნაკლები დაშორება.
               </p>
             </div>
           ) : null}
@@ -4291,16 +4379,16 @@ function SearchEditor({
         <NumField
           label="ტელეფონი X"
           value={s.mobileX ?? 0}
-          min={-120}
-          max={360}
+          min={STACK_MOBILE_X_MIN}
+          max={STACK_MOBILE_X_MAX}
           paramKey="mobileX"
           onCommit={(mobileX) => onUpdate({ mobileX })}
         />
         <NumField
           label="ტელეფონი Y"
           value={s.mobileY ?? 0}
-          min={-80}
-          max={400}
+          min={STACK_MOBILE_Y_MIN}
+          max={STACK_MOBILE_Y_MAX}
           paramKey="mobileY"
           onCommit={(mobileY) => onUpdate({ mobileY })}
         />

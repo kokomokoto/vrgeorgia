@@ -643,9 +643,9 @@ function TypeCategoryCard({
             }
           : onFilterToggle
       }
-      className={`relative min-w-0 overflow-visible transition-all ${
-        compact ? 'min-h-[4rem] px-0.5 py-1.5' : 'h-full min-h-0'
-      } ${frameCss ? 'border-solid' : 'border-2'} ${
+      className={`relative min-w-0 transition-all ${
+        compact ? 'min-h-[4rem] overflow-hidden px-0.5 py-1.5' : 'h-auto w-full'
+      } ${designMode && !compact ? 'overflow-visible' : compact ? '' : 'overflow-hidden'} ${frameCss ? 'border-solid' : 'border-2'} ${
         designMode || compact ? '' : 'hover:scale-105 hover:shadow-md'
       } ${
         isDesignSelected
@@ -659,6 +659,12 @@ function TypeCategoryCard({
       style={{
         borderRadius: radius,
         opacity: clampOpacity(item.opacity),
+        ...(compact
+          ? {}
+          : {
+              aspectRatio: 'var(--type-card-ar)',
+              height: 'auto',
+            }),
         ...(frameCss || {}),
       }}
     >
@@ -812,6 +818,16 @@ export function HomeTypePanel({
 
   const mediaById = useTypePanelMedia(items);
   const selectedTypeItemId = design?.selectedTypeItemId ?? null;
+  const typeCols = 10;
+  const panelW = design?.layout.typePanel.w ?? 1280;
+  const panelH = design?.layout.typePanel.h ?? 164;
+  /** Designed single-row card size — keep that ratio when the grid wraps to 5 cols. */
+  const typeRowH = scaleDesignPx(Math.max(56, panelH - pad * 2), designScale, 56);
+  const typeCardW = scaleDesignPx(
+    Math.max(48, (panelW - pad * 2 - gap * (typeCols - 1)) / typeCols),
+    designScale,
+    48
+  );
 
   const renderCards = (compact: boolean) =>
     PROPERTY_CATEGORIES.map((cat) => {
@@ -873,14 +889,20 @@ export function HomeTypePanel({
 
   return (
     <div
-      className="box-border flex h-full w-full flex-col overflow-visible rounded-xl bg-transparent max-md:p-0 md:p-[var(--type-pad)]"
-      style={{ '--type-pad': `${pad}px` } as React.CSSProperties}
+      className="box-border flex h-auto w-full flex-col overflow-visible rounded-xl bg-transparent max-md:p-0 md:p-[var(--type-pad)]"
+      style={
+        {
+          '--type-pad': `${pad}px`,
+          '--type-row-h': `${typeRowH}px`,
+          '--type-card-ar': `${typeCardW} / ${typeRowH}`,
+        } as React.CSSProperties
+      }
     >
       {hideMobile ? null : mobileAccordion}
 
       <div
-        className="hidden h-full min-h-0 grid-cols-5 content-stretch md:grid xl:grid-cols-10"
-        style={{ gap }}
+        className="hidden min-h-0 grid-cols-5 content-start md:grid xl:grid-cols-10"
+        style={{ gap, gridAutoRows: 'auto' }}
       >
         {renderCards(false)}
       </div>

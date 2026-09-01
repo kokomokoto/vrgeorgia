@@ -67,25 +67,23 @@ export function clampMobileNudgeY(n: number | undefined, fallback = 0): number {
   return Math.max(MOBILE_NUDGE_Y_MIN, Math.min(MOBILE_NUDGE_Y_MAX, v));
 }
 
+export const STACK_MOBILE_X_MIN = -24;
+export const STACK_MOBILE_X_MAX = 24;
 /**
- * Phone flex-stack spacing tweaks only.
- * Legacy designs stored large mobileY for absolute `top` pull — those become
- * overlapping margins in the stack model, so wipe values outside a small range.
+ * Phone flex-stack spacing tweaks.
+ * Negative Y pulls the next block closer; positive Y adds gap below the previous one.
  */
-export const STACK_MOBILE_Y_MIN = -48;
-export const STACK_MOBILE_Y_MAX = 64;
-export const STACK_MOBILE_Y_LEGACY_ABS = 40;
+export const STACK_MOBILE_Y_MIN = -96;
+export const STACK_MOBILE_Y_MAX = 320;
 
 export function clampStackMobileNudgeY(n: number | undefined, fallback = 0): number {
   const v = typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : fallback;
-  if (Math.abs(v) > STACK_MOBILE_Y_LEGACY_ABS) return 0;
   return Math.max(STACK_MOBILE_Y_MIN, Math.min(STACK_MOBILE_Y_MAX, v));
 }
 
 export function clampStackMobileNudgeX(n: number | undefined, fallback = 0): number {
   const v = typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : fallback;
-  if (Math.abs(v) > 40) return 0;
-  return Math.max(-24, Math.min(24, v));
+  return Math.max(STACK_MOBILE_X_MIN, Math.min(STACK_MOBILE_X_MAX, v));
 }
 
 export function normalizeBoxLayout(
@@ -982,10 +980,14 @@ export type HeroTextModeVisual = {
 export type HeroTextLayout = BoxLayout & {
   title: string;
   subtitle: string;
-  /** Title font size in px */
+  /** Desktop title font size in px (md+). Independent of phone. */
   titleFontSize: number;
-  /** Subtitle font size in px */
+  /** Desktop subtitle font size in px (md+). Independent of phone. */
   subtitleFontSize: number;
+  /** Phone title font size in px (< md). Independent of desktop. */
+  mobileTitleFontSize: number;
+  /** Phone subtitle font size in px (< md). Independent of desktop. */
+  mobileSubtitleFontSize: number;
   /** Title color #RRGGBB (fallback when a mode has no override) */
   titleColor: string;
   /** Subtitle color #RRGGBB (fallback when a mode has no override) */
@@ -1369,6 +1371,11 @@ export const DEFAULT_HERO: HeroLayout = {
   transition: 'fade-slow',
 };
 
+/** Matches the previous hardcoded phone title size in HomeHero. */
+export const HERO_TEXT_MOBILE_TITLE_FS_DEFAULT = 26;
+/** Matches the previous hardcoded phone subtitle size in HomeHero. */
+export const HERO_TEXT_MOBILE_SUBTITLE_FS_DEFAULT = 13;
+
 export const DEFAULT_HERO_TEXT: HeroTextLayout = {
   x: 0,
   y: 0,
@@ -1378,6 +1385,8 @@ export const DEFAULT_HERO_TEXT: HeroTextLayout = {
   subtitle: '',
   titleFontSize: 32,
   subtitleFontSize: 14,
+  mobileTitleFontSize: HERO_TEXT_MOBILE_TITLE_FS_DEFAULT,
+  mobileSubtitleFontSize: HERO_TEXT_MOBILE_SUBTITLE_FS_DEFAULT,
   titleColor: '#ffffff',
   subtitleColor: '#e5e5e5',
   mobileX: 16,
@@ -1720,7 +1729,8 @@ export const DESIGNABLE_LABELS: Record<DesignableId, string> = {
 export const DESIGNABLE_HINTS: Record<DesignableId, string> = {
   header: 'ჰედერის სიმაღლე და ფონი; ლოგო/მენიუ — ცალკე ქვეფოლდერებში.',
   hero: 'ჰეროს სიმაღლე და სლაიდშოუ. თითოეულ რეჟიმს (დღე/შუალედური/ღამე) თავისი ფოტოები აქვს — არ ირევა.',
-  heroText: 'მთავარი სათაური / ქვესათაური — ტექსტი, ზომა და ფერი.',
+  heroText:
+    'მთავარი სათაური / ქვესათაური — ტექსტი, ფერი; ვებისა და ტელეფონის შრიფტის ზომები ცალ-ცალკე.',
   dealBar: 'იყიდება / ქირავდება / გირავდება — პოზიცია და ზომა.',
   search: 'ძიების ბლოკი — ჩარჩო, ფილტრები, სერჩი და გაფართოებული ღილაკი.',
   typePanel: 'ქონების ტიპები — ფოტო გადაათრიე/გაადიდე, წარწერები გადაადგილე; ფერი/ფოტო რეჟიმის მიხედვით.',
@@ -1728,7 +1738,7 @@ export const DESIGNABLE_HINTS: Record<DesignableId, string> = {
     'მარცხენა წრეები — ფორმა/სურათი/ტექსტი; ჩვენება/დამალვა რეჟიმის მიხედვით.',
   map: 'მთავარი გვერდის რუკის ზომა და პოზიცია.',
   listings:
-    'ობიექტების ჩამონათვალი — ნაპოვნია/სორტი/ბარათები/პაგინაცია; გადაადგილება და სიგანე.',
+    'ობიექტების ჩამონათვალი — ნაპოვნია/სორტი/ბარათები/პაგინაცია; ტელეფონზე ზედა ზოლიდან გადაათრიე.',
   quickRail:
     'მარჯვენა სწრაფი ბმულები — ფორმა/სურათი/ტექსტი; ჩვენება/დამალვა რეჟიმის მიხედვით.',
   theme: 'რეჟიმები, ფერები და გადასართავი იკონი (emoji / მედია). ჰედერზე იკონზე კლიკი აქ გახსნის.',
@@ -1977,6 +1987,18 @@ function normalizeHeroText(raw?: Partial<HeroTextLayout> | null): HeroTextLayout
       DEFAULT_HERO_TEXT.subtitleFontSize,
       10,
       48
+    ),
+    mobileTitleFontSize: clampFontSize(
+      raw?.mobileTitleFontSize,
+      DEFAULT_HERO_TEXT.mobileTitleFontSize,
+      10,
+      64
+    ),
+    mobileSubtitleFontSize: clampFontSize(
+      raw?.mobileSubtitleFontSize,
+      DEFAULT_HERO_TEXT.mobileSubtitleFontSize,
+      8,
+      36
     ),
     titleColor: asOptionalHexColor(raw?.titleColor) || DEFAULT_HERO_TEXT.titleColor,
     subtitleColor: asOptionalHexColor(raw?.subtitleColor) || DEFAULT_HERO_TEXT.subtitleColor,
@@ -2720,7 +2742,9 @@ export function normalizeHomeDesignInput(
     dealBar: normalizeDealBar(parsed.dealBar as Partial<DealBarLayout> | null | undefined),
     typePanel: normalizeTypePanel(parsed.typePanel),
     map: normalizeBoxLayout(parsed.map, DEFAULT_HOME_DESIGN.map, { stackMobile: true }),
-    listings: normalizeBoxLayout(parsed.listings, DEFAULT_HOME_DESIGN.listings),
+    listings: normalizeBoxLayout(parsed.listings, DEFAULT_HOME_DESIGN.listings, {
+      stackMobile: true,
+    }),
     serviceRail: {
       ...DEFAULT_HOME_DESIGN.serviceRail,
       ...parsed.serviceRail,

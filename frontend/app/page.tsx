@@ -354,13 +354,13 @@ export default function HomePage() {
 
         <div
           data-design-center
-          className="relative z-0 mx-auto min-w-0 w-full max-w-full md:max-w-[var(--center-w)]"
+          className="relative z-0 mx-auto min-w-0 w-full max-w-full md:max-w-[var(--center-w)] max-md:pb-[var(--design-inspector-pad,0px)]"
           style={{ '--center-w': `${centerW}px` } as React.CSSProperties}
         >
             <div className="flex w-full flex-col max-md:[gap:var(--mobile-stack)] md:gap-4">
               <Designable id="typePanel" className="max-md:hidden">
                 <div
-                  className="mx-auto h-auto w-full max-w-full md:h-full md:max-w-[var(--type-w)]"
+                  className="mx-auto h-auto w-full max-w-full md:max-w-[var(--type-w)]"
                   style={
                     {
                       width: '100%',
@@ -526,32 +526,54 @@ export default function HomePage() {
           ) : null}
 
           {!showSkeleton && totalCount > 0 && (
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
-              <div className="text-sm text-slate-600 dark:text-zinc-300">
-                {tr('found', 'ნაპოვნია')}:{' '}
-                <span className="font-semibold text-slate-900 dark:text-amber-400">{totalCount}</span>{' '}
-                {tr('objects', 'ობიექტი')}
-                {totalPages > 1 && (
-                  <span className="ml-2">
-                    ({tr('page_of', 'გვერდი')} {currentPage} / {totalPages})
+            <div className="flex items-center gap-2">
+              <div
+                className="flex min-w-0 flex-1 items-center gap-1 text-sm text-slate-600 dark:text-zinc-300"
+                title={`${tr('found', 'ნაპოვნია')} ${totalCount} ${tr('objects', 'ობიექტი')}${
+                  totalPages > 1 ? ` · ${tr('page_of', 'გვერდი')} ${currentPage} / ${totalPages}` : ''
+                }`}
+              >
+                <span className="sm:hidden" aria-hidden>
+                  🏠
+                </span>
+                <span className="hidden sm:inline">
+                  {tr('found', 'ნაპოვნია')}:{' '}
+                </span>
+                <span className="font-semibold tabular-nums text-slate-900 dark:text-amber-400">
+                  {totalCount}
+                </span>
+                <span className="min-w-0 truncate"> {tr('objects', 'ობიექტი')}</span>
+                {totalPages > 1 ? (
+                  <span className="shrink-0 tabular-nums text-slate-500 dark:text-zinc-400">
+                    <span className="sm:hidden">
+                      {' '}
+                      · {tr('page_short', 'გვ.')} {currentPage}/{totalPages}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {' '}
+                      ({tr('page_of', 'გვერდი')} {currentPage} / {totalPages})
+                    </span>
                   </span>
-                )}
+                ) : null}
               </div>
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="shrink-0 text-xs text-slate-500 dark:text-zinc-500">{tr('sorting', 'სორტირება')}:</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="hidden shrink-0 text-xs text-slate-500 sm:inline dark:text-zinc-500">
+                  {tr('sorting', 'სორტირება')}:
+                </span>
                 <select
-                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm sm:flex-none dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                  aria-label={tr('sorting', 'სორტირება')}
+                  className="w-auto max-w-[11.5rem] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs max-sm:[field-sizing:content] sm:max-w-none sm:px-3 sm:text-sm dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
                   value={sortBy}
                   onChange={(e) => handleSortChange(e.target.value)}
                 >
-                  <option value="date_desc">{tr('sort_date_desc', 'ახალი → ძველი')}</option>
-                  <option value="date_asc">{tr('sort_date_asc', 'ძველი → ახალი')}</option>
-                  <option value="price_asc">{tr('sort_price_asc', 'ფასი ↑')}</option>
-                  <option value="price_desc">{tr('sort_price_desc', 'ფასი ↓')}</option>
-                  <option value="area_asc">{tr('sort_area_asc', 'ფართობი ↑')}</option>
-                  <option value="area_desc">{tr('sort_area_desc', 'ფართობი ↓')}</option>
-                  <option value="views_desc">{tr('sort_views_desc', 'ნახვები ↓')}</option>
-                  <option value="views_asc">{tr('sort_views_asc', 'ნახვები ↑')}</option>
+                  <option value="date_desc">{tr('sort_date_desc', '📅 ახალი → ძველი')}</option>
+                  <option value="date_asc">{tr('sort_date_asc', '📅 ძველი → ახალი')}</option>
+                  <option value="price_asc">{tr('sort_price_asc', '💰 ფასი ↑')}</option>
+                  <option value="price_desc">{tr('sort_price_desc', '💰 ფასი ↓')}</option>
+                  <option value="area_asc">{tr('sort_area_asc', '📐 ფართობი ↑')}</option>
+                  <option value="area_desc">{tr('sort_area_desc', '📐 ფართობი ↓')}</option>
+                  <option value="views_desc">{tr('sort_views_desc', '👁️ ნახვები ↓')}</option>
+                  <option value="views_asc">{tr('sort_views_asc', '👁️ ნახვები ↑')}</option>
                 </select>
               </div>
             </div>

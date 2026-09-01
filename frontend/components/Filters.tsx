@@ -137,6 +137,7 @@ function HeroSearchField({
   heroCompact,
   heroSearchStyle,
   mapSidebar = false,
+  plain = false,
   placeholder,
   value,
   onChange,
@@ -146,6 +147,7 @@ function HeroSearchField({
   heroCompact: boolean;
   heroSearchStyle: SearchLayout | null;
   mapSidebar?: boolean;
+  plain?: boolean;
   placeholder: string;
   value: string;
   onChange: (patch: Partial<FiltersState>) => void;
@@ -171,19 +173,23 @@ function HeroSearchField({
         />
       </svg>
       <input
-        className={`w-full min-w-0 border border-slate-200 bg-white pl-10 pr-3 leading-none text-slate-900 placeholder:text-slate-400 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
-          heroCompact || heroSearchStyle ? 'py-0' : mapSidebar ? 'min-h-11 rounded-xl py-2.5 text-sm' : 'rounded-lg py-2.5 text-sm'
-        } ${heroSearchStyle ? '' : heroCompact ? 'h-12 rounded-lg text-sm' : ''}`}
+        className={`w-full min-w-0 leading-none text-slate-900 placeholder:text-slate-400 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${
+          plain
+            ? 'h-11 rounded-lg border-0 bg-transparent py-0 pl-10 pr-2 text-sm'
+            : `border border-slate-200 bg-white pl-10 pr-3 dark:border-zinc-600 dark:bg-zinc-950 ${
+                heroCompact || heroSearchStyle ? 'py-0' : mapSidebar ? 'min-h-11 rounded-xl py-2.5 text-sm' : 'rounded-lg py-2.5 text-sm'
+              } ${heroSearchStyle ? '' : heroCompact ? 'h-12 rounded-lg text-sm' : ''}`
+        }`}
         style={
-          heroSearchStyle || metrics.h
-            ? {
+          plain || !(heroSearchStyle || metrics.h)
+            ? undefined
+            : {
                 height: inputH,
                 borderRadius: heroSearchStyle?.inputBorderRadius,
                 borderColor: heroSearchStyle?.inputBorderColor,
                 backgroundColor: heroSearchStyle?.inputBackground,
                 fontSize: heroSearchStyle?.inputFontSize,
               }
-            : undefined
         }
         placeholder={placeholder}
         value={value}
@@ -1690,12 +1696,13 @@ export function Filters({
     committed.buildingProject.length +
     committed.renovationStatus.length;
 
-  const renderSearchField = (wrapperClassName: string) => (
+  const renderSearchField = (wrapperClassName: string, plain = false) => (
     <HeroSearchField
       wrapperClassName={wrapperClassName}
       heroCompact={heroCompact}
       heroSearchStyle={heroSearchStyle}
       mapSidebar={mapSidebar}
+      plain={plain}
       placeholder={labels.search_placeholder}
       value={value.q || value.propertyId || ''}
       onChange={(next) => onChange({ ...value, ...next })}
@@ -1703,7 +1710,7 @@ export function Filters({
     />
   );
 
-  const renderHeroSearchButton = (fullWidth: boolean) => {
+  const renderHeroSearchButton = (fullWidth: boolean, compact = false) => {
     const sub = resolveSearchControl(
       heroSearchStyle || heroSearchStyleRaw || DEFAULT_SEARCH,
       'submit'
@@ -1712,15 +1719,17 @@ export function Filters({
       <button
         type="button"
         onClick={publishHeroSearch}
-        className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold text-white transition-colors bg-blue-600 hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400 ${
-          fullWidth
-            ? 'min-h-11 w-full rounded-xl px-4 text-sm'
-            : heroSearchStyle
-              ? 'h-full w-full self-center'
-              : 'min-h-12 shrink-0 self-center rounded-lg px-4 text-sm'
+        className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-semibold text-white transition-colors bg-blue-600 hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400 ${
+          compact
+            ? 'h-11 shrink-0 rounded-lg px-3 text-sm'
+            : fullWidth
+              ? 'min-h-11 w-full rounded-xl px-4 text-sm'
+              : heroSearchStyle
+                ? 'h-full w-full self-center'
+                : 'min-h-12 shrink-0 self-center rounded-lg px-4 text-sm'
         }`}
         style={
-          heroSearchStyle && !fullWidth
+          heroSearchStyle && !fullWidth && !compact
             ? {
                 minHeight: sub.h,
                 height: '100%',
@@ -1744,7 +1753,7 @@ export function Filters({
         <span>{labels.search}</span>
       </button>
     );
-    if (fullWidth) return button;
+    if (fullWidth || compact) return button;
     return (
       <SearchControlShell id="submit" className="ml-auto hidden self-center md:block">
         {button}
@@ -1974,8 +1983,9 @@ export function Filters({
           }
         >
           <div className="md:hidden">
-            <div className="rounded-xl border border-slate-200 bg-white p-2 dark:border-zinc-700 dark:bg-zinc-900">
-              {renderSearchField('relative min-w-0 w-full')}
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 dark:border-zinc-700 dark:bg-zinc-900">
+              {renderSearchField('relative min-w-0 flex-1', true)}
+              {renderHeroSearchButton(false, true)}
             </div>
             <button
               type="button"
@@ -2182,7 +2192,6 @@ export function Filters({
             })()}
             {renderHeroSearchButton(false)}
           </div>
-          <div className="mt-2 md:hidden">{renderHeroSearchButton(true)}</div>
         </div>
       )}
 

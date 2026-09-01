@@ -6,6 +6,8 @@ import { DesignableBadge } from '@/components/home-design/DesignableBadge';
 import {
   railStackHeight,
   clampOpacity,
+  clampStackMobileNudgeX,
+  clampStackMobileNudgeY,
   type DesignableId,
 } from '@/lib/homeDesignLayout';
 import { scaleDesignPx, scaleDesignOffset, useHomeDesignScale, useIsDesignDesktop } from '@/lib/useIsDesignDesktop';
@@ -41,6 +43,7 @@ const MOBILE_STACK_NUDGE_IDS = new Set<DesignableId>([
   'search',
   'typePanel',
   'map',
+  'listings',
 ]);
 
 /**
@@ -88,11 +91,20 @@ export function Designable({
     (MOBILE_ABS_NUDGE_IDS.has(id) || MOBILE_STACK_NUDGE_IDS.has(id));
   const canMoveDesign = (designMode && applyGeometry) || canNudgeMobile;
   /**
-   * Phone: SE-resize must not write into shared desktop `h` (search/dealBar).
+   * Phone: SE-resize must not write into shared desktop `h`.
    */
   const mobileBlocksDesktopHeight =
-    !isDesktop && (id === 'heroText' || id === 'search' || id === 'dealBar');
+    !isDesktop &&
+    (id === 'heroText' ||
+      id === 'search' ||
+      id === 'dealBar' ||
+      id === 'typePanel' ||
+      id === 'map' ||
+      id === 'listings');
   const canResizeDesign = designMode && !mobileBlocksDesktopHeight;
+  /** Listings fill the page — drag from the handle so the rest of the page can still scroll. */
+  const listingsPhoneHandle = canNudgeMobile && id === 'listings';
+  const wrapMoves = canMoveDesign && !listingsPhoneHandle;
 
   const box = React.useMemo(() => {
     if (id === 'serviceRail') {
@@ -251,10 +263,8 @@ export function Designable({
       if (canNudgeMobile) {
         const next = MOBILE_STACK_NUDGE_IDS.has(id)
           ? {
-              // Stack blocks: mostly vertical spacing; keep X near 0
-              mobileX: Math.max(-24, Math.min(24, Math.round(d.origX + dx))),
-              // Allow pulling up enough to close the flex gap between cards
-              mobileY: Math.max(-48, Math.min(64, Math.round(d.origY + dy))),
+              mobileX: clampStackMobileNudgeX(d.origX + dx),
+              mobileY: clampStackMobileNudgeY(d.origY + dy),
             }
           : {
               mobileX: Math.round(d.origX + dx),
@@ -340,11 +350,11 @@ export function Designable({
       : id === 'search' || id === 'dealBar'
         ? `${id === 'search' ? 'max-md:min-h-[52px] ' : ''}max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-auto md:overflow-visible`
         : id === 'typePanel'
-          ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-0 md:mt-[var(--d-y)] md:h-[var(--d-h)] md:overflow-visible'
+          ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-0 md:mt-[var(--d-y)] md:h-auto md:min-h-[var(--d-h)] md:overflow-visible'
           : id === 'map'
             ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-0 md:mt-[var(--d-y)] md:h-auto md:overflow-visible'
             : id === 'listings'
-              ? 'max-md:relative max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-0 md:mt-[var(--d-y)] md:overflow-visible'
+              ? 'max-md:relative max-md:ml-[var(--m-x)] max-md:mt-[var(--m-y)] max-md:!h-auto max-md:!w-full max-md:!max-w-full md:relative md:left-[var(--d-x)] md:top-0 md:mt-[var(--d-y)] md:overflow-visible'
               : id === 'serviceRail' || id === 'quickRail'
                 ? 'max-md:relative md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-[var(--d-h)] md:w-[var(--d-w)]'
                 : 'max-md:relative md:relative md:left-[var(--d-x)] md:top-[var(--d-y)] md:h-[var(--d-h)] md:w-full md:max-w-[var(--d-max-w)]';
@@ -371,7 +381,7 @@ export function Designable({
             : {
                 width: '100%',
                 maxWidth: box.w,
-                ...(id === 'typePanel' ? { height: dH } : null),
+                ...(id === 'typePanel' ? { minHeight: dH, height: 'auto' } : null),
                 ...(id === 'map' ? { height: 'auto' } : null),
                 ...(id === 'search' || id === 'dealBar' || id === 'heroText'
                   ? { minHeight: dMinH, height: 'auto' }
@@ -385,8 +395,8 @@ export function Designable({
             : undefined,
           // Inset outline so Design Mode box matches public layout size
           outlineOffset: canSelectDesign ? -1 : undefined,
-          cursor: canMoveDesign ? 'move' : canSelectDesign ? 'pointer' : undefined,
-          touchAction: canMoveDesign || (canResizeDesign && selected) ? 'none' : undefined,
+          cursor: wrapMoves ? 'move' : canSelectDesign ? 'pointer' : undefined,
+          touchAction: wrapMoves || (canResizeDesign && selected) ? 'none' : undefined,
         } as unknown as React.CSSProperties
       }
       data-designable={id}
@@ -400,10 +410,12 @@ export function Designable({
             }
           : undefined
       }
-      onPointerDown={canMoveDesign ? (e) => startDrag(e, 'move') : undefined}
-      onPointerMove={canMoveDesign || canResizeDesign ? onPointerMove : undefined}
-      onPointerUp={canMoveDesign || canResizeDesign ? onPointerUp : undefined}
-      onPointerCancel={canMoveDesign || canResizeDesign ? onPointerUp : undefined}
+      onPointerDown={wrapMoves ? (e) => startDrag(e, 'move') : undefined}
+      onPointerMove={wrapMoves || listingsPhoneHandle || canResizeDesign ? onPointerMove : undefined}
+      onPointerUp={wrapMoves || listingsPhoneHandle || canResizeDesign ? onPointerUp : undefined}
+      onPointerCancel={
+        wrapMoves || listingsPhoneHandle || canResizeDesign ? onPointerUp : undefined
+      }
     >
       {canSelectDesign && !selected ? (
         <span
@@ -412,16 +424,47 @@ export function Designable({
         />
       ) : null}
       {canSelectDesign ? <DesignableBadge id={id} selected={selected} /> : null}
+      {listingsPhoneHandle ? (
+        <button
+          type="button"
+          data-design-move-handle
+          className="pointer-events-auto absolute left-1/2 top-0 z-50 flex -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none items-center gap-1 rounded-full border border-blue-600 bg-blue-600 px-3 py-1 text-[11px] font-bold text-white shadow-lg active:cursor-grabbing"
+          title="გადაათრიე ობიექტების სია"
+          aria-label="ობიექტების სიის გადაადგილება"
+          onPointerDown={(e) => startDrag(e, 'move')}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
+          <span aria-hidden>⇅</span>
+          გადაადგილება
+        </button>
+      ) : canNudgeMobile && id !== 'heroText' ? (
+        <button
+          type="button"
+          data-design-move-handle
+          className="pointer-events-auto absolute left-1/2 top-0 z-50 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none items-center justify-center rounded-full border border-blue-600 bg-blue-600 text-sm font-bold text-white shadow-lg active:cursor-grabbing"
+          title="გადაათრიე ბლოკი"
+          aria-label="ბლოკის გადაადგილება"
+          onPointerDown={(e) => startDrag(e, 'move')}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
+          ⇅
+        </button>
+      ) : null}
       <div
         className={
-          canMoveDesign
+          id === 'typePanel'
+            ? 'h-auto w-full'
+            : canMoveDesign
             ? // Phone stack + abs nudge: children must not steal the drag gesture
               !isDesktop &&
               (MOBILE_STACK_NUDGE_IDS.has(id) || MOBILE_ABS_NUDGE_IDS.has(id))
               ? 'pointer-events-none h-full w-full'
               : id === 'serviceRail' ||
                   id === 'quickRail' ||
-                  id === 'typePanel' ||
                   id === 'listings' ||
                   id === 'search' ||
                   id === 'dealBar'

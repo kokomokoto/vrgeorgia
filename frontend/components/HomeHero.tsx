@@ -20,6 +20,8 @@ import {
   HERO_MOBILE_H_MAX,
   HERO_MOBILE_H_MIN,
   HERO_MOBILE_STACK_GAP_DEFAULT,
+  HERO_TEXT_MOBILE_SUBTITLE_FS_DEFAULT,
+  HERO_TEXT_MOBILE_TITLE_FS_DEFAULT,
   clampOpacity,
   resolveHeroTextForMode,
 } from '@/lib/homeDesignLayout';
@@ -70,9 +72,13 @@ export function HomeHero({
   const heroTextTitle = heroText?.title?.trim() ? heroText.title : title;
   const heroTextSubtitle = heroText?.subtitle?.trim() ? heroText.subtitle : subtitle;
 
-  /** Desktop sizes via CSS `md:`; phone uses the stacked defaults below md. */
+  /** Desktop sizes via CSS `md:`; phone uses independent mobile* tokens below md. */
   const titleFontSize = scaleDesignPx(heroText?.titleFontSize ?? 32, designScale, 14);
   const subtitleFontSize = scaleDesignPx(heroText?.subtitleFontSize ?? 14, designScale, 10);
+  const mobileTitleFontSize =
+    heroText?.mobileTitleFontSize ?? HERO_TEXT_MOBILE_TITLE_FS_DEFAULT;
+  const mobileSubtitleFontSize =
+    heroText?.mobileSubtitleFontSize ?? HERO_TEXT_MOBILE_SUBTITLE_FS_DEFAULT;
   const titleColor = resolvedHeroText?.titleColor ?? '#ffffff';
   const subtitleColor = resolvedHeroText?.subtitleColor ?? '#e5e5e5';
 
@@ -216,10 +222,11 @@ export function HomeHero({
     <Designable id="heroText" className="max-w-[calc(100%-1.5rem)] px-0 sm:px-0">
       <div className="flex max-w-full flex-col justify-start">
         <h1
-          className="font-serif font-semibold tracking-tight [font-size:26px] md:[font-size:var(--hero-title-fs)]"
+          className="font-serif font-semibold tracking-tight [font-size:var(--hero-title-fs-mobile)] md:[font-size:var(--hero-title-fs)]"
           style={
             {
               '--hero-title-fs': `${titleFontSize}px`,
+              '--hero-title-fs-mobile': `${mobileTitleFontSize}px`,
               color: titleColor,
               lineHeight: 1.2,
             } as React.CSSProperties
@@ -228,10 +235,11 @@ export function HomeHero({
           {heroTextTitle}
         </h1>
         <p
-          className="mt-1.5 leading-relaxed [font-size:13px] md:[font-size:var(--hero-sub-fs)]"
+          className="mt-1.5 leading-relaxed [font-size:var(--hero-sub-fs-mobile)] md:[font-size:var(--hero-sub-fs)]"
           style={
             {
               '--hero-sub-fs': `${subtitleFontSize}px`,
+              '--hero-sub-fs-mobile': `${mobileSubtitleFontSize}px`,
               color: subtitleColor,
             } as React.CSSProperties
           }

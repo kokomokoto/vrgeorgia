@@ -1,6 +1,7 @@
 import {
   HEADER_ITEM_GAP_PX_DEFAULT,
   HEADER_ITEM_IDS,
+  HEADER_POS_SPACE_WIDTH,
   clampHeaderItemGapPx,
   headerItemPadPxById,
   type HeaderItemId,
@@ -20,17 +21,19 @@ export function queryHeaderCanvas(): HTMLElement | null {
 
 export function measureHeaderItemSizes(
   host: HTMLElement,
-  box: DOMRect
+  box: DOMRect,
+  opts?: { includeDesignRing?: boolean }
 ): Partial<Record<HeaderItemId, HeaderItemSizePct>> {
   const sizes: Partial<Record<HeaderItemId, HeaderItemSizePct>> = {};
   if (box.width <= 0 || box.height <= 0) return sizes;
+  const ring = opts?.includeDesignRing === false ? 0 : HEADER_ITEM_RING_PX;
   host.querySelectorAll<HTMLElement>('[data-header-item]').forEach((el) => {
     const id = el.getAttribute('data-header-item') as HeaderItemId | null;
     if (!id || !HEADER_ITEM_IDS.includes(id)) return;
     const r = el.getBoundingClientRect();
     sizes[id] = {
-      wPct: ((r.width + HEADER_ITEM_RING_PX) / box.width) * 100,
-      hPct: ((r.height + HEADER_ITEM_RING_PX) / box.height) * 100,
+      wPct: ((r.width + ring) / box.width) * 100,
+      hPct: ((r.height + ring) / box.height) * 100,
     };
   });
   return sizes;
@@ -73,13 +76,17 @@ export function seedVisibleHeaderPositions(
 
 export function liveHeaderOverlapOpts(
   header: HeaderLayout | undefined,
-  axisLock?: 'x' | 'y' | null
+  axisLock?: 'x' | 'y' | null,
+  opts?: { forExactSpacing?: boolean }
 ): HeaderOverlapOpts | null {
   const host = queryHeaderCanvas();
   if (!host) return null;
   const box = host.getBoundingClientRect();
   if (box.width <= 0 || box.height <= 0) return null;
-  const sizes = measureHeaderItemSizes(host, box);
+  // Exact visual spacing uses bare text boxes; drag collision keeps the design ring.
+  const sizes = measureHeaderItemSizes(host, box, {
+    includeDesignRing: !opts?.forExactSpacing,
+  });
   return {
     sizes,
     visibleIds: HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id])),
@@ -102,7 +109,7 @@ export function fallbackHeaderOverlapOpts(
     ),
     gapPx: clampHeaderItemGapPx(header?.itemGapPx, HEADER_ITEM_GAP_PX_DEFAULT),
     padPxById: headerItemPadPxById(header?.itemStyles),
-    barW: 1280,
+    barW: HEADER_POS_SPACE_WIDTH,
     barH: header?.h ?? 60,
     axisLock: axisLock ?? null,
   };
@@ -110,7 +117,11 @@ export function fallbackHeaderOverlapOpts(
 
 export function headerOverlapOptsForEditor(
   header: HeaderLayout | undefined,
-  axisLock?: 'x' | 'y' | null
+  axisLock?: 'x' | 'y' | null,
+  opts?: { forExactSpacing?: boolean }
 ): HeaderOverlapOpts {
-  return liveHeaderOverlapOpts(header, axisLock) || fallbackHeaderOverlapOpts(header, axisLock);
+  return (
+    liveHeaderOverlapOpts(header, axisLock, opts) ||
+    fallbackHeaderOverlapOpts(header, axisLock)
+  );
 }

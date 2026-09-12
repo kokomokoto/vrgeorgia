@@ -13,6 +13,12 @@ const DEAL_LABELS: Record<string, string> = {
   mortgage: 'გირავდება',
 };
 
+const DEAL_SOLD_LABELS: Record<string, string> = {
+  sale: 'გაიყიდა',
+  rent: 'გაქირავდა',
+  mortgage: 'გირავნობით გაიცა',
+};
+
 const TYPE_LABELS: Record<string, string> = {
   apartment: 'ბინა',
   house: 'სახლი',
@@ -80,8 +86,9 @@ function getOwnerName(property: Property): string | undefined {
 export function buildPropertyShareDescription(property: Property): string {
   const parts: string[] = [];
   const typeLabel = TYPE_LABELS[property.type] || property.type;
-  const dealLabel = DEAL_LABELS[property.dealType || 'sale'] || '';
-  if (typeLabel && dealLabel) parts.push(`${dealLabel} ${typeLabel}`);
+  const dealMap = property.status === 'sold' ? DEAL_SOLD_LABELS : DEAL_LABELS;
+  const dealLabel = dealMap[property.dealType || 'sale'] || '';
+  if (typeLabel && dealLabel) parts.push(`${typeLabel} ${dealLabel}`);
 
   const address = getPropertyAddressLine(property);
   if (address) parts.push(address);
@@ -98,6 +105,7 @@ export function buildPropertyShareDescription(property: Property): string {
 }
 
 function buildKeywords(property: Property): string[] {
+  const dealMap = property.status === 'sold' ? DEAL_SOLD_LABELS : DEAL_LABELS;
   const keywords = [
     'უძრავი ქონება',
     'საქართველო',
@@ -105,7 +113,7 @@ function buildKeywords(property: Property): string[] {
     property.city,
     property.tbilisiDistrict,
     TYPE_LABELS[property.type],
-    DEAL_LABELS[property.dealType || 'sale'],
+    dealMap[property.dealType || 'sale'],
     'real estate',
     'Georgia',
     'Tbilisi',

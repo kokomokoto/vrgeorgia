@@ -7,7 +7,7 @@ import { useCompare } from '@/components/CompareProvider';
 import { resolveImageUrl } from '@/lib/api';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
-import { getPropertyPrices } from '@/lib/propertyDisplay';
+import { getPropertyPrices, getDealTypeLabel } from '@/lib/propertyDisplay';
 
 export default function ComparePage() {
   const { t } = useTranslation();
@@ -63,7 +63,7 @@ export default function ComparePage() {
       return pricePerSqm != null ? `${currencySymbol}${pricePerSqm.toLocaleString()}` : '-';
     }},
     { key: 'type', label: t('type'), format: (p: Property) => t(p.type) },
-    { key: 'dealType', label: t('dealType'), format: (p: Property) => t(p.dealType === 'rent' ? 'rentType' : p.dealType) },
+    { key: 'dealType', label: t('dealType'), format: (p: Property) => getDealTypeLabel(p.dealType, t, p.status) },
     { key: 'city', label: t('city'), format: (p: Property) => p.city || '-' },
     { key: 'region', label: t('region'), format: (p: Property) => p.region ? t(`region_${p.region}`) : '-' },
     { key: 'floor', label: t('floor'), format: (p: Property) => p.floor ? `${p.floor}${p.totalFloors ? ` / ${p.totalFloors}` : ''}` : '-' },

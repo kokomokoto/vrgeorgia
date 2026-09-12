@@ -482,6 +482,21 @@ export function clampRailPercent(n: number | undefined, fallback: number): numbe
   return Math.max(0, Math.min(100, roundToDecimals(n, 1)));
 }
 
+/**
+ * Header free-nav positions are % of the centered `max-w-6xl` column, so a label
+ * may legitimately sit outside it: negative = left of the column, >100 = right.
+ */
+export const HEADER_POS_MIN_PCT = -60;
+export const HEADER_POS_MAX_PCT = 160;
+
+export function clampHeaderPercent(n: number | undefined, fallback: number): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
+  return Math.max(
+    HEADER_POS_MIN_PCT,
+    Math.min(HEADER_POS_MAX_PCT, roundToDecimals(n, 1))
+  );
+}
+
 export function clampRailRadius(n: number | undefined, fallback: number): number {
   if (typeof n !== 'number' || !Number.isFinite(n)) return fallback;
   return Math.max(0, Math.round(n));
@@ -1117,12 +1132,19 @@ export const HEADER_ROW_IDS: HeaderItemId[] = [
   ...HEADER_RIGHT_CLUSTER_IDS,
 ];
 
-/** Matches `max-w-6xl` + `px-4` classic header so items aren’t glued to the viewport. */
+/** Matches `max-w-6xl` classic header so items aren’t glued to the viewport. */
 export const HEADER_CONTENT_MAX_PX = 1152;
 export const HEADER_CONTENT_INSET_PX = 16;
 export const HEADER_PACK_GAP_MIN_PX = 12;
 export const HEADER_PACK_GAP_MAX_PX = 24;
+/** Legacy authoring viewport — only for migrating old full-bar-% positions → column-%. */
 export const HEADER_PACK_REF_WIDTH = 1920;
+
+/**
+ * Free-nav canvas = `max-w-6xl` column (not the full viewport).
+ * Positions are % of this column so 1080p and 2K keep the same rhythm.
+ */
+export const HEADER_POS_SPACE_WIDTH = HEADER_CONTENT_MAX_PX;
 
 function headerContentBand(barW: number): { left: number; width: number } {
   const col = Math.min(HEADER_CONTENT_MAX_PX, barW);
@@ -1130,6 +1152,69 @@ function headerContentBand(barW: number): { left: number; width: number } {
   const left = side + HEADER_CONTENT_INSET_PX;
   const right = barW - side - HEADER_CONTENT_INSET_PX;
   return { left, width: Math.max(1, right - left) };
+}
+
+/**
+ * Old free-nav positions were % of the full viewport bar (authored at ~1920).
+ * Convert to % of the centered max-w-6xl column.
+ */
+export function migrateHeaderPositionsViewportToColumn(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
+  fromBarW = HEADER_PACK_REF_WIDTH
+): Partial<Record<HeaderItemId, HeaderItemPos>> | undefined {
+  if (!positions || Object.keys(positions).length === 0) return undefined;
+  const band = headerContentBand(fromBarW);
+  const out: Partial<Record<HeaderItemId, HeaderItemPos>> = {};
+  for (const id of HEADER_ITEM_IDS) {
+    const pos = positions[id];
+    if (!pos || typeof pos !== 'object') continue;
+    const centerPx = (Number(pos.x) / 100) * fromBarW;
+    const xInCol = ((centerPx - band.left) / band.width) * 100;
+    out[id] = {
+      // Items left of the column map to negative % — do not pile them on 0.
+      x: clampHeaderPercent(xInCol, 50),
+      y: clampHeaderPercent(pos.y, 50),
+    };
+  }
+  return Object.keys(out).length ? out : positions;
+}
+
+/** True when positions look like full-viewport % (brand sits ~20%+ on a 1920 bar). */
+export function headerPositionsLookLikeViewportSpace(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
+): boolean {
+  const brandX = positions?.brand?.x;
+  return typeof brandX === 'number' && Number.isFinite(brandX) && brandX >= 12;
+}
+
+/**
+ * @deprecated Use migrateHeaderPositionsViewportToColumn — kept for older callers.
+ * v3 free-nav positions were already % of the viewport bar — keep them.
+ * Repair only the short-lived v4 column-space packs (brand near 0–8%).
+ */
+export function migrateHeaderPositionsViewportToContent(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
+): Partial<Record<HeaderItemId, HeaderItemPos>> | undefined {
+  if (!positions || Object.keys(positions).length === 0) return undefined;
+  const brandX = positions.brand?.x;
+  // Column-space pack after the brief v4 experiment: expand back to viewport % at 1920.
+  if (typeof brandX === 'number' && brandX > 0 && brandX < 10) {
+    const colW = HEADER_CONTENT_MAX_PX;
+    const colLeft = Math.max(0, (HEADER_PACK_REF_WIDTH - colW) / 2);
+    const out: Partial<Record<HeaderItemId, HeaderItemPos>> = {};
+    for (const id of HEADER_ITEM_IDS) {
+      const pos = positions[id];
+      if (!pos || typeof pos !== 'object') continue;
+      const centerCol = (Number(pos.x) / 100) * colW;
+      const centerBar = colLeft + centerCol;
+      out[id] = {
+        x: clampRailPercent((centerBar / HEADER_PACK_REF_WIDTH) * 100, 50),
+        y: clampRailPercent(pos.y, 50),
+      };
+    }
+    return Object.keys(out).length ? out : positions;
+  }
+  return positions;
 }
 
 function packHeaderRow(
@@ -1156,7 +1241,7 @@ function packHeaderRow(
   return out;
 }
 
-/** One even row inside the content column — same gap between every label. */
+/** One even row inside the max-w-6xl column — same gap between every label. */
 export function packHeaderItemPositions(opts?: {
   barW?: number;
   widthsPx?: Partial<Record<HeaderItemId, number>>;
@@ -1164,7 +1249,8 @@ export function packHeaderItemPositions(opts?: {
   padPx?: number;
   skipIds?: Iterable<HeaderItemId>;
 }): Record<HeaderItemId, HeaderItemPos> {
-  const barW = Math.max(640, opts?.barW ?? HEADER_PACK_REF_WIDTH);
+  // Default pack in column space (matches the free-nav canvas).
+  const barW = Math.max(640, opts?.barW ?? HEADER_POS_SPACE_WIDTH);
   const skip = new Set(opts?.skipIds ?? ['messages', 'login']);
   const visible = packHeaderRow(skip, barW, opts?.widthsPx);
   const typical = packHeaderRow(new Set<HeaderItemId>(['messages', 'login']), barW, opts?.widthsPx);
@@ -1263,7 +1349,7 @@ export type HeaderLayout = {
   profileLabel: string;
   adminLabel: string;
   /**
-   * Free positions for header text items (% of bar).
+   * Free positions for header text items (% of the max-w-6xl content column).
    * When empty/undefined → classic flex layout (except Design Mode canvas).
    */
   itemPositions?: Partial<Record<HeaderItemId, HeaderItemPos>>;
@@ -1277,7 +1363,7 @@ export type HeaderLayout = {
 };
 
 export type HomeDesignLayout = {
-  version: 3;
+  version: 5;
   header: HeaderLayout;
   hero: HeroLayout;
   heroText: HeroTextLayout;
@@ -1559,7 +1645,7 @@ export const DEFAULT_SEARCH: SearchLayout = {
 };
 
 export const DEFAULT_HOME_DESIGN: HomeDesignLayout = {
-  version: 3,
+  version: 5,
   header: { ...DEFAULT_HEADER, itemPositions: copyDefaultHeaderItemPositions() },
   hero: { ...DEFAULT_HERO },
   heroText: { ...DEFAULT_HERO_TEXT },
@@ -2162,8 +2248,11 @@ function asOptionalString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-export function normalizeHeader(raw?: Partial<HeaderLayout> | null): HeaderLayout {
-  const itemPositions = normalizeHeaderItemPositions(raw?.itemPositions);
+export function normalizeHeader(
+  raw?: Partial<HeaderLayout> | null,
+  opts?: { repairLegacyRows?: boolean }
+): HeaderLayout {
+  const itemPositions = normalizeHeaderItemPositions(raw?.itemPositions, opts);
   const itemStyles = normalizeHeaderItemStyles(raw?.itemStyles);
   return {
     h: Math.max(44, Math.min(120, Math.round(raw?.h ?? DEFAULT_HEADER.h))),
@@ -2190,7 +2279,8 @@ export function normalizeHeader(raw?: Partial<HeaderLayout> | null): HeaderLayou
 }
 
 function normalizeHeaderItemPositions(
-  raw: Partial<Record<HeaderItemId, HeaderItemPos>> | null | undefined
+  raw: Partial<Record<HeaderItemId, HeaderItemPos>> | null | undefined,
+  opts?: { repairLegacyRows?: boolean }
 ): Partial<Record<HeaderItemId, HeaderItemPos>> | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const out: Partial<Record<HeaderItemId, HeaderItemPos>> = {};
@@ -2198,8 +2288,8 @@ function normalizeHeaderItemPositions(
     const pos = raw[id];
     if (!pos || typeof pos !== 'object') continue;
     out[id] = {
-      x: clampRailPercent(pos.x, DEFAULT_HEADER_ITEM_POSITIONS[id].x),
-      y: clampRailPercent(pos.y, DEFAULT_HEADER_ITEM_POSITIONS[id].y),
+      x: clampHeaderPercent(pos.x, DEFAULT_HEADER_ITEM_POSITIONS[id].x),
+      y: clampHeaderPercent(pos.y, DEFAULT_HEADER_ITEM_POSITIONS[id].y),
     };
   }
   if (Object.keys(out).length === 0) return undefined;
@@ -2230,6 +2320,61 @@ function normalizeHeaderItemPositions(
     return copyDefaultHeaderItemPositions();
   }
 
+  // Repair short-lived / legacy packs, then map full-viewport % → column %.
+  const brandX = out.brand?.x;
+  if (typeof brandX === 'number' && brandX > 0 && brandX < 10) {
+    // Already column-ish; keep.
+  } else if (headerPositionsLookLikeViewportSpace(out)) {
+    const migrated = migrateHeaderPositionsViewportToColumn(out);
+    if (migrated) {
+      for (const id of HEADER_ITEM_IDS) {
+        if (migrated[id]) out[id] = migrated[id]!;
+      }
+    }
+  }
+
+  // Overlap resolution used to shove labels vertically while the UI forced top:50%.
+  // Once Y is rendered, that leftover scatter makes the bar look broken — snap to one
+  // row. Only for pre-v5 data: newer layouts are authored by hand (free X/Y, minus
+  // values included) and must survive a reload exactly as designed.
+  return opts?.repairLegacyRows ? flattenHeaderItemPositionsToRow(out) : out;
+}
+
+/** Repair leftover overlap shove from older full-bar layouts (load/normalize only). */
+export function flattenHeaderItemPositionsToRow(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
+): Partial<Record<HeaderItemId, HeaderItemPos>> | undefined {
+  if (!positions || Object.keys(positions).length === 0) return positions;
+  const ys = HEADER_ITEM_IDS.map((id) => positions[id]?.y).filter(
+    (y): y is number => typeof y === 'number' && Number.isFinite(y)
+  );
+  const ySpread = ys.length ? Math.max(...ys) - Math.min(...ys) : 0;
+  const yOffCenter = ys.some((y) => Math.abs(y - 50) > 3);
+
+  // Overlap shove also parked utilities (admin/upload) left of the main nav.
+  const servicesX = positions.services?.x;
+  const adminX = positions.admin?.x;
+  const uploadX = positions.upload?.x;
+  const orderBroken =
+    (typeof adminX === 'number' &&
+      typeof servicesX === 'number' &&
+      adminX < servicesX - 0.5) ||
+    (typeof uploadX === 'number' &&
+      typeof servicesX === 'number' &&
+      uploadX < servicesX - 0.5);
+
+  if (orderBroken) {
+    // Scrambled left/right clusters — restore a clean factory row.
+    return copyDefaultHeaderItemPositions();
+  }
+  if (ySpread <= 6 && !yOffCenter) return positions;
+  // Keep X (user layout); only flatten vertical scatter onto one baseline.
+  const out: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...positions };
+  for (const id of HEADER_ITEM_IDS) {
+    const cur = out[id];
+    if (!cur) continue;
+    out[id] = { x: cur.x, y: 50 };
+  }
   return out;
 }
 
@@ -2305,21 +2450,17 @@ export function resolveHeaderItemPos(
 }
 
 /** Fallback AABB size (% of header bar) when DOM measurement is unavailable. */
-export const DEFAULT_HEADER_ITEM_SIZE_PCT: Record<HeaderItemId, { wPct: number; hPct: number }> = {
-  brand: { wPct: 5.2, hPct: 40 },
-  services: { wPct: 9.0, hPct: 40 },
-  about: { wPct: 4.5, hPct: 40 },
-  agents: { wPct: 6.7, hPct: 40 },
-  upload: { wPct: 13.5, hPct: 40 },
-  favorites: { wPct: 8.8, hPct: 40 },
-  compare: { wPct: 7.0, hPct: 40 },
-  login: { wPct: 5.5, hPct: 40 },
-  messages: { wPct: 9.0, hPct: 40 },
-  profile: { wPct: 6.0, hPct: 40 },
-  admin: { wPct: 10.0, hPct: 44 },
-  theme: { wPct: 2.9, hPct: 44 },
-  language: { wPct: 4.4, hPct: 44 },
-};
+/** Fallback sizes when DOM isn't measured yet — px widths as % of the design bar (1920). */
+export const DEFAULT_HEADER_ITEM_SIZE_PCT: Record<HeaderItemId, { wPct: number; hPct: number }> =
+  Object.fromEntries(
+    HEADER_ITEM_IDS.map((id) => [
+      id,
+      {
+        wPct: Math.round(((HEADER_ITEM_WIDTH_PX[id] / HEADER_POS_SPACE_WIDTH) * 1000)) / 10,
+        hPct: id === 'admin' || id === 'theme' || id === 'language' ? 44 : 40,
+      },
+    ])
+  ) as Record<HeaderItemId, { wPct: number; hPct: number }>;
 
 export type HeaderItemSizePct = { wPct: number; hPct: number };
 
@@ -2371,12 +2512,12 @@ export function resolveHeaderItemNoOverlap(
   positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
   opts?: HeaderOverlapOpts
 ): HeaderItemPos {
-  const desiredX = clampRailPercent(proposed.x, proposed.x);
-  const desiredY = clampRailPercent(proposed.y, proposed.y);
+  const desiredX = clampHeaderPercent(proposed.x, proposed.x);
+  const desiredY = clampHeaderPercent(proposed.y, proposed.y);
   let x = desiredX;
   let y = desiredY;
   const axisLock = opts?.axisLock ?? null;
-  const barW = Math.max(1, opts?.barW ?? 1280);
+  const barW = Math.max(1, opts?.barW ?? HEADER_POS_SPACE_WIDTH);
   const barH = Math.max(1, opts?.barH ?? 60);
   const baseGapPx = clampHeaderItemGapPx(opts?.gapPx);
 
@@ -2434,12 +2575,12 @@ export function resolveHeaderItemNoOverlap(
           : Math.sign(desiredY - otherPos.y) || 1;
 
       const candX: HeaderItemPos = {
-        x: clampRailPercent(otherPos.x + dirX * minDx, x),
+        x: clampHeaderPercent(otherPos.x + dirX * minDx, x),
         y,
       };
       const candY: HeaderItemPos = {
         x,
-        y: clampRailPercent(otherPos.y + dirY * minDy, y),
+        y: clampHeaderPercent(otherPos.y + dirY * minDy, y),
       };
 
       const distPx = (cand: HeaderItemPos) => {
@@ -2450,9 +2591,22 @@ export function resolveHeaderItemNoOverlap(
 
       let next: HeaderItemPos;
       if (axisLock === 'x') {
-        next = overlaps(candX.x, candX.y, otherPos, minDx, minDy) ? candY : candX;
+        // Never fall back to a vertical shove — that used to corrupt the single-row bar.
+        next = candX;
+        if (overlaps(next.x, next.y, otherPos, minDx, minDy)) {
+          next = {
+            x: clampHeaderPercent(otherPos.x + dirX * (minDx + 0.15), x),
+            y,
+          };
+        }
       } else if (axisLock === 'y') {
-        next = overlaps(candY.x, candY.y, otherPos, minDx, minDy) ? candX : candY;
+        next = candY;
+        if (overlaps(next.x, next.y, otherPos, minDx, minDy)) {
+          next = {
+            x,
+            y: clampHeaderPercent(otherPos.y + dirY * (minDy + 0.15), y),
+          };
+        }
       } else {
         // Pixel space — % X/% Y are not comparable on a wide, short header.
         // Prefer sliding beside a neighbor, not stacking on top of it.
@@ -2521,13 +2675,18 @@ export function spreadHeaderItemPositions(
   const ids = (
     opts?.visibleIds?.length ? [...opts.visibleIds] : HEADER_ITEM_IDS.filter((id) => id !== 'messages')
   ).filter((id) => Boolean(next[id]));
+  // Header is a single row unless the caller explicitly unlocks vertical separation.
+  const resolvedOpts: HeaderOverlapOpts = {
+    ...opts,
+    axisLock: opts?.axisLock === 'y' ? 'y' : 'x',
+  };
 
   for (let pass = 0; pass < 14; pass++) {
     ids.sort((a, b) => next[b]!.x - next[a]!.x || next[b]!.y - next[a]!.y);
     let changed = false;
     for (const id of ids) {
       const cur = next[id]!;
-      const resolved = resolveHeaderItemNoOverlap(id, cur, next, opts);
+      const resolved = resolveHeaderItemNoOverlap(id, cur, next, resolvedOpts);
       if (resolved.x !== cur.x || resolved.y !== cur.y) {
         next[id] = resolved;
         changed = true;
@@ -2539,62 +2698,189 @@ export function spreadHeaderItemPositions(
 }
 
 /**
- * Keep designed left-to-right order, but push labels apart in *pixels* so they
- * still fit when the bar is narrower (other monitor, OS DPI, browser zoom).
- * `fits: false` means even a packed row overflows — caller should use flex nav.
+ * Place visible labels left→right with an **exact** edge-to-edge gap (px).
+ * Keeps the leftmost item’s center; everything else slides to match the gap.
+ * Per-item `padPx` is added on top of the shared gap (same as collision).
  */
-export function fitHeaderItemPositions(
+export function spaceHeaderItemsExactGap(
   positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
   opts?: HeaderOverlapOpts
-): { positions: Partial<Record<HeaderItemId, HeaderItemPos>>; fits: boolean } {
+): Partial<Record<HeaderItemId, HeaderItemPos>> {
   const next: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...(positions || {}) };
-  const barW = Math.max(1, opts?.barW ?? HEADER_PACK_REF_WIDTH);
-  const gapPx = Math.max(HEADER_PACK_GAP_MIN_PX, clampHeaderItemGapPx(opts?.gapPx));
+  const barW = Math.max(1, opts?.barW ?? HEADER_POS_SPACE_WIDTH);
+  const gapPx = clampHeaderItemGapPx(opts?.gapPx, HEADER_ITEM_GAP_PX_DEFAULT);
   const ids = (
     opts?.visibleIds?.length ? [...opts.visibleIds] : HEADER_ITEM_IDS.filter((id) => id !== 'messages')
   ).filter((id) => Boolean(next[id]));
-  if (ids.length === 0) return { positions: next, fits: true };
+  if (ids.length < 2) return syncHeaderAccountSlotPositions(next, ids);
 
   ids.sort((a, b) => next[a]!.x - next[b]!.x || next[a]!.y - next[b]!.y);
 
   const widthOf = (id: HeaderItemId) => {
     const wp = opts?.sizes?.[id]?.wPct;
     if (typeof wp === 'number' && Number.isFinite(wp) && wp > 0) return (wp / 100) * barW;
-    return ((DEFAULT_HEADER_ITEM_SIZE_PCT[id]?.wPct ?? 6) / 100) * barW;
+    return HEADER_ITEM_WIDTH_PX[id] ?? 48;
+  };
+  const padOf = (id: HeaderItemId) => clampHeaderItemGapPx(opts?.padPxById?.[id], 0);
+
+  const rowY = next[ids[0]!]!.y;
+  let cursorRight = (next[ids[0]!]!.x / 100) * barW + widthOf(ids[0]!) / 2;
+
+  for (let i = 1; i < ids.length; i++) {
+    const id = ids[i]!;
+    const prevId = ids[i - 1]!;
+    const pairGap = gapPx + padOf(prevId) + padOf(id);
+    const w = widthOf(id);
+    const centerPx = cursorRight + pairGap + w / 2;
+    next[id] = {
+      x: clampHeaderPercent((centerPx / barW) * 100, next[id]!.x),
+      y: rowY,
+    };
+    cursorRight = centerPx + w / 2;
+  }
+
+  // Keep first item’s Y for the whole row.
+  next[ids[0]!] = { x: next[ids[0]!]!.x, y: rowY };
+  return syncHeaderAccountSlotPositions(next, ids);
+}
+
+/** Edge-to-edge gap (px) between each consecutive pair, left→right. */
+export function measureHeaderNeighborGapsPx(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
+  opts?: HeaderOverlapOpts
+): { leftId: HeaderItemId; rightId: HeaderItemId; gapPx: number }[] {
+  const barW = Math.max(1, opts?.barW ?? HEADER_POS_SPACE_WIDTH);
+  const ids = (
+    opts?.visibleIds?.length ? [...opts.visibleIds] : HEADER_ITEM_IDS.filter((id) => id !== 'messages')
+  ).filter((id) => Boolean(positions?.[id]));
+  if (ids.length < 2) return [];
+
+  ids.sort((a, b) => positions![a]!.x - positions![b]!.x || positions![a]!.y - positions![b]!.y);
+
+  const widthOf = (id: HeaderItemId) => {
+    const wp = opts?.sizes?.[id]?.wPct;
+    if (typeof wp === 'number' && Number.isFinite(wp) && wp > 0) return (wp / 100) * barW;
+    return HEADER_ITEM_WIDTH_PX[id] ?? 48;
+  };
+
+  const out: { leftId: HeaderItemId; rightId: HeaderItemId; gapPx: number }[] = [];
+  for (let i = 0; i < ids.length - 1; i++) {
+    const leftId = ids[i]!;
+    const rightId = ids[i + 1]!;
+    const leftRight = (positions![leftId]!.x / 100) * barW + widthOf(leftId) / 2;
+    const rightLeft = (positions![rightId]!.x / 100) * barW - widthOf(rightId) / 2;
+    out.push({
+      leftId,
+      rightId,
+      gapPx: Math.round(rightLeft - leftRight),
+    });
+  }
+  return out;
+}
+
+/**
+ * Keep designed left-to-right order. If the bar is narrower than the designed
+ * spacing, uniformly compress gaps so the rhythm stays proportional — do not
+ * left-pack into a lopsided cluster. fits: false only when min-gap overflows.
+ */
+export function fitHeaderItemPositions(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined,
+  opts?: HeaderOverlapOpts
+): { positions: Partial<Record<HeaderItemId, HeaderItemPos>>; fits: boolean } {
+  const next: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...(positions || {}) };
+  const barW = Math.max(1, opts?.barW ?? HEADER_POS_SPACE_WIDTH);
+  const gapPx = Math.max(HEADER_PACK_GAP_MIN_PX, clampHeaderItemGapPx(opts?.gapPx));
+  const ids = (
+    opts?.visibleIds?.length ? [...opts.visibleIds] : HEADER_ITEM_IDS.filter((id) => id !== 'messages')
+  ).filter((id) => Boolean(next[id]));
+  if (ids.length === 0) return { positions: next, fits: true };
+
+  // Hand-placed layouts are intentional: labels parked outside the column (minus /
+  // over 100) or spread over several rows must render exactly as designed.
+  const authoredXs = ids.map((id) => next[id]!.x);
+  const authoredYs = ids.map((id) => next[id]!.y);
+  const outsideColumn = authoredXs.some((x) => x < 0 || x > 100);
+  const multiRow = Math.max(...authoredYs) - Math.min(...authoredYs) > 6;
+  if (outsideColumn || multiRow) return { positions: next, fits: true };
+
+  ids.sort((a, b) => next[a]!.x - next[b]!.x || next[a]!.y - next[b]!.y);
+
+  const widthOf = (id: HeaderItemId) => {
+    const wp = opts?.sizes?.[id]?.wPct;
+    if (typeof wp === 'number' && Number.isFinite(wp) && wp > 0) return (wp / 100) * barW;
+    return HEADER_ITEM_WIDTH_PX[id] ?? 48;
   };
 
   const edge = HEADER_CONTENT_INSET_PX;
-  const placedLeft: number[] = [];
-  let cursor = edge;
-  for (const id of ids) {
-    const w = widthOf(id);
-    const extra =
-      clampHeaderItemGapPx(opts?.padPxById?.[id], 0);
-    let left = (next[id]!.x / 100) * barW - w / 2;
-    if (left < cursor) left = cursor;
-    placedLeft.push(left);
-    cursor = left + w + gapPx + extra;
-  }
-
-  const lastId = ids[ids.length - 1]!;
-  let lastRight = placedLeft[placedLeft.length - 1]! + widthOf(lastId);
   const limit = barW - edge;
-  if (lastRight > limit + 0.5) {
-    const shift = Math.min(lastRight - limit, Math.max(0, placedLeft[0]! - edge));
-    if (shift > 0) {
-      for (let i = 0; i < placedLeft.length; i++) placedLeft[i]! -= shift;
-      lastRight -= shift;
-    }
-  }
+  const centers = ids.map((id) => (next[id]!.x / 100) * barW);
+  const widths = ids.map((id) => widthOf(id));
+  const extras = ids.map((id) => clampHeaderItemGapPx(opts?.padPxById?.[id], 0));
 
-  if (lastRight > limit + 0.5) {
+  const totalItemW = widths.reduce((s, w) => s + w, 0);
+  const totalExtra = extras.reduce((s, e) => s + e, 0);
+  const gapCount = Math.max(0, ids.length - 1);
+  const avail = limit - edge;
+  const minNeeded = totalItemW + totalExtra + gapPx * gapCount;
+  if (minNeeded > avail + 0.5) {
     return { positions: next, fits: false };
   }
 
+  const designedGaps: number[] = [];
+  for (let i = 0; i < ids.length - 1; i++) {
+    const gapCenters = centers[i + 1]! - centers[i]!;
+    const minGapCenters = widths[i]! / 2 + widths[i + 1]! / 2 + gapPx + extras[i]!;
+    designedGaps.push(Math.max(gapCenters, minGapCenters));
+  }
+
+  let runW =
+    (widths[0] ?? 0) / 2 +
+    (widths[widths.length - 1] ?? 0) / 2 +
+    designedGaps.reduce((s, g) => s + g, 0);
+
+  if (runW > avail) {
+    const fixed =
+      (widths[0] ?? 0) / 2 + (widths[widths.length - 1] ?? 0) / 2 + gapCount * gapPx;
+    const stretch = designedGaps.reduce((s, g, i) => {
+      const minG = widths[i]! / 2 + widths[i + 1]! / 2 + gapPx + extras[i]!;
+      return s + Math.max(0, g - minG);
+    }, 0);
+    const room = Math.max(0, avail - fixed);
+    const scale = stretch > 0 ? Math.min(1, room / stretch) : 1;
+    for (let i = 0; i < designedGaps.length; i++) {
+      const minG = widths[i]! / 2 + widths[i + 1]! / 2 + gapPx + extras[i]!;
+      const extra = Math.max(0, designedGaps[i]! - minG);
+      designedGaps[i] = minG + extra * scale;
+    }
+    runW =
+      (widths[0] ?? 0) / 2 +
+      (widths[widths.length - 1] ?? 0) / 2 +
+      designedGaps.reduce((s, g) => s + g, 0);
+  }
+
+  const midDesigned = (centers[0]! + centers[centers.length - 1]!) / 2;
+  const midBar = (edge + limit) / 2;
+  let firstCenter = midBar - runW / 2 + (widths[0] ?? 0) / 2;
+  const minFirst = edge + (widths[0] ?? 0) / 2;
+  const maxLast = limit - (widths[widths.length - 1] ?? 0) / 2;
+  if (firstCenter < minFirst) firstCenter = minFirst;
+  let lastCenter = firstCenter + designedGaps.reduce((s, g) => s + g, 0);
+  if (lastCenter > maxLast) firstCenter -= lastCenter - maxLast;
+
+  const outCenters: number[] = [firstCenter];
+  for (let i = 0; i < designedGaps.length; i++) {
+    outCenters.push(outCenters[i]! + designedGaps[i]!);
+  }
+
+  const outMid = (outCenters[0]! + outCenters[outCenters.length - 1]!) / 2;
+  let shift = midDesigned - outMid;
+  const minShift = minFirst - outCenters[0]!;
+  const maxShift = maxLast - outCenters[outCenters.length - 1]!;
+  shift = Math.max(minShift, Math.min(maxShift, shift));
+
   const out: Partial<Record<HeaderItemId, HeaderItemPos>> = { ...next };
   ids.forEach((id, i) => {
-    const w = widthOf(id);
-    const center = placedLeft[i]! + w / 2;
+    const center = outCenters[i]! + shift;
     out[id] = {
       x: clampRailPercent((center / barW) * 100, next[id]!.x),
       y: next[id]!.y,
@@ -2679,11 +2965,18 @@ export function loadHomeDesign(): HomeDesignLayout {
     }
 
     const layout = normalizeHomeDesignInput(parsed);
+    const rawVersion = typeof parsed.version === 'number' ? parsed.version : 2;
     const needsHrefPersist = (parsed.serviceRail?.items || []).some(
       (it) => it.href && migrateServiceHref(it.href) !== it.href
     );
+    const headerRepaired =
+      Boolean(parsed.header?.itemPositions) &&
+      JSON.stringify(parsed.header?.itemPositions) !==
+        JSON.stringify(layout.header.itemPositions);
     if (
       needsHrefPersist ||
+      rawVersion < 5 ||
+      headerRepaired ||
       !parsed.hero ||
       !parsed.heroText ||
       !parsed.themePalettes ||
@@ -2725,11 +3018,21 @@ export function normalizeHomeDesignInput(
     }
   }
 
+  // Header free-nav positions are % of max-w-6xl column (not full viewport).
+  let headerRaw = parsed.header;
+  if (
+    headerRaw?.itemPositions &&
+    headerPositionsLookLikeViewportSpace(headerRaw.itemPositions)
+  ) {
+    const migrated = migrateHeaderPositionsViewportToColumn(headerRaw.itemPositions);
+    headerRaw = { ...headerRaw, itemPositions: migrated };
+  }
+
   return syncLegacyThemeFields({
     ...DEFAULT_HOME_DESIGN,
     ...parsed,
-    version: 3,
-    header: normalizeHeader(parsed.header),
+    version: 5,
+    header: normalizeHeader(headerRaw, { repairLegacyRows: rawVersion < 5 }),
     hero,
     heroText: normalizeHeroText(parsed.heroText),
     themeModes: normalizeThemeModes(

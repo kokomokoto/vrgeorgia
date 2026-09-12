@@ -506,8 +506,8 @@ export function HomeDesignProvider({
         /* keep next */
       }
 
-      // One-time: balanced header nav defaults (left cluster + right utilities)
-      const headerBalanceKey = 'vhome-header-nav-row-v5';
+      // One-time: header free-nav in max-w-6xl column space (same on 1080p / 2K)
+      const headerBalanceKey = 'vhome-header-nav-column-v6';
       try {
         if (!cancelled && !window.localStorage.getItem(headerBalanceKey)) {
           next = {

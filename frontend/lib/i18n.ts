@@ -444,6 +444,10 @@ const resources = {
       deal_sale: 'იყიდება',
       deal_rent: 'ქირავდება',
       deal_mortgage: 'გირავდება',
+      // გაყიდული ობიექტი — წარსული ფორმა (იყიდება→გაიყიდა და ა.შ.)
+      deal_sold_sale: 'გაიყიდა',
+      deal_sold_rent: 'გაქირავდა',
+      deal_sold_mortgage: 'გირავნობით გაიცა',
       // Property card
       per_sqm_suffix: '/კვ.მ',
       no_photo: 'ფოტო არ არის',
@@ -1240,6 +1244,9 @@ const resources = {
       deal_sale: 'For Sale',
       deal_rent: 'For Rent',
       deal_mortgage: 'Mortgage',
+      deal_sold_sale: 'Sold',
+      deal_sold_rent: 'Rented',
+      deal_sold_mortgage: 'Collateralized',
       // Property card
       per_sqm_suffix: '/sqm',
       no_photo: 'No photo',
@@ -2022,6 +2029,9 @@ const resources = {
       deal_sale: 'Продажа',
       deal_rent: 'Аренда',
       deal_mortgage: 'Залог',
+      deal_sold_sale: 'Продано',
+      deal_sold_rent: 'Сдано',
+      deal_sold_mortgage: 'Отдано под залог',
       // Property card
       per_sqm_suffix: '/кв.м',
       no_photo: 'Нет фото',

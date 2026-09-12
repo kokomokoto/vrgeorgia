@@ -10,7 +10,7 @@ import { deleteProperty, getProperty, listProperties, resolveImageUrl } from '@/
 import { getUsdToGelRate } from '@/lib/currency';
 import { mergePropertyPools, pickSimilarProperties } from '@/lib/similarProperties';
 import { getApiBase } from '@/lib/config';
-import { getPropertyAddressLine } from '@/lib/propertyDisplay';
+import { getPropertyAddressLine, getTypeDealPhrase } from '@/lib/propertyDisplay';
 import { apiLang } from '@/lib/apiLang';
 import { MapView } from '@/components/MapView';
 import { ShareButtons } from '@/components/ShareButtons';
@@ -609,10 +609,8 @@ function PropertyDetailInner() {
   const generateAutoDescription = () => {
     const parts: string[] = [];
     
-    // ტიპი და გარიგება თარგმანით
-    const typeLabel = t(property.type) || property.type;
-    const dealLabel = t(property.dealType === 'rent' ? 'rentType' : property.dealType) || property.dealType;
-    parts.push(`${typeLabel} ${dealLabel}`);
+    // ტიპი და გარიგება თარგმანით (გაყიდულზე — წარსული: გაიყიდა / გაქირავდა)
+    parts.push(getTypeDealPhrase(property, t));
     
     // მდებარეობა - თბილისის დუბლირების გარეშე
     if (property.city || property.region) {

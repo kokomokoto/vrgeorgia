@@ -12,6 +12,12 @@ const DEAL_LABELS: Record<string, string> = {
   mortgage: 'გირავდება',
 };
 
+const DEAL_SOLD_LABELS: Record<string, string> = {
+  sale: 'გაიყიდა',
+  rent: 'გაქირავდა',
+  mortgage: 'გირავნობით გაიცა',
+};
+
 const TYPE_LABELS: Record<string, string> = {
   apartment: 'ბინა',
   house: 'სახლი',
@@ -30,9 +36,10 @@ export function propertyTypeLabel(type?: string): string {
   return TYPE_LABELS[type] || type;
 }
 
-export function propertyDealLabel(dealType?: string): string {
-  if (!dealType) return DEAL_LABELS.sale;
-  return DEAL_LABELS[dealType] || dealType;
+export function propertyDealLabel(dealType?: string, status?: Property['status']): string {
+  const map = status === 'sold' ? DEAL_SOLD_LABELS : DEAL_LABELS;
+  if (!dealType) return map.sale;
+  return map[dealType] || dealType;
 }
 
 /** Organization + WebSite — მთავარი გვერდისთვის */
@@ -82,7 +89,7 @@ export function buildPropertyJsonLd(id: string, property: Property) {
   const image = getPropertyShareImageUrl(property);
   const currency = property.priceCurrency === 'GEL' ? 'GEL' : 'USD';
   const typeLabel = propertyTypeLabel(property.type);
-  const dealLabel = propertyDealLabel(property.dealType);
+  const dealLabel = propertyDealLabel(property.dealType, property.status);
 
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -128,7 +135,10 @@ export function buildPropertyJsonLd(id: string, property: Property) {
       '@type': 'Offer',
       price: totalPrice,
       priceCurrency: currency,
-      availability: 'https://schema.org/InStock',
+      availability:
+        property.status === 'sold'
+          ? 'https://schema.org/SoldOut'
+          : 'https://schema.org/InStock',
       url: pageUrl,
     };
   }

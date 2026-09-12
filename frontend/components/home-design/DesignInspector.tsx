@@ -1,7 +1,11 @@
 'use client';
 
 import React from 'react';
-import { useHomeDesignOptional, FACTORY_DESIGN_PRESET_ID } from '@/components/home-design/HomeDesignContext';
+import {
+  useHomeDesignOptional,
+  FACTORY_DESIGN_PRESET_ID,
+  type DesignEditParam,
+} from '@/components/home-design/HomeDesignContext';
 import {
   DESIGNABLE_HINTS,
   DESIGNABLE_LABELS,
@@ -50,10 +54,15 @@ import {
   STACK_MOBILE_Y_MIN,
   HEADER_ITEM_GAP_PX_DEFAULT,
   HEADER_ITEM_GAP_PX_MAX,
+  HEADER_POS_MAX_PCT,
+  HEADER_POS_MIN_PCT,
+  DEFAULT_HEADER_ITEM_POSITIONS,
   clampHeaderItemGapPx,
+  clampHeaderPercent,
   headerItemLabelKey,
-  resolveHeaderItemNoOverlap,
+  measureHeaderNeighborGapsPx,
   resolveHeaderItemPos,
+  spaceHeaderItemsExactGap,
   spreadHeaderItemPositions,
   resolveRailItemsForMode,
   resolveTypePanelItemsForMode,
@@ -66,6 +75,7 @@ import {
   type HeaderItemId,
   type HeaderLayout,
   type HeroTransition,
+  type HomeDesignLayout,
   type RailItem,
   type SearchLayout,
   type HeaderItemStyle,
@@ -228,6 +238,159 @@ function scrollInspectorTo(
   });
 }
 
+function editParamLabel(p: DesignEditParam): string {
+  switch (p) {
+    case 'posX':
+      return 'X (%)';
+    case 'posY':
+      return 'Y (%)';
+    case 'headerH':
+      return 'სიმაღლე (H)';
+    case 'itemW':
+      return 'Item W';
+    case 'itemH':
+      return 'Item H';
+    case 'mobileX':
+      return 'Mobile X';
+    case 'mobileY':
+      return 'Mobile Y';
+    case 'labelX':
+      return 'Label X';
+    case 'labelY':
+      return 'Label Y';
+    case 'countX':
+      return 'რაოდენობა X';
+    case 'countY':
+      return 'რაოდენობა Y';
+    case 'iconX':
+      return 'იკონი X';
+    case 'iconY':
+      return 'იკონი Y';
+    case 'mediaX':
+      return 'ფოტო X';
+    case 'mediaY':
+      return 'ფოტო Y';
+    case 'mediaScale':
+      return 'ფოტოს ზომა';
+    default:
+      return p.toUpperCase();
+  }
+}
+
+function formatLiveEditValue(n: number, decimals = 1): string {
+  if (!Number.isFinite(n)) return '—';
+  if (decimals <= 0) return String(Math.round(n));
+  const f = 10 ** decimals;
+  return String(Math.round(n * f) / f);
+}
+
+function layoutBoxForLive(
+  layout: HomeDesignLayout,
+  id: DesignableId
+): {
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  mobileX?: number;
+  mobileY?: number;
+  itemW?: number;
+  itemH?: number;
+} | null {
+  switch (id) {
+    case 'header':
+      return { h: layout.header.h };
+    case 'hero':
+      return layout.hero;
+    case 'heroText':
+      return layout.heroText;
+    case 'search':
+      return layout.search;
+    case 'dealBar':
+      return layout.dealBar;
+    case 'typePanel':
+      return layout.typePanel;
+    case 'serviceRail':
+      return layout.serviceRail;
+    case 'quickRail':
+      return layout.quickRail;
+    case 'map':
+      return layout.map;
+    case 'listings':
+      return layout.listings;
+    default:
+      return null;
+  }
+}
+
+/** Live numeric readout for the params currently being dragged/edited on canvas. */
+function resolveLiveEditReadouts(
+  layout: HomeDesignLayout,
+  selectedId: DesignableId | null,
+  selectedHeaderItemId: HeaderItemId | null,
+  params: DesignEditParam[]
+): { key: DesignEditParam; label: string; value: string }[] {
+  if (!selectedId || params.length === 0) return [];
+  const box = layoutBoxForLive(layout, selectedId);
+  const headerPos =
+    selectedId === 'header' && selectedHeaderItemId
+      ? resolveHeaderItemPos(layout.header.itemPositions, selectedHeaderItemId)
+      : null;
+
+  return params.map((key) => {
+    let raw: number | undefined;
+    let decimals = 0;
+    if (key === 'posX' && headerPos) {
+      raw = headerPos.x;
+      decimals = 1;
+    } else if (key === 'posY' && headerPos) {
+      raw = headerPos.y;
+      decimals = 1;
+    } else if (key === 'headerH') {
+      raw = layout.header.h;
+    } else if (box) {
+      if (key === 'x') raw = box.x;
+      else if (key === 'y') raw = box.y;
+      else if (key === 'w') raw = box.w;
+      else if (key === 'h') raw = box.h;
+      else if (key === 'mobileX') raw = box.mobileX;
+      else if (key === 'mobileY') raw = box.mobileY;
+      else if (key === 'itemW') raw = box.itemW;
+      else if (key === 'itemH') raw = box.itemH;
+    }
+    return {
+      key,
+      label: editParamLabel(key),
+      value: raw === undefined ? '—' : formatLiveEditValue(raw, decimals),
+    };
+  });
+}
+
+/** Prefer active fields / live section; never jump the panel to the top. */
+function scrollInspectorToActiveEdit(
+  body: HTMLElement,
+  activeEditParams: DesignEditParam[]
+): boolean {
+  for (const key of activeEditParams) {
+    const el = body.querySelector<HTMLElement>(`[data-edit-param="${key}"]`);
+    if (el) {
+      scrollInspectorTo(body, el, 'center');
+      return true;
+    }
+  }
+  const liveSection = body.querySelector<HTMLElement>('[data-inspector-live-section]');
+  if (liveSection) {
+    scrollInspectorTo(body, liveSection, 'start');
+    return true;
+  }
+  const focused = body.querySelector<HTMLElement>('[data-inspector-focused="true"]');
+  if (focused) {
+    scrollInspectorTo(body, focused, 'start');
+    return true;
+  }
+  return false;
+}
+
 /** Floating inspector — only visible in Design Mode on the home page */
 export function DesignInspector() {
   const ctx = useHomeDesignOptional();
@@ -320,25 +483,24 @@ export function DesignInspector() {
   React.useEffect(() => {
     if (!ctx?.designMode || !ctx.canDesignMode) return;
     if (!selectedId || ui.collapsed) return;
-    const t = window.setTimeout(() => {
+    let cancelled = false;
+    let tries = 0;
+    const tryScroll = () => {
+      if (cancelled) return;
       const body = bodyRef.current;
       if (!body) return;
-      if (activeEditParams.length > 0) {
-        const key = activeEditParams[0];
-        const el = body.querySelector<HTMLElement>(`[data-edit-param="${key}"]`);
-        if (el) {
-          scrollInspectorTo(body, el, 'center');
-          return;
-        }
+      if (scrollInspectorToActiveEdit(body, activeEditParams)) return;
+      tries += 1;
+      if (tries < 8) {
+        window.setTimeout(tryScroll, 40);
       }
-      const focused = body.querySelector<HTMLElement>('[data-inspector-focused="true"]');
-      if (focused) {
-        scrollInspectorTo(body, focused, 'start');
-        return;
-      }
-      body.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 80);
-    return () => window.clearTimeout(t);
+      // Never scrollTo(top: 0) — that hides the fields being edited.
+    };
+    const t = window.setTimeout(tryScroll, 40);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, [
     ctx?.designMode,
     ctx?.canDesignMode,
@@ -564,6 +726,20 @@ export function DesignInspector() {
         : selectedId
           ? DESIGNABLE_LABELS[selectedId]
           : null;
+
+  const liveParamsForReadout: DesignEditParam[] =
+    activeEditParams.length > 0
+      ? activeEditParams
+      : selectedId === 'header' && selectedHeaderItemId
+        ? ['posX', 'posY']
+        : [];
+
+  const liveEditReadouts = resolveLiveEditReadouts(
+    layout,
+    selectedId,
+    selectedHeaderItemId,
+    liveParamsForReadout
+  );
 
   const mobileDock = !isDesktopLayout;
 
@@ -914,7 +1090,7 @@ export function DesignInspector() {
 
           {editingLabel ? (
             <div
-              className="mb-3 rounded-lg border border-blue-400 bg-blue-50 px-2.5 py-2 dark:border-blue-500 dark:bg-blue-950/50"
+              className="sticky top-0 z-10 -mx-1 mb-3 rounded-lg border border-blue-400 bg-blue-50 px-2.5 py-2 shadow-sm dark:border-blue-500 dark:bg-blue-950/90"
             >
               <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
                 მონიშნული ეკრანზე
@@ -922,46 +1098,25 @@ export function DesignInspector() {
               <div className="mt-0.5 text-[13px] font-bold text-blue-900 dark:text-blue-100">
                 {editingLabel}
               </div>
-              {activeEditParams.length > 0 ? (
+              {liveEditReadouts.length > 0 ? (
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                  {liveEditReadouts.map((row) => (
+                    <div
+                      key={row.key}
+                      className="rounded-md border border-blue-300/80 bg-white/90 px-2 py-1.5 dark:border-blue-600/60 dark:bg-zinc-900/80"
+                    >
+                      <div className="text-[9px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">
+                        {row.label}
+                      </div>
+                      <div className="font-mono text-[15px] font-bold tabular-nums leading-tight text-blue-950 dark:text-blue-50">
+                        {row.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : activeEditParams.length > 0 ? (
                 <div className="mt-1 text-[11px] font-medium text-blue-800 dark:text-blue-200">
-                  იცვლება:{' '}
-                  {activeEditParams
-                    .map((p) =>
-                      p === 'posX'
-                        ? 'X (%)'
-                        : p === 'posY'
-                          ? 'Y (%)'
-                          : p === 'headerH'
-                            ? 'სიმაღლე (H)'
-                            : p === 'itemW'
-                              ? 'Item W'
-                              : p === 'itemH'
-                                ? 'Item H'
-                                : p === 'mobileX'
-                                  ? 'Mobile X'
-                                  : p === 'mobileY'
-                                    ? 'Mobile Y'
-                                    : p === 'labelX'
-                                      ? 'Label X'
-                                      : p === 'labelY'
-                                        ? 'Label Y'
-                                        : p === 'countX'
-                                          ? 'რაოდენობა X'
-                                          : p === 'countY'
-                                            ? 'რაოდენობა Y'
-                                            : p === 'iconX'
-                                              ? 'იკონი X'
-                                              : p === 'iconY'
-                                                ? 'იკონი Y'
-                                                : p === 'mediaX'
-                                                  ? 'ფოტო X'
-                                                  : p === 'mediaY'
-                                                    ? 'ფოტო Y'
-                                                    : p === 'mediaScale'
-                                                      ? 'ფოტოს ზომა'
-                                        : p.toUpperCase()
-                    )
-                    .join(' · ')}
+                  იცვლება: {activeEditParams.map(editParamLabel).join(' · ')}
                 </div>
               ) : (
                 <div className="mt-1 text-[10px] text-blue-700/80 dark:text-blue-300/80">
@@ -982,7 +1137,11 @@ export function DesignInspector() {
           header={layout.header}
           modes={layout.themeModes}
           selectedItemId={selectedHeaderItemId}
-          onSelectItem={setSelectedHeaderItemId}
+          onSelectItem={(id) => {
+            setSelectedHeaderItemId(id);
+            if (id) ctx.setActiveEditParams(['posX', 'posY']);
+            else ctx.setActiveEditParams([]);
+          }}
           onUpdate={updateHeader}
           onUpdatePalette={updateThemePalette}
           onResetPalette={resetThemePalette}
@@ -1974,28 +2133,71 @@ function HeaderEditor({
         value={header.opacity}
         onChange={(opacity) => onUpdate({ opacity })}
       />
-      <NumField
-        label="სიტყვების ზღვარი (px)"
-        value={header.itemGapPx ?? HEADER_ITEM_GAP_PX_DEFAULT}
-        min={0}
-        max={HEADER_ITEM_GAP_PX_MAX}
-        onCommit={(itemGapPx) => {
-          const gap = clampHeaderItemGapPx(itemGapPx);
-          const nextHeader = { ...header, itemGapPx: gap };
-          const opts = headerOverlapOptsForEditor(nextHeader);
-          const seeded = seedVisibleHeaderPositions(
-            header.itemPositions,
-            queryHeaderCanvas()
-          );
-          const next = spreadHeaderItemPositions(seeded, { ...opts, gapPx: gap });
-          onUpdate({ itemGapPx: gap, itemPositions: next });
-        }}
-      />
+      <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50/60 p-2 dark:border-blue-900 dark:bg-blue-950/30">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+          უხილავი საზღვარი / დაშორება
+        </div>
+        <NumField
+          label="მინ. დაშორება (px)"
+          value={header.itemGapPx ?? HEADER_ITEM_GAP_PX_DEFAULT}
+          min={0}
+          max={HEADER_ITEM_GAP_PX_MAX}
+          nudge={1}
+          // Changing the number only sets the rule — drag already respects it live.
+          onCommit={(itemGapPx) => onUpdate({ itemGapPx: clampHeaderItemGapPx(itemGapPx) })}
+        />
+        <p className="text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+          წარწერებს შორის კიდე–კიდე მინიმალური დაშორება. Design Mode-ში ლურჯი
+          ჩარჩო აჩვენებს უხილავ კედელს; გადათრევისას ერთმანეთს უფრო ახლოს ვერ
+          მიხვალ (Ctrl = დროებით იგნორი).
+        </p>
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => {
+              const opts = headerOverlapOptsForEditor(header, null, { forExactSpacing: true });
+              const seeded = seedVisibleHeaderPositions(
+                header.itemPositions,
+                queryHeaderCanvas()
+              );
+              onUpdate({
+                itemPositions: spreadHeaderItemPositions(seeded, {
+                  ...opts,
+                  gapPx: clampHeaderItemGapPx(header.itemGapPx, HEADER_ITEM_GAP_PX_DEFAULT),
+                }),
+              });
+            }}
+            className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            გადაფარვის მოხსნა
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const opts = headerOverlapOptsForEditor(header, null, { forExactSpacing: true });
+              const seeded = seedVisibleHeaderPositions(
+                header.itemPositions,
+                queryHeaderCanvas()
+              );
+              onUpdate({
+                itemPositions: spaceHeaderItemsExactGap(seeded, {
+                  ...opts,
+                  gapPx: clampHeaderItemGapPx(header.itemGapPx, HEADER_ITEM_GAP_PX_DEFAULT),
+                }),
+              });
+            }}
+            className="rounded-md border border-blue-300 bg-blue-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 dark:border-blue-700"
+          >
+            ზუსტი დაშორება ყველას
+          </button>
+        </div>
+        <HeaderGapReadout header={header} />
+      </div>
       <p className="text-[10px] leading-snug text-slate-400">
-        ჰედერის ქვედა ლურჯ ზოლზე გადაათრიე — სიმაღლე იცვლება. ლოგო/მენიუს ტექსტს ჰედერში
-        გადაათრიე (Shift = მხოლოდ ჰორიზონტალურად, Alt = მხოლოდ ვერტიკალურად). სიტყვები
-        ერთმანეთს არ გადაეფარებიან — ზღვარი აქ იცვლება. ცარიელ ადგილზე კლიკი = ჰედერის
-        ფოლდერი; ელემენტზე კლიკი = ქვეფოლდერი.
+        ჰედერის ქვედა ლურჯ ზოლზე გადაათრიე — სიმაღლე იცვლება. წარწერას ჰედერში გადაათრიე
+        (Alt = მხოლოდ ვერტიკალურად, Ctrl = საზღვრის გარეშე). ზუსტი ადგილისთვის ელემენტი
+        აირჩიე ქვემოთ და X/Y ჩაწერე (მინუსიც შეიძლება). ცარიელ ადგილზე კლიკი = ჰედერის
+        ფოლდერი.
       </p>
 
       <div className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-zinc-700 dark:bg-zinc-950">
@@ -2013,17 +2215,28 @@ function HeaderEditor({
             </button>
           ) : null}
         </div>
-        {HEADER_ITEM_IDS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onSelectItem(id)}
-            className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-white px-2.5 py-2 text-left text-[12px] font-semibold text-slate-800 hover:border-blue-300 hover:bg-blue-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-blue-700 dark:hover:bg-blue-950/40"
-          >
-            <span>{HEADER_ITEM_LABELS[id]}</span>
-            <span className="text-[11px] font-medium text-slate-400">→</span>
-          </button>
-        ))}
+        {HEADER_ITEM_IDS.map((id) => {
+          const itemPos = resolveHeaderItemPos(header.itemPositions, id);
+          const outside = itemPos.x < 0 || itemPos.x > 100;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onSelectItem(id)}
+              className="flex w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-left text-[12px] font-semibold text-slate-800 hover:border-blue-300 hover:bg-blue-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-blue-700 dark:hover:bg-blue-950/40"
+            >
+              <span className="truncate">{HEADER_ITEM_LABELS[id]}</span>
+              <span
+                className={`shrink-0 text-[10px] font-medium tabular-nums ${
+                  outside ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
+                }`}
+                title={outside ? 'სვეტს გარეთ დგას' : undefined}
+              >
+                {itemPos.x} / {itemPos.y} →
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-zinc-700 dark:bg-zinc-950">
@@ -2219,6 +2432,71 @@ function HeaderEditor({
   );
 }
 
+function HeaderGapReadout({ header }: { header: HeaderLayout }) {
+  const [pairs, setPairs] = React.useState<
+    { leftId: HeaderItemId; rightId: HeaderItemId; gapPx: number }[]
+  >([]);
+  const targetGap = clampHeaderItemGapPx(header.itemGapPx, HEADER_ITEM_GAP_PX_DEFAULT);
+  const positionsKey = JSON.stringify(header.itemPositions || {});
+  const padKey = JSON.stringify(header.itemStyles || {});
+
+  React.useEffect(() => {
+    let cancelled = false;
+    let raf = 0;
+    const measure = () => {
+      if (cancelled) return;
+      const opts = headerOverlapOptsForEditor(header, null, { forExactSpacing: true });
+      const seeded = seedVisibleHeaderPositions(header.itemPositions, queryHeaderCanvas());
+      setPairs(measureHeaderNeighborGapsPx(seeded, opts));
+    };
+    raf = requestAnimationFrame(measure);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- remeasure when layout coords/gap change
+  }, [positionsKey, padKey, header.itemGapPx, header.h]);
+
+  if (pairs.length === 0) return null;
+
+  const minGap = Math.min(...pairs.map((p) => p.gapPx));
+  const maxGap = Math.max(...pairs.map((p) => p.gapPx));
+
+  return (
+    <div className="rounded-md border border-blue-100 bg-white/80 px-2 py-1.5 dark:border-blue-900/60 dark:bg-zinc-950/60">
+      <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold text-slate-600 dark:text-zinc-300">
+        <span>ახლანდელი დაშორებები</span>
+        <span className="tabular-nums text-slate-400">
+          {minGap === maxGap ? `${minGap}px` : `${minGap}…${maxGap}px`} · მიზანი {targetGap}px
+        </span>
+      </div>
+      <ul className="max-h-28 space-y-0.5 overflow-y-auto text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+        {pairs.map((p) => {
+          const ok = p.gapPx >= targetGap - 1;
+          const exact = Math.abs(p.gapPx - targetGap) <= 1;
+          return (
+            <li
+              key={`${p.leftId}-${p.rightId}`}
+              className={`flex items-center justify-between gap-2 tabular-nums ${
+                exact
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : ok
+                    ? ''
+                    : 'font-semibold text-amber-600 dark:text-amber-400'
+              }`}
+            >
+              <span className="truncate">
+                {HEADER_ITEM_LABELS[p.leftId]} → {HEADER_ITEM_LABELS[p.rightId]}
+              </span>
+              <span>{p.gapPx}px</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function HeaderItemEditor({
   header,
   itemId,
@@ -2245,6 +2523,19 @@ function HeaderItemEditor({
   const color =
     itemStyle?.color ||
     (isBrand ? header.brandColor || brandFallbackColor : header.navColor || navFallbackColor);
+
+  /** Write the exact coordinates the admin asked for (drag/inspector agree). */
+  const setPos = (next: { x: number; y: number }) => {
+    onUpdate({
+      itemPositions: {
+        ...(header.itemPositions || {}),
+        [itemId]: {
+          x: clampHeaderPercent(next.x, pos.x),
+          y: clampHeaderPercent(next.y, pos.y),
+        },
+      },
+    });
+  };
 
   const patchItemStyle = (patch: {
     fontSize?: number;
@@ -2278,7 +2569,7 @@ function HeaderItemEditor({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-inspector-focused="true">
       <button
         type="button"
         onClick={onBack}
@@ -2294,6 +2585,60 @@ function HeaderItemEditor({
         <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
           {HEADER_ITEM_LABELS[itemId]}
         </div>
+        <div
+          className="grid grid-cols-2 gap-2"
+          data-inspector-live-section="position"
+        >
+          <NumField
+            label="X (%)"
+            value={pos.x}
+            min={HEADER_POS_MIN_PCT}
+            max={HEADER_POS_MAX_PCT}
+            decimals={1}
+            nudge={0.5}
+            paramKey="posX"
+            // Exactly what you type — no auto anti-overlap correction.
+            onCommit={(x) => setPos({ x, y: pos.y })}
+          />
+          <NumField
+            label="Y (%)"
+            value={pos.y}
+            min={HEADER_POS_MIN_PCT}
+            max={HEADER_POS_MAX_PCT}
+            decimals={1}
+            nudge={0.5}
+            paramKey="posY"
+            onCommit={(y) => setPos({ x: pos.x, y })}
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setPos({ x: pos.x, y: 50 })}
+            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            რიგში დაბრუნება (Y 50)
+          </button>
+          <button
+            type="button"
+            onClick={() => setPos({ x: 50, y: 50 })}
+            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            ცენტრში
+          </button>
+          <button
+            type="button"
+            onClick={() => setPos({ ...DEFAULT_HEADER_ITEM_POSITIONS[itemId] })}
+            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            საწყისი ადგილი
+          </button>
+        </div>
+        <p className="text-[10px] leading-snug text-slate-400">
+          X/Y = სვეტის პროცენტი. მინუსი მარცხნივ/ზემოთ გაჰყავს წარწერა სვეტს გარეთ
+          (დასაშვები {HEADER_POS_MIN_PCT}…{HEADER_POS_MAX_PCT}). ისრები ↑/↓ ცვლის 0.5-ით,
+          Shift+ისარი — 5-ით.
+        </p>
         {labelKey ? (
           <TextField
             label={isBrand ? 'ტექსტი (ცარიელი = Vhome)' : 'ტექსტი (ცარიელი = თარგმანი)'}
@@ -2321,60 +2666,6 @@ function HeaderItemEditor({
             />
           </div>
         ) : null}
-        <div className="grid grid-cols-2 gap-2">
-          <NumField
-            label="X (%)"
-            value={pos.x}
-            min={0}
-            max={100}
-            decimals={1}
-            paramKey="posX"
-            onCommit={(x) => {
-              const opts = headerOverlapOptsForEditor(header);
-              const nextPos = resolveHeaderItemNoOverlap(
-                itemId,
-                { x, y: pos.y },
-                {
-                  ...(header.itemPositions || {}),
-                  [itemId]: { x, y: pos.y },
-                },
-                opts
-              );
-              onUpdate({
-                itemPositions: {
-                  ...(header.itemPositions || {}),
-                  [itemId]: nextPos,
-                },
-              });
-            }}
-          />
-          <NumField
-            label="Y (%)"
-            value={pos.y}
-            min={0}
-            max={100}
-            decimals={1}
-            paramKey="posY"
-            onCommit={(y) => {
-              const opts = headerOverlapOptsForEditor(header);
-              const nextPos = resolveHeaderItemNoOverlap(
-                itemId,
-                { x: pos.x, y },
-                {
-                  ...(header.itemPositions || {}),
-                  [itemId]: { x: pos.x, y },
-                },
-                opts
-              );
-              onUpdate({
-                itemPositions: {
-                  ...(header.itemPositions || {}),
-                  [itemId]: nextPos,
-                },
-              });
-            }}
-          />
-        </div>
         <NumField
           label="ზღვარი გარშემო (px)"
           value={itemStyle?.padPx ?? 0}
@@ -2385,17 +2676,12 @@ function HeaderItemEditor({
             const prev = header.itemStyles?.[itemId] || {};
             const nextStyle: HeaderItemStyle = { ...prev, padPx: nextPad };
             if (nextPad === 0) delete nextStyle.padPx;
-            const nextStyles = {
-              ...(header.itemStyles || {}),
-              [itemId]: nextStyle,
-            };
-            const opts = headerOverlapOptsForEditor({ ...header, itemStyles: nextStyles });
-            const nextPositions = header.itemPositions
-              ? spreadHeaderItemPositions(header.itemPositions, opts)
-              : header.itemPositions;
+            // Padding only widens this label — positions stay where they were placed.
             onUpdate({
-              itemStyles: nextStyles,
-              ...(nextPositions ? { itemPositions: nextPositions } : {}),
+              itemStyles: {
+                ...(header.itemStyles || {}),
+                [itemId]: nextStyle,
+              },
             });
           }}
         />
@@ -2404,9 +2690,9 @@ function HeaderItemEditor({
           onChange={(opacity) => patchItemStyle({ opacity })}
         />
         <p className="text-[10px] leading-snug text-slate-400">
-          ჰედერზე გადაათრიე იგივე ელემენტი — პოზიცია აქაც განახლდება. Shift = მხოლოდ
-          ჰორიზონტალურად, Alt = მხოლოდ ვერტიკალურად. „ზღვარი გარშემო“ ამ სიტყვას სხვებისგან
-          უფრო შორს აჩერებს.
+          ჰედერზე გადაათრიე იგივე ელემენტი — პოზიცია აქაც განახლდება. Alt = ვერტიკალი,
+          Ctrl = უხილავი საზღვრის იგნორი. „ზღვარი გარშემო“ ამ წარწერის პირად დამატებით
+          კედელს ამატებს საერთო მინ. დაშორებას.
         </p>
       </div>
     </div>
@@ -4843,6 +5129,7 @@ function NumField({
   min,
   max,
   decimals = 0,
+  nudge,
   paramKey,
   visible,
   onVisibleChange,
@@ -4854,6 +5141,8 @@ function NumField({
   max?: number;
   /** Allow fractional input (e.g. 1 = tenths for %). Default 0 = integers only. */
   decimals?: number;
+  /** Step for −/+ buttons and ↑/↓ keys (Shift = ×10). Default 1. */
+  nudge?: number;
   /** When set, highlights while canvas drag touches this param */
   paramKey?: import('@/components/home-design/HomeDesignContext').DesignEditParam;
   /** Optional show/hide checkbox in the label row (type-panel name/count). */
@@ -4864,8 +5153,10 @@ function NumField({
   const active = Boolean(paramKey && design?.activeEditParams.includes(paramKey));
   const [draft, setDraft] = React.useState(() => formatNumFieldValue(value, decimals));
   const [focused, setFocused] = React.useState(false);
+  const stepBaseRef = React.useRef(value);
 
   React.useEffect(() => {
+    stepBaseRef.current = value;
     if (!focused) setDraft(formatNumFieldValue(value, decimals));
   }, [value, focused, decimals]);
 
@@ -4888,6 +5179,22 @@ function NumField({
   const draftPattern =
     decimals > 0 ? /^-?\d*(?:[.,]\d*)?$/ : /^-?\d*$/;
   const layerOff = Boolean(onVisibleChange) && visible === false;
+  const step = nudge && nudge > 0 ? nudge : 1;
+
+  const applyStep = (delta: number) => {
+    // Track the last value we sent so rapid −/+ clicks in one tick keep stepping
+    // instead of recomputing from the not-yet-rerendered prop.
+    const typed = Number(draft.trim().replace(',', '.'));
+    const from = focused && Number.isFinite(typed) ? typed : stepBaseRef.current;
+    let next = from + delta;
+    if (min !== undefined) next = Math.max(min, next);
+    if (max !== undefined) next = Math.min(max, next);
+    const f = 10 ** Math.max(0, decimals);
+    next = Math.round(next * f) / f;
+    stepBaseRef.current = next;
+    setDraft(formatNumFieldValue(next, decimals));
+    if (next !== value) onCommit(next);
+  };
 
   return (
     <div
@@ -4915,31 +5222,65 @@ function NumField({
           </span>
         ) : null}
       </div>
-      <input
-        type="text"
-        inputMode={decimals > 0 ? 'decimal' : 'numeric'}
-        disabled={layerOff}
-        className={`mt-0.5 w-full rounded-md border px-2 py-1 text-sm dark:bg-zinc-950 dark:text-zinc-100 ${
-          layerOff
-            ? 'cursor-not-allowed opacity-40'
-            : active
-              ? 'border-blue-400 text-blue-900 dark:border-blue-500 dark:text-blue-100'
-              : 'border-slate-200 text-slate-800 dark:border-zinc-600'
-        }`}
-        value={draft}
-        onFocus={() => setFocused(true)}
-        onChange={(e) => {
-          const raw = e.target.value;
-          if (raw === '' || raw === '-' || draftPattern.test(raw)) setDraft(raw);
-        }}
-        onBlur={(e) => {
-          setFocused(false);
-          commitFromRaw(e.target.value);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-        }}
-      />
+      <div className="mt-0.5 flex w-full min-w-0 items-center gap-1">
+        {nudge ? (
+          <button
+            type="button"
+            tabIndex={-1}
+            disabled={layerOff}
+            onClick={() => applyStep(-step)}
+            title={`−${step}`}
+            className="h-7 w-5 shrink-0 rounded-md border border-slate-200 text-sm font-bold leading-none text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            −
+          </button>
+        ) : null}
+        <input
+          type="text"
+          inputMode={decimals > 0 ? 'decimal' : 'numeric'}
+          disabled={layerOff}
+          className={`w-full min-w-0 rounded-md border px-1.5 py-1 text-sm dark:bg-zinc-950 dark:text-zinc-100 ${
+            layerOff
+              ? 'cursor-not-allowed opacity-40'
+              : active
+                ? 'border-blue-400 text-blue-900 dark:border-blue-500 dark:text-blue-100'
+                : 'border-slate-200 text-slate-800 dark:border-zinc-600'
+          }`}
+          value={draft}
+          onFocus={() => setFocused(true)}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === '' || raw === '-' || draftPattern.test(raw)) setDraft(raw);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            commitFromRaw(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+              return;
+            }
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              const dir = e.key === 'ArrowUp' ? 1 : -1;
+              applyStep(dir * step * (e.shiftKey ? 10 : 1));
+            }
+          }}
+        />
+        {nudge ? (
+          <button
+            type="button"
+            tabIndex={-1}
+            disabled={layerOff}
+            onClick={() => applyStep(step)}
+            title={`+${step}`}
+            className="h-7 w-5 shrink-0 rounded-md border border-slate-200 text-sm font-bold leading-none text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            +
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

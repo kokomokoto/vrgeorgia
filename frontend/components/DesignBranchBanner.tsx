@@ -3,7 +3,8 @@
 /**
  * Design Mode chrome for admins on the homepage.
  * — Off: compact “რედაქტირება” control (visitors never see it).
- * — On: sticky status bar + გამორთვა.
+ * — On: status bar + გამორთვა — same bottom dock as the edit button so it
+ *   never covers the header labels the admin is trying to position.
  */
 import { usePathname } from 'next/navigation';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
@@ -19,7 +20,7 @@ export function DesignBranchBanner() {
 
   if (designOn) {
     return (
-      <div className="pointer-events-none fixed inset-x-0 top-2 z-[300] flex justify-center">
+      <div className="pointer-events-none fixed bottom-4 left-1/2 z-[300] -translate-x-1/2">
         <div
           role="status"
           className="pointer-events-auto flex items-center justify-center gap-2 rounded-full bg-blue-700 px-3 py-1.5 text-center text-xs font-semibold text-white shadow-lg"

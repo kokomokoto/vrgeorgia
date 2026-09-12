@@ -21,6 +21,8 @@ export type SnapRect = {
 type SnapExclude = {
   designable?: string;
   headerItem?: string;
+  /** When true, do not snap header labels to each other (only bar/center). */
+  skipHeaderSiblings?: boolean;
   chip?: string;
   typeCard?: string;
   railLabel?: string;
@@ -199,7 +201,7 @@ export function collectDesignSnapTargets(
     }
   }
 
-  if (mode === 'header') {
+  if (mode === 'header' && !exclude?.skipHeaderSiblings) {
     targets.push(
       ...collectSnapRects(
         '[data-header-item]',

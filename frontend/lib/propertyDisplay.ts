@@ -2,17 +2,33 @@ import type { Property } from './types';
 
 type TFn = (key: string) => string;
 
-export function getDealTypeLabel(dealType: Property['dealType'], t: TFn): string {
-  if (dealType === 'rent') return t('deal_rent');
-  if (dealType === 'mortgage') return t('deal_mortgage');
-  return t('deal_sale');
+/**
+ * გარიგების ტიპის ლეიბლი.
+ * გაყიდულ ობიექტზე წარსული ფორმა: იყიდება→გაიყიდა, ქირავდება→გაქირავდა, გირავდება→გირავნობით გაიცა.
+ */
+export function getDealTypeLabel(
+  dealType: Property['dealType'] | undefined,
+  t: TFn,
+  status?: Property['status']
+): string {
+  const sold = status === 'sold';
+  if (dealType === 'rent') return t(sold ? 'deal_sold_rent' : 'deal_rent');
+  if (dealType === 'mortgage') return t(sold ? 'deal_sold_mortgage' : 'deal_mortgage');
+  return t(sold ? 'deal_sold_sale' : 'deal_sale');
 }
 
-/** მაგ: სასტუმრო-იყიდება */
+/** მაგ: სასტუმრო-იყიდება / აგარაკი-გაქირავდა */
 export function getTypeDealBadge(p: Property, t: TFn): string {
   const typeLabel = t(p.type) || p.type;
-  const dealLabel = getDealTypeLabel(p.dealType, t);
+  const dealLabel = getDealTypeLabel(p.dealType, t, p.status);
   return `${typeLabel}-${dealLabel}`;
+}
+
+/** მაგ: აგარაკი ქირავდება → აგარაკი გაქირავდა */
+export function getTypeDealPhrase(p: Property, t: TFn): string {
+  const typeLabel = t(p.type) || p.type;
+  const dealLabel = getDealTypeLabel(p.dealType, t, p.status);
+  return `${typeLabel} ${dealLabel}`;
 }
 
 /** ძებნილი/რუკის მისამართიდან ქუჩის ნაწილი (ბოლო ნაწილი ხშირად ქალაქია) */

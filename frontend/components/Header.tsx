@@ -16,14 +16,13 @@ import {
   HEADER_ITEM_IDS,
   HEADER_ITEM_GAP_PX_DEFAULT,
   clampHeaderItemGapPx,
+  clampHeaderPercent,
   clampOpacity,
-  clampRailPercent,
   fitHeaderItemPositions,
-  HEADER_PACK_REF_WIDTH,
+  HEADER_POS_SPACE_WIDTH,
   headerFreeLayoutIsCramped,
   headerHasFreeLayout,
   headerItemPadPxById,
-  headerPositionsEqual,
   resolveHeaderItemNoOverlap,
   resolveHeaderItemPos,
   syncHeaderAccountSlotPositions,
@@ -35,7 +34,6 @@ import {
 import {
   liveHeaderOverlapOpts,
   measureHeaderItemSizes,
-  seedVisibleHeaderPositions,
 } from '@/lib/headerCanvasMeasure';
 import {
   clearDesignSnapGuides,
@@ -176,6 +174,8 @@ function useHeaderItemDrag(enabled: boolean) {
   const design = useHomeDesignOptional();
   const designRef = React.useRef(design);
   designRef.current = design;
+  /** True while a header label is actively following the pointer (past drag threshold). */
+  const [liveDragging, setLiveDragging] = React.useState(false);
   const dragRef = React.useRef<{
     itemId: HeaderItemId;
     host: HTMLElement;
@@ -192,32 +192,18 @@ function useHeaderItemDrag(enabled: boolean) {
     lockY: number;
     /** X locked at pointer-down (Alt = vertical-only drag) */
     lockX: number;
+    /** Last axis lock during move — used when resolving overlap on pointer-up */
+    axisLock: 'x' | 'y';
     historyStarted: boolean;
   } | null>(null);
 
   React.useEffect(() => {
     if (!enabled) return;
-    const overlapOpts = (
-      box: DOMRect,
-      sizes: Partial<Record<HeaderItemId, HeaderItemSizePct>>,
-      axisLock?: 'x' | 'y' | null
-    ) => {
-      const header = designRef.current?.layout.header;
-      return {
-        sizes,
-        visibleIds: HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id])),
-        gapPx: clampHeaderItemGapPx(header?.itemGapPx, HEADER_ITEM_GAP_PX_DEFAULT),
-        padPxById: headerItemPadPxById(header?.itemStyles),
-        barW: box.width,
-        barH: box.height,
-        axisLock: axisLock ?? null,
-      };
-    };
 
     const applyDragPoint = (
       clientX: number,
       clientY: number,
-      shiftKey: boolean,
+      _shiftKey: boolean,
       altKey: boolean,
       ctrlKey: boolean
     ) => {
@@ -229,15 +215,19 @@ function useHeaderItemDrag(enabled: boolean) {
         if (dist < DRAG_THRESHOLD_PX) return;
         drag.historyStarted = true;
         designNow.beginHistoryGesture();
+        // Drop fitted overlay so the label follows itemPositions live under the cursor.
+        setLiveDragging(true);
       }
       const box = drag.host.getBoundingClientRect();
       if (box.width <= 0 || box.height <= 0) return;
       drag.box = box;
       const sizes = measureHeaderItemSizes(drag.host, box);
       drag.sizes = sizes;
-      const axisLock: 'x' | 'y' | null = shiftKey ? 'x' : altKey ? 'y' : null;
-      let x = clampRailPercent(((clientX - box.left) / box.width) * 100 - drag.grabDxPct, 50);
-      let y = clampRailPercent(((clientY - box.top) / box.height) * 100 - drag.grabDyPct, 50);
+      // Default = horizontal row. Alt = vertical only. Shift also keeps the row.
+      const axisLock: 'x' | 'y' = altKey ? 'y' : 'x';
+      drag.axisLock = axisLock;
+      let x = clampHeaderPercent(((clientX - box.left) / box.width) * 100 - drag.grabDxPct, 50);
+      let y = clampHeaderPercent(((clientY - box.top) / box.height) * 100 - drag.grabDyPct, 50);
       if (axisLock === 'x') y = drag.lockY;
       if (axisLock === 'y') x = drag.lockX;
       if (!ctrlKey) {
@@ -246,31 +236,57 @@ function useHeaderItemDrag(enabled: boolean) {
         const h = size ? (size.hPct / 100) * box.height : 1;
         const cx = box.left + (x / 100) * box.width;
         const cy = box.top + (y / 100) * box.height;
+        // Only snap to the column/bar — sibling labels make a packed row feel glued shut.
         const snap = snapRectToTargets(
           rectFromValues(drag.itemId, cx - w / 2, cy - h / 2, Math.max(w, 1), Math.max(h, 1)),
-          collectDesignSnapTargets('header', { headerItem: drag.itemId })
+          collectDesignSnapTargets('header', {
+            headerItem: drag.itemId,
+            skipHeaderSiblings: true,
+          })
         );
-        x = clampRailPercent(((cx + snap.dx - box.left) / box.width) * 100, 50);
-        y = clampRailPercent(((cy + snap.dy - box.top) / box.height) * 100, 50);
+        x = clampHeaderPercent(((cx + snap.dx - box.left) / box.width) * 100, 50);
+        y = clampHeaderPercent(((cy + snap.dy - box.top) / box.height) * 100, 50);
         if (axisLock === 'x') y = drag.lockY;
         if (axisLock === 'y') x = drag.lockX;
         setDesignSnapGuides(snap.guides);
       } else {
         clearDesignSnapGuides();
       }
-      const seeded = seedVisibleHeaderPositions(
-        designNow.layout.header.itemPositions,
-        drag.host
-      );
-      seeded[drag.itemId] = resolveHeaderItemNoOverlap(
-        drag.itemId,
-        { x, y },
-        seeded,
-        overlapOpts(box, sizes, axisLock)
-      );
+
+      const header = designNow.layout.header;
+      const gapPx = clampHeaderItemGapPx(header.itemGapPx, HEADER_ITEM_GAP_PX_DEFAULT);
+      // Invisible boundary: while dragging, stay at least gapPx from neighbors
+      // (Ctrl = free placement — ignore the wall for this gesture).
+      if (!ctrlKey && gapPx > 0) {
+        const resolved = resolveHeaderItemNoOverlap(
+          drag.itemId,
+          { x, y },
+          designNow.layout.header.itemPositions || {},
+          {
+            sizes,
+            visibleIds: HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id])),
+            gapPx,
+            padPxById: headerItemPadPxById(header.itemStyles),
+            barW: box.width,
+            barH: box.height,
+            axisLock,
+          }
+        );
+        x = resolved.x;
+        y = resolved.y;
+        if (axisLock === 'x') y = drag.lockY;
+        if (axisLock === 'y') x = drag.lockX;
+      }
+
+      const prev = designNow.layout.header.itemPositions || {};
+      // Only move the grabbed label — never re-seed the whole row from the DOM
+      // (that used to rewrite every item and made the bar "jump").
       const visibleIds = HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id]));
       designNow.updateHeader({
-        itemPositions: syncHeaderAccountSlotPositions(seeded, visibleIds),
+        itemPositions: syncHeaderAccountSlotPositions(
+          { ...prev, [drag.itemId]: { x, y } },
+          visibleIds
+        ),
       });
     };
 
@@ -281,34 +297,48 @@ function useHeaderItemDrag(enabled: boolean) {
       if (pointerId !== undefined && drag.pointerId !== pointerId) return;
       if (drag.historyStarted) {
         const box = drag.host.getBoundingClientRect();
-        if (box.width > 0 && box.height > 0) {
+        const header = designNow.layout.header;
+        const gapPx = clampHeaderItemGapPx(header.itemGapPx, HEADER_ITEM_GAP_PX_DEFAULT);
+        // Final settle against the invisible boundary (same as live drag).
+        if (box.width > 0 && box.height > 0 && gapPx > 0) {
           const sizes = measureHeaderItemSizes(drag.host, box);
-          const prev = designNow.layout.header.itemPositions || {};
+          const prev = header.itemPositions || {};
           const current = prev[drag.itemId];
           if (current) {
-            const seeded = seedVisibleHeaderPositions(prev, drag.host);
-            seeded[drag.itemId] = resolveHeaderItemNoOverlap(
-              drag.itemId,
-              current,
-              seeded,
-              overlapOpts(box, sizes, null)
-            );
-            const visibleIds = HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id]));
+            const nextPos = resolveHeaderItemNoOverlap(drag.itemId, current, prev, {
+              sizes,
+              visibleIds: HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id])),
+              gapPx,
+              padPxById: headerItemPadPxById(header.itemStyles),
+              barW: box.width,
+              barH: box.height,
+              axisLock: drag.axisLock || 'x',
+            });
+            const locked =
+              drag.axisLock === 'y'
+                ? { x: current.x, y: nextPos.y }
+                : { x: nextPos.x, y: current.y };
             designNow.updateHeader({
-              itemPositions: syncHeaderAccountSlotPositions(seeded, visibleIds),
+              itemPositions: syncHeaderAccountSlotPositions(
+                { ...prev, [drag.itemId]: locked },
+                HEADER_ITEM_IDS.filter((id) => Boolean(sizes[id]))
+              ),
             });
           }
         }
         designNow.endHistoryGesture();
       }
+      const el = drag.el;
+      const pid = drag.pointerId;
+      dragRef.current = null;
+      setLiveDragging(false);
+      designNow.setActiveEditParams(['posX', 'posY']);
+      clearDesignSnapGuides();
       try {
-        drag.el.releasePointerCapture(drag.pointerId);
+        el.releasePointerCapture(pid);
       } catch {
         /* already released */
       }
-      dragRef.current = null;
-      designNow.setActiveEditParams([]);
-      clearDesignSnapGuides();
     };
 
     const onMove = (e: PointerEvent) => {
@@ -337,9 +367,27 @@ function useHeaderItemDrag(enabled: boolean) {
       if (!enabled || !designNow) return;
       e.preventDefault();
       e.stopPropagation();
-      if (dragRef.current && !dragRef.current.historyStarted) {
+
+      // Always clear a stuck previous drag — otherwise the next label never receives moves.
+      if (dragRef.current) {
+        const prev = dragRef.current;
         dragRef.current = null;
+        setLiveDragging(false);
+        clearDesignSnapGuides();
+        if (prev.historyStarted) {
+          try {
+            designNow.endHistoryGesture();
+          } catch {
+            /* ignore */
+          }
+        }
+        try {
+          prev.el.releasePointerCapture(prev.pointerId);
+        } catch {
+          /* already released */
+        }
       }
+
       const host = (e.currentTarget as HTMLElement).closest('[data-header-canvas]');
       if (!(host instanceof HTMLElement)) return;
       const box = host.getBoundingClientRect();
@@ -361,6 +409,7 @@ function useHeaderItemDrag(enabled: boolean) {
         startClientY: e.clientY,
         lockY: start.y,
         lockX: start.x,
+        axisLock: 'x',
         historyStarted: false,
       };
       designNow.setActiveEditParams(['posX', 'posY']);
@@ -381,7 +430,7 @@ function useHeaderItemDrag(enabled: boolean) {
     [enabled]
   );
 
-  return { onPointerDown, dragRef };
+  return { onPointerDown, dragRef, liveDragging };
 }
 
 function HeaderFreeItem({
@@ -409,6 +458,18 @@ function HeaderFreeItem({
   href?: string;
   onClick?: (e: React.MouseEvent) => void;
 }) {
+  const design = useHomeDesignOptional();
+  const gapPx = clampHeaderItemGapPx(
+    design?.layout.header.itemGapPx,
+    HEADER_ITEM_GAP_PX_DEFAULT
+  );
+  const padPx = clampHeaderItemGapPx(
+    design?.layout.header.itemStyles?.[itemId]?.padPx,
+    0
+  );
+  // Half of the shared min-gap + this label’s pad = the invisible keep-out zone.
+  const halo =
+    designMode && gapPx + padPx > 0 ? Math.round(gapPx / 2) + padPx : 0;
   const commonClass = `pointer-events-auto ${className || ''} ${
     designMode
       ? `cursor-grab touch-none select-none ring-1 active:cursor-grabbing ${
@@ -420,15 +481,24 @@ function HeaderFreeItem({
   const commonStyle: React.CSSProperties = {
     position: 'absolute',
     left: `${pos.x}%`,
-    top: '50%',
+    top: `${pos.y}%`,
     transform: 'translate(-50%, -50%)',
     display: 'flex',
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
     alignItems: 'center',
     height: 36,
     lineHeight: 1,
     // Stable paint order by X — avoid one label permanently covering another when near
     zIndex: selected ? 40 : 5 + Math.round(pos.x),
     whiteSpace: 'nowrap',
+    ...(halo > 0
+      ? {
+          boxShadow: `0 0 0 ${halo}px rgba(37, 99, 235, 0.12)`,
+          outline: '1px dashed rgba(37, 99, 235, 0.45)',
+          outlineOffset: `${halo}px`,
+        }
+      : null),
     ...style,
   };
 
@@ -442,7 +512,10 @@ function HeaderFreeItem({
     : {};
 
   const content = designMode ? (
-    <span className="pointer-events-none">{children}</span>
+    // inline-flex keeps icon+label on one row (admin lock was stacking above the text).
+    <span className="pointer-events-none inline-flex items-center gap-1 whitespace-nowrap">
+      {children}
+    </span>
   ) : (
     children
   );
@@ -503,27 +576,31 @@ export function Header() {
   const [mounted, setMounted] = React.useState(false);
 
   const headerHRaw = headerLayout?.h ?? DEFAULT_HEADER.h;
-  const designScale = useHomeDesignScale(1280);
-  const typeScale = useHomeDesignScale(HEADER_PACK_REF_WIDTH);
-  const fontScale = typeScale;
+  // Same reference as free-nav authoring (max-w-6xl column). Fonts must not
+  // grow on 2K while gaps stay % of the full viewport — that stretched the bar.
+  const designScale = useHomeDesignScale(HEADER_POS_SPACE_WIDTH);
+  const fontScale = designScale;
   const headerH = scaleDesignPx(headerHRaw, designScale, 36);
   const itemPositions = headerLayout?.itemPositions;
+  // Design Mode: never drop free-nav because labels got close — that felt like a total freeze
+  // after dragging a second item. Public page may still fall back when the row is stacked.
   const freeLayoutUsable =
-    headerHasFreeLayout(itemPositions) && !headerFreeLayoutIsCramped(itemPositions);
+    headerHasFreeLayout(itemPositions) &&
+    (designMode || !headerFreeLayoutIsCramped(itemPositions));
   const [navOverflow, setNavOverflow] = React.useState(false);
   const navOverflowRef = React.useRef(false);
   /**
-   * Same nav mode as the public page so Design Mode is WYSIWYG.
-   * Drag still works when free layout is what visitors see.
+   * Free-nav stays on for every xl+ width so 1080p and 2K share the same column rhythm.
+   * Overflow used to flip to classic flex and made the bar look totally different per monitor.
    */
-  const useFreeNav = freeLayoutUsable && !navOverflow;
+  const useFreeNav = freeLayoutUsable;
   const drag = useHeaderItemDrag(designMode);
   const itemPadKey = JSON.stringify(headerItemPadPxById(headerLayout?.itemStyles));
   const designRef = React.useRef(design);
   designRef.current = design;
-  const [publicPositions, setPublicPositions] = React.useState<
-    Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
-  >(undefined);
+
+  /** Public display may compress gaps to fit the column — never rewrite saved layout. */
+  const [displayPositions, setDisplayPositions] = React.useState(itemPositions);
 
   const selectHeaderRoot = React.useCallback(() => {
     design?.setSelectedId('header');
@@ -638,53 +715,57 @@ export function Header() {
     if (!freeLayoutUsable) {
       navOverflowRef.current = false;
       setNavOverflow(false);
-      setPublicPositions(undefined);
+      setDisplayPositions(itemPositions);
       return;
     }
+    // Design Mode: exact saved coordinates (editable).
+    if (designMode) {
+      navOverflowRef.current = false;
+      setNavOverflow(false);
+      setDisplayPositions(itemPositions);
+      return;
+    }
+
     let cancelled = false;
     let raf = 0;
     let emptyTries = 0;
     const run = () => {
       if (cancelled) return;
-      if (designMode && drag.dragRef.current?.historyStarted) return;
-      if (window.innerWidth < DESIGN_WIDE_MIN_WIDTH) return;
+      if (window.innerWidth < DESIGN_WIDE_MIN_WIDTH) {
+        setDisplayPositions(itemPositions);
+        return;
+      }
       const header = designRef.current?.layout.header;
       const opts = liveHeaderOverlapOpts(header);
       if (!opts?.visibleIds?.length) {
-        if (!navOverflowRef.current && emptyTries < 10) {
+        if (emptyTries < 10) {
           emptyTries += 1;
           raf = requestAnimationFrame(run);
+        } else {
+          setDisplayPositions(itemPositions);
         }
         return;
       }
       emptyTries = 0;
       const host = document.querySelector('[data-header-canvas]');
-      if (!(host instanceof HTMLElement)) return;
+      if (!(host instanceof HTMLElement)) {
+        setDisplayPositions(itemPositions);
+        return;
+      }
       const box = host.getBoundingClientRect();
       if (box.width <= 0) return;
-      const seeded = seedVisibleHeaderPositions(header?.itemPositions, host);
+      const seeded = { ...(header?.itemPositions || {}) };
       if (!user && seeded.profile) {
         seeded.login = { ...seeded.profile };
       }
       const fitted = fitHeaderItemPositions(seeded, opts);
-      if (!fitted.fits) {
-        navOverflowRef.current = true;
-        setNavOverflow(true);
-        setPublicPositions(undefined);
-        return;
-      }
-      if (navOverflowRef.current) {
-        navOverflowRef.current = false;
-        setNavOverflow(false);
-      }
-      setPublicPositions((prev) =>
-        headerPositionsEqual(prev, fitted.positions) ? prev : fitted.positions
-      );
+      // Always stay on free-nav; only the on-screen coords may compress.
+      setDisplayPositions(fitted.positions);
+      navOverflowRef.current = false;
+      setNavOverflow(false);
     };
     run();
     const schedule = () => {
-      navOverflowRef.current = false;
-      setNavOverflow(false);
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         raf = requestAnimationFrame(run);
@@ -713,19 +794,18 @@ export function Header() {
     headerLayout?.itemGapPx,
     i18n.language,
     mounted,
-    typeScale,
     fontScale,
   ]);
 
   const brandFontSize = scaleDesignPx(
     headerLayout?.brandFontSize ?? DEFAULT_HEADER.brandFontSize,
     fontScale,
-    12
+    1
   );
   const navFontSize = scaleDesignPx(
     headerLayout?.navFontSize ?? DEFAULT_HEADER.navFontSize,
     fontScale,
-    11
+    1
   );
   const brandColor = headerLayout?.brandColor?.trim() || '';
   const navColor = headerLayout?.navColor?.trim() || '';
@@ -740,7 +820,7 @@ export function Header() {
   const itemStyle = (id: HeaderItemId) => {
     const base = resolveHeaderItemTextStyle(headerLayout, id);
     if (typeof base.fontSize === 'number') {
-      return { ...base, fontSize: scaleDesignPx(base.fontSize, fontScale, 11) };
+      return { ...base, fontSize: scaleDesignPx(base.fontSize, fontScale, 1) };
     }
     return base;
   };
@@ -762,11 +842,12 @@ export function Header() {
   };
 
   const pos = (id: HeaderItemId) => {
-    const source = publicPositions || itemPositions;
+    // Design Mode: saved coords. Public: may use column-fit display coords.
+    const source = designMode ? itemPositions : displayPositions || itemPositions;
     if (!designMode && !user && id === 'login') {
       const loginPos = resolveHeaderItemPos(source, 'login');
       const profilePos = source?.profile;
-      if (profilePos && !publicPositions) return profilePos;
+      if (profilePos) return profilePos;
       return loginPos;
     }
     return resolveHeaderItemPos(source, id);
@@ -962,15 +1043,23 @@ export function Header() {
               style={{ fontSize: itemStyle('admin').fontSize }}
               onClick={designMode ? onDesignItemClick('admin') : undefined}
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                />
-              </svg>
-              {adminText}
+              <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                <svg
+                  className="h-4 w-4 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+                {adminText}
+              </span>
             </HeaderFreeItem>
           ) : null}
         </>
@@ -1017,7 +1106,6 @@ export function Header() {
     <header
       data-site-header
       data-designable="header"
-      data-header-canvas
       data-header-has-media={hasHeaderMedia ? 'true' : undefined}
       className="sticky top-0 z-40 box-border overflow-visible border-b border-slate-200/80 bg-white/85 backdrop-blur-md dark:border-zinc-800/80 dark:backdrop-blur-md relative"
       style={{
@@ -1054,13 +1142,18 @@ export function Header() {
         </>
       ) : null}
 
-      {/* Free layout — xl+ only */}
+      {/* Free layout — xl+ only; positions = % of max-w-6xl column (same on 1080p and 2K). */}
       {useFreeNav ? (
         <div className="pointer-events-none absolute inset-0 z-[2] hidden xl:block">
-          {designMode ? (
-            <DesignableBadge id="header" selected={selected} placement="inside" />
-          ) : null}
-          {freeNavItems}
+          <div
+            data-header-canvas
+            className="relative mx-auto h-full w-full max-w-6xl"
+          >
+            {designMode ? (
+              <DesignableBadge id="header" selected={selected} placement="inside" />
+            ) : null}
+            {freeNavItems}
+          </div>
         </div>
       ) : null}
 

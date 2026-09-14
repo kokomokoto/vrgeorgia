@@ -1,9 +1,10 @@
 import type { Property } from '@/lib/types';
 import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay';
 import { getPropertyShareImageUrl } from '@/lib/propertyShareMetadata';
+import { SITE_NAME, getSiteUrl } from '@/lib/siteUrl';
 
-export const SITE_URL = 'https://vrgeorgia.ge';
-export const SITE_NAME = 'Vhome';
+export { SITE_NAME };
+export const SITE_URL = getSiteUrl();
 export const SITE_API = 'https://vrgeorgia-api.onrender.com';
 
 const DEAL_LABELS: Record<string, string> = {
@@ -52,7 +53,7 @@ export function buildOrganizationJsonLd() {
         '@id': `${SITE_URL}/#organization`,
         name: SITE_NAME,
         url: SITE_URL,
-        logo: `${SITE_URL}/favicon.ico`,
+        logo: `${SITE_URL}/images/vhome-icon.png`,
         description:
           'უძრავი ქონება საქართველოში — ბინები, სახლები, კომერციული ფართები, მიწა. ვირტუალური ტურები და აგენტები.',
         areaServed: {
@@ -199,9 +200,9 @@ export function buildAboutPageJsonLd() {
     '@type': 'AboutPage',
     '@id': `${SITE_URL}/about`,
     url: `${SITE_URL}/about`,
-    name: 'VR Georgia-ს შესახებ',
+    name: 'Vhome-ს შესახებ',
     description:
-      'VR Georgia — უძრავი ქონების პლატფორმა საქართველოში ვირტუალური ტურებით, რუკით და აგენტებით.',
+      'Vhome — უძრავი ქონების პლატფორმა საქართველოში ვირტუალური ტურებით, რუკით და აგენტებით.',
     isPartOf: { '@id': `${SITE_URL}/#website` },
     about: { '@id': `${SITE_URL}/#organization` },
   };

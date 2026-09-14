@@ -10,14 +10,14 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     id: 'what-is',
     question: {
-      ka: 'რა არის VR Georgia?',
-      en: 'What is VR Georgia?',
-      ru: 'Что такое VR Georgia?',
+      ka: 'რა არის Vhome?',
+      en: 'What is Vhome?',
+      ru: 'Что такое Vhome?',
     },
     answer: {
-      ka: 'VR Georgia არის უძრავი ქონების პლატფორმა საქართველოში. აქ ნახავთ ბინებს, სახლებს, მიწის ნაკვეთებსა და კომერციულ ფართებს, ხშირად 3D/VR ტურებით და რუკაზე ძიებით.',
-      en: 'VR Georgia is a real-estate marketplace for Georgia. Browse apartments, houses, land and commercial spaces, often with 3D/VR tours and map search.',
-      ru: 'VR Georgia — платформа недвижимости в Грузии. Здесь квартиры, дома, земля и коммерция, часто с 3D/VR-турами и поиском на карте.',
+      ka: 'Vhome არის უძრავი ქონების პლატფორმა საქართველოში. აქ ნახავთ ბინებს, სახლებს, მიწის ნაკვეთებსა და კომერციულ ფართებს, ხშირად 3D/VR ტურებით და რუკაზე ძიებით.',
+      en: 'Vhome is a real-estate marketplace for Georgia. Browse apartments, houses, land and commercial spaces, often with 3D/VR tours and map search.',
+      ru: 'Vhome — платформа недвижимости в Грузии. Здесь квартиры, дома, земля и коммерция, часто с 3D/VR-турами и поиском на карте.',
     },
   },
   {

@@ -15,12 +15,12 @@ import {
 } from '@/lib/structuredData';
 
 /**
- * Social messengers + search engines + AI crawlers.
- * Middleware returns static HTML so content/OG/JSON-LD is in the first response
- * (SPA client fetch is invisible to many bots).
+ * Social / messenger preview bots only.
+ * Search engines (Googlebot, Bingbot, etc.) must get the real Next.js page —
+ * thin share HTML here would hurt indexing.
  */
 export const SOCIAL_CRAWLER_USER_AGENT =
-  /facebookexternalhit|facebookcatalog|Facebot|Messenger|WhatsApp|Twitterbot|LinkedInBot|TelegramBot|Discordbot|Slackbot|SkypeUriPreview|meta-external|Pinterestbot|vkShare|Viber|Googlebot|Google-Extended|Bingbot|BingPreview|DuckDuckBot|Slurp|Yandex|Baiduspider|Applebot|GPTBot|ChatGPT-User|ClaudeBot|anthropic|PerplexityBot|Bytespider|CCBot|Amazonbot|cohere-ai|ia_archiver/i;
+  /facebookexternalhit|facebookcatalog|Facebot|Messenger|WhatsApp|Twitterbot|LinkedInBot|TelegramBot|Discordbot|Slackbot|SkypeUriPreview|meta-external|Pinterestbot|vkShare|Viber/i;
 
 function escapeHtml(value: string): string {
   return value

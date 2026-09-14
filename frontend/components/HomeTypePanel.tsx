@@ -160,11 +160,13 @@ function TypeCoverMedia({
   scale,
   x,
   y,
+  alt = 'Property type',
 }: {
   media?: TypeMedia;
   scale: number;
   x: number;
   y: number;
+  alt?: string;
 }) {
   if (!media?.url && !media?.embedUrl) return null;
   const frame = typeMediaFrameStyle(scale, x, y);
@@ -173,7 +175,7 @@ function TypeCoverMedia({
     return (
       <iframe
         src={media.embedUrl}
-        title=""
+        title={alt}
         className="pointer-events-none border-0"
         style={frame}
         allow="autoplay; encrypted-media"
@@ -200,7 +202,7 @@ function TypeCoverMedia({
   return (
     <img
       src={media.url}
-      alt=""
+      alt={alt}
       draggable={false}
       className="pointer-events-none"
       style={frame}
@@ -600,7 +602,7 @@ function TypeCategoryCard({
           aria-hidden
         >
           {thumbUrl ? (
-            <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
+            <img src={thumbUrl} alt={displayLabel || item.label || 'Property type'} className="h-full w-full object-cover" />
           ) : (
             <span className="text-base leading-none">{item.icon || fallbackIcon}</span>
           )}
@@ -673,7 +675,13 @@ function TypeCategoryCard({
         style={{ borderRadius: Math.max(0, radius - (frameCss?.borderWidth ?? 2)) }}
         aria-hidden
       >
-        <TypeCoverMedia media={media} scale={mediaScale} x={mediaX} y={mediaY} />
+        <TypeCoverMedia
+          media={media}
+          scale={mediaScale}
+          x={mediaX}
+          y={mediaY}
+          alt={displayLabel || item.label || 'Property type'}
+        />
         {overlayCss ? (
           <span className="absolute inset-0" style={{ background: overlayCss }} />
         ) : null}

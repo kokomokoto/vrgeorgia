@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Vhome">
+  <defs>
+    <!-- Outer face of left wing (brighter) -->
+    <linearGradient id="leftOuter" x1="120" y1="70" x2="240" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7BE24A"/>
+      <stop offset="55%" stop-color="#45C028"/>
+      <stop offset="100%" stop-color="#2FA81A"/>
+    </linearGradient>
+    <!-- Inner fold of left wing (darker) -->
+    <linearGradient id="leftInner" x1="200" y1="100" x2="256" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2E9A1C"/>
+      <stop offset="100%" stop-color="#14520C"/>
+    </linearGradient>
+    <!-- Outer face of right wing -->
+    <linearGradient id="rightOuter" x1="256" y1="360" x2="400" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2FA81A"/>
+      <stop offset="45%" stop-color="#45C028"/>
+      <stop offset="100%" stop-color="#7BE24A"/>
+    </linearGradient>
+    <!-- Inner fold of right wing -->
+    <linearGradient id="rightInner" x1="256" y1="360" x2="320" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#14520C"/>
+      <stop offset="100%" stop-color="#2E9A1C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark square frame -->
+  <rect
+    x="96"
+    y="108"
+    width="320"
+    height="320"
+    rx="18"
+    ry="18"
+    fill="none"
+    stroke="#1E2226"
+    stroke-width="46"
+  />
+
+  <!--
+    3D ribbon V — two arms with outer/inner faces + soft curved tips
+    that overlap the top of the frame.
+  -->
+
+  <!-- Left arm OUTER (front) -->
+  <path
+    fill="url(#leftOuter)"
+    d="M 108 96
+       C 130 58, 168 52, 198 78
+       L 248 330
+       L 214 362
+       L 118 148
+       C 110 128, 106 112, 108 96
+       Z"
+  />
+
+  <!-- Left arm INNER (crease) -->
+  <path
+    fill="url(#leftInner)"
+    d="M 198 78
+       C 210 92, 222 140, 236 250
+       L 248 330
+       L 228 346
+       C 220 260, 208 160, 198 78
+       Z"
+  />
+
+  <!-- Right arm INNER (crease) -->
+  <path
+    fill="url(#rightInner)"
+    d="M 314 78
+       C 304 92, 290 140, 276 250
+       L 264 330
+       L 284 346
+       C 292 260, 304 160, 314 78
+       Z"
+  />
+
+  <!-- Right arm OUTER (front) -->
+  <path
+    fill="url(#rightOuter)"
+    d="M 404 96
+       C 382 58, 344 52, 314 78
+       L 264 330
+       L 298 362
+       L 394 148
+       C 402 128, 406 112, 404 96
+       Z"
+  />
+
+  <!-- Vertex join (darker tip of V) -->
+  <path
+    fill="#114A0B"
+    d="M 214 362
+       L 248 330
+       L 264 330
+       L 298 362
+       L 256 404
+       Z"
+  />
+
+  <!-- Soft highlight on outer tips -->
+  <path
+    fill="#8FEA58"
+    opacity="0.45"
+    d="M 130 88
+       C 148 62, 176 60, 196 82
+       L 188 98
+       C 172 82, 152 84, 138 100
+       Z"
+  />
+  <path
+    fill="#8FEA58"
+    opacity="0.45"
+    d="M 382 88
+       C 364 62, 336 60, 316 82
+       L 324 98
+       C 340 82, 360 84, 374 100
+       Z"
+  />
+</svg>

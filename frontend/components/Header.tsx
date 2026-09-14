@@ -4,6 +4,7 @@ import Link from 'next/link';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BrandLogo } from './BrandLogo';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from './AuthProvider';
@@ -25,6 +26,8 @@ import {
   headerItemPadPxById,
   resolveHeaderItemNoOverlap,
   resolveHeaderItemPos,
+  resolveBrandLogoSize,
+  ensureBrandLogoPosition,
   syncHeaderAccountSlotPositions,
   type HeaderItemId,
   type HeaderItemPos,
@@ -487,7 +490,8 @@ function HeaderFreeItem({
     flexDirection: 'row',
     flexWrap: 'nowrap',
     alignItems: 'center',
-    height: 36,
+    height: itemId === 'brandLogo' ? 'auto' : 36,
+    minHeight: itemId === 'brandLogo' ? undefined : 36,
     lineHeight: 1,
     // Stable paint order by X — avoid one label permanently covering another when near
     zIndex: selected ? 40 : 5 + Math.round(pos.x),
@@ -676,17 +680,21 @@ export function Header() {
     }
   };
 
-  const handleLogoClick = (e: React.MouseEvent) => {
-    if (designMode) {
-      e.preventDefault();
-      e.stopPropagation();
-      selectHeaderItem('brand');
-      return;
-    }
+  const handleLogoNavigate = (e: React.MouseEvent) => {
     e.preventDefault();
     // ლოგო = ახალი ძიება — შენახული ფილტრები/სორტი იშლება
     clearHomeFiltersStorage();
     window.location.href = '/';
+  };
+
+  const handleBrandItemClick = (itemId: 'brand' | 'brandLogo') => (e: React.MouseEvent) => {
+    if (designMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectHeaderItem(itemId);
+      return;
+    }
+    handleLogoNavigate(e);
   };
 
   const appName = headerLayout?.brandLabel?.trim() || 'Vhome';
@@ -802,6 +810,7 @@ export function Header() {
     fontScale,
     1
   );
+  const brandLogoSize = scaleDesignPx(resolveBrandLogoSize(headerLayout), fontScale, 1);
   const navFontSize = scaleDesignPx(
     headerLayout?.navFontSize ?? DEFAULT_HEADER.navFontSize,
     fontScale,
@@ -843,7 +852,8 @@ export function Header() {
 
   const pos = (id: HeaderItemId) => {
     // Design Mode: saved coords. Public: may use column-fit display coords.
-    const source = designMode ? itemPositions : displayPositions || itemPositions;
+    const rawSource = designMode ? itemPositions : displayPositions || itemPositions;
+    const source = ensureBrandLogoPosition(rawSource);
     if (!designMode && !user && id === 'login') {
       const loginPos = resolveHeaderItemPos(source, 'login');
       const profilePos = source?.profile;
@@ -856,6 +866,23 @@ export function Header() {
   const freeNavItems = (
     <>
       <HeaderFreeItem
+        itemId="brandLogo"
+        pos={pos('brandLogo')}
+        designMode={designMode}
+        selected={selectedHeaderItemId === 'brandLogo'}
+        drag={drag}
+        as="a"
+        href="/"
+        onClick={handleBrandItemClick('brandLogo')}
+        className="inline-flex items-center justify-center leading-none"
+        style={{
+          opacity: clampOpacity(headerLayout?.itemStyles?.brandLogo?.opacity),
+        }}
+      >
+        <BrandLogo sizePx={brandLogoSize} />
+      </HeaderFreeItem>
+
+      <HeaderFreeItem
         itemId="brand"
         pos={pos('brand')}
         designMode={designMode}
@@ -863,7 +890,7 @@ export function Header() {
         drag={drag}
         as="a"
         href="/"
-        onClick={handleLogoClick}
+        onClick={handleBrandItemClick('brand')}
         className="font-semibold leading-none"
         style={itemStyle('brand')}
       >
@@ -1123,7 +1150,9 @@ export function Header() {
       onClick={
         designMode
           ? (e) => {
-              if ((e.target as HTMLElement).closest('a, button, select, input, textarea, label')) {
+              const t = e.target as HTMLElement;
+              // Keep item selection when clicking a free-nav chip / logo / control.
+              if (t.closest('a, button, select, input, textarea, label, [data-header-item]')) {
                 return;
               }
               e.preventDefault();
@@ -1166,14 +1195,63 @@ export function Header() {
           <div className="flex min-w-0 shrink-0 items-center gap-3">
             <a
               href="/"
-              onClick={handleLogoClick}
+              onClick={designMode ? undefined : handleLogoNavigate}
               data-theme-brand
-              className={`cursor-pointer font-semibold leading-none ${
-                designMode ? 'pointer-events-auto relative z-10 ring-1 ring-blue-400/50' : ''
+              className={`inline-flex cursor-pointer items-center gap-2 font-semibold leading-none ${
+                designMode ? 'pointer-events-auto relative z-10' : ''
               }`}
               style={brandStyle}
             >
-              {appName}
+              <span
+                role={designMode ? 'button' : undefined}
+                tabIndex={designMode ? 0 : undefined}
+                data-header-item="brandLogo"
+                className={
+                  designMode
+                    ? `pointer-events-auto relative z-10 inline-flex cursor-grab touch-none select-none ring-1 active:cursor-grabbing ${
+                        selectedHeaderItemId === 'brandLogo'
+                          ? 'ring-2 ring-blue-600'
+                          : 'ring-blue-400/60'
+                      }`
+                    : undefined
+                }
+                onClick={
+                  designMode
+                    ? (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        selectHeaderItem('brandLogo');
+                      }
+                    : undefined
+                }
+              >
+                <BrandLogo sizePx={brandLogoSize} />
+              </span>
+              <span
+                role={designMode ? 'button' : undefined}
+                tabIndex={designMode ? 0 : undefined}
+                data-header-item="brand"
+                className={
+                  designMode
+                    ? `pointer-events-auto relative z-10 cursor-grab touch-none select-none ring-1 active:cursor-grabbing ${
+                        selectedHeaderItemId === 'brand'
+                          ? 'ring-2 ring-blue-600'
+                          : 'ring-blue-400/60'
+                      }`
+                    : undefined
+                }
+                onClick={
+                  designMode
+                    ? (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        selectHeaderItem('brand');
+                      }
+                    : undefined
+                }
+              >
+                {appName}
+              </span>
             </a>
           </div>
           <nav
@@ -1262,11 +1340,12 @@ export function Header() {
         ) : null}
         <a
           href="/"
-          onClick={handleLogoClick}
+          onClick={designMode ? undefined : handleLogoNavigate}
           data-theme-brand
-          className="cursor-pointer font-semibold leading-none"
+          className="inline-flex cursor-pointer items-center gap-2 font-semibold leading-none"
           style={brandStyle}
         >
+          <BrandLogo sizePx={brandLogoSize} />
           {appName}
         </a>
         <div className="flex items-center gap-3">

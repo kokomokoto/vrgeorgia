@@ -919,6 +919,10 @@ export function HomeDesignProvider({
             patch.brandFontSize !== undefined
               ? Math.max(12, Math.min(40, Math.round(patch.brandFontSize)))
               : prev.header.brandFontSize,
+          brandLogoSize:
+            patch.brandLogoSize !== undefined
+              ? Math.max(16, Math.min(96, Math.round(patch.brandLogoSize)))
+              : prev.header.brandLogoSize,
           navFontSize:
             patch.navFontSize !== undefined
               ? Math.max(10, Math.min(24, Math.round(patch.navFontSize)))

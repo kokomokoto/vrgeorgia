@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
-
-const SITE_URL = 'https://vrgeorgia.ge';
+import { getSiteUrl } from '@/lib/siteUrl';
 
 function apiBase(): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();
@@ -58,6 +57,7 @@ async function fetchPublicAgents(): Promise<ListedAgent[]> {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const SITE_URL = getSiteUrl();
   const now = new Date();
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: SITE_URL, lastModified: now, changeFrequency: 'hourly', priority: 1 },
@@ -74,6 +74,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/services/consult`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
     { url: `${SITE_URL}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${SITE_URL}/faq`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
+    { url: `${SITE_URL}/mortgage-calculator`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
   ];
 
   const [properties, agents] = await Promise.all([

@@ -77,10 +77,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get single agent by ID (public)
+// Get single agent by ID or linked user ID (public)
 router.get('/:id', async (req, res) => {
   try {
-    const agent = await Agent.findById(req.params.id).populate('user', 'name avatar phone email');
+    const id = req.params.id;
+    let agent = await Agent.findById(id).populate('user', 'name avatar phone email').catch(() => null);
+    if (!agent) {
+      agent = await Agent.findOne({ user: id }).populate('user', 'name avatar phone email');
+    }
     if (!agent) {
       return res.status(404).json({ error: 'Agent not found' });
     }
@@ -103,7 +107,11 @@ router.get('/:id', async (req, res) => {
 // Get agent's properties (public; admins can request non-public via adminView=1)
 router.get('/:id/properties', async (req, res) => {
   try {
-    const agent = await Agent.findById(req.params.id).select('user').lean();
+    const id = req.params.id;
+    let agent = await Agent.findById(id).select('user').lean().catch(() => null);
+    if (!agent?.user) {
+      agent = await Agent.findOne({ user: id }).select('user').lean();
+    }
     if (!agent?.user) {
       return res.status(404).json({ error: 'Agent not found' });
     }

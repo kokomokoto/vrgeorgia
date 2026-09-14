@@ -2,11 +2,12 @@ import type { Metadata } from 'next';
 import { FAQ_ITEMS } from '@/lib/faqContent';
 import { SITE_URL, buildFaqPageJsonLd, jsonLdScript } from '@/lib/structuredData';
 import { FaqPageClient } from '@/components/FaqPageClient';
+import { DEFAULT_OG_IMAGE } from '@/lib/seoDefaults';
 
 export const metadata: Metadata = {
   title: 'ხშირად დასმული კითხვები (FAQ)',
   description:
-    'პასუხები VR Georgia-ზე: როგორ ვიპოვოთ ბინა ან სახლი, რა არის VR ტური, როგორ დავუკავშირდეთ აგენტს, ფასები და მიწის სტატუსი.',
+    'პასუხები Vhome-ზე: როგორ ვიპოვოთ ბინა ან სახლი, რა არის VR ტური, როგორ დავუკავშირდეთ აგენტს, ფასები და მიწის სტატუსი.',
   alternates: { canonical: `${SITE_URL}/faq` },
   openGraph: {
     title: 'FAQ — Vhome',
@@ -15,6 +16,7 @@ export const metadata: Metadata = {
     siteName: 'Vhome',
     locale: 'ka_GE',
     type: 'website',
+    images: [DEFAULT_OG_IMAGE],
   },
   robots: { index: true, follow: true },
 };

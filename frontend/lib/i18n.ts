@@ -241,7 +241,7 @@ const resources = {
       breadcrumb_home: 'მთავარი',
       faq_page_title: 'ხშირად დასმული კითხვები',
       faq_page_intro:
-        'მოკლე პასუხები VR Georgia-ს გამოყენებაზე — ძიება, აგენტები, ვირტუალური ტურები და განცხადებები.',
+        'მოკლე პასუხები Vhome-ს გამოყენებაზე — ძიება, აგენტები, ვირტუალური ტურები და განცხადებები.',
       faq_page_more: 'მეტი ინფორმაცია:',
       faq_link_map: 'რუკაზე ძებნა',
       about_page_about_link: 'საიტის შესახებ',
@@ -290,7 +290,7 @@ const resources = {
       services_section_consult_body:
         'ერთჯერადი შეხვედრა ან ონლაინ ზარი: ბიუჯეტი, ეტაპები, კონტრაქტორის არჩევა, რისკები და რეგულაციების მოკლე მიმოხილვა.',
       services_footer_note:
-        'VR Georgia უძრავი ქონების განცხადებების პლატფორმაა; აღნიშნული მომსახურებების მიწოდება ხდება პროფესიონალებთან პირდაპირი შეთანხმებით.',
+        'Vhome უძრავი ქონების განცხადებების პლატფორმაა; აღნიშნული მომსახურებების მიწოდება ხდება პროფესიონალებთან პირდაპირი შეთანხმებით.',
       services_back: 'ყველა მომსახურება',
       services_open_page: 'გვერდის გახსნა',
       // Mortgage Calculator
@@ -1041,7 +1041,7 @@ const resources = {
       breadcrumb_home: 'Home',
       faq_page_title: 'Frequently asked questions',
       faq_page_intro:
-        'Short answers about using VR Georgia — search, agents, virtual tours and listings.',
+        'Short answers about using Vhome — search, agents, virtual tours and listings.',
       faq_page_more: 'More information:',
       faq_link_map: 'Search on map',
       about_page_about_link: 'About the site',
@@ -1090,7 +1090,7 @@ const resources = {
       services_section_consult_body:
         'One-off meeting or online call: budget, phasing, contractor selection, risks, and a concise overview of regulations.',
       services_footer_note:
-        'VR Georgia is a real-estate listings platform; delivery of these services is agreed directly with qualified professionals.',
+        'Vhome is a real-estate listings platform; delivery of these services is agreed directly with qualified professionals.',
       services_back: 'All services',
       services_open_page: 'Open page',
       // Mortgage Calculator
@@ -1826,7 +1826,7 @@ const resources = {
       breadcrumb_home: 'Главная',
       faq_page_title: 'Часто задаваемые вопросы',
       faq_page_intro:
-        'Краткие ответы по VR Georgia — поиск, агенты, виртуальные туры и объявления.',
+        'Краткие ответы по Vhome — поиск, агенты, виртуальные туры и объявления.',
       faq_page_more: 'Дополнительно:',
       faq_link_map: 'Поиск на карте',
       about_page_about_link: 'О сайте',
@@ -1875,7 +1875,7 @@ const resources = {
       services_section_consult_body:
         'Разовая встреча или онлайн-звонок: бюджет, этапы, выбор подрядчика, риски и краткий обзор нормативов.',
       services_footer_note:
-        'VR Georgia — платформа объявлений о недвижимости; оказание перечисленных услуг согласуется напрямую с квалифицированными специалистами.',
+        'Vhome — платформа объявлений о недвижимости; оказание перечисленных услуг согласуется напрямую с квалифицированными специалистами.',
       services_back: 'Все услуги',
       services_open_page: 'Открыть страницу',
       // Mortgage Calculator

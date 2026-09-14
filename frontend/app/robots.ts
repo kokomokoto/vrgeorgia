@@ -1,17 +1,32 @@
 import type { MetadataRoute } from 'next';
+import { getSiteUrl, isNoIndexHost } from '@/lib/siteUrl';
 
 const PRIVATE_PATHS = [
   '/admin/',
   '/login',
+  '/register',
   '/profile',
   '/upload',
   '/favorites',
   '/compare',
   '/messages',
   '/analytics',
+  '/property/*/edit',
 ];
 
 export default function robots(): MetadataRoute.Robots {
+  const site = getSiteUrl();
+
+  if (isNoIndexHost()) {
+    return {
+      rules: {
+        userAgent: '*',
+        disallow: '/',
+      },
+      host: site,
+    };
+  }
+
   return {
     rules: [
       {
@@ -19,7 +34,6 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: PRIVATE_PATHS,
       },
-      // AI / search crawlers — explicit allow for public content discovery
       {
         userAgent: 'Googlebot',
         allow: '/',
@@ -77,7 +91,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
       },
     ],
-    sitemap: 'https://vrgeorgia.ge/sitemap.xml',
-    host: 'https://vrgeorgia.ge',
+    sitemap: `${site}/sitemap.xml`,
+    host: site,
   };
 }

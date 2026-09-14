@@ -31,6 +31,7 @@ import { LightboxZoomImage } from '@/components/LightboxZoomImage';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { toYouTubeEmbedUrl } from '@/lib/youtubeEmbed';
 import { resolveTourPublicUrl } from '@/lib/tourBuilder';
+import { getSiteUrl } from '@/lib/siteUrl';
 import { Shimmer } from '@/components/Skeleton';
 import { useAuth } from '@/components/AuthProvider';
 import { isAdminRole, isAgentRole } from '@/lib/userRoles';
@@ -262,7 +263,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
               src={resolveImageUrl(p, 'thumb', {
                 isPanorama: isPanoramaPhoto(p, panoramaPhotos),
               })}
-              alt=""
+              alt={`Photo ${i + 1}`}
               className="h-full w-full object-cover"
             />
           </button>
@@ -729,7 +730,7 @@ function PropertyDetailInner() {
               <img
                 key={photo}
                 src={resolveGalleryPhotoUrl(photo, property.panoramaPhotos)}
-                alt=""
+                alt={`${property.title || 'Property'} — photo ${idx + 1}`}
                 className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${
                   active ? 'z-[1] opacity-100 group-hover:opacity-95' : 'z-0 opacity-0'
                 }`}
@@ -755,7 +756,7 @@ function PropertyDetailInner() {
   const agentProfileHref = property.ownerAgentProfileId
     ? `/agents/${property.ownerAgentProfileId}`
     : isAgentRole(owner?.role) && ownerId
-      ? `/agent/${ownerId}`
+      ? `/agents/${ownerId}`
       : null;
 
   const listedDateLabel = property.createdAt
@@ -799,7 +800,7 @@ function PropertyDetailInner() {
   const sharePageUrl =
     typeof window !== 'undefined'
       ? window.location.href
-      : `https://vrgeorgia.ge/property/${property._id}${shareTokenFromUrl ? `?t=${shareTokenFromUrl}` : ''}`;
+      : `${getSiteUrl()}/property/${property._id}${shareTokenFromUrl ? `?t=${shareTokenFromUrl}` : ''}`;
 
   const idMetaPanel = (
     <div className="flex flex-col justify-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
@@ -866,7 +867,7 @@ function PropertyDetailInner() {
             {owner?.avatar ? (
               <img
                 src={resolveImageUrl(owner.avatar)}
-                alt=""
+                alt={owner?.name || owner?.email || 'Agent'}
                 className="h-14 w-14 shrink-0 rounded-full object-cover"
               />
             ) : (
@@ -886,7 +887,7 @@ function PropertyDetailInner() {
             {owner?.avatar ? (
               <img
                 src={resolveImageUrl(owner.avatar)}
-                alt=""
+                alt={owner?.name || owner?.email || 'Agent'}
                 className="h-14 w-14 shrink-0 rounded-full object-cover"
               />
             ) : (
@@ -1222,9 +1223,9 @@ function PropertyDetailInner() {
 
       {property.desc && (
         <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
-          <div className="text-sm font-semibold mb-2">
+          <h2 className="mb-2 text-sm font-semibold">
             {t('description')}
-          </div>
+          </h2>
           <div className="text-sm text-slate-700 whitespace-pre-wrap break-words overflow-hidden">{displayDesc}</div>
         </div>
       )}
@@ -1542,7 +1543,7 @@ function PropertyDetailInner() {
         id="property-map-section"
         className="scroll-mt-24 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3"
       >
-        <div className="text-sm font-semibold mb-2">{t('mapLocation')}</div>
+        <h2 className="mb-2 text-sm font-semibold">{t('mapLocation')}</h2>
         <div
           ref={propertyMapWrapRef}
           className="relative h-[200px] overflow-hidden rounded-lg sm:h-[300px]"
@@ -1586,7 +1587,7 @@ function PropertyDetailInner() {
       {/* მსგავსი ობიექტები — სრული სიგანე */}
       {similarProperties.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 lg:col-span-2">
-          <div className="text-sm font-semibold mb-2">{t('similar_properties')}</div>
+          <h2 className="mb-2 text-sm font-semibold">{t('similar_properties')}</h2>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {similarProperties.map((p) => (
               <PropertyCard key={p._id} p={p} />

@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 import type { Property } from '@/lib/types';
 import { applyCloudinaryTransform } from '@/lib/imageUrl';
 import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay';
+import { SITE_NAME, getSiteHost, getSiteUrl } from '@/lib/siteUrl';
+import { DEFAULT_OG_IMAGE } from '@/lib/seoDefaults';
 
-const SITE_URL = 'https://vrgeorgia.ge';
-const SITE_NAME = 'Vhome';
-const SITE_HOST = 'vrgeorgia.ge';
+const SITE_URL = getSiteUrl();
+const SITE_HOST = getSiteHost();
 
 const DEAL_LABELS: Record<string, string> = {
   sale: 'იყიდება',
@@ -193,7 +194,7 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
     },
     twitter: {
       card: 'summary_large_image',
-      site: '@vrgeorgia',
+      site: '@vhome',
       title,
       description,
       images: primaryImage
@@ -230,12 +231,14 @@ export function buildDefaultShareMetadata(): Metadata {
       siteName: SITE_NAME,
       locale: 'ka_GE',
       alternateLocale: ['en_US', 'ru_RU'],
+      images: [DEFAULT_OG_IMAGE],
     },
     twitter: {
       card: 'summary_large_image',
-      site: '@vrgeorgia',
+      site: '@vhome',
       title,
       description,
+      images: [DEFAULT_OG_IMAGE.url],
     },
     other: {
       'application-name': SITE_NAME,

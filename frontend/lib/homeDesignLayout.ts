@@ -1016,6 +1016,7 @@ export type HeroTextLayout = BoxLayout & {
 
 /** Sticky site header — height, labels, typography */
 export type HeaderItemId =
+  | 'brandLogo'
   | 'brand'
   | 'services'
   | 'about'
@@ -1049,6 +1050,7 @@ export type HeaderItemStyle = {
 };
 
 export const HEADER_ITEM_IDS: HeaderItemId[] = [
+  'brandLogo',
   'brand',
   'services',
   'about',
@@ -1068,11 +1070,12 @@ export const HEADER_ITEM_IDS: HeaderItemId[] = [
 export const HEADER_WIDGET_ITEM_IDS: HeaderItemId[] = ['theme', 'language'];
 
 export function headerItemHasTextLabel(id: HeaderItemId): boolean {
-  return id !== 'theme' && id !== 'language';
+  return id !== 'theme' && id !== 'language' && id !== 'brandLogo';
 }
 
 export const HEADER_ITEM_LABELS: Record<HeaderItemId, string> = {
-  brand: 'ლოგო',
+  brandLogo: 'ლოგოს იკონი',
+  brand: 'ლოგოს ტექსტი',
   services: 'მომსახურება',
   about: 'შესახებ',
   agents: 'აგენტები',
@@ -1092,6 +1095,7 @@ export const HEADER_ITEM_LABELS: Record<HeaderItemId, string> = {
  * Centers are stored as % so the same rhythm scales with the bar.
  */
 export const HEADER_ITEM_WIDTH_PX: Record<HeaderItemId, number> = {
+  brandLogo: 36,
   brand: 52,
   services: 114,
   about: 56,
@@ -1108,6 +1112,7 @@ export const HEADER_ITEM_WIDTH_PX: Record<HeaderItemId, number> = {
 };
 
 export const HEADER_LEFT_CLUSTER_IDS: HeaderItemId[] = [
+  'brandLogo',
   'brand',
   'services',
   'about',
@@ -1285,6 +1290,7 @@ export const DEFAULT_HEADER_ITEM_POSITIONS: Record<HeaderItemId, HeaderItemPos> 
 
 /** Old even-spread across the whole bar (looked sparse / uneven). */
 const LEGACY_EVEN_HEADER_X: Partial<Record<HeaderItemId, number>> = {
+  brandLogo: 2.5,
   brand: 5,
   services: 15,
   about: 24,
@@ -1332,6 +1338,8 @@ export type HeaderLayout = {
   /** Logo / brand label. Empty = "Vhome" */
   brandLabel: string;
   brandFontSize: number;
+  /** Brand icon size in px (independent from brand text). */
+  brandLogoSize: number;
   /** Brand color #RRGGBB. Empty = theme accent */
   brandColor: string;
   navFontSize: number;
@@ -1484,6 +1492,7 @@ export const DEFAULT_HEADER: HeaderLayout = {
   itemGapPx: 8,
   brandLabel: '',
   brandFontSize: 16,
+  brandLogoSize: 32,
   brandColor: '',
   navFontSize: 14,
   navColor: '',
@@ -2252,13 +2261,16 @@ export function normalizeHeader(
   raw?: Partial<HeaderLayout> | null,
   opts?: { repairLegacyRows?: boolean }
 ): HeaderLayout {
-  const itemPositions = normalizeHeaderItemPositions(raw?.itemPositions, opts);
+  const itemPositions = ensureBrandLogoPosition(
+    normalizeHeaderItemPositions(raw?.itemPositions, opts)
+  );
   const itemStyles = normalizeHeaderItemStyles(raw?.itemStyles);
   return {
     h: Math.max(44, Math.min(120, Math.round(raw?.h ?? DEFAULT_HEADER.h))),
     opacity: clampOpacity(raw?.opacity, DEFAULT_HEADER.opacity),
     brandLabel: asOptionalString(raw?.brandLabel),
     brandFontSize: clampFontSize(raw?.brandFontSize, DEFAULT_HEADER.brandFontSize, 12, 40),
+    brandLogoSize: clampFontSize(raw?.brandLogoSize, DEFAULT_HEADER.brandLogoSize, 16, 96),
     brandColor: asOptionalHexColor(raw?.brandColor) || '',
     navFontSize: clampFontSize(raw?.navFontSize, DEFAULT_HEADER.navFontSize, 10, 24),
     navColor: asOptionalHexColor(raw?.navColor) || '',
@@ -2414,7 +2426,12 @@ function normalizeHeaderItemStyles(
     if (!style || typeof style !== 'object') continue;
     const next: HeaderItemStyle = {};
     if (typeof style.fontSize === 'number' && Number.isFinite(style.fontSize)) {
-      next.fontSize = clampFontSize(style.fontSize, id === 'brand' ? 16 : 14, 10, 48);
+      next.fontSize = clampFontSize(
+        style.fontSize,
+        id === 'brandLogo' ? DEFAULT_HEADER.brandLogoSize : id === 'brand' ? 16 : 14,
+        id === 'brandLogo' ? 16 : 10,
+        id === 'brandLogo' ? 96 : 48
+      );
     }
     const color = asOptionalHexColor(style.color);
     if (color) next.color = color;
@@ -2904,6 +2921,7 @@ export function headerItemLabelKey(
   | 'profileLabel'
   | 'adminLabel'
   | null {
+  if (id === 'brandLogo') return null;
   if (id === 'brand') return 'brandLabel';
   if (id === 'services') return 'servicesLabel';
   if (id === 'about') return 'aboutLabel';
@@ -2916,6 +2934,37 @@ export function headerItemLabelKey(
   if (id === 'profile') return 'profileLabel';
   if (id === 'admin') return 'adminLabel';
   return null;
+}
+
+/** Independent header brand icon size (px). */
+export function resolveBrandLogoSize(header: HeaderLayout | undefined): number {
+  const fromStyle = header?.itemStyles?.brandLogo?.fontSize;
+  if (typeof fromStyle === 'number' && Number.isFinite(fromStyle)) {
+    return Math.max(16, Math.min(96, Math.round(fromStyle)));
+  }
+  const fromHeader = header?.brandLogoSize;
+  if (typeof fromHeader === 'number' && Number.isFinite(fromHeader)) {
+    return Math.max(16, Math.min(96, Math.round(fromHeader)));
+  }
+  return DEFAULT_HEADER.brandLogoSize;
+}
+
+/**
+ * Older layouts only had `brand`. Place `brandLogo` just left of the text when missing.
+ */
+export function ensureBrandLogoPosition(
+  positions: Partial<Record<HeaderItemId, HeaderItemPos>> | undefined
+): Partial<Record<HeaderItemId, HeaderItemPos>> | undefined {
+  if (!positions || Object.keys(positions).length === 0) return positions;
+  if (positions.brandLogo) return positions;
+  const brand = positions.brand ?? DEFAULT_HEADER_ITEM_POSITIONS.brand;
+  return {
+    ...positions,
+    brandLogo: {
+      x: clampHeaderPercent(brand.x - 3.5, DEFAULT_HEADER_ITEM_POSITIONS.brandLogo.x),
+      y: clampHeaderPercent(brand.y, 50),
+    },
+  };
 }
 
 /** Migrate v1 localStorage (diameter-only) → v2 */

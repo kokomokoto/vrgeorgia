@@ -1,4 +1,4 @@
-# VR Georgia
+# Vhome
 
 > Real-estate marketplace for Georgia (Sakartvelo): apartments, houses, land, commercial spaces, with VR/3D tours, map search and agent listings.
 
@@ -8,14 +8,14 @@
 - Russian (ru) — UI + translated listing fields
 
 ## Main pages
-- Home / search: https://vrgeorgia.ge/
-- Map search: https://vrgeorgia.ge/map
-- Agents directory: https://vrgeorgia.ge/agents
-- Architecture services: https://vrgeorgia.ge/services
-- About: https://vrgeorgia.ge/about
-- FAQ: https://vrgeorgia.ge/faq
-- Sitemap: https://vrgeorgia.ge/sitemap.xml
-- Robots: https://vrgeorgia.ge/robots.txt
+- Home / search: https://vhome.ge/
+- Map search: https://vhome.ge/map
+- Agents directory: https://vhome.ge/agents
+- Architecture services: https://vhome.ge/services
+- About: https://vhome.ge/about
+- FAQ: https://vhome.ge/faq
+- Sitemap: https://vhome.ge/sitemap.xml
+- Robots: https://vhome.ge/robots.txt
 
 ## What the product does
 - Public search for sale, rent and mortgage listings across Georgia
@@ -25,15 +25,15 @@
 - Structured data: Organization, WebSite, RealEstateListing, FAQPage, BreadcrumbList, AboutPage
 
 ## Listings
-- URL pattern: https://vrgeorgia.ge/property/{id}
+- URL pattern: https://vhome.ge/property/{id}
 - Fields typically include: title, description, price (USD/GEL), sqm, rooms, address, city, deal type, photos, tour links
 
 ## Agents
-- Directory: https://vrgeorgia.ge/agents
-- Profile: https://vrgeorgia.ge/agents/{id}
+- Directory: https://vhome.ge/agents
+- Profile: https://vhome.ge/agents/{id}
 
 ## FAQ topics covered on /faq
-- What is VR Georgia
+- What is Vhome
 - How to find apartments/houses in Tbilisi
 - What VR/3D tours are
 - How to find agents
@@ -48,8 +48,8 @@
 - Optional query: `?lang=ka|en|ru` for translated title/city/street/description
 
 ## What not to index
-- /admin, /login, /profile, /upload, /favorites, /compare, /messages (private / account areas)
+- /admin, /login, /register, /profile, /upload, /favorites, /compare, /messages, /analytics, property edit pages
 
 ## Contact
-- Website: https://vrgeorgia.ge
+- Website: https://vhome.ge
 - (Social profiles and public phone/email will be added when available)

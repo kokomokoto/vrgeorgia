@@ -172,7 +172,7 @@ export function FaqPageClient() {
           <p className="mt-3 text-base leading-relaxed text-slate-600 dark:text-zinc-300">
             {tx(
               'faq_page_intro',
-              'მოკლე პასუხები VR Georgia-ს გამოყენებაზე — ძიება, აგენტები, ვირტუალური ტურები და განცხადებები.',
+              'მოკლე პასუხები Vhome-ს გამოყენებაზე — ძიება, აგენტები, ვირტუალური ტურები და განცხადებები.',
             )}
           </p>
         </div>
@@ -314,7 +314,7 @@ export function FaqPageClient() {
               >
                 <summary className="cursor-pointer list-none px-4 py-3.5 text-left text-base font-semibold text-slate-900 marker:content-none dark:text-zinc-100 [&::-webkit-details-marker]:hidden">
                   <span className="flex items-start justify-between gap-3">
-                    <span>{faqText(lang, item.question)}</span>
+                    <h2 className="m-0 text-base font-semibold leading-snug">{faqText(lang, item.question)}</h2>
                     <span className="shrink-0 text-slate-400 transition group-open:rotate-180">▼</span>
                   </span>
                 </summary>

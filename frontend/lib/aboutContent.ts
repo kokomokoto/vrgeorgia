@@ -13,9 +13,9 @@ export type AboutContent = {
 
 export const ABOUT_BY_LANG: Record<AboutLang, AboutContent> = {
   ka: {
-    title: 'რა არის VR Georgia?',
+    title: 'რა არის Vhome?',
     intro:
-      'VR Georgia არის ონლაინ პლატფორმა უძრავი ქონების მოსაძებნად საქართველოში. აქ იკრიბება განცხადებები ბინებზე, სახლებზე, მიწაზე, კომერციულ ფართებსა და სხვა ტიპებზე — რუკით, ფილტრებით და ხშირად ვირტუალური / 3D ტურებით.',
+      'Vhome არის ონლაინ პლატფორმა უძრავი ქონების მოსაძებნად საქართველოში. აქ იკრიბება განცხადებები ბინებზე, სახლებზე, მიწაზე, კომერციულ ფართებსა და სხვა ტიპებზე — რუკით, ფილტრებით და ხშირად ვირტუალური / 3D ტურებით.',
     sectionWhat: 'რას ნახავთ საიტზე',
     items: [
       { href: '/', label: 'მთავარი ძიება', desc: 'ტიპი, ფასი, ფართობი, ქალაქი/უბანი' },
@@ -29,9 +29,9 @@ export const ABOUT_BY_LANG: Record<AboutLang, AboutContent> = {
       'მყიდველებისა და დამქირავებლებისთვის — სწრაფი ძიება და ვიზუალური მიმოხილვა. აგენტებისა და მფლობელებისთვის — განცხადებების განთავსება და კონტაქტი დაინტერესებულ პირებთან.',
   },
   en: {
-    title: 'What is VR Georgia?',
+    title: 'What is Vhome?',
     intro:
-      'VR Georgia is an online platform for finding real estate in Georgia. Listings cover apartments, houses, land, commercial spaces and more — with maps, filters and often VR/3D tours.',
+      'Vhome is an online platform for finding real estate in Georgia. Listings cover apartments, houses, land, commercial spaces and more — with maps, filters and often VR/3D tours.',
     sectionWhat: 'What you will find on the site',
     items: [
       { href: '/', label: 'Main search', desc: 'type, price, area, city/district' },
@@ -45,9 +45,9 @@ export const ABOUT_BY_LANG: Record<AboutLang, AboutContent> = {
       'For buyers and renters — fast search and visual browsing. For agents and owners — publishing listings and reaching interested people.',
   },
   ru: {
-    title: 'Что такое VR Georgia?',
+    title: 'Что такое Vhome?',
     intro:
-      'VR Georgia — онлайн-платформа поиска недвижимости в Грузии. Здесь объявления о квартирах, домах, земле, коммерции и другом — с картой, фильтрами и часто VR/3D-турами.',
+      'Vhome — онлайн-платформа поиска недвижимости в Грузии. Здесь объявления о квартирах, домах, земле, коммерции и другом — с картой, фильтрами и часто VR/3D-турами.',
     sectionWhat: 'Что есть на сайте',
     items: [
       { href: '/', label: 'Главный поиск', desc: 'тип, цена, площадь, город/район' },

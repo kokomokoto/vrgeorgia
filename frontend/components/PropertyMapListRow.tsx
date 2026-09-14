@@ -67,7 +67,7 @@ export function PropertyMapListRow({
               src={resolveImageUrl(img, 'thumb', {
                 isPanorama: isPanoramaPhoto(img, p.panoramaPhotos),
               })}
-              alt=""
+              alt={p.title || t('property') || 'Property'}
               className="h-full w-full object-cover"
             />
           ) : (

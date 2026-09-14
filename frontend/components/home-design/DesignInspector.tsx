@@ -2248,14 +2248,21 @@ function HeaderEditor({
         </p>
         <div className="grid grid-cols-2 gap-2">
           <NumField
-            label="ლოგოს ზომა"
+            label="იკონის ზომა"
+            value={header.brandLogoSize ?? 32}
+            min={16}
+            max={96}
+            onCommit={(brandLogoSize) => onUpdate({ brandLogoSize })}
+          />
+          <NumField
+            label="ტექსტის ზომა"
             value={header.brandFontSize}
             min={12}
             max={40}
             onCommit={(brandFontSize) => onUpdate({ brandFontSize })}
           />
           <ColorField
-            label="ლოგოს ფერი"
+            label="ტექსტის ფერი"
             value={brandColor}
             onChange={(next) => onUpdate({ brandColor: next })}
           />
@@ -2517,9 +2524,15 @@ function HeaderItemEditor({
   const pos = resolveHeaderItemPos(header.itemPositions, itemId);
   const itemStyle = header.itemStyles?.[itemId];
   const isBrand = itemId === 'brand';
+  const isBrandLogo = itemId === 'brandLogo';
   const isWidget = itemId === 'theme' || itemId === 'language';
   const fontSize =
-    itemStyle?.fontSize ?? (isBrand ? header.brandFontSize : header.navFontSize);
+    itemStyle?.fontSize ??
+    (isBrandLogo
+      ? header.brandLogoSize ?? 32
+      : isBrand
+        ? header.brandFontSize
+        : header.navFontSize);
   const color =
     itemStyle?.color ||
     (isBrand ? header.brandColor || brandFallbackColor : header.navColor || navFallbackColor);
@@ -2551,6 +2564,18 @@ function HeaderItemEditor({
       const legacy: Partial<HeaderLayout> = {};
       if (patch.fontSize !== undefined) legacy.brandFontSize = patch.fontSize;
       if (patch.color !== undefined) legacy.brandColor = patch.color;
+      onUpdate({
+        ...legacy,
+        itemStyles: {
+          ...(header.itemStyles || {}),
+          [itemId]: nextStyle,
+        },
+      });
+      return;
+    }
+    if (isBrandLogo) {
+      const legacy: Partial<HeaderLayout> = {};
+      if (patch.fontSize !== undefined) legacy.brandLogoSize = patch.fontSize;
       onUpdate({
         ...legacy,
         itemStyles: {
@@ -2645,12 +2670,24 @@ function HeaderItemEditor({
             value={labelValue}
             onCommit={(value) => onUpdate({ [labelKey]: value })}
           />
+        ) : isBrandLogo ? (
+          <p className="text-[10px] leading-snug text-slate-400">
+            იკონის ზომა და პოზიცია ცალკე იცვლება — ტექსტი („Vhome“) სხვა ელემენტია.
+          </p>
         ) : (
           <p className="text-[10px] leading-snug text-slate-400">
             ამ ელემენტს ტექსტი არ აქვს — მხოლოდ პოზიცია იცვლება.
           </p>
         )}
-        {!isWidget ? (
+        {isBrandLogo ? (
+          <NumField
+            label="იკონის ზომა (px)"
+            value={fontSize}
+            min={16}
+            max={96}
+            onCommit={(next) => patchItemStyle({ fontSize: next })}
+          />
+        ) : !isWidget ? (
           <div className="grid grid-cols-2 gap-2">
             <NumField
               label="ზომა"

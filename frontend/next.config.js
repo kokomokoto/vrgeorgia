@@ -66,6 +66,34 @@ const nextConfig = {
       { source: '/v/:path*', destination: `${api}/v/:path*` },
     ];
   },
+  // Canonical host: https://vhome.ge (apex). www + legacy domain → apex.
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.vhome.ge' }],
+        destination: 'https://vhome.ge/:path*',
+        permanent: true,
+      },
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'vrgeorgia.ge' }],
+        destination: 'https://vhome.ge/:path*',
+        permanent: true,
+      },
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.vrgeorgia.ge' }],
+        destination: 'https://vhome.ge/:path*',
+        permanent: true,
+      },
+      {
+        source: '/agent/:id',
+        destination: '/agents/:id',
+        permanent: true,
+      },
+    ];
+  },
   // Security headers
   async headers() {
     return [

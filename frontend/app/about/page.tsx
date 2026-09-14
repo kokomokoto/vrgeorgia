@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { SITE_URL, buildAboutPageJsonLd, jsonLdScript } from '@/lib/structuredData';
 import { AboutPageClient } from '@/components/AboutPageClient';
+import { DEFAULT_OG_IMAGE } from '@/lib/seoDefaults';
 
 export const metadata: Metadata = {
   title: 'საიტის შესახებ',
   description:
-    'რა არის VR Georgia: უძრავი ქონების ძიება საქართველოში, რუკა, აგენტები და ვირტუალური ტურები.',
+    'რა არის Vhome: უძრავი ქონების ძიება საქართველოში, რუკა, აგენტები და ვირტუალური ტურები.',
   alternates: { canonical: `${SITE_URL}/about` },
   openGraph: {
     title: 'Vhome-ს შესახებ',
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
     siteName: 'Vhome',
     locale: 'ka_GE',
     type: 'website',
+    images: [DEFAULT_OG_IMAGE],
   },
   robots: { index: true, follow: true },
 };

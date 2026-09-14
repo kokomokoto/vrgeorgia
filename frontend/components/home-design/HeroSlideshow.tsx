@@ -44,7 +44,7 @@ function HeroMediaLayer({
     return (
       <Image
         src={DEFAULT_HERO_IMAGE}
-        alt=""
+        alt="Vhome — უძრავი ქონება საქართველოში"
         width={width}
         height={height}
         priority
@@ -87,7 +87,7 @@ function HeroMediaLayer({
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={layer.src}
-      alt=""
+      alt="Vhome — უძრავი ქონება საქართველოში"
       className="absolute inset-0 h-full w-full object-cover object-center"
       style={style}
       draggable={false}

@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
+import { absoluteListingImageUrl, getPropertyShareImageUrl } from '@/lib/propertyShareMetadata';
 import { getSiteUrl } from '@/lib/siteUrl';
+import type { Property } from '@/lib/types';
 
 function apiBase(): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();
@@ -11,11 +13,22 @@ function apiBase(): string {
 type ListedProperty = {
   _id: string;
   createdAt?: string;
+  updatedAt?: string;
+  title?: string;
+  photos?: string[];
+  mainPhoto?: number;
 };
 
 type ListedAgent = {
   _id: string;
+  updatedAt?: string;
 };
+
+function parseDate(value?: string): Date | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
 
 async function fetchPublicProperties(): Promise<ListedProperty[]> {
   try {
@@ -45,15 +58,39 @@ async function fetchPublicProperties(): Promise<ListedProperty[]> {
 
 async function fetchPublicAgents(): Promise<ListedAgent[]> {
   try {
-    const res = await fetch(`${apiBase()}/api/agents?limit=100`, {
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { agents?: ListedAgent[] };
-    return Array.isArray(data.agents) ? data.agents : [];
+    const all: ListedAgent[] = [];
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const res = await fetch(`${apiBase()}/api/agents?limit=100&page=${page}`, {
+        next: { revalidate: 3600 },
+      });
+      if (!res.ok) break;
+      const data = (await res.json()) as {
+        agents?: ListedAgent[];
+        totalPages?: number;
+      };
+      const batch = Array.isArray(data.agents) ? data.agents : [];
+      all.push(...batch);
+      totalPages = Math.max(1, Number(data.totalPages) || 1);
+      page += 1;
+    } while (page <= totalPages && page <= 50);
+    return all;
   } catch {
     return [];
   }
+}
+
+function propertySitemapImages(p: ListedProperty): NonNullable<MetadataRoute.Sitemap[number]['images']> {
+  const asProperty = p as unknown as Property;
+  const share = getPropertyShareImageUrl(asProperty);
+  const images: string[] = [];
+  if (share) images.push(share);
+  for (const photo of p.photos || []) {
+    const abs = absoluteListingImageUrl(photo);
+    if (abs && !images.includes(abs) && images.length < 5) images.push(abs);
+  }
+  return images;
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -82,16 +119,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     fetchPublicAgents(),
   ]);
 
-  const propertyRoutes: MetadataRoute.Sitemap = properties.map((p) => ({
-    url: `${SITE_URL}/property/${p._id}`,
-    lastModified: p.createdAt ? new Date(p.createdAt) : now,
-    changeFrequency: 'daily' as const,
-    priority: 0.8,
-  }));
+  const propertyRoutes: MetadataRoute.Sitemap = properties.map((p) => {
+    const images = propertySitemapImages(p);
+    return {
+      url: `${SITE_URL}/property/${p._id}`,
+      lastModified: parseDate(p.updatedAt) || parseDate(p.createdAt) || now,
+      changeFrequency: 'daily' as const,
+      priority: 0.8,
+      ...(images.length ? { images } : {}),
+    };
+  });
 
   const agentRoutes: MetadataRoute.Sitemap = agents.map((a) => ({
     url: `${SITE_URL}/agents/${a._id}`,
-    lastModified: now,
+    lastModified: parseDate(a.updatedAt) || now,
     changeFrequency: 'weekly' as const,
     priority: 0.7,
   }));

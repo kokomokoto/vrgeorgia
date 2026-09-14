@@ -248,3 +248,29 @@ export function buildDefaultShareMetadata(): Metadata {
     },
   };
 }
+
+/** Missing property / soft-404 — keep URL out of Google index. */
+export function buildMissingPropertyMetadata(id: string): Metadata {
+  const pageUrl = `${SITE_URL}/property/${id}`;
+  return {
+    title: 'განცხადება ვერ მოიძებნა',
+    description: 'ეს განცხადება აღარ არის ხელმისაწვდომი ან წაშლილია.',
+    metadataBase: new URL(SITE_URL),
+    alternates: { canonical: pageUrl },
+    robots: { index: false, follow: false },
+    openGraph: {
+      type: 'website',
+      url: pageUrl,
+      title: 'განცხადება ვერ მოიძებნა | Vhome',
+      description: 'ეს განცხადება აღარ არის ხელმისაწვდომი.',
+      siteName: SITE_NAME,
+      locale: 'ka_GE',
+    },
+  };
+}
+
+/** Absolute listing photo URL for sitemap / OG helpers. */
+export function absoluteListingImageUrl(path?: string | null): string | undefined {
+  if (!path?.trim()) return undefined;
+  return resolveAbsoluteImageUrl(path.trim());
+}

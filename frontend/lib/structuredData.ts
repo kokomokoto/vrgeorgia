@@ -208,6 +208,63 @@ export function buildAboutPageJsonLd() {
   };
 }
 
+export function buildAgentJsonLd(agent: {
+  _id: string;
+  name?: string;
+  photo?: string;
+  company?: string;
+  bio?: { ka?: string };
+  areas?: string[];
+  avgRating?: number;
+  totalReviews?: number;
+  phone?: string;
+  email?: string;
+}) {
+  const pageUrl = `${SITE_URL}/agents/${agent._id}`;
+  const data: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'RealEstateAgent',
+    '@id': `${pageUrl}#agent`,
+    name: agent.name || 'აგენტი',
+    url: pageUrl,
+    image: agent.photo || undefined,
+    worksFor: agent.company
+      ? { '@type': 'Organization', name: agent.company }
+      : { '@id': `${SITE_URL}/#organization` },
+    description: agent.bio?.ka || undefined,
+    areaServed: (agent.areas || []).length
+      ? agent.areas!.map((a) => ({ '@type': 'Place', name: a }))
+      : { '@type': 'Country', name: 'Georgia' },
+    telephone: agent.phone || undefined,
+    email: agent.email || undefined,
+  };
+  if (agent.avgRating && agent.totalReviews && agent.totalReviews > 0) {
+    data.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: agent.avgRating,
+      reviewCount: agent.totalReviews,
+      bestRating: 5,
+      worstRating: 1,
+    };
+  }
+  return data;
+}
+
+export function buildServiceJsonLd(slug: string, title: string, description: string) {
+  const pageUrl = `${SITE_URL}/services/${slug}`;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Service',
+    '@id': `${pageUrl}#service`,
+    name: title,
+    description,
+    url: pageUrl,
+    provider: { '@id': `${SITE_URL}/#organization` },
+    areaServed: { '@type': 'Country', name: 'Georgia' },
+    isPartOf: { '@id': `${SITE_URL}/#website` },
+  };
+}
+
 export function jsonLdScript(data: unknown): string {
   return JSON.stringify(data).replace(/</g, '\\u003c');
 }

@@ -33,7 +33,10 @@ export function isNoIndexHost(host?: string): boolean {
   const h = (host || getSiteHost()).toLowerCase();
   return (
     h.startsWith('staging.') ||
+    h === 'staging.vrgeorgia.ge' ||
+    h.endsWith('.onrender.com') ||
     h.includes('onrender.com') ||
+    (h.endsWith('.vrgeorgia.ge') && h !== 'vrgeorgia.ge' && h !== 'www.vrgeorgia.ge') ||
     process.env.NEXT_PUBLIC_NOINDEX === '1' ||
     process.env.NEXT_PUBLIC_NOINDEX === 'true'
   );

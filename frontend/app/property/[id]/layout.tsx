@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import {
-  buildDefaultShareMetadata,
+  buildMissingPropertyMetadata,
   buildPropertyShareMetadata,
   fetchPropertyForShareMetadata,
 } from '@/lib/propertyShareMetadata';
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Pick<LayoutProps, 'params'>):
   const { id } = await params;
   const property = await fetchPropertyForShareMetadata(id);
   if (!property) {
-    return buildDefaultShareMetadata();
+    return buildMissingPropertyMetadata(id);
   }
   return buildPropertyShareMetadata(id, property);
 }

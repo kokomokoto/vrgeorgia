@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export default function Error({
@@ -9,6 +10,18 @@ export default function Error({
   reset: () => void;
 }) {
   const { t } = useTranslation();
+
+  useEffect(() => {
+    const meta = document.createElement('meta');
+    meta.setAttribute('name', 'robots');
+    meta.setAttribute('content', 'noindex, nofollow');
+    meta.setAttribute('data-error-robots', '1');
+    document.head.appendChild(meta);
+    return () => {
+      meta.remove();
+    };
+  }, []);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
       <div className="text-8xl mb-4">⚠️</div>

@@ -2,8 +2,10 @@ import type { Property } from '@/lib/types';
 import {
   buildDefaultShareMetadata,
   buildPropertyShareDescription,
+  getPropertyOpenGraphImageUrl,
   getPropertyShareImageUrl,
 } from '@/lib/propertyShareMetadata';
+import { DEFAULT_OG_IMAGE } from '@/lib/seoDefaults';
 import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay';
 import {
   SITE_NAME,
@@ -90,11 +92,14 @@ function buildShareCrawlerHtml({
 
 function buildDefaultShareCrawlerHtml(): string {
   const meta = buildDefaultShareMetadata();
+  const path = DEFAULT_OG_IMAGE.url.startsWith('/')
+    ? DEFAULT_OG_IMAGE.url
+    : `/${DEFAULT_OG_IMAGE.url}`;
   return buildShareCrawlerHtml({
     title: typeof meta.title === 'string' ? meta.title : SITE_NAME,
     description: meta.description ?? '',
     pageUrl: SITE_URL,
-    image: undefined,
+    image: `${SITE_URL}${path}`,
     bodyHtml: `
   <main>
     <h1>${escapeHtml(SITE_NAME)}</h1>
@@ -159,14 +164,15 @@ export function buildPropertyShareCrawlerHtml(id: string, property: Property | n
   const title = property.title?.trim() || 'განცხადება';
   const description = buildPropertyShareDescription(property);
   const pageUrl = `${SITE_URL}/property/${id}`;
-  const image = getPropertyShareImageUrl(property);
+  const image = getPropertyOpenGraphImageUrl(id, property);
+  const bodyImage = getPropertyShareImageUrl(property) || image;
 
   return buildShareCrawlerHtml({
     title,
     description,
     pageUrl,
     image,
-    bodyHtml: buildPropertyBodyHtml(id, property, pageUrl, image),
+    bodyHtml: buildPropertyBodyHtml(id, property, pageUrl, bodyImage),
     jsonLd: buildPropertyJsonLd(id, property),
   });
 }

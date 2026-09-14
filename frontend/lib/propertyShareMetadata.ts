@@ -66,7 +66,7 @@ function getMainPhoto(property: Property): string | undefined {
   return property.photos?.[mainIndex] ?? property.photos?.[0];
 }
 
-/** OG სურათი — JPEG 1200×630 (Facebook, WhatsApp, Telegram, Viber, LinkedIn, Discord…) */
+/** Remote listing photo URL (Cloudinary JPEG 1200×630). Prefer getPropertyOpenGraphImageUrl for social meta. */
 export function getPropertyShareImageUrl(property: Property): string | undefined {
   const photo = getMainPhoto(property);
   if (!photo) return undefined;
@@ -76,6 +76,20 @@ export function getPropertyShareImageUrl(property: Property): string | undefined
     return applyCloudinaryTransform(absolute, 'w_1200,h_630,c_fill,f_jpg,q_auto');
   }
   return absolute;
+}
+
+/**
+ * Same-origin OG image URL for Meta (Facebook / Instagram / WhatsApp / Messenger).
+ * Direct Cloudinary URLs often render as a blank preview card even when title works.
+ */
+export function getPropertyOpenGraphImageUrl(id: string, property: Property): string {
+  if (getPropertyShareImageUrl(property)) {
+    return `${SITE_URL}/og/property/${encodeURIComponent(id)}`;
+  }
+  const path = DEFAULT_OG_IMAGE.url.startsWith('/')
+    ? DEFAULT_OG_IMAGE.url
+    : `/${DEFAULT_OG_IMAGE.url}`;
+  return `${SITE_URL}${path}`;
 }
 
 function getOwnerName(property: Property): string | undefined {
@@ -132,9 +146,8 @@ type OgImage = {
   type?: string;
 };
 
-function buildOgImage(title: string, property: Property): OgImage | undefined {
-  const primary = getPropertyShareImageUrl(property);
-  if (!primary) return undefined;
+function buildOgImage(id: string, title: string, property: Property): OgImage {
+  const primary = getPropertyOpenGraphImageUrl(id, property);
 
   return {
     url: primary,
@@ -157,8 +170,8 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
   const pageUrl = `${SITE_URL}/property/${id}`;
   const ownerName = getOwnerName(property);
   const keywords = buildKeywords(property);
-  const ogImage = buildOgImage(title, property);
-  const primaryImage = ogImage?.url;
+  const ogImage = buildOgImage(id, title, property);
+  const primaryImage = ogImage.url;
 
   return {
     title,
@@ -190,20 +203,18 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
       siteName: SITE_NAME,
       locale: 'ka_GE',
       alternateLocale: ['en_US', 'ru_RU'],
-      images: ogImage ? [ogImage] : undefined,
+      images: [ogImage],
     },
     twitter: {
       card: 'summary_large_image',
       site: '@vhome',
       title,
       description,
-      images: primaryImage
-        ? {
-            url: primaryImage,
-            alt: title,
-            secureUrl: primaryImage.startsWith('https://') ? primaryImage : undefined,
-          }
-        : undefined,
+      images: {
+        url: primaryImage,
+        alt: title,
+        secureUrl: primaryImage.startsWith('https://') ? primaryImage : undefined,
+      },
     },
     other: {
       'apple-mobile-web-app-title': title,

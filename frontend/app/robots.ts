@@ -83,11 +83,43 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
       },
       {
+        userAgent: 'WhatsApp',
+        allow: '/',
+      },
+      {
         userAgent: 'meta-externalagent',
         allow: '/',
       },
       {
         userAgent: 'meta-externalfetcher',
+        allow: '/',
+      },
+      {
+        userAgent: 'FacebookBot',
+        allow: '/',
+      },
+      {
+        userAgent: 'LinkedInBot',
+        allow: '/',
+      },
+      {
+        userAgent: 'TelegramBot',
+        allow: '/',
+      },
+      {
+        userAgent: 'Twitterbot',
+        allow: '/',
+      },
+      {
+        userAgent: 'Discordbot',
+        allow: '/',
+      },
+      {
+        userAgent: 'Slackbot',
+        allow: '/',
+      },
+      {
+        userAgent: 'Viber',
         allow: '/',
       },
     ],

@@ -25,7 +25,8 @@ export async function middleware(request: NextRequest) {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
+      // Short cache so Meta/WhatsApp re-scrapes pick up OG fixes quickly
+      'Cache-Control': 'public, max-age=60, must-revalidate',
     },
   });
 }

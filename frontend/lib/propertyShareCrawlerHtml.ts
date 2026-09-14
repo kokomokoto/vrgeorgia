@@ -22,7 +22,7 @@ import {
  * thin share HTML here would hurt indexing.
  */
 export const SOCIAL_CRAWLER_USER_AGENT =
-  /facebookexternalhit|facebookcatalog|Facebot|Messenger|WhatsApp|Twitterbot|LinkedInBot|TelegramBot|Discordbot|Slackbot|SkypeUriPreview|meta-external|Pinterestbot|vkShare|Viber/i;
+  /facebookexternalhit|facebookcatalog|Facebot|FacebookBot|Messenger|WhatsApp|Twitterbot|LinkedInBot|TelegramBot|Discordbot|Slackbot|SkypeUriPreview|meta-external|Pinterestbot|vkShare|Viber/i;
 
 function escapeHtml(value: string): string {
   return value

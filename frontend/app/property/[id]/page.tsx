@@ -542,11 +542,8 @@ function PropertyDetailInner() {
     if (appliedDefaultForId.current !== property._id) {
       appliedDefaultForId.current = property._id;
       const preferred = property.defaultMediaView;
-      // თუ ნამდვილი 3D (ექსტერიერი/ინტერიერი/ტური) არსებობს — მას ვაჩვენებთ პირველად,
-      // თუნდაც defaultMediaView=photos იყოს (ფოტოების ტაბი მაინც ხელმისაწვდომია).
-      const preferredIsReal3d =
-        preferred === 'exterior' || preferred === 'interior' || preferred === 'tour';
-      if (preferredIsReal3d && preferred && available[preferred]) {
+      // Respect the agent's "პირველი გამოჩენა" when that tab exists (incl. photos).
+      if (preferred && available[preferred]) {
         setView3dMode(preferred);
       } else {
         setView3dMode(pickFallback());

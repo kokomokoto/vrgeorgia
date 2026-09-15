@@ -94,13 +94,13 @@ export async function POST(request: Request) {
     }
   }
 
-  // Resize large panoramas so GPU upload stays fast (max 4K equirectangular)
+  // Resize huge panoramas so GPU stays happy (max 8K equirectangular)
   let output = buffer;
   let outExt = ext;
   try {
     const optimized = await sharp(buffer)
-      .resize(4096, 2048, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 85, mozjpeg: true })
+      .resize(8192, 4096, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 90, mozjpeg: true })
       .toBuffer();
     output = Buffer.from(optimized);
     outExt = "jpg";

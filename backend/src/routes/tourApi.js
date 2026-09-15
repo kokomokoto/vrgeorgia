@@ -424,8 +424,8 @@ router.post('/upload', uploadPanorama.single('file'), async (req, res, next) => 
     let outExt = ext;
     try {
       output = await sharp(file.buffer)
-        .resize(4096, 2048, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 85, mozjpeg: true })
+        .resize(8192, 4096, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 90, mozjpeg: true })
         .toBuffer();
       outExt = 'jpg';
     } catch {

@@ -185,10 +185,11 @@ html:has(.tour-shell) body {
   height: 100% !important;
 }
 
+/* Only size the PSV host — never force canvas CSS size.
+   Stretching the WebGL canvas with width/height:100% makes panoramas look pixelated. */
 .tour-panorama-layer > div,
 .tour-panorama-layer .psv-container,
-.tour-panorama-layer .psv-canvas-container,
-.tour-panorama-layer canvas {
+.tour-panorama-layer .psv-canvas-container {
   width: 100% !important;
   height: 100% !important;
 }

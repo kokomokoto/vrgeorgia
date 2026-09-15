@@ -11,36 +11,42 @@ export function isCloudinaryConfigured() {
   );
 }
 
+/** Keep high resolution for 360° viewer (max ~8192×4096, never below ~2048×1024). */
 export async function compressPanoramaForCloudinary(input) {
   const meta = await sharp(input, { failOn: 'none' }).metadata();
   let pipeline = sharp(input, { failOn: 'none' }).rotate();
 
   const maxDim = Math.max(meta.width || 0, meta.height || 0);
-  if (maxDim > 4096) {
-    pipeline = pipeline.resize(4096, 2048, {
+  if (maxDim > 8192) {
+    pipeline = pipeline.resize(8192, 4096, {
       fit: 'inside',
       withoutEnlargement: true,
     });
   }
 
-  let quality = 85;
+  let quality = 90;
   let output = await pipeline.jpeg({ quality, mozjpeg: true }).toBuffer();
 
   let attempts = 0;
   while (output.length > CLOUDINARY_MAX_BYTES && attempts < 24) {
     attempts += 1;
-    if (quality > 55) {
+    if (quality > 70) {
       quality -= 5;
       output = await sharp(output).jpeg({ quality, mozjpeg: true }).toBuffer();
       continue;
     }
     const m = await sharp(output).metadata();
-    const nw = Math.floor((m.width || 1600) * 0.88);
-    const nh = Math.floor((m.height || 1200) * 0.88);
-    if (nw < 1280 || nh < 640) break;
+    const nw = Math.floor((m.width || 4096) * 0.92);
+    const nh = Math.floor((m.height || 2048) * 0.92);
+    if (nw < 2048 || nh < 1024) {
+      quality = Math.max(55, quality - 5);
+      output = await sharp(output).jpeg({ quality, mozjpeg: true }).toBuffer();
+      if (quality <= 55) break;
+      continue;
+    }
     output = await sharp(output)
       .resize(nw, nh, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 72, mozjpeg: true })
+      .jpeg({ quality: Math.max(70, quality), mozjpeg: true })
       .toBuffer();
   }
 

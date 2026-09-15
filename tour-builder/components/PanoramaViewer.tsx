@@ -285,7 +285,13 @@ export function PanoramaViewer({
     viewer.addEventListener("ready", () => {
       viewerReadyRef.current = true;
       scheduleResize();
-      requestAnimationFrame(scheduleResize);
+      requestAnimationFrame(() => {
+        scheduleResize();
+        requestAnimationFrame(scheduleResize);
+      });
+      // Embed/layout can settle a frame later — refresh buffer once more.
+      window.setTimeout(scheduleResize, 120);
+      window.setTimeout(scheduleResize, 400);
 
       const scene =
         scenesRef.current.find(

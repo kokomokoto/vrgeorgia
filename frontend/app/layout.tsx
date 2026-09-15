@@ -70,7 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var k='vr-theme';var s=localStorage.getItem(k);var d=document.documentElement;if(s==='dark'){d.classList.add('dark');d.classList.remove('twilight');}else if(s==='twilight'){d.classList.remove('dark');d.classList.add('twilight');}else if(s==='light'){d.classList.remove('dark');d.classList.remove('twilight');}}catch(e){}})();`,
+            __html: `(function(){try{var d=document.documentElement;var k='vr-theme';var s=localStorage.getItem(k);if(s==='dark'){d.classList.add('dark');d.classList.remove('twilight');}else if(s==='twilight'){d.classList.remove('dark');d.classList.add('twilight');}else if(s==='light'){d.classList.remove('dark');d.classList.remove('twilight');}var t=localStorage.getItem('token');var u=localStorage.getItem('user');if(t){d.setAttribute('data-vr-auth','1');if(u){try{var r=JSON.parse(u).role;if(r)d.setAttribute('data-vr-role',String(r));}catch(e){}}}else{d.removeAttribute('data-vr-auth');d.removeAttribute('data-vr-role');}}catch(e){}})();`,
           }}
         />
       </head>

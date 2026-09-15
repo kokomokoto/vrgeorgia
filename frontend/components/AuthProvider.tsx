@@ -14,8 +14,10 @@ export const SESSION_EXPIRED_KEY = 'vr-session-expired';
 type AuthState = {
   user: User | null;
   token: string | null;
-  /** true after getMe finishes (or when there is no token) — avoids stale admin link from localStorage */
+  /** true after getMe finishes (or when there is no token) — server-verified profile */
   profileLoaded: boolean;
+  /** true after localStorage session was applied (before paint via useLayoutEffect) */
+  authBootstrapped: boolean;
   setAuth: (token: string, user: User) => void;
   logout: () => void;
 };
@@ -28,35 +30,82 @@ export function useAuth() {
   return ctx;
 }
 
+function readStoredSession(): { token: string | null; user: User | null } {
+  try {
+    const token = window.localStorage.getItem('token');
+    const raw = window.localStorage.getItem('user');
+    if (!raw) return { token, user: null };
+    try {
+      return { token, user: JSON.parse(raw) as User };
+    } catch {
+      window.localStorage.removeItem('user');
+      return { token, user: null };
+    }
+  } catch {
+    return { token: null, user: null };
+  }
+}
+
+/** Keep <html data-vr-auth> in sync for first-paint CSS (set early by layout inline script too). */
+function syncAuthDomAttrs(token: string | null, user: User | null) {
+  try {
+    const d = document.documentElement;
+    if (token) {
+      d.setAttribute('data-vr-auth', '1');
+      const role = String(user?.role || '').trim();
+      if (role) d.setAttribute('data-vr-role', role);
+      else d.removeAttribute('data-vr-role');
+    } else {
+      d.removeAttribute('data-vr-auth');
+      d.removeAttribute('data-vr-role');
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = React.useState<string | null>(null);
   const [user, setUser] = React.useState<User | null>(null);
   const [profileLoaded, setProfileLoaded] = React.useState(false);
+  const [authBootstrapped, setAuthBootstrapped] = React.useState(false);
+
+  // Restore session BEFORE first paint — useEffect would flash the guest header.
+  React.useLayoutEffect(() => {
+    const { token: t, user: u } = readStoredSession();
+    if (t) setToken(t);
+    if (u) setUser(u);
+    syncAuthDomAttrs(t, u);
+    setAuthBootstrapped(true);
+  }, []);
 
   React.useEffect(() => {
-    const t = window.localStorage.getItem('token');
-    const u = window.localStorage.getItem('user');
-    if (t) setToken(t);
-    if (u) setUser(JSON.parse(u));
+    if (!authBootstrapped) return;
 
-    // role/status შეიძლება მოძველებული იყოს localStorage-ში — განვაახლოთ სერვერიდან,
-    // რომ ადმინის ბმული სწორად გამოჩნდეს და დამტკიცების სტატუსი იყოს ახალი.
+    let cancelled = false;
+    const t = token || window.localStorage.getItem('token');
     if (t) {
       getMe()
         .then((res) => {
-          if (res?.user) {
-            setUser(res.user as User);
-            window.localStorage.setItem('user', JSON.stringify(res.user));
-          }
+          if (cancelled || !res?.user) return;
+          setUser(res.user as User);
+          window.localStorage.setItem('user', JSON.stringify(res.user));
+          syncAuthDomAttrs(t, res.user as User);
         })
         .catch(() => {
           // 401-ს api.ts ამუშავებს (logout event)
         })
-        .finally(() => setProfileLoaded(true));
+        .finally(() => {
+          if (!cancelled) setProfileLoaded(true);
+        });
     } else {
       setProfileLoaded(true);
     }
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authBootstrapped, token]);
 
   const setAuth = React.useCallback((t: string, u: User) => {
     setToken(t);
@@ -65,6 +114,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem('user', JSON.stringify(u));
     window.localStorage.removeItem(SESSION_EXPIRED_KEY);
     window.localStorage.setItem(LAST_REFRESH_KEY, String(Date.now()));
+    syncAuthDomAttrs(t, u);
+    setAuthBootstrapped(true);
+    setProfileLoaded(true);
   }, []);
 
   const logout = React.useCallback(() => {
@@ -73,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.removeItem('token');
     window.localStorage.removeItem('user');
     window.localStorage.removeItem(LAST_REFRESH_KEY);
+    syncAuthDomAttrs(null, null);
   }, []);
 
   React.useEffect(() => {
@@ -111,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res.user) {
           setUser(res.user);
           window.localStorage.setItem('user', JSON.stringify(res.user));
+          syncAuthDomAttrs(res.token, res.user);
         }
       } catch {
         // 401-ს api.ts ამუშავებს; ქსელის შეცდომაზე უბრალოდ მოგვიანებით ვცდით
@@ -135,6 +189,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [Boolean(token)]);
 
   return (
-    <AuthContext.Provider value={{ user, token, profileLoaded, setAuth, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{ user, token, profileLoaded, authBootstrapped, setAuth, logout }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
 }

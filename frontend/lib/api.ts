@@ -508,7 +508,7 @@ export async function deleteProperty(id: string) {
 
 // Profile APIs
 export async function getMe() {
-  return request<{ user: User }>('/api/auth/me');
+  return request<{ user: User }>('/api/auth/me', { timeoutMs: 8_000 });
 }
 
 /** sliding session — ვადის გასვლამდე ახალი ტოკენი, რომ სესია სამუშაოს შუაში არ გაწყდეს */

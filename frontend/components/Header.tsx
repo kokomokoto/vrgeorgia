@@ -555,7 +555,7 @@ function HeaderFreeItem({
 
 export function Header() {
   const { t, i18n } = useTranslation();
-  const { user, profileLoaded } = useAuth();
+  const { user } = useAuth();
   const { theme, activeModeId } = useTheme();
   const design = useHomeDesignOptional();
   const designMode = design?.designMode ?? false;
@@ -716,8 +716,8 @@ export function Header() {
     headerLayout?.profileLabel?.trim() || (mounted ? t('profile') : 'პროფილი');
   const adminText =
     headerLayout?.adminLabel?.trim() || (mounted ? t('admin_panel') : 'ადმინ პანელი');
-  const isAdmin = profileLoaded && isAdminRole(user?.role);
-  const isAgent = profileLoaded && isAgentRole(user?.role);
+  const isAdmin = isAdminRole(user?.role);
+  const isAgent = isAgentRole(user?.role);
 
   React.useLayoutEffect(() => {
     if (!freeLayoutUsable) {
@@ -795,7 +795,6 @@ export function Header() {
     freeLayoutUsable,
     user,
     isAdmin,
-    profileLoaded,
     itemPositions,
     itemPadKey,
     headerHRaw,

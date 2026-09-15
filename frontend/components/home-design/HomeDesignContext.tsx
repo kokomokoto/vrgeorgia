@@ -41,7 +41,6 @@ import {
   HERO_MOBILE_STACK_GAP_DEFAULT,
   HERO_H_MIN,
   HERO_H_MAX,
-  copyDefaultHeaderItemPositions,
   applyDefaultGeometry,
   packHeaderItemPositions,
   headerItemIdsHiddenByStyle,
@@ -445,7 +444,9 @@ export function HomeDesignProvider({
   }, [syncHistoryFlags]);
 
   React.useLayoutEffect(() => {
-    // Sync local cache before first paint (may be newer than SSR snapshot).
+    // If SSR already injected the published layout, do not overwrite with a possibly
+    // stale localStorage cache (old one-time migrations wrote factory header positions).
+    if (initialLayout) return;
     try {
       const cached = loadHomeDesign();
       if (!layoutsEqual(cached, layoutRef.current)) {
@@ -454,13 +455,15 @@ export function HomeDesignProvider({
     } catch {
       /* keep SSR / default */
     }
-  }, []);
+  }, [initialLayout]);
 
   React.useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      let next = loadHomeDesign();
+      let next = initialLayout
+        ? normalizeHomeDesignInput(initialLayout as Partial<HomeDesignLayout>)
+        : loadHomeDesign();
       const resetKey = 'vhome-night-palette-restored-v2';
       try {
         if (!window.localStorage.getItem(resetKey)) {
@@ -506,23 +509,8 @@ export function HomeDesignProvider({
         /* keep next */
       }
 
-      // One-time: header free-nav in max-w-6xl column space (same on 1080p / 2K)
-      const headerBalanceKey = 'vhome-header-nav-column-v6';
-      try {
-        if (!cancelled && !window.localStorage.getItem(headerBalanceKey)) {
-          next = {
-            ...next,
-            header: {
-              ...next.header,
-              itemPositions: copyDefaultHeaderItemPositions(),
-            },
-          };
-          saveHomeDesign(next);
-          window.localStorage.setItem(headerBalanceKey, '1');
-        }
-      } catch {
-        /* keep next */
-      }
+      // NOTE: removed vhome-header-nav-column-v6 migration — it reset published
+      // header itemPositions to factory defaults for every new/incognito browser.
 
       if (cancelled) return;
       setLayout(next);
@@ -533,7 +521,7 @@ export function HomeDesignProvider({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialLayout]);
 
   React.useEffect(() => {
     if (!hydrated || typeof window === 'undefined') return;

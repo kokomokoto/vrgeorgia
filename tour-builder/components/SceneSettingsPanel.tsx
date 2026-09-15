@@ -344,9 +344,34 @@ export function SceneSettingsPanel({
         </div>
         <p className="mt-1 text-xs text-zinc-500">
           When enabled, the scene opens at the default view, then the camera
-          moves through the points below in order, looping. Speed is adjustable.
-          With no points, only the default view is shown.
+          moves through the points below in order. Without auto-advance it
+          loops in this scene. Speed is adjustable. With no points, only the
+          default view is shown.
         </p>
+
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-900/40 px-2.5 py-2">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-zinc-200">
+              Auto-advance after panning
+            </p>
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              When this photo finishes its camera path, open the next photo.
+              After the last photo, start again from the first.
+            </p>
+          </div>
+          <label className="flex flex-none cursor-pointer items-center gap-1.5 text-xs text-zinc-300">
+            <input
+              type="checkbox"
+              checked={(scene.auto_advance_after_pan ?? 0) === 1}
+              onChange={(e) =>
+                onPatch({ auto_advance_after_pan: e.target.checked ? 1 : 0 })
+              }
+              disabled={!panEnabled}
+              className="h-3.5 w-3.5 accent-blue-500 disabled:opacity-40"
+            />
+            {(scene.auto_advance_after_pan ?? 0) === 1 ? "On" : "Off"}
+          </label>
+        </div>
 
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500">

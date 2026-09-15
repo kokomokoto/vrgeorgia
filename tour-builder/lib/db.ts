@@ -174,6 +174,7 @@ export async function updateScene(
       | "pan_keyframes_json"
       | "pan_segment_ms"
       | "pan_speed_rpm"
+      | "auto_advance_after_pan"
     >
   >
 ): Promise<Scene | undefined> {
@@ -204,6 +205,7 @@ export async function updateScene(
     "pan_keyframes_json",
     "pan_segment_ms",
     "pan_speed_rpm",
+    "auto_advance_after_pan",
   ] as const;
 
   const set: Record<string, unknown> = {};

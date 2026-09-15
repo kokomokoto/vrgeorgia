@@ -13,6 +13,7 @@ export const SCENE_DEFAULTS = {
   pan_enabled: 0,
   pan_segment_ms: 800,
   pan_speed_rpm: 1,
+  auto_advance_after_pan: 0,
 } as const;
 
 /** panning სიჩქარის დიაპაზონი (rpm) — slider 0..100 */
@@ -38,6 +39,8 @@ export function normalizeScene(raw: Scene): Scene {
     pan_keyframes_json: raw.pan_keyframes_json ?? null,
     pan_segment_ms: raw.pan_segment_ms ?? SCENE_DEFAULTS.pan_segment_ms,
     pan_speed_rpm: raw.pan_speed_rpm ?? SCENE_DEFAULTS.pan_speed_rpm,
+    auto_advance_after_pan:
+      raw.auto_advance_after_pan ?? SCENE_DEFAULTS.auto_advance_after_pan,
   };
 }
 

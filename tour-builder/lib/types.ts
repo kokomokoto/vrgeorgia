@@ -39,6 +39,11 @@ export interface Scene {
   pan_segment_ms?: number;
   /** კადრის მოძრაობის სიჩქარე (rpm) */
   pan_speed_rpm?: number;
+  /**
+   * 1 = panning-ის ერთი სრული გავლის შემდეგ ავტომატურად შემდეგ სცენაზე
+   * (ბოლოს შემდეგ თავიდან). 0 = სცენაში ციკლური panning.
+   */
+  auto_advance_after_pan?: number;
 }
 
 /** panning ერთი წერტილი — კამერის პოზიცია */

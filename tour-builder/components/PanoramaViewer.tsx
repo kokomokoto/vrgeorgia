@@ -40,6 +40,8 @@ export interface PanoramaViewerProps {
   placementHint?: string | null;
   navigateToSceneId?: string | null;
   clickToAdvance?: boolean;
+  /** Called when a scene finishes one panning pass (auto-advance). */
+  onPanComplete?: (sceneId: string) => void;
   onActiveSceneChange?: (sceneId: string) => void;
   onSceneChange?: (sceneId: string) => void;
   onPlaceHotspot?: (yaw: number, pitch: number) => void;
@@ -65,6 +67,7 @@ export function PanoramaViewer({
   placementHint = null,
   navigateToSceneId = null,
   clickToAdvance = false,
+  onPanComplete,
   onActiveSceneChange,
   onSceneChange,
   onPlaceHotspot,
@@ -91,6 +94,7 @@ export function PanoramaViewer({
   const clickToAdvanceRef = useRef(clickToAdvance);
   const onPlaceRef = useRef(onPlaceHotspot);
   const onSceneChangeRef = useRef(onSceneChange ?? onActiveSceneChange);
+  const onPanCompleteRef = useRef(onPanComplete);
   const navigateToSceneIdRef = useRef(navigateToSceneId);
 
   scenesRef.current = scenes;
@@ -101,6 +105,7 @@ export function PanoramaViewer({
   clickToAdvanceRef.current = clickToAdvance;
   onPlaceRef.current = onPlaceHotspot;
   onSceneChangeRef.current = onSceneChange ?? onActiveSceneChange;
+  onPanCompleteRef.current = onPanComplete;
 
   const activeScene = scenes.find((s) => s.id === activeSceneId);
   const activePanoramaUrl = activeScene?.image_path
@@ -239,7 +244,9 @@ export function PanoramaViewer({
         if (scene) {
           applyViewerLimits(viewer, scene, clampCleanupRef);
           stopPanLoop(viewer, panRef);
-          applySceneEntry(viewer, scene, panRef, true);
+          applySceneEntry(viewer, scene, panRef, true, (id) =>
+            onPanCompleteRef.current?.(id)
+          );
           syncMarkers(markers, sceneId);
         }
       });
@@ -307,7 +314,13 @@ export function PanoramaViewer({
           }
         }
       } else if (!addHotspotRef.current) {
-        applySceneEntry(viewer, scene, panRef, modeRef.current === "navigate");
+        applySceneEntry(
+          viewer,
+          scene,
+          panRef,
+          modeRef.current === "navigate",
+          (id) => onPanCompleteRef.current?.(id)
+        );
       }
 
       syncMarkers(markers, scene.id);
@@ -465,6 +478,7 @@ export function PanoramaViewer({
     activeScene?.pan_enabled,
     activeScene?.pan_keyframes_json,
     activeScene?.pan_speed_rpm,
+    activeScene?.auto_advance_after_pan,
   ]);
 
   useEffect(() => {
@@ -539,7 +553,8 @@ function applySceneEntry(
   viewer: Viewer,
   scene: Scene,
   panRef: { current: PanController },
-  autoPan: boolean
+  autoPan: boolean,
+  onPanComplete?: (sceneId: string) => void
 ) {
   viewer.stopAnimation();
   stopPanLoop(viewer, panRef);
@@ -547,7 +562,15 @@ function applySceneEntry(
     applyDefaultView(viewer, scene);
   }
   if (autoPan && isPanningActive(scene)) {
-    void startPanLoop(viewer, scene, panRef);
+    const once = (scene.auto_advance_after_pan ?? 0) === 1;
+    void startPanLoop(viewer, scene, panRef, {
+      once,
+      onComplete: once
+        ? () => {
+            onPanComplete?.(scene.id);
+          }
+        : undefined,
+    });
   }
 }
 
@@ -576,26 +599,27 @@ function shortestAngle(from: number, to: number): number {
 }
 
 /**
- * panning loop: default view → წერტილი 1 → წერტილი 2 → ... → უკან საწყისზე (ციკლი).
+ * panning loop: default view → წერტილი 1 → წერტილი 2 → ...
  *
- * იყენებს ერთიან requestAnimationFrame ციკლს მუდმივი კუთხური სიჩქარით —
- * წერტილებს შორის გადასვლა არ ჩერდება და სიჩქარე არ იცვლება (smooth).
- * სიჩქარე scene.pan_speed_rpm-დან. ჩერდება stopPanLoop()-ით ან ახალი token-ით.
+ * once=false (default): ბოლოდან საწყისზე ბრუნდება (ციკლი სცენაში).
+ * once=true: ერთი გავლა ბოლო წერტილამდე, შემდეგ onComplete (შემდეგი სცენა).
+ *
+ * იყენებს requestAnimationFrame-ს მუდმივი კუთხური სიჩქარით.
  */
 function startPanLoop(
   viewer: Viewer,
   scene: Scene,
-  panRef: { current: PanController }
+  panRef: { current: PanController },
+  options?: { once?: boolean; onComplete?: () => void }
 ) {
   const keyframes = parsePanKeyframes(scene);
   if ((scene.pan_enabled ?? 0) !== 1 || keyframes.length === 0) return;
 
-  // წინა loop-ის გაუქმება და ახალი token
   stopPanLoop(viewer, panRef);
   const token = panRef.current.token;
   panRef.current.active = true;
+  const once = options?.once === true;
 
-  // წერტილების სია: default view (თუ მითითებულია) + keyframes
   const waypoints: { yaw: number; pitch: number; zoom: number }[] = [];
   if (scene.default_view_custom === 1) {
     waypoints.push({
@@ -608,7 +632,6 @@ function startPanLoop(
     waypoints.push({ yaw: kf.yaw, pitch: kf.pitch, zoom: kf.zoom });
   }
 
-  // ერთი წერტილი — უბრალოდ დავაყენოთ ხედი, მოძრაობა არ არის
   if (waypoints.length < 2) {
     try {
       viewer.rotate({ yaw: waypoints[0].yaw, pitch: waypoints[0].pitch });
@@ -616,13 +639,15 @@ function startPanLoop(
     } catch {
       /* ignore */
     }
+    if (once) {
+      panRef.current.active = false;
+      options?.onComplete?.();
+    }
     return;
   }
 
-  // ჩაკეტილი ციკლი — ბოლო წერტილიდან საწყისზე ბრუნდება
-  const path = [...waypoints, waypoints[0]];
+  const path = once ? [...waypoints] : [...waypoints, waypoints[0]];
 
-  // თითო სეგმენტის წინასწარ დათვლა (კუთხური სიგრძე, delta-ები)
   const segments = path.slice(0, -1).map((a, i) => {
     const b = path[i + 1];
     const dyaw = shortestAngle(a.yaw, b.yaw);
@@ -631,11 +656,9 @@ function startPanLoop(
     return { a, b, dyaw, dpitch, dzoom: b.zoom - a.zoom, len };
   });
 
-  // rpm → რადიანი / ms (1 rpm = 2π რად 60000 ms-ში)
   const rpm = scene.pan_speed_rpm && scene.pan_speed_rpm > 0 ? scene.pan_speed_rpm : 1;
   const radPerMs = (rpm * 2 * Math.PI) / 60000;
 
-  // საწყის წერტილზე დაყენება
   try {
     viewer.rotate({ yaw: path[0].yaw, pitch: path[0].pitch });
     viewer.zoom(path[0].zoom);
@@ -644,9 +667,24 @@ function startPanLoop(
   }
 
   let seg = 0;
-  let segProgress = 0; // უკვე გავლილი კუთხე მიმდინარე სეგმენტში (რად)
+  let segProgress = 0;
   let lastZoom = path[0].zoom;
   let lastTime = performance.now();
+  let finished = false;
+
+  const finishOnce = () => {
+    if (finished) return;
+    finished = true;
+    panRef.current.active = false;
+    const last = path[path.length - 1];
+    try {
+      viewer.rotate({ yaw: last.yaw, pitch: last.pitch });
+      viewer.zoom(last.zoom);
+    } catch {
+      /* ignore */
+    }
+    options?.onComplete?.();
+  };
 
   const step = (now: number) => {
     if (!panRef.current.active || token !== panRef.current.token) return;
@@ -654,45 +692,68 @@ function startPanLoop(
     lastTime = now;
 
     let advance = radPerMs * dt;
-    // სეგმენტებზე გადასვლა (ნულოვანი სიგრძის სეგმენტებს ვტოვებთ)
-    let guard = 0;
-    while (advance > 0 && guard < segments.length + 2) {
-      const s = segments[seg];
-      const remaining = s.len - segProgress;
-      if (s.len <= 1e-6) {
-        // zoom- only ან იდენტური წერტილი — გადავახტეთ
-        seg = (seg + 1) % segments.length;
-        segProgress = 0;
-        guard++;
-        continue;
-      }
-      if (advance < remaining) {
-        segProgress += advance;
-        advance = 0;
-      } else {
-        advance -= remaining;
-        seg = (seg + 1) % segments.length;
-        segProgress = 0;
-      }
-    }
-
+  let guard = 0;
+  while (advance > 0 && guard < segments.length + 2) {
     const s = segments[seg];
-    const t = s.len > 1e-6 ? segProgress / s.len : 0;
-    const yaw = s.a.yaw + s.dyaw * t;
-    const pitch = s.a.pitch + s.dpitch * t;
-    const zoom = s.a.zoom + s.dzoom * t;
-    try {
-      viewer.rotate({ yaw, pitch });
-      if (Math.abs(zoom - lastZoom) > 0.05) {
-        viewer.zoom(zoom);
-        lastZoom = zoom;
+    if (s.len <= 1e-6) {
+      if (once && seg >= segments.length - 1) {
+        finishOnce();
+        return;
       }
-    } catch {
-      /* viewer disposed */
+      if (once) {
+        seg += 1;
+        if (seg >= segments.length) {
+          finishOnce();
+          return;
+        }
+      } else {
+        seg = (seg + 1) % segments.length;
+      }
+      segProgress = 0;
+      guard++;
+      continue;
     }
+    const remaining = s.len - segProgress;
+    if (advance < remaining) {
+      segProgress += advance;
+      advance = 0;
+    } else {
+      advance -= remaining;
+      if (once && seg >= segments.length - 1) {
+        finishOnce();
+        return;
+      }
+      if (once) {
+        seg += 1;
+        if (seg >= segments.length) {
+          finishOnce();
+          return;
+        }
+      } else {
+        seg = (seg + 1) % segments.length;
+      }
+      segProgress = 0;
+    }
+    guard++;
+  }
 
-    panRef.current.raf = requestAnimationFrame(step);
-  };
+  const s = segments[seg];
+  const t = s.len > 1e-6 ? segProgress / s.len : 0;
+  const yaw = s.a.yaw + s.dyaw * t;
+  const pitch = s.a.pitch + s.dpitch * t;
+  const zoom = s.a.zoom + s.dzoom * t;
+  try {
+    viewer.rotate({ yaw, pitch });
+    if (Math.abs(zoom - lastZoom) > 0.05) {
+      viewer.zoom(zoom);
+      lastZoom = zoom;
+    }
+  } catch {
+    /* viewer disposed */
+  }
+
+  panRef.current.raf = requestAnimationFrame(step);
+};
 
   panRef.current.raf = requestAnimationFrame(step);
 }

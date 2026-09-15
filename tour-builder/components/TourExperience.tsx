@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getOrderedScenes } from "@/lib/scene-nav";
+import { getNextSceneId, getOrderedScenes } from "@/lib/scene-nav";
 import type { Hotspot, Scene } from "@/lib/types";
 import { PanoramaViewer } from "./PanoramaViewer";
 import { SceneFilmstrip } from "./SceneFilmstrip";
@@ -40,6 +40,14 @@ export function TourExperience({
     setActiveSceneId(id);
   }, []);
 
+  const handlePanComplete = useCallback(
+    (sceneId: string) => {
+      const next = getNextSceneId(ordered, sceneId);
+      if (next) setActiveSceneId(next);
+    },
+    [ordered]
+  );
+
   if (!activeSceneId || ordered.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0a0a0c] text-zinc-400">
@@ -60,6 +68,7 @@ export function TourExperience({
           mode="navigate"
           clickToAdvance={clickToAdvance}
           onSceneChange={setActiveSceneId}
+          onPanComplete={handlePanComplete}
         />
 
         <SceneFilmstrip

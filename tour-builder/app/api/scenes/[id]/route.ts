@@ -31,6 +31,7 @@ export async function PATCH(request: Request, { params }: Params) {
     "pan_enabled",
     "pan_segment_ms",
     "pan_speed_rpm",
+    "auto_advance_after_pan",
   ] as const;
 
   // panning წერტილები — JSON სტრიქონი (მასივი {yaw,pitch,zoom})

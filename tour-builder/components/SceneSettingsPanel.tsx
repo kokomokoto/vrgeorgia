@@ -479,6 +479,9 @@ export function SceneSettingsPanel({
                 className="flex-1 rounded-lg border border-zinc-600 bg-zinc-800 px-2 py-2 text-xs font-medium text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
               >
                 Preview panning
+                {Number(scene.auto_advance_after_pan) === 1
+                  ? " → next photo"
+                  : ""}
               </button>
               <button
                 type="button"

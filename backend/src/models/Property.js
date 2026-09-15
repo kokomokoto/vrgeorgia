@@ -145,6 +145,8 @@ const propertySchema = new mongoose.Schema(
     // ადმინის მიერ აპინული ობიექტი — მთავარ გვერდზე პირველ რიგში ჩანს
     pinned: { type: Boolean, default: false },
     pinnedAt: { type: Date, default: null },
+    /** უფრო მაღალი = უფრო ზემოთ (დრაგ-ენდ-დროპ რიგი აპინულებში) */
+    pinOrder: { type: Number, default: null },
 
     /** ნაგვის ყუთი — soft delete */
     deletedAt: { type: Date, default: null },

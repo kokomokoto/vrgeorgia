@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, Suspense } from 'react';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -12,6 +12,7 @@ import { AdminTransferPropertyModal } from '@/components/AdminTransferPropertyMo
 import { Filters, type FiltersState } from '@/components/Filters';
 import { DEFAULT_MAP_FILTERS, filtersToPropertyQuery } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
+import { reorderArray, resolveDropToIndex, type DropPlacement } from '@/lib/propertyPhotos';
 import type { Property } from '@/lib/types';
 
 interface AdminProperty {
@@ -27,6 +28,7 @@ interface AdminProperty {
   status: string;
   listingVisibility?: 'public' | 'unlisted' | 'private';
   pinned?: boolean;
+  pinOrder?: number | null;
   photos: string[];
   userId?: {
     name: string;
@@ -46,12 +48,14 @@ function buildPropertiesQueryString(
   sortBy: string,
   page: number,
   statusFilter: string,
-  visibilityFilter: string
+  visibilityFilter: string,
+  pinnedFilter: '' | '1'
 ): string {
   const query: PropertyQuery = {
     ...filtersToPropertyQuery(filters, sortBy),
-    limit: 20,
-    page,
+    // აპინულებში დრაგ-რიგისთვის ყველა პინი ერთ გვერდზე
+    limit: pinnedFilter === '1' ? 200 : 20,
+    page: pinnedFilter === '1' ? 1 : page,
   };
 
   const params = new URLSearchParams();
@@ -78,6 +82,7 @@ function buildPropertiesQueryString(
   }
   if (statusFilter) params.set('status', statusFilter);
   if (visibilityFilter) params.set('listingVisibility', visibilityFilter);
+  if (pinnedFilter === '1') params.set('pinned', 'true');
   return params.toString();
 }
 
@@ -111,6 +116,15 @@ function AdminProperties() {
   const [visibilityFilter, setVisibilityFilter] = useState(
     searchParams.get('listingVisibility') || searchParams.get('visibility') || ''
   );
+  const [pinnedFilter, setPinnedFilter] = useState<''| '1'>(
+    searchParams.get('pinned') === '1' || searchParams.get('pinned') === 'true' ? '1' : ''
+  );
+  const [pinnedCount, setPinnedCount] = useState(0);
+  const [pinReorderSaving, setPinReorderSaving] = useState(false);
+  const [draggingPinIndex, setDraggingPinIndex] = useState<number | null>(null);
+  const pinDragIndexRef = useRef<number | null>(null);
+  const pinOrderDirtyRef = useRef(false);
+  const propertiesRef = useRef<AdminProperty[]>([]);
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
   const [sortBy, setSortBy] = useState('date_desc');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -121,10 +135,15 @@ function AdminProperties() {
     userId?: string;
   } | null>(null);
 
+  useEffect(() => {
+    propertiesRef.current = properties;
+  }, [properties]);
+
   const clearAllFilters = useCallback(() => {
     setFilters({ ...DEFAULT_MAP_FILTERS });
     setStatusFilter('');
     setVisibilityFilter('');
+    setPinnedFilter('');
   }, []);
 
   const fetchProperties = useCallback(async (token: string, qs: string) => {
@@ -158,9 +177,13 @@ function AdminProperties() {
     let alive = true;
     (async () => {
       try {
-        const data = await fetchProperties(token, 'limit=200&page=1');
-        if (!alive || !data) return;
-        setRangeProperties(data.properties as unknown as Property[]);
+        const [rangeData, pinnedData] = await Promise.all([
+          fetchProperties(token, 'limit=200&page=1'),
+          fetchProperties(token, 'pinned=true&limit=1&page=1'),
+        ]);
+        if (!alive) return;
+        if (rangeData) setRangeProperties(rangeData.properties as unknown as Property[]);
+        if (pinnedData) setPinnedCount(pinnedData.total || 0);
       } catch {
         if (alive) setError('სერვერთან კავშირი ვერ მოხერხდა');
       } finally {
@@ -175,7 +198,7 @@ function AdminProperties() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, visibilityFilter, filters, sortBy]);
+  }, [statusFilter, visibilityFilter, pinnedFilter, filters, sortBy]);
 
   useEffect(() => {
     if (initLoading) return;
@@ -189,13 +212,23 @@ function AdminProperties() {
       setError('');
 
       try {
-        const qs = buildPropertiesQueryString(filters, sortBy, page, statusFilter, visibilityFilter);
+        const qs = buildPropertiesQueryString(
+          filters,
+          sortBy,
+          page,
+          statusFilter,
+          visibilityFilter,
+          pinnedFilter
+        );
         const data = await fetchProperties(token, qs);
         if (!alive || !data) return;
         setProperties(data.properties || []);
         setTotal(data.total || 0);
         setPages(data.pages || 1);
         setSelectedIds([]);
+        if (pinnedFilter === '1') {
+          setPinnedCount(data.total || 0);
+        }
         trackSearchFilters('admin_properties', filters, {
           sort: sortBy,
           resultCount: data.properties?.length ?? 0,
@@ -211,20 +244,34 @@ function AdminProperties() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [filters, sortBy, page, statusFilter, visibilityFilter, i18n.language, initLoading, fetchProperties]);
+  }, [filters, sortBy, page, statusFilter, visibilityFilter, pinnedFilter, i18n.language, initLoading, fetchProperties]);
 
   const refreshList = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
-    const qs = buildPropertiesQueryString(filters, sortBy, page, statusFilter, visibilityFilter);
-    const data = await fetchProperties(token, qs);
+    const qs = buildPropertiesQueryString(
+      filters,
+      sortBy,
+      page,
+      statusFilter,
+      visibilityFilter,
+      pinnedFilter
+    );
+    const [data, pinnedData] = await Promise.all([
+      fetchProperties(token, qs),
+      pinnedFilter === '1'
+        ? Promise.resolve(null)
+        : fetchProperties(token, 'pinned=true&limit=1&page=1'),
+    ]);
     if (data) {
       setProperties(data.properties || []);
       setTotal(data.total || 0);
       setPages(data.pages || 1);
       setSelectedIds([]);
+      if (pinnedFilter === '1') setPinnedCount(data.total || 0);
     }
-  }, [filters, sortBy, page, statusFilter, visibilityFilter, fetchProperties]);
+    if (pinnedData) setPinnedCount(pinnedData.total || 0);
+  }, [filters, sortBy, page, statusFilter, visibilityFilter, pinnedFilter, fetchProperties]);
 
   const handleStatusChange = async (propertyId: string, status: string) => {
     const reason = status === 'rejected' ? (prompt('მიუთითეთ უარყოფის მიზეზი') || '').trim() : '';
@@ -284,7 +331,15 @@ function AdminProperties() {
         body: JSON.stringify({ pinned }),
       });
       if (res.ok) {
-        setProperties((prev) => prev.map((p) => (p._id === propertyId ? { ...p, pinned } : p)));
+        setPinnedCount((prev) => Math.max(0, prev + (pinned ? 1 : -1)));
+        if (pinnedFilter === '1' && !pinned) {
+          setProperties((prev) => prev.filter((p) => p._id !== propertyId));
+          setTotal((prev) => Math.max(0, prev - 1));
+        } else {
+          setProperties((prev) =>
+            prev.map((p) => (p._id === propertyId ? { ...p, pinned } : p))
+          );
+        }
       } else {
         alert('ოპერაცია ვერ შესრულდა');
       }
@@ -292,6 +347,85 @@ function AdminProperties() {
       alert('ოპერაცია ვერ შესრულდა');
     }
   };
+
+  const persistPinnedOrder = useCallback(async (ordered: AdminProperty[]) => {
+    const token = localStorage.getItem('token');
+    if (!token || ordered.length === 0) return;
+    setPinReorderSaving(true);
+    try {
+      const res = await fetch(`${getApiBase()}/api/admin/properties/pins/reorder`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderedIds: ordered.map((p) => p._id) }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.message || 'რიგის შენახვა ვერ მოხერხდა');
+        await refreshList();
+      }
+    } catch {
+      alert('რიგის შენახვა ვერ მოხერხდა');
+      await refreshList();
+    } finally {
+      setPinReorderSaving(false);
+    }
+  }, [refreshList]);
+
+  const handlePinnedLiveReorder = useCallback((fromIndex: number, toIndex: number) => {
+    setProperties((prev) => {
+      const next = reorderArray(prev, fromIndex, toIndex);
+      propertiesRef.current = next;
+      return next;
+    });
+    pinOrderDirtyRef.current = true;
+  }, []);
+
+  const getPinnedRowDragProps = useCallback(
+    (index: number) => ({
+      draggable: true,
+      onDragStart: (e: React.DragEvent) => {
+        pinDragIndexRef.current = index;
+        pinOrderDirtyRef.current = false;
+        setDraggingPinIndex(index);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(index));
+        // Firefox-ს სჭირდება რეალური მონაცემი; ცარიელი ტექსტი ზოგჯერ drag-ს აჩერებს
+        if (e.dataTransfer.setDragImage && e.currentTarget instanceof HTMLElement) {
+          e.dataTransfer.setDragImage(e.currentTarget, 24, 24);
+        }
+      },
+      onDragOver: (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const from = pinDragIndexRef.current;
+        if (from === null) return;
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const placement: DropPlacement =
+          e.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+        const to = resolveDropToIndex(from, index, placement);
+        if (to !== from) {
+          handlePinnedLiveReorder(from, to);
+          pinDragIndexRef.current = to;
+          setDraggingPinIndex(to);
+        }
+      },
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      onDragEnd: async () => {
+        pinDragIndexRef.current = null;
+        setDraggingPinIndex(null);
+        if (!pinOrderDirtyRef.current) return;
+        pinOrderDirtyRef.current = false;
+        await persistPinnedOrder(propertiesRef.current);
+      },
+    }),
+    [handlePinnedLiveReorder, persistPinnedOrder]
+  );
 
   const handleDelete = async (propertyId: string) => {
     if (!confirm('განცხადება გადავა ნაგვის ყუთში. გავაგრძელოთ?')) return;
@@ -374,7 +508,11 @@ function AdminProperties() {
           <div>
             <h1 className="text-3xl font-bold text-gray-800">განცხადებები</h1>
             <p className="text-gray-600">
-              {listLoading ? t('loading', 'იტვირთება...') : `ნაპოვნია ${total} განცხადება`}
+              {listLoading
+                ? t('loading', 'იტვირთება...')
+                : pinnedFilter === '1'
+                  ? `აპინული: ${total} განცხადება`
+                  : `ნაპოვნია ${total} განცხადება`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -416,6 +554,47 @@ function AdminProperties() {
             </select>
           </div>
         </div>
+
+        <div className="mb-6 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setPinnedFilter('')}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              pinnedFilter === ''
+                ? 'bg-slate-800 text-white'
+                : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            ყველა განცხადება
+          </button>
+          <button
+            type="button"
+            onClick={() => setPinnedFilter('1')}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              pinnedFilter === '1'
+                ? 'bg-amber-500 text-white'
+                : 'border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+            }`}
+          >
+            <span aria-hidden>📌</span>
+            აპინული
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                pinnedFilter === '1' ? 'bg-white/25 text-white' : 'bg-amber-200/80 text-amber-900'
+              }`}
+            >
+              {pinnedCount}
+            </span>
+          </button>
+        </div>
+
+        {pinnedFilter === '1' && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            აქ ჩანს მხოლოდ მთავარ გვერდზე აპინული განცხადებები. ჩავლებით (
+            <span className="font-medium">⋮⋮</span>) გადაიტანე ზემოთ/ქვემოთ — რიგი მთავარ გვერდზეც იცვლება.
+            {pinReorderSaving ? ' ინახება…' : ''}
+          </div>
+        )}
 
         <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="mb-3 text-sm text-gray-500">
@@ -462,6 +641,7 @@ function AdminProperties() {
           <table className="w-full min-w-[1080px] table-fixed">
             <colgroup>
               <col className="w-12" />
+              {pinnedFilter === '1' ? <col className="w-10" /> : null}
               <col className="w-64" />
               <col className="w-28" />
               <col className="w-32" />
@@ -481,6 +661,11 @@ function AdminProperties() {
                     }
                   />
                 </th>
+                {pinnedFilter === '1' && (
+                  <th className="px-2 py-4 text-center text-sm font-semibold text-gray-400" title="რიგი">
+                    ⋮⋮
+                  </th>
+                )}
                 <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">განცხადება</th>
                 <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">ტიპი</th>
                 <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">ფასი</th>
@@ -497,19 +682,31 @@ function AdminProperties() {
             <tbody className="divide-y divide-gray-100">
               {initLoading || listLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={pinnedFilter === '1' ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
                     იტვირთება...
                   </td>
                 </tr>
               ) : properties.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
-                    განცხადებები ვერ მოიძებნა
+                  <td colSpan={pinnedFilter === '1' ? 9 : 8} className="px-6 py-8 text-center text-gray-500">
+                    {pinnedFilter === '1'
+                      ? 'აპინული განცხადებები ჯერ არ არის'
+                      : 'განცხადებები ვერ მოიძებნა'}
                   </td>
                 </tr>
               ) : (
-                properties.map((property) => (
-                  <tr key={property._id} className="group hover:bg-gray-50">
+                properties.map((property, index) => {
+                  const pinDrag =
+                    pinnedFilter === '1' ? getPinnedRowDragProps(index) : null;
+                  return (
+                  <tr
+                    key={property._id}
+                    className={`group hover:bg-gray-50 ${
+                      draggingPinIndex === index ? 'bg-amber-50 opacity-80' : ''
+                    }`}
+                    onDragOver={pinDrag?.onDragOver}
+                    onDrop={pinDrag?.onDrop}
+                  >
                     <td className="px-4 py-4">
                       <input
                         type="checkbox"
@@ -520,6 +717,21 @@ function AdminProperties() {
                         }}
                       />
                     </td>
+                    {pinnedFilter === '1' && pinDrag && (
+                      <td className="px-2 py-4 text-center align-middle">
+                        <button
+                          type="button"
+                          className="inline-flex cursor-grab select-none items-center justify-center rounded px-1.5 py-1 text-lg leading-none text-gray-400 hover:bg-amber-100 hover:text-amber-700 active:cursor-grabbing"
+                          title="გადაიტანე რიგის შესაცვლელად"
+                          aria-label="რიგის შეცვლა"
+                          draggable={pinDrag.draggable}
+                          onDragStart={pinDrag.onDragStart}
+                          onDragEnd={pinDrag.onDragEnd}
+                        >
+                          ⋮⋮
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-4 align-top">
                       <div className="flex min-w-0 items-start gap-3">
                         <div className="relative h-12 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200">
@@ -662,12 +874,13 @@ function AdminProperties() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
 
-          {pages > 1 && (
+          {pages > 1 && pinnedFilter !== '1' && (
             <div className="flex flex-wrap items-center justify-center gap-2 bg-gray-50 px-4 py-4 sm:px-6">
               <button
                 type="button"

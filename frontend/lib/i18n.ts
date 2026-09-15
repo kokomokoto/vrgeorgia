@@ -317,6 +317,9 @@ const resources = {
       copyLink: 'ლინკის კოპირება',
       copyId: 'ID-ის კოპირება',
       copied: 'კოპირებულია!',
+      pinListing: 'მთავარზე აპინვა',
+      unpinListing: 'აპინვის მოხსნა',
+      pinFailed: 'აპინვა ვერ მოხერხდა',
       // Messages
       messages: 'შეტყობინებები',
       conversations: 'საუბრები',
@@ -1117,6 +1120,9 @@ const resources = {
       copyLink: 'Copy link',
       copyId: 'Copy ID',
       copied: 'Copied!',
+      pinListing: 'Pin to homepage',
+      unpinListing: 'Unpin from homepage',
+      pinFailed: 'Could not update pin',
       // Messages
       messages: 'Messages',
       conversations: 'Conversations',
@@ -1902,6 +1908,9 @@ const resources = {
       copyLink: 'Копировать ссылку',
       copyId: 'Копировать ID',
       copied: 'Скопировано!',
+      pinListing: 'Закрепить на главной',
+      unpinListing: 'Открепить с главной',
+      pinFailed: 'Не удалось изменить закрепление',
       // Messages
       messages: 'Сообщения',
       conversations: 'Беседы',

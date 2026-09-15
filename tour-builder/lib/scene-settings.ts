@@ -40,7 +40,8 @@ export function normalizeScene(raw: Scene): Scene {
     pan_segment_ms: raw.pan_segment_ms ?? SCENE_DEFAULTS.pan_segment_ms,
     pan_speed_rpm: raw.pan_speed_rpm ?? SCENE_DEFAULTS.pan_speed_rpm,
     auto_advance_after_pan:
-      raw.auto_advance_after_pan ?? SCENE_DEFAULTS.auto_advance_after_pan,
+      Number(raw.auto_advance_after_pan ?? SCENE_DEFAULTS.auto_advance_after_pan) ||
+      0,
   };
 }
 
@@ -125,6 +126,38 @@ export function autorotateToSlider(rpm: number): number {
 
 /** Apply saved default view (opening frame). */
 export function applyDefaultView(viewer: Viewer, scene: Scene) {
-  viewer.rotate({ yaw: scene.default_yaw, pitch: scene.default_pitch });
-  viewer.zoom(scene.default_zoom);
+  const view = getSceneEntryView(scene);
+  viewer.rotate({ yaw: view.yaw, pitch: view.pitch });
+  viewer.zoom(view.zoom);
+}
+
+/**
+ * Camera pose where a scene should first appear — default view if set,
+ * otherwise the first pan point (so auto-pan never flashes a wrong angle).
+ */
+export function getSceneEntryView(scene: Scene): {
+  yaw: number;
+  pitch: number;
+  zoom: number;
+} {
+  if (scene.default_view_custom === 1) {
+    return {
+      yaw: scene.default_yaw,
+      pitch: scene.default_pitch,
+      zoom: scene.default_zoom,
+    };
+  }
+  const keyframes = parsePanKeyframes(scene);
+  if (keyframes.length > 0) {
+    return {
+      yaw: keyframes[0].yaw,
+      pitch: keyframes[0].pitch,
+      zoom: keyframes[0].zoom,
+    };
+  }
+  return {
+    yaw: scene.default_yaw ?? 0,
+    pitch: scene.default_pitch ?? 0,
+    zoom: scene.default_zoom ?? 50,
+  };
 }

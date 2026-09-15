@@ -319,6 +319,7 @@ function PropertyDetailInner() {
     'exterior' | 'interior' | 'tour' | 'photos'
   >('exterior');
   const [idCopied, setIdCopied] = useState(false);
+  const [pinning, setPinning] = useState(false);
   const propertyMapSectionRef = React.useRef<HTMLDivElement>(null);
 
   // ენის დეტექცია - hooks ყოველთვის ერთნაირად უნდა გამოიძახონ
@@ -797,13 +798,56 @@ function PropertyDetailInner() {
     window.setTimeout(() => setIdCopied(false), 2000);
   };
 
+  const togglePropertyPin = async () => {
+    if (!property || !isAdmin || pinning) return;
+    const nextPinned = !property.pinned;
+    const token =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('token')?.trim()
+        : null;
+    if (!token) return;
+
+    setPinning(true);
+    try {
+      const res = await fetch(
+        `${getApiBase()}/api/admin/properties/${property._id}/pin`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ pinned: nextPinned }),
+        }
+      );
+      if (!res.ok) {
+        alert(t('pinFailed'));
+        return;
+      }
+      const updated = (await res.json()) as Property;
+      setProperty((prev) =>
+        prev
+          ? {
+              ...prev,
+              pinned: updated.pinned ?? nextPinned,
+              pinnedAt: updated.pinnedAt ?? (nextPinned ? new Date().toISOString() : null),
+            }
+          : prev
+      );
+    } catch {
+      alert(t('pinFailed'));
+    } finally {
+      setPinning(false);
+    }
+  };
+
   const sharePageUrl =
     typeof window !== 'undefined'
       ? window.location.href
       : `${getSiteUrl()}/property/${property._id}${shareTokenFromUrl ? `?t=${shareTokenFromUrl}` : ''}`;
 
   const idMetaPanel = (
-    <div className="flex flex-col justify-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+    <div className="flex h-full flex-col justify-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
       <div className="flex items-center gap-2">
         <div className="font-mono text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
           ID: {displayId}
@@ -834,6 +878,36 @@ function PropertyDetailInner() {
             </svg>
           )}
         </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={togglePropertyPin}
+            disabled={pinning}
+            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${
+              property.pinned
+                ? 'bg-amber-500 text-white hover:bg-amber-600'
+                : 'bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700'
+            }`}
+            title={property.pinned ? t('unpinListing') : t('pinListing')}
+            aria-label={property.pinned ? t('unpinListing') : t('pinListing')}
+            aria-pressed={!!property.pinned}
+          >
+            {property.pinned ? (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M16 3a1 1 0 011 1v2.586l1.707 1.707A1 1 0 0118 10h-3v7l-2 3-2-3v-7H8a1 1 0 01-.707-1.707L9 6.586V4a1 1 0 011-1h6z" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 4v4.5l2 2V12h-3.5V19L12 21l-1.5-2v-7H7v-1.5l2-2V4h6z"
+                />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
       {(listedDateLabel || typeof property.views === 'number') && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
@@ -996,8 +1070,8 @@ function PropertyDetailInner() {
 
   return (
     <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] lg:items-start">
-      {/* სათაური + მისამართი — მარცხე სვეტი (3D-ის სიგანე) */}
-      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:flex-row sm:items-start sm:gap-2.5 sm:p-3 lg:col-start-1 lg:row-start-1">
+      {/* სათაური + მისამართი — მარცხე სვეტი (3D-ის სიგანე); ID გრაფასთან ერთი სიმაღლე */}
+      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:flex-row sm:items-center sm:gap-2.5 sm:p-3 lg:col-start-1 lg:row-start-1 lg:h-full lg:self-stretch">
         <div className="min-w-0 flex-1">
           <h1 className="break-words text-base font-semibold text-slate-900 sm:text-xl">
             {displayTitle}
@@ -1046,7 +1120,7 @@ function PropertyDetailInner() {
       </div>
 
       {/* ID, თარიღი, ნახვები — მხოლოდ desktop (მობილურზე ფასის ქვემოთაა) */}
-      <div className="hidden lg:block lg:col-start-2 lg:row-start-1">{idMetaPanel}</div>
+      <div className="hidden h-full lg:block lg:col-start-2 lg:row-start-1 lg:self-stretch">{idMetaPanel}</div>
 
       {/* 3D ან მთავარი ფოტო + მარჯვე პანელები (desktop) */}
       {showMediaHero && (

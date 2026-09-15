@@ -143,6 +143,7 @@ const SCENE_PATCH_KEYS = [
   'pan_keyframes_json',
   'pan_segment_ms',
   'pan_speed_rpm',
+  'auto_advance_after_pan',
 ];
 
 export async function updateScene(id, data) {

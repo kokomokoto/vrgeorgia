@@ -7,12 +7,14 @@ import { PanoramaViewer, type ViewerApi } from "./PanoramaViewer";
 import { SceneSettingsPanel } from "./SceneSettingsPanel";
 import { SceneSidebar } from "./SceneSidebar";
 import {
+  assertPanoramaFileReady,
   getImageFilesFromDataTransfer,
   hasPanoramaImageInDataTransfer,
   isPanoramaImageFile,
   sceneNameFromFile,
 } from "@/lib/dnd-image";
 import { applySceneSelectionClick } from "@/lib/scene-selection";
+import { getNextSceneId } from "@/lib/scene-nav";
 import { sortScenesByOrder } from "@/lib/scene-reorder";
 import type { Hotspot, Scene, TourDraft } from "@/lib/types";
 
@@ -183,6 +185,15 @@ export function TourEditor({ tourId }: TourEditorProps) {
     const errors: string[] = [];
 
     for (const file of valid) {
+      try {
+        await assertPanoramaFileReady(file);
+      } catch (e) {
+        errors.push(
+          `${file.name}: ${e instanceof Error ? e.message : "Invalid image"}`
+        );
+        continue;
+      }
+
       let sceneId = replaceSceneId;
       if (!sceneId) {
         const scene = await addScene(sceneNameFromFile(file));
@@ -449,7 +460,8 @@ export function TourEditor({ tourId }: TourEditorProps) {
       payload.pan_enabled !== undefined ||
       payload.pan_keyframes_json !== undefined ||
       payload.pan_speed_rpm !== undefined ||
-      payload.pan_segment_ms !== undefined;
+      payload.pan_segment_ms !== undefined ||
+      payload.auto_advance_after_pan !== undefined;
 
     if (isLocalPatch) {
       patchSceneLocal(activeSceneId, payload);
@@ -775,6 +787,10 @@ export function TourEditor({ tourId }: TourEditorProps) {
               addHotspotMode={addHotspotMode}
               placementHint={placementHint}
               onPlaceHotspot={placeHotspot}
+              onPanComplete={(sceneId) => {
+                const next = getNextSceneId(draft.scenes, sceneId);
+                if (next) setActiveSceneId(next);
+              }}
               onViewerReady={setViewerApi}
             />
           ) : (

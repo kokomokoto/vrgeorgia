@@ -243,14 +243,56 @@ async function verifyIdempotencyIndex() {
   }
 }
 
+function isMongoNetworkBlip(err) {
+  if (!err) return false;
+  const name = err.name || '';
+  const code = err.code || err.cause?.code || '';
+  const msg = String(err.message || err.cause?.message || '');
+  return (
+    name === 'MongoNetworkError' ||
+    name === 'MongoServerSelectionError' ||
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    /ECONNRESET|ETIMEDOUT|ECONNREFUSED|topology was destroyed|connection.*closed/i.test(msg)
+  );
+}
+
+let reconnectTimer = null;
+async function reconnectMongo() {
+  if (reconnectTimer) return;
+  if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) return;
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+    try {
+      console.warn('MongoDB: reconnecting…');
+      await mongoose.connect(MONGODB_URI);
+      console.log('MongoDB: reconnected');
+    } catch (err) {
+      console.error('MongoDB: reconnect failed:', err.message);
+      reconnectMongo();
+    }
+  }, 2000);
+}
+
 async function start() {
   mongoose.connection.on('error', (err) => {
-    console.error('MongoDB connection error:', err);
+    // არ ვუშვებთ პროცესს — Atlas/ქსელის blip ხშირად ECONNRESET-ით მოდის
+    console.error('MongoDB connection error:', err.message || err);
   });
   mongoose.connection.on('disconnected', () => {
-    console.warn('MongoDB disconnected');
+    console.warn('MongoDB disconnected — will reconnect');
+    reconnectMongo();
   });
-  await mongoose.connect(MONGODB_URI);
+  mongoose.connection.on('reconnected', () => {
+    console.log('MongoDB reconnected');
+  });
+
+  await mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 15_000,
+    heartbeatFrequencyMS: 10_000,
+    maxPoolSize: 10,
+  });
   console.log('Connected to MongoDB');
   console.log(`Environment: ${NODE_ENV}`);
 
@@ -281,6 +323,27 @@ async function start() {
   // სოკეტის უმოქმედობის ტაიმერი გამორთული — მოთხოვნის ლიმიტს requestTimeout წყვეტს
   server.setTimeout(0);
 }
+
+// Mongo driver ხანდახან ECONNRESET-ს uncaughtException-ად აგდებს — პროცესი კვდებოდა
+// და `node --watch` ფაილის ცვლილებამდე აღარ იწყებდა → FE: "სერვერთან კავშირი ვერ მოხერხდა".
+process.on('uncaughtException', (err) => {
+  if (isMongoNetworkBlip(err)) {
+    console.error('MongoDB network blip (kept alive):', err.message || err);
+    reconnectMongo();
+    return;
+  }
+  console.error('Uncaught exception — exiting:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  if (isMongoNetworkBlip(reason)) {
+    console.error('MongoDB network rejection (kept alive):', reason?.message || reason);
+    reconnectMongo();
+    return;
+  }
+  console.error('Unhandled rejection:', reason);
+});
 
 start().catch((err) => {
   console.error(err);

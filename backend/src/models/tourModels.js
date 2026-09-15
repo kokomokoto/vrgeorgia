@@ -40,6 +40,8 @@ const sceneSchema = new mongoose.Schema(
     pan_keyframes_json: { type: String, default: null },
     pan_segment_ms: { type: Number, default: 4000 },
     pan_speed_rpm: { type: Number, default: 0.08 },
+    /** 1 = after one panning pass, go to next scene (loop) */
+    auto_advance_after_pan: { type: Number, default: 0 },
   },
   { collection: 'tb_scenes' }
 );
@@ -102,6 +104,7 @@ export function toSceneRaw(d) {
     pan_keyframes_json: d.pan_keyframes_json ?? null,
     pan_segment_ms: d.pan_segment_ms,
     pan_speed_rpm: d.pan_speed_rpm,
+    auto_advance_after_pan: d.auto_advance_after_pan ?? 0,
   };
 }
 

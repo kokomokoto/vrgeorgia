@@ -85,7 +85,7 @@ export function parsePropertySortOption(sortRaw) {
     sortOption = { createdAt: -1 };
   }
   // Note: callers that still use find().sort(this) will mis-order docs with missing `pinned`.
-  return { pinned: -1, pinnedAt: -1, ...sortOption };
+  return { pinned: -1, pinOrder: -1, pinnedAt: -1, ...sortOption };
 }
 
 /**
@@ -148,13 +148,28 @@ export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts
   const pipeline = [{ $match: matchFilter }];
 
   // missing `pinned` must sort like false — raw { pinned: -1 } sends those docs to the end
+  // pinOrder: admin drag order; fallback to pinnedAt ms for older docs without pinOrder
   const addFields = {
     _sortPinned: { $cond: [{ $eq: ['$pinned', true] }, 1, 0] },
+    _sortPinOrder: {
+      $ifNull: [
+        '$pinOrder',
+        {
+          $convert: {
+            input: '$pinnedAt',
+            to: 'long',
+            onError: 0,
+            onNull: 0,
+          },
+        },
+      ],
+    },
   };
 
   /** @type {Record<string, 1|-1>} */
   let sortSpec = {
     _sortPinned: -1,
+    _sortPinOrder: -1,
     pinnedAt: -1,
   };
 
@@ -168,6 +183,7 @@ export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts
     pipeline.push({
       $addFields: {
         _sortPinned: addFields._sortPinned,
+        _sortPinOrder: addFields._sortPinOrder,
         _sortMissing: {
           $cond: [
             {
@@ -181,15 +197,22 @@ export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts
     });
     sortSpec = {
       _sortPinned: -1,
+      _sortPinOrder: -1,
       pinnedAt: -1,
       _sortMissing: 1,
       _sortValue: plan.direction,
       createdAt: -1,
     };
   } else {
-    pipeline.push({ $addFields: { _sortPinned: addFields._sortPinned } });
+    pipeline.push({
+      $addFields: {
+        _sortPinned: addFields._sortPinned,
+        _sortPinOrder: addFields._sortPinOrder,
+      },
+    });
     sortSpec = {
       _sortPinned: -1,
+      _sortPinOrder: -1,
       pinnedAt: -1,
       ...plan.fieldSort,
     };
@@ -200,8 +223,8 @@ export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts
   if (limit != null) pipeline.push({ $limit: limit });
 
   const helperFields = plan.needsComputed
-    ? ['_sortPinned', '_sortValue', '_sortMissing']
-    : ['_sortPinned'];
+    ? ['_sortPinned', '_sortPinOrder', '_sortValue', '_sortMissing']
+    : ['_sortPinned', '_sortPinOrder'];
 
   if (select) {
     const include = {};

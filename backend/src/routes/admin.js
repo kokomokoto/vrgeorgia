@@ -515,6 +515,13 @@ router.get('/properties', requireAuth, adminMiddleware, async (req, res) => {
       filter.userId = req.query.userId;
     }
 
+    const pinnedRaw = String(req.query.pinned || '').trim().toLowerCase();
+    if (pinnedRaw === 'true' || pinnedRaw === '1') {
+      filter.pinned = true;
+    } else if (pinnedRaw === 'false' || pinnedRaw === '0') {
+      filter.pinned = { $ne: true };
+    }
+
     applyListingVisibilityFilter(
       filter,
       req.query.listingVisibility || req.query.brokerListingMode || ''
@@ -795,15 +802,65 @@ router.post('/duplicates/merge', requireAuth, adminMiddleware, async (req, res) 
   }
 });
 
+// აპინული განცხადებების რიგი (დრაგ-ენდ-დროპ) — პირველი ID = ყველაზე ზემოთ მთავარზე
+// უნდა იყოს /:id/pin-მდე, რომ Express-მა "pins" id-ად არ მიიღოს
+router.put('/properties/pins/reorder', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : null;
+    if (!orderedIds || orderedIds.length === 0) {
+      return res.status(400).json({ message: 'orderedIds აუცილებელია' });
+    }
+    if (orderedIds.length > 200) {
+      return res.status(400).json({ message: 'ძალიან ბევრი ID' });
+    }
+
+    const ids = orderedIds.map((id) => String(id)).filter(Boolean);
+    const unique = new Set(ids);
+    if (unique.size !== ids.length) {
+      return res.status(400).json({ message: 'დუბლიკატი ID' });
+    }
+
+    const pinned = await Property.find(
+      withNotDeleted({ _id: { $in: ids }, pinned: true })
+    ).select('_id');
+    if (pinned.length !== ids.length) {
+      return res.status(400).json({ message: 'ყველა ID უნდა იყოს აპინული განცხადება' });
+    }
+
+    const base = Date.now();
+    const ops = ids.map((id, index) => ({
+      updateOne: {
+        filter: { _id: id },
+        update: {
+          $set: {
+            pinOrder: base + (ids.length - index),
+            pinnedAt: new Date(base - index),
+          },
+        },
+      },
+    }));
+    await Property.bulkWrite(ops);
+
+    await writeAudit(req.user.id, 'property.pins_reordered', 'property', 'pins', {
+      count: ids.length,
+      orderedIds: ids,
+    });
+
+    res.json({ ok: true, orderedIds: ids });
+  } catch (error) {
+    console.error('admin pins reorder failed:', error);
+    res.status(500).json({ message: 'რიგის შენახვა ვერ მოხერხდა' });
+  }
+});
+
 // Pin/Unpin property — აპინული ობიექტები მთავარ გვერდზე პირველ რიგში ჩანს
 router.put('/properties/:id/pin', requireAuth, adminMiddleware, async (req, res) => {
   try {
     const pinned = req.body.pinned !== false; // default true
-    const property = await Property.findByIdAndUpdate(
-      req.params.id,
-      { pinned, pinnedAt: pinned ? new Date() : null },
-      { new: true }
-    );
+    const update = pinned
+      ? { pinned: true, pinnedAt: new Date(), pinOrder: Date.now() }
+      : { pinned: false, pinnedAt: null, pinOrder: null };
+    const property = await Property.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!property) return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა' });
 
     await writeAudit(req.user.id, pinned ? 'property.pinned' : 'property.unpinned', 'property', req.params.id);

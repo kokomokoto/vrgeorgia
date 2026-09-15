@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef } from "react";
 import { Viewer } from "@photo-sphere-viewer/core";
@@ -10,7 +10,7 @@ import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
 import { getNextSceneId } from "@/lib/scene-nav";
 import { sceneOrderKey, tourViewerKey } from "@/lib/scene-reorder";
 import {
-  applyDefaultView,
+  getSceneEntryView,
   getViewerLimits,
   isPanningActive,
   parsePanKeyframes,
@@ -22,12 +22,22 @@ import { buildViewerNodes, sceneMarkers } from "@/lib/viewer-utils";
 
 export type ViewerMode = "edit" | "navigate";
 
-const FAST_TRANSITION = {
+const SCENE_TRANSITION = {
   showLoader: false,
   effect: "fade" as const,
   rotation: false,
-  speed: 350,
+  speed: 700,
 };
+
+/** VirtualTour / setPanorama options: fade in already looking at the pan start. */
+function transitionToSceneEntry(scene: Scene) {
+  const entry = getSceneEntryView(scene);
+  return {
+    ...SCENE_TRANSITION,
+    rotateTo: { yaw: entry.yaw, pitch: entry.pitch },
+    zoomTo: entry.zoom,
+  };
+}
 
 type PanController = { token: number; active: boolean; raf: number };
 
@@ -52,9 +62,9 @@ export interface PanoramaViewerProps {
 export interface ViewerApi {
   getPosition: () => { yaw: number; pitch: number; zoom: number };
   goToView: (yaw: number, pitch: number, zoom: number) => void;
-  /** panning-ის გაშვება მიმდინარე სცენის პარამეტრებით (preview) */
+  /** panning-áƒ˜áƒ¡ áƒ’áƒáƒ¨áƒ•áƒ”áƒ‘áƒ áƒ›áƒ˜áƒ›áƒ“áƒ˜áƒœáƒáƒ áƒ” áƒ¡áƒªáƒ”áƒœáƒ˜áƒ¡ áƒžáƒáƒ áƒáƒ›áƒ”áƒ¢áƒ áƒ”áƒ‘áƒ˜áƒ— (preview) */
   startPan: () => void;
-  /** panning-ის გაჩერება */
+  /** panning-áƒ˜áƒ¡ áƒ’áƒáƒ©áƒ”áƒ áƒ”áƒ‘áƒ */
   stopPan: () => void;
 }
 
@@ -86,6 +96,8 @@ export function PanoramaViewer({
   const vtNodesKeyRef = useRef<string | null>(null);
   const clampCleanupRef = useRef<(() => void) | null>(null);
   const panRef = useRef<PanController>({ token: 0, active: false, raf: 0 });
+  /** After auto-advance, start panning on the next scene in edit mode too. */
+  const chainPanRef = useRef(false);
 
   const scenesRef = useRef(scenes);
   const hotspotsRef = useRef(hotspots);
@@ -108,9 +120,6 @@ export function PanoramaViewer({
   onPanCompleteRef.current = onPanComplete;
 
   const activeScene = scenes.find((s) => s.id === activeSceneId);
-  const activePanoramaUrl = activeScene?.image_path
-    ? resolvePanoramaUrl(activeScene.image_path)
-    : null;
 
   const tourKey = useMemo(() => tourViewerKey(scenes, mode), [scenes, mode]);
   const orderKey = useMemo(() => sceneOrderKey(scenes), [scenes]);
@@ -123,73 +132,23 @@ export function PanoramaViewer({
     preloadPanoramas(urls);
   }, [tourKey, scenes]);
 
+  // Create viewer once per tour structure â€” scene switches must NOT destroy it
+  // (that caused pan to start, stop, and restart on every photo).
   useEffect(() => {
     if (!containerRef.current || !activeScene?.image_path) return;
 
     const isNavigate = mode === "navigate";
     const nodes = buildViewerNodes(scenes);
-    // VirtualTour პლაგინი საჭიროა მხოლოდ მაშინ, როცა რამდენიმე სცენაა და
-    // მათ შორის ნავიგაციაა საჭირო. ერთსცენიან ტურზე ვაჩვენებთ პანორამას პირდაპირ.
     const useVirtualTour = isNavigate && nodes.length > 1;
     const limits = getViewerLimits(activeScene);
+    const startPanoramaUrl = resolvePanoramaUrl(activeScene.image_path);
 
-    const existing = viewerRef.current;
-    if (
-      existing &&
-      isNavigate &&
-      useVirtualTour &&
-      currentPanoramaRef.current &&
-      pluginsRef.current.vt
-    ) {
-      return;
-    }
-
-    if (
-      existing &&
-      isNavigate &&
-      !useVirtualTour &&
-      currentPanoramaRef.current === activeScene.image_path
-    ) {
-      applyViewerLimits(existing, activeScene, clampCleanupRef);
-      return;
-    }
-
-    if (
-      existing &&
-      !isNavigate &&
-      currentPanoramaRef.current === activeScene.image_path
-    ) {
-      applyViewerLimits(existing, activeScene, clampCleanupRef);
-      return;
-    }
-
-    if (
-      existing &&
-      !isNavigate &&
-      currentPanoramaRef.current !== activeScene.image_path
-    ) {
-      existing
-        .setPanorama(activePanoramaUrl, {
-          caption: activeScene.name,
-          showLoader: false,
-          transition: { effect: "fade", rotation: false, speed: 300 },
-        })
-        .then(() => {
-          currentPanoramaRef.current = activeScene.image_path;
-          currentSceneIdRef.current = activeScene.id;
-          const markers = pluginsRef.current.markers!;
-          applyViewerLimits(existing, activeScene, clampCleanupRef);
-          syncMarkers(markers, activeScene.id);
-          stopPanLoop(existing, panRef);
-          if (!addHotspotRef.current) {
-            applySceneEntry(existing, activeScene, panRef, false);
-          }
-        });
-      return;
-    }
-
-    if (existing) {
-      existing.destroy();
+    if (viewerRef.current) {
+      try {
+        viewerRef.current.destroy();
+      } catch {
+        /* ignore */
+      }
       viewerRef.current = null;
       pluginsRef.current = {};
     }
@@ -204,17 +163,22 @@ export function PanoramaViewer({
         VirtualTourPlugin,
         {
           preload: true,
-          transitionOptions: FAST_TRANSITION,
+          // Land each node on its pan-start view (not a random leftover angle).
+          transitionOptions: (toNode: { id: string }) => {
+            const scene = scenesRef.current.find((s) => s.id === toNode.id);
+            return scene ? transitionToSceneEntry(scene) : SCENE_TRANSITION;
+          },
         },
       ]);
     }
 
+    const entry = getSceneEntryView(activeScene);
     const viewer = new Viewer({
       container: containerRef.current,
-      panorama: activePanoramaUrl,
-      defaultYaw: activeScene.default_yaw,
-      defaultPitch: activeScene.default_pitch,
-      defaultZoomLvl: activeScene.default_zoom,
+      panorama: startPanoramaUrl,
+      defaultYaw: entry.yaw,
+      defaultPitch: entry.pitch,
+      defaultZoomLvl: entry.zoom,
       minFov: limits.minFov,
       maxFov: limits.maxFov,
       navbar: false,
@@ -238,17 +202,26 @@ export function PanoramaViewer({
 
       vt.addEventListener("node-changed", (e: { node: { id: string } }) => {
         const sceneId = e.node.id;
+        const prevId = currentSceneIdRef.current;
         currentSceneIdRef.current = sceneId;
-        onSceneChangeRef.current?.(sceneId);
         const scene = scenesRef.current.find((s) => s.id === sceneId);
-        if (scene) {
-          applyViewerLimits(viewer, scene, clampCleanupRef);
-          stopPanLoop(viewer, panRef);
-          applySceneEntry(viewer, scene, panRef, true, (id) =>
-            onPanCompleteRef.current?.(id)
-          );
-          syncMarkers(markers, sceneId);
+        if (scene?.image_path) {
+          currentPanoramaRef.current = scene.image_path;
         }
+        onSceneChangeRef.current?.(sceneId);
+        if (!scene) return;
+
+        applyViewerLimits(viewer, scene, clampCleanupRef);
+        syncMarkers(markers, sceneId);
+
+        // Same node while already panning â€” ignore duplicate setNodes events.
+        if (prevId === sceneId && panRef.current.active) return;
+
+        stopPanLoop(viewer, panRef);
+        applySceneEntry(viewer, scene, panRef, true, (id) => {
+          chainPanRef.current = true;
+          onPanCompleteRef.current?.(id);
+        });
       });
     }
 
@@ -262,7 +235,11 @@ export function PanoramaViewer({
         pluginsRef.current.vt
       ) {
         try {
-          pluginsRef.current.vt.setCurrentNode(targetId, FAST_TRANSITION);
+          const target = scenesRef.current.find((s) => s.id === targetId);
+          pluginsRef.current.vt.setCurrentNode(
+            targetId,
+            target ? transitionToSceneEntry(target) : SCENE_TRANSITION
+          );
         } catch {
           /* plugin not ready */
         }
@@ -289,7 +266,6 @@ export function PanoramaViewer({
         scheduleResize();
         requestAnimationFrame(scheduleResize);
       });
-      // Embed/layout can settle a frame later — refresh buffer once more.
       window.setTimeout(scheduleResize, 120);
       window.setTimeout(scheduleResize, 400);
 
@@ -313,10 +289,37 @@ export function PanoramaViewer({
           const pendingId = navigateToSceneIdRef.current;
           if (
             pendingId &&
-            pendingId !== currentSceneIdRef.current &&
+            pendingId !== startId &&
             tourNodes.some((n) => n.id === pendingId)
           ) {
-            pluginsRef.current.vt.setCurrentNode(pendingId, FAST_TRANSITION);
+            pluginsRef.current.vt.setCurrentNode(
+              pendingId,
+              (() => {
+                const target = scenesRef.current.find((s) => s.id === pendingId);
+                return target ? transitionToSceneEntry(target) : SCENE_TRANSITION;
+              })()
+            );
+          } else {
+            // setNodes sometimes skips node-changed for the initial node.
+            // Start pan once only if nothing else started it.
+            window.setTimeout(() => {
+              if (
+                addHotspotRef.current ||
+                modeRef.current !== "navigate" ||
+                panRef.current.active
+              ) {
+                return;
+              }
+              const s =
+                scenesRef.current.find(
+                  (sc) =>
+                    sc.id === (currentSceneIdRef.current ?? startId ?? scene.id)
+                ) ?? scene;
+              applySceneEntry(viewer, s, panRef, true, (id) => {
+                chainPanRef.current = true;
+                onPanCompleteRef.current?.(id);
+              });
+            }, 80);
           }
         }
       } else if (!addHotspotRef.current) {
@@ -325,7 +328,10 @@ export function PanoramaViewer({
           scene,
           panRef,
           modeRef.current === "navigate",
-          (id) => onPanCompleteRef.current?.(id)
+          (id) => {
+            chainPanRef.current = true;
+            onPanCompleteRef.current?.(id);
+          }
         );
       }
 
@@ -346,13 +352,21 @@ export function PanoramaViewer({
             scenesRef.current.find(
               (sc) => sc.id === (currentSceneIdRef.current ?? activeScene.id)
             ) ?? activeScene;
-          void startPanLoop(viewer, s, panRef);
+          const once = Number(s.auto_advance_after_pan) === 1;
+          void startPanLoop(viewer, s, panRef, {
+            once,
+            onComplete: once
+              ? () => {
+                  chainPanRef.current = true;
+                  onPanCompleteRef.current?.(s.id);
+                }
+              : undefined,
+          });
         },
         stopPan: () => stopPanLoop(viewer, panRef),
       });
     });
 
-    // მომხმარებლის ხელით ჩარევისას (გადათრევა/zoom) panning ჩერდება
     const stopPanOnInteract = () => stopPanLoop(viewer, panRef);
     const containerEl = containerRef.current;
     containerEl?.addEventListener("pointerdown", stopPanOnInteract);
@@ -377,7 +391,11 @@ export function PanoramaViewer({
           next !== current
         ) {
           try {
-            pluginsRef.current.vt.setCurrentNode(next, FAST_TRANSITION);
+            const target = scenesRef.current.find((s) => s.id === next);
+            pluginsRef.current.vt.setCurrentNode(
+              next,
+              target ? transitionToSceneEntry(target) : SCENE_TRANSITION
+            );
           } catch {
             /* plugin not ready */
           }
@@ -418,7 +436,54 @@ export function PanoramaViewer({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tourKey, activeScene?.image_path]);
+  }, [tourKey]);
+
+  // Edit mode: swap panorama without recreating the viewer.
+  useEffect(() => {
+    if (mode !== "edit") return;
+    const viewer = viewerRef.current;
+    if (!viewer || !viewerReadyRef.current || !activeScene?.image_path) return;
+    if (currentPanoramaRef.current === activeScene.image_path) {
+      applyViewerLimits(viewer, activeScene, clampCleanupRef);
+      return;
+    }
+
+    const url = resolvePanoramaUrl(activeScene.image_path);
+    const scene = activeScene;
+    const entry = getSceneEntryView(scene);
+    viewer
+      .setPanorama(url, {
+        caption: scene.name,
+        showLoader: false,
+        position: { yaw: entry.yaw, pitch: entry.pitch },
+        zoom: entry.zoom,
+        transition: {
+          effect: "fade",
+          rotation: false,
+          speed: 700,
+        },
+      })
+      .then(() => {
+        if (viewerRef.current !== viewer) return;
+        currentPanoramaRef.current = scene.image_path;
+        currentSceneIdRef.current = scene.id;
+        const markers = pluginsRef.current.markers;
+        applyViewerLimits(viewer, scene, clampCleanupRef);
+        if (markers) syncMarkers(markers, scene.id);
+        stopPanLoop(viewer, panRef);
+        if (!addHotspotRef.current) {
+          const chain = chainPanRef.current;
+          chainPanRef.current = false;
+          applySceneEntry(viewer, scene, panRef, chain, (id) => {
+            chainPanRef.current = true;
+            onPanCompleteRef.current?.(id);
+          });
+        }
+      })
+      .catch(() => {
+        /* panorama swap aborted */
+      });
+  }, [mode, activeSceneId, activeScene?.image_path]);
 
   useEffect(() => {
     if (mode !== "navigate" || !viewerReadyRef.current) return;
@@ -445,7 +510,11 @@ export function PanoramaViewer({
     const vt = pluginsRef.current.vt;
     if (!vt || currentSceneIdRef.current === navigateToSceneId) return;
     try {
-      vt.setCurrentNode(navigateToSceneId, FAST_TRANSITION);
+      const target = scenesRef.current.find((s) => s.id === navigateToSceneId);
+      vt.setCurrentNode(
+        navigateToSceneId,
+        target ? transitionToSceneEntry(target) : SCENE_TRANSITION
+      );
     } catch {
       /* plugin not ready */
     }
@@ -472,11 +541,12 @@ export function PanoramaViewer({
     activeScene?.max_yaw,
   ]);
 
-  // რედაქტირების რეჟიმში panning პარამეტრების შეცვლისას ვაჩერებთ მიმდინარე
-  // preview-ს, რომ წერტილების დამატება/რედაქტირება მშვიდად მოხდეს.
+  // áƒ áƒ”áƒ“áƒáƒ¥áƒ¢áƒ˜áƒ áƒ”áƒ‘áƒ˜áƒ¡ áƒ áƒ”áƒŸáƒ˜áƒ›áƒ¨áƒ˜ panning áƒžáƒáƒ áƒáƒ›áƒ”áƒ¢áƒ áƒ”áƒ‘áƒ˜áƒ¡ áƒ¨áƒ”áƒªáƒ•áƒšáƒ˜áƒ¡áƒáƒ¡ áƒ•áƒáƒ©áƒ”áƒ áƒ”áƒ‘áƒ— áƒ›áƒ˜áƒ›áƒ“áƒ˜áƒœáƒáƒ áƒ”
+  // preview-áƒ¡, áƒ áƒáƒ› áƒ¬áƒ”áƒ áƒ¢áƒ˜áƒšáƒ”áƒ‘áƒ˜áƒ¡ áƒ“áƒáƒ›áƒáƒ¢áƒ”áƒ‘áƒ/áƒ áƒ”áƒ“áƒáƒ¥áƒ¢áƒ˜áƒ áƒ”áƒ‘áƒ áƒ›áƒ¨áƒ•áƒ˜áƒ“áƒáƒ“ áƒ›áƒáƒ®áƒ“áƒ”áƒ¡.
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer || mode !== "edit") return;
+    if (chainPanRef.current || panRef.current.active) return;
     stopPanLoop(viewer, panRef);
   }, [
     mode,
@@ -491,6 +561,7 @@ export function PanoramaViewer({
     const viewer = viewerRef.current;
     if (!viewer || !activeScene || mode !== "edit") return;
     if (addHotspotMode) return;
+    if (chainPanRef.current || panRef.current.active) return;
     stopPanLoop(viewer, panRef);
     applySceneEntry(viewer, activeScene, panRef, false);
   }, [
@@ -510,7 +581,6 @@ export function PanoramaViewer({
       editable,
       new Map(scenesRef.current.map((s) => [s.id, s.name]))
     );
-    const scene = scenesRef.current.find((s) => s.id === sceneId);
     markers.setMarkers(hotspotList);
   }
 
@@ -543,18 +613,13 @@ function applyViewerLimits(
     minFov: limits.minFov,
     maxFov: limits.maxFov,
   });
-  // 360°-ით თავისუფალი დატრიალება — pitch/yaw შეზღუდვები მოხსნილია,
-  // რომ მომხმარებელმა სრულად დაატრიალოს სურათი ნებისმიერი მიმართულებით.
   if (clampCleanupRef) {
     clampCleanupRef.current?.();
     clampCleanupRef.current = null;
   }
 }
 
-/**
- * სცენაში შესვლა: ჯერ ვტვირთავთ default view-ს, შემდეგ (თუ navigate რეჟიმია და
- * panning ჩართულია) ვიწყებთ წერტილებზე მოძრაობას.
- */
+/** Enter a scene: snap to pan-start view, then auto-pan when requested. */
 function applySceneEntry(
   viewer: Viewer,
   scene: Scene,
@@ -564,11 +629,15 @@ function applySceneEntry(
 ) {
   viewer.stopAnimation();
   stopPanLoop(viewer, panRef);
-  if (scene.default_view_custom === 1) {
-    applyDefaultView(viewer, scene);
+  const entry = getSceneEntryView(scene);
+  try {
+    viewer.rotate({ yaw: entry.yaw, pitch: entry.pitch });
+    viewer.zoom(entry.zoom);
+  } catch {
+    /* viewer may be mid-dispose */
   }
   if (autoPan && isPanningActive(scene)) {
-    const once = (scene.auto_advance_after_pan ?? 0) === 1;
+    const once = Number(scene.auto_advance_after_pan) === 1;
     void startPanLoop(viewer, scene, panRef, {
       once,
       onComplete: once
@@ -580,7 +649,7 @@ function applySceneEntry(
   }
 }
 
-/** მიმდინარე panning loop-ის გაჩერება */
+/** Stop the current panning loop */
 function stopPanLoop(viewer: Viewer, panRef: { current: PanController }) {
   panRef.current.active = false;
   panRef.current.token++;
@@ -595,7 +664,7 @@ function stopPanLoop(viewer: Viewer, panRef: { current: PanController }) {
   }
 }
 
-/** yaw-ის უმოკლესი კუთხური სხვაობა (-π..π) — wrap-around-ის გათვალისწინებით */
+/** Shortest yaw delta in (-pi..pi), with wrap-around */
 function shortestAngle(from: number, to: number): number {
   const TWO_PI = Math.PI * 2;
   let d = (to - from) % TWO_PI;
@@ -605,12 +674,9 @@ function shortestAngle(from: number, to: number): number {
 }
 
 /**
- * panning loop: default view → წერტილი 1 → წერტილი 2 → ...
- *
- * once=false (default): ბოლოდან საწყისზე ბრუნდება (ციკლი სცენაში).
- * once=true: ერთი გავლა ბოლო წერტილამდე, შემდეგ onComplete (შემდეგი სცენა).
- *
- * იყენებს requestAnimationFrame-ს მუდმივი კუთხური სიჩქარით.
+ * Panning loop: default view -> point 1 -> point 2 -> ...
+ * once=false: loops back to start within the scene.
+ * once=true: one pass to the last point, then onComplete (next scene).
  */
 function startPanLoop(
   viewer: Viewer,

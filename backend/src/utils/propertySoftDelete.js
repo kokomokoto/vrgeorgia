@@ -23,6 +23,7 @@ export async function softDeletePropertyDoc(property, deletedBy) {
   property.deletedBy = deletedBy;
   property.pinned = false;
   property.pinnedAt = null;
+  property.pinOrder = null;
   await property.save();
 }
 
@@ -36,6 +37,7 @@ export async function softDeletePropertiesByUserId(userId, deletedBy) {
         deletedBy,
         pinned: false,
         pinnedAt: null,
+        pinOrder: null,
       },
     }
   );

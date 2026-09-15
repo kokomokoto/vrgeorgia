@@ -59,6 +59,7 @@ const SCENE_NUMERIC_FIELDS = [
   'pan_enabled',
   'pan_segment_ms',
   'pan_speed_rpm',
+  'auto_advance_after_pan',
 ];
 
 function parseScenePatch(body) {

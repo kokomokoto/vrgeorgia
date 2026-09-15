@@ -28,13 +28,20 @@ function isPropertyRoute(pathname: string): boolean {
   return pathname === '/property' || pathname.startsWith('/property/');
 }
 
-/** მთავარი გვერდის ცენტრის სიგანე (map / typePanel / listings) */
-function useHomeContentMaxWidthPx(): number {
+/** მთავარი გვერდის ცენტრის სიგანე (map / typePanel / listings) — გასწორების ჩარჩო */
+function useHomeCenterWidthPx(): number {
   const homeDesign = useHomeDesignOptional();
   const mapW = homeDesign?.layout.map.w ?? 1280;
   const listingsW = homeDesign?.layout.listings?.w ?? 1280;
   const typePanelW = homeDesign?.layout.typePanel.w ?? 1280;
-  return Math.max(mapW, typePanelW, listingsW, 1280);
+  return Math.max(640, Math.round(Math.max(mapW, typePanelW, listingsW, 1280)));
+}
+
+/** ჩამონათვალის სიგანე — ობიექტის მასალები ამ სიგანეზე, ცენტრის მარცხენა კიდიდან */
+function useHomeListingsWidthPx(): number {
+  const homeDesign = useHomeDesignOptional();
+  const listingsW = homeDesign?.layout.listings?.w ?? 1280;
+  return Math.max(640, Math.round(listingsW) || 1280);
 }
 
 function SiteMain({
@@ -48,7 +55,8 @@ function SiteMain({
   homePage: boolean;
   propertyPage: boolean;
 }) {
-  const contentMaxPx = useHomeContentMaxWidthPx();
+  const centerMaxPx = useHomeCenterWidthPx();
+  const listingsMaxPx = useHomeListingsWidthPx();
 
   if (adminPanel) {
     return (
@@ -65,16 +73,25 @@ function SiteMain({
   }
 
   if (propertyPage) {
+    // იგივე ჩარჩო რაც მთავარის data-design-center + listings:
+    // ცენტრი (მაგ. 1296) mx-auto, შიგნით ჩამონათვალის სიგანე (1280) მარცხნიდან —
+    // მარჯვენა კიდე ემთხვევა ჰოუმის ქარდებს / KA-ს.
     return (
-      <main
-        className="relative z-0 mx-auto w-full min-h-[50vh] max-w-[var(--site-content-w)] flex-1 px-3 py-4 sm:px-0 sm:py-6"
-        style={{ '--site-content-w': `${contentMaxPx}px` } as React.CSSProperties}
-      >
-        {children}
+      <main className="relative z-0 w-full min-h-[50vh] flex-1 px-3 py-4 sm:px-0 sm:py-6">
+        <div
+          className="relative mx-auto w-full max-w-[var(--site-center-w)]"
+          style={{ '--site-center-w': `${centerMaxPx}px` } as React.CSSProperties}
+        >
+          <div
+            className="w-full max-w-[var(--site-content-w)]"
+            style={{ '--site-content-w': `${listingsMaxPx}px` } as React.CSSProperties}
+          >
+            {children}
+          </div>
+        </div>
       </main>
     );
   }
-
   return (
     <main className="relative z-0 mx-auto w-full min-h-[50vh] max-w-7xl flex-1 px-2 py-4 sm:px-4 sm:py-6">
       {children}

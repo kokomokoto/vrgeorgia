@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { tourFetch } from '@/lib/tourApi';
+import { listenForTourAuth, waitForTourAuth } from '@/lib/tourAuth';
 
 function EmbedInner() {
   const searchParams = useSearchParams();
@@ -10,10 +11,14 @@ function EmbedInner() {
   const userId = searchParams.get('userId') || searchParams.get('uid');
   const sessionId = searchParams.get('session');
 
+  useEffect(() => listenForTourAuth(), []);
+
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
+        await waitForTourAuth();
+        if (!alive) return;
         const res = await tourFetch('/api/tours', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

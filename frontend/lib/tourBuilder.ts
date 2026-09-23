@@ -190,6 +190,37 @@ export function getTourEditUrl(tourId: string, sessionId?: string | null): strin
   return `${getTourBuilderOrigin()}/tours/${tourId}/edit?${params.toString()}`;
 }
 
+export const VRGEORGIA_TOUR_AUTH_READY = 'VRGEORGIA_TOUR_AUTH_READY';
+export const VRGEORGIA_TOUR_AUTH = 'VRGEORGIA_TOUR_AUTH';
+
+/** ტურის რედაქტორი სხვა მისამართზე იხსნება. ტოკენი მხოლოდ postMessage-ით მიდის, მისამართში არა. */
+export function openTourEditorWindow(url: string): Window | null {
+  if (typeof window === 'undefined') return null;
+  const child = window.open(url, 'vrgeorgia-tour-builder');
+  if (!child) return null;
+
+  const token = window.localStorage.getItem('token')?.trim() || '';
+  let targetOrigin = '';
+  try {
+    targetOrigin = new URL(url, window.location.href).origin;
+  } catch {
+    targetOrigin = '';
+  }
+
+  const onMessage = (event: MessageEvent) => {
+    if (event.source !== child) return;
+    if (targetOrigin && event.origin !== targetOrigin) return;
+    if (event.data?.type !== VRGEORGIA_TOUR_AUTH_READY) return;
+    if (token) {
+      child.postMessage({ type: VRGEORGIA_TOUR_AUTH, token }, event.origin);
+    }
+  };
+
+  window.addEventListener('message', onMessage);
+  window.setTimeout(() => window.removeEventListener('message', onMessage), 20000);
+  return child;
+}
+
 export const VRGEORGIA_TOUR_MESSAGE = 'VRGEORGIA_TOUR_PUBLISHED' as const;
 
 export type VrGeorgiaTourPublishedMessage = {

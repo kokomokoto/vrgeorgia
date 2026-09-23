@@ -5,6 +5,7 @@ import {
   getPropertyOpenGraphImageUrl,
   getPropertyShareImageUrl,
 } from '@/lib/propertyShareMetadata';
+import { canonicalPropertyPathId } from '@/lib/seoDuplicateCanonical';
 import { DEFAULT_OG_IMAGE } from '@/lib/seoDefaults';
 import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay';
 import {
@@ -163,7 +164,7 @@ export function buildPropertyShareCrawlerHtml(id: string, property: Property | n
 
   const title = property.title?.trim() || 'განცხადება';
   const description = buildPropertyShareDescription(property);
-  const pageUrl = `${SITE_URL}/property/${id}`;
+  const pageUrl = `${SITE_URL}/property/${canonicalPropertyPathId(id, property)}`;
   const image = getPropertyOpenGraphImageUrl(id, property);
   const bodyImage = getPropertyShareImageUrl(property) || image;
 

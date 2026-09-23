@@ -96,6 +96,11 @@ export type Property = {
   views?: number;
   createdAt?: string;
   status?: 'pending' | 'active' | 'rejected' | 'sold';
+  /**
+   * თუ ეს ჩანაწერი სხვა საჯარო განცხადების დუბლიკატია,
+   * აქ არის ინდექსირებადი (keeper) განცხადების id.
+   */
+  canonicalId?: string;
   /** ადმინის მიერ აპინული — მთავარ გვერდზე პირველ რიგში */
   pinned?: boolean;
   pinnedAt?: string | null;

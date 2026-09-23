@@ -1,6 +1,20 @@
 import jwt from 'jsonwebtoken';
 import { getJWTSecret } from '../config/jwt.js';
 
+export function optionalAuth(req, _res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return next();
+
+  try {
+    const payload = jwt.verify(token, getJWTSecret());
+    if (payload?.sub) req.user = { id: payload.sub };
+  } catch {
+    // ტურის რედაქტორი ტოკენის გარეშეც მუშაობს; ცუდი ტოკენი ქმედებას არ აჩერებს
+  }
+  next();
+}
+
 export function requireAuth(req, res, next) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';

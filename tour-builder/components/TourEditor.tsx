@@ -24,10 +24,13 @@ interface TourEditorProps {
 
 import { VRGEORGIA_TOUR_MESSAGE, getPublicTourUrl } from "@/lib/vrgeorgia";
 import { tourFetch } from "@/lib/tourApi";
+import { listenForTourAuth } from "@/lib/tourAuth";
 
 export function TourEditor({ tourId }: TourEditorProps) {
   const searchParams = useSearchParams();
   const embedMode = searchParams.get("embed") === "1";
+
+  useEffect(() => listenForTourAuth(), []);
   const embedSessionId = searchParams.get("session") || "";
   const [draft, setDraft] = useState<TourDraft | null>(null);
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
@@ -94,9 +97,14 @@ export function TourEditor({ tourId }: TourEditorProps) {
 
   const activeScene = draft?.scenes.find((s) => s.id === activeSceneId);
 
+  // Viewer იქმნება ერთხელ (tourKey) — სცენის გადართვა edit-ში setPanorama-ით ხდება
+  // და ready აღარ ირთვება. ამიტომ API-ს ნულზე არ ვყრით სცენის ცვლილებაზე,
+  // მხოლოდ როცა პანორამა საერთოდ აღარაა.
   useEffect(() => {
-    setViewerApi(null);
-  }, [activeSceneId, activeScene?.image_path]);
+    if (!activeScene?.image_path) {
+      setViewerApi(null);
+    }
+  }, [activeScene?.image_path]);
 
   const sceneHotspots =
     draft?.hotspots.filter((h) => h.scene_id === activeSceneId) ?? [];

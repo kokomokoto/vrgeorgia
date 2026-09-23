@@ -22,6 +22,7 @@ import {
   withNotDeleted,
   softDeletePropertyDoc,
 } from '../utils/propertySoftDelete.js';
+import { findSeoDuplicateKeeperId } from '../services/seoDuplicateCanonical.js';
 import {
   applyPropertyQueryFilters,
   queryPropertiesSorted,
@@ -1008,6 +1009,13 @@ router.get(
     }
 
     delete property.editDraft;
+
+    try {
+      const canonicalId = await findSeoDuplicateKeeperId(property);
+      if (canonicalId) property.canonicalId = canonicalId;
+    } catch (err) {
+      console.warn('seo canonical lookup failed:', err?.message || err);
+    }
 
     if (!hasCompleteTranslation(property, lang)) {
       try {

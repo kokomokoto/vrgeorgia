@@ -7,6 +7,7 @@ import { getMe } from '@/lib/api';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { isAdminRole, roleLabel } from '@/lib/userRoles';
+import { auditActionLabel, auditTargetLabel } from '@/lib/auditLabels';
 
 interface Stats {
   totalUsers: number;
@@ -354,7 +355,7 @@ export default function AdminDashboard() {
               {auditLogs.map((log) => (
                 <div key={log._id} className="flex items-center justify-between border-b border-gray-100 pb-2 text-sm">
                   <div className="text-gray-700">
-                    <span className="font-medium">{log.action}</span> • {log.targetType} • {log.targetId.slice(-6)}
+                    <span className="font-medium">{auditActionLabel(log.action)}</span> • {auditTargetLabel(log.targetType)} • {log.targetId.slice(-6)}
                   </div>
                   <div className="text-gray-500">
                     {(log.adminId?.name || log.adminId?.email || 'admin')} • {new Date(log.createdAt).toLocaleString('ka-GE')}

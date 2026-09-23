@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { Property } from '@/lib/types';
 import { applyCloudinaryTransform } from '@/lib/imageUrl';
 import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay';
+import { canonicalPropertyPathId } from '@/lib/seoDuplicateCanonical';
 import { SITE_NAME, getSiteHost, getSiteUrl } from '@/lib/siteUrl';
 import { DEFAULT_OG_IMAGE } from '@/lib/seoDefaults';
 
@@ -119,6 +120,30 @@ export function buildPropertyShareDescription(property: Property): string {
   return parts.join(' · ');
 }
 
+/**
+ * Google-ის `<title>`: აგენტის სათაურს ემატება ქუჩა, ფასი და ნომერი,
+ * რომ ერთნაირი „იყიდება“ განცხადებები დუბლიკატად არ ჩაითვალოს.
+ * ეკრანზე H1 უცვლელია.
+ */
+export function buildPropertyDocumentTitle(property: Property): string {
+  const base = property.title?.trim() || 'განცხადება';
+  const street = property.street?.trim() || '';
+  const { currencySymbol, totalPrice, pricePerSqm } = getPropertyPrices(property);
+  const price =
+    totalPrice != null
+      ? `${currencySymbol}${totalPrice.toLocaleString('en-US')}`
+      : pricePerSqm != null
+        ? `${currencySymbol}${pricePerSqm.toLocaleString('en-US')}/m²`
+        : '';
+  const idBit = property.numericId ? `#${property.numericId}` : '';
+  const baseLower = base.toLowerCase();
+  const parts = [street, price, idBit].filter((part) => {
+    if (!part) return false;
+    return !baseLower.includes(part.toLowerCase());
+  });
+  return parts.length ? `${base} — ${parts.join(' · ')}` : base;
+}
+
 function buildKeywords(property: Property): string[] {
   const dealMap = property.status === 'sold' ? DEAL_SOLD_LABELS : DEAL_LABELS;
   const keywords = [
@@ -165,9 +190,11 @@ function buildOgImage(id: string, title: string, property: Property): OgImage {
  * LinkedIn, X/Twitter, Discord, Slack, iMessage, Pinterest და სხვ.
  */
 export function buildPropertyShareMetadata(id: string, property: Property): Metadata {
-  const title = property.title?.trim() || 'განცხადება';
+  const title = buildPropertyDocumentTitle(property);
   const description = buildPropertyShareDescription(property);
-  const pageUrl = `${SITE_URL}/property/${id}`;
+  const canonicalId = canonicalPropertyPathId(id, property);
+  const pageUrl = `${SITE_URL}/property/${canonicalId}`;
+  const isDuplicate = Boolean(property.canonicalId && property.canonicalId !== id);
   const ownerName = getOwnerName(property);
   const keywords = buildKeywords(property);
   const ogImage = buildOgImage(id, title, property);
@@ -185,16 +212,18 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
     alternates: {
       canonical: pageUrl,
     },
-    robots: {
-      index: true,
-      follow: true,
-      googleBot: {
-        index: true,
-        follow: true,
-        'max-image-preview': 'large',
-        'max-snippet': -1,
-      },
-    },
+    robots: isDuplicate
+      ? { index: false, follow: true }
+      : {
+          index: true,
+          follow: true,
+          googleBot: {
+            index: true,
+            follow: true,
+            'max-image-preview': 'large',
+            'max-snippet': -1,
+          },
+        },
     openGraph: {
       type: 'website',
       url: pageUrl,

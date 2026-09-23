@@ -1,4 +1,7 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { permanentRedirect } from 'next/navigation';
+import { canonicalPropertyPathId } from '@/lib/seoDuplicateCanonical';
 import {
   buildMissingPropertyMetadata,
   buildPropertyShareMetadata,
@@ -29,7 +32,15 @@ export async function generateMetadata({ params }: Pick<LayoutProps, 'params'>):
 export default async function PropertyDetailLayout({ children, params }: LayoutProps) {
   const { id } = await params;
   const property = await fetchPropertyForShareMetadata(id);
-  const pageUrl = `${SITE_URL}/property/${id}`;
+  const pathname = (await headers()).get('x-pathname') || '';
+  const isEdit = pathname === `/property/${id}/edit` || pathname.startsWith(`/property/${id}/edit/`);
+  if (!isEdit && property) {
+    const target = canonicalPropertyPathId(id, property);
+    if (target && target !== id) {
+      permanentRedirect(`/property/${target}`);
+    }
+  }
+  const pageUrl = `${SITE_URL}/property/${property?._id || id}`;
   const title = property?.title?.trim() || 'განცხადება';
   const typeLabel = propertyTypeLabel(property?.type);
 

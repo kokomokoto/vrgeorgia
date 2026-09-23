@@ -1,5 +1,14 @@
 import { getTourDraft, setPublishedSnapshot } from "./db";
+import { deleteSceneImageFile } from "./scene-files";
 import type { PublishedSnapshot } from "./types";
+
+function imagePaths(snapshot: PublishedSnapshot | null): Set<string> {
+  return new Set(
+    (snapshot?.scenes || [])
+      .map((scene) => scene.image_path)
+      .filter((path): path is string => Boolean(path))
+  );
+}
 
 export async function buildSnapshot(
   tourId: string
@@ -23,6 +32,7 @@ export async function buildSnapshot(
 }
 
 export async function publishTour(tourId: string) {
+  const previous = await getPublishedSnapshot(tourId);
   const snapshot = await buildSnapshot(tourId);
   if (!snapshot) {
     throw new Error("Tour not found");
@@ -32,6 +42,14 @@ export async function publishTour(tourId: string) {
   if (!tour) {
     throw new Error("Failed to save published snapshot");
   }
+
+  const nextPaths = imagePaths(snapshot);
+  for (const imagePath of imagePaths(previous)) {
+    if (!nextPaths.has(imagePath)) {
+      deleteSceneImageFile(snapshot.tourId, imagePath);
+    }
+  }
+
   return { tour, snapshot };
 }
 

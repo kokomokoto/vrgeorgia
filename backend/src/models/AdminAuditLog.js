@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const adminAuditLogSchema = new mongoose.Schema(
   {
-    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     action: { type: String, required: true, trim: true },
     targetType: { type: String, required: true, trim: true },
     targetId: { type: String, required: true, trim: true },

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
   getTourBuilderEmbedUrl,
   getTourEditUrl,
+  openTourEditorWindow,
   getPublishedTourUrl,
   extractTourId,
   isTourPublishedMessage,
@@ -138,7 +139,7 @@ export function PropertyVirtualTourFields({
       ? getTourEditUrl(existingId, sessionId)
       : getTourBuilderEmbedUrl(creatorId, sessionId);
 
-    const w = window.open(url, 'vrgeorgia-tour-builder');
+    const w = openTourEditorWindow(url);
     if (w) {
       tourWindowRef.current = w;
       w.focus();

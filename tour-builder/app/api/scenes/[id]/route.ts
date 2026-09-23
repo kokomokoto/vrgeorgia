@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteScene, getScene, updateScene } from "@/lib/db";
+import { getPublishedSnapshot } from "@/lib/publish";
 import { deleteSceneImageFile } from "@/lib/scene-files";
 
 export const runtime = "nodejs";
@@ -74,7 +75,13 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (!scene) {
     return NextResponse.json({ error: "Scene not found" }, { status: 404 });
   }
-  deleteSceneImageFile(scene.tour_id, scene.image_path);
+  const published = await getPublishedSnapshot(scene.tour_id);
+  const stillLive = (published?.scenes || []).some(
+    (item) => item.image_path && item.image_path === scene.image_path
+  );
+  if (!stillLive) {
+    deleteSceneImageFile(scene.tour_id, scene.image_path);
+  }
   const ok = await deleteScene(id);
   if (!ok) {
     return NextResponse.json({ error: "Failed to delete scene" }, { status: 500 });

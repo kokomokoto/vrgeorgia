@@ -30,8 +30,40 @@ import {
 } from '../services/tour/panoramaImage.js';
 import { deleteSceneImageFile } from '../services/tour/sceneFiles.js';
 import { tourUploadPath, tourUploadUrl, TOUR_UPLOADS_DIR } from '../services/tour/tourPaths.js';
+import { optionalAuth } from '../middleware/auth.js';
+import { writeAudit } from '../services/auditLog.js';
+import { Property } from '../models/Property.js';
 
 const router = express.Router();
+router.use(optionalAuth);
+
+function clientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  const raw = typeof forwarded === 'string' && forwarded.trim() ? forwarded.split(',')[0] : req.ip;
+  return String(raw || '').trim().slice(0, 64);
+}
+
+async function findPropertyForTour(tourId) {
+  const id = String(tourId || '').trim();
+  if (!id) return null;
+  const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return Property.findOne({ tourLink: { $regex: new RegExp(`/v/${escaped}`, 'i') } })
+    .select('title numericId')
+    .lean();
+}
+
+async function auditTour(req, action, tourId, meta = {}) {
+  const property = await findPropertyForTour(tourId);
+  const anonymous = !req.user?.id;
+  await writeAudit(req.user?.id || null, action, 'tour', tourId, {
+    anonymous,
+    ...(anonymous ? { ip: clientIp(req) } : {}),
+    propertyId: property?._id ? String(property._id) : '',
+    propertyNumericId: property?.numericId || '',
+    propertyTitle: property?.title || '',
+    ...meta,
+  });
+}
 
 const PANORAMA_MAX_MB = Number(process.env.TOUR_PANORAMA_MAX_MB || 50);
 const uploadPanorama = multer({
@@ -114,6 +146,7 @@ router.post('/tours', async (req, res, next) => {
         ? req.body.created_by_user_id.trim()
         : null;
     const tour = await createTour(title, createdByUserId);
+    await auditTour(req, 'tour.created', tour.id, { tourTitle: tour.title || title });
     res.status(201).json(tour);
   } catch (err) {
     next(err);
@@ -134,11 +167,17 @@ router.get('/tours/:id', async (req, res, next) => {
 
 router.patch('/tours/:id', async (req, res, next) => {
   try {
-    const tour = await updateTour(req.params.id, {
-      title: typeof req.body?.title === 'string' ? req.body.title.trim() : undefined,
-    });
+    const before = await getTour(req.params.id);
+    const nextTitle = typeof req.body?.title === 'string' ? req.body.title.trim() : undefined;
+    const tour = await updateTour(req.params.id, { title: nextTitle });
     if (!tour) {
       return res.status(404).json({ error: 'Tour not found' });
+    }
+    if (before && nextTitle && nextTitle !== before.title) {
+      await auditTour(req, 'tour.renamed', tour.id, {
+        tourTitle: tour.title,
+        previousTitle: before.title || '',
+      });
     }
     res.json(tour);
   } catch (err) {
@@ -148,10 +187,12 @@ router.patch('/tours/:id', async (req, res, next) => {
 
 router.delete('/tours/:id', async (req, res, next) => {
   try {
+    const before = await getTour(req.params.id);
     const ok = await deleteTour(req.params.id);
     if (!ok) {
       return res.status(404).json({ error: 'Tour not found' });
     }
+    await auditTour(req, 'tour.deleted', req.params.id, { tourTitle: before?.title || '' });
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -161,10 +202,17 @@ router.delete('/tours/:id', async (req, res, next) => {
 router.post('/tours/:id/publish', async (req, res, next) => {
   try {
     const result = await publishTour(req.params.id);
+    const scenes = result.snapshot.scenes || [];
+    const sceneCount = scenes.filter((s) => s.image_path).length;
+    await auditTour(req, 'tour.published', req.params.id, {
+      tourTitle: result.tour?.title || '',
+      sceneCount,
+      sceneNames: scenes.map((s) => s.name).filter(Boolean).slice(0, 30),
+    });
     res.json({
       tour: result.tour,
       publishedAt: result.tour.published_at,
-      sceneCount: result.snapshot.scenes.filter((s) => s.image_path).length,
+      sceneCount,
     });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Publish failed' });
@@ -208,6 +256,7 @@ router.post('/tours/:id/scenes/reorder', async (req, res, next) => {
     if (!ok) {
       return res.status(400).json({ error: 'Invalid scene order' });
     }
+    await auditTour(req, 'tour.scenes_reordered', tourId, { sceneCount: sceneIds.length });
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -232,6 +281,10 @@ router.post('/scenes', async (req, res, next) => {
     }
 
     const scene = await createScene(tourId, name);
+    await auditTour(req, 'tour.scene_created', tourId, {
+      sceneId: scene.id,
+      sceneName: scene.name || name,
+    });
     res.status(201).json(scene);
   } catch (err) {
     next(err);
@@ -244,9 +297,23 @@ router.patch('/scenes/:id', async (req, res, next) => {
     if (parsed.error) {
       return res.status(parsed.status).json({ error: parsed.error });
     }
+    const before = await getScene(req.params.id);
     const scene = await updateScene(req.params.id, parsed.data);
     if (!scene) {
       return res.status(404).json({ error: 'Scene not found' });
+    }
+    if (before && parsed.data.name && parsed.data.name !== before.name) {
+      await auditTour(req, 'tour.scene_renamed', scene.tour_id, {
+        sceneId: scene.id,
+        sceneName: scene.name,
+        previousName: before.name || '',
+      });
+    }
+    if (before && parsed.data.image_path && parsed.data.image_path !== before.image_path) {
+      await auditTour(req, before.image_path ? 'tour.panorama_replaced' : 'tour.panorama_uploaded', scene.tour_id, {
+        sceneId: scene.id,
+        sceneName: scene.name || before.name || '',
+      });
     }
     res.json(scene);
   } catch (err) {
@@ -260,11 +327,22 @@ router.delete('/scenes/:id', async (req, res, next) => {
     if (!scene) {
       return res.status(404).json({ error: 'Scene not found' });
     }
-    deleteSceneImageFile(scene.tour_id, scene.image_path);
+    const published = await getPublishedSnapshot(scene.tour_id);
+    const stillLive = (published?.scenes || []).some(
+      (item) => item?.image_path && item.image_path === scene.image_path
+    );
+    if (!stillLive) {
+      deleteSceneImageFile(scene.tour_id, scene.image_path);
+    }
     const ok = await deleteScene(req.params.id);
     if (!ok) {
       return res.status(500).json({ error: 'Failed to delete scene' });
     }
+    await auditTour(req, 'tour.scene_deleted', scene.tour_id, {
+      sceneId: scene.id,
+      sceneName: scene.name || '',
+      ...(scene.image_path ? { imageRemoved: !stillLive } : {}),
+    });
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -301,6 +379,12 @@ router.post('/hotspots', async (req, res, next) => {
     }
 
     const hotspot = await createHotspot(sceneId, targetSceneId, yaw, pitch, label);
+    await auditTour(req, 'tour.hotspot_created', scene.tour_id, {
+      sceneId: scene.id,
+      sceneName: scene.name || '',
+      targetSceneName: target.name || '',
+      label: label || '',
+    });
     res.status(201).json(hotspot);
   } catch (err) {
     next(err);
@@ -349,9 +433,23 @@ router.patch('/hotspots/:id', async (req, res, next) => {
 
 router.delete('/hotspots/:id', async (req, res, next) => {
   try {
+    const hotspot = await getHotspot(req.params.id);
+    if (!hotspot) {
+      return res.status(404).json({ error: 'Hotspot not found' });
+    }
+    const scene = await getScene(hotspot.scene_id);
+    const target = await getScene(hotspot.target_scene_id);
     const ok = await deleteHotspot(req.params.id);
     if (!ok) {
       return res.status(404).json({ error: 'Hotspot not found' });
+    }
+    if (scene) {
+      await auditTour(req, 'tour.hotspot_deleted', scene.tour_id, {
+        sceneId: scene.id,
+        sceneName: scene.name || '',
+        targetSceneName: target?.name || '',
+        label: hotspot.label || '',
+      });
     }
     res.json({ ok: true });
   } catch (err) {
@@ -398,6 +496,10 @@ router.post('/upload', uploadPanorama.single('file'), async (req, res, next) => 
           deleteSceneImageFile(scene.tour_id, scene.image_path);
         }
         const updated = await updateScene(sceneId, { image_path: imageUrl });
+        await auditTour(req, scene.image_path ? 'tour.panorama_replaced' : 'tour.panorama_uploaded', scene.tour_id, {
+          sceneId: scene.id,
+          sceneName: scene.name || '',
+        });
         return res.json(updated);
       } catch (e) {
         return res.status(400).json({ error: e.message || 'Upload failed' });
@@ -445,6 +547,10 @@ router.post('/upload', uploadPanorama.single('file'), async (req, res, next) => 
 
     const imageUrl = tourUploadUrl(scene.tour_id, outFilename);
     const updated = await updateScene(sceneId, { image_path: imageUrl });
+    await auditTour(req, scene.image_path ? 'tour.panorama_replaced' : 'tour.panorama_uploaded', scene.tour_id, {
+      sceneId: scene.id,
+      sceneName: scene.name || '',
+    });
     res.json(updated);
   } catch (err) {
     if (err.code === 'LIMIT_FILE_SIZE') {

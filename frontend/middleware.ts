@@ -7,18 +7,28 @@ import {
 } from '@/lib/propertyShareCrawlerHtml';
 
 export async function middleware(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-pathname', request.nextUrl.pathname);
+
   const userAgent = request.headers.get('user-agent') ?? '';
   if (!SOCIAL_CRAWLER_USER_AGENT.test(userAgent)) {
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   const match = request.nextUrl.pathname.match(/^\/property\/([^/]+)\/?$/);
   if (!match) {
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   const id = decodeURIComponent(match[1]);
   const property = await fetchPropertyForShareMetadata(id);
+  const canonicalId = property?.canonicalId || (property?._id ? String(property._id) : '');
+  if (property && canonicalId && canonicalId !== id) {
+    const dest = request.nextUrl.clone();
+    dest.pathname = `/property/${canonicalId}`;
+    dest.search = '';
+    return NextResponse.redirect(dest, 308);
+  }
   const html = buildPropertyShareCrawlerHtml(id, property);
 
   return new NextResponse(html, {

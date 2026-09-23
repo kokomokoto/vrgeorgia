@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { resolveImageUrl, type PropertyQuery } from '@/lib/api';
 import { getApiBase } from '@/lib/config';
 import { AdminSidebar } from '@/components/AdminSidebar';
-import { getTourEditUrl, resolveTourPublicUrl } from '@/lib/tourBuilder';
+import { getTourEditUrl, openTourEditorWindow, resolveTourPublicUrl } from '@/lib/tourBuilder';
 import { Filters, type FiltersState } from '@/components/Filters';
 import { DEFAULT_MAP_FILTERS, filtersToPropertyQuery } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
@@ -293,6 +293,11 @@ export default function AdminToursPage() {
   };
 
   const publicTourUrl = (tourLink: string) => resolveTourPublicUrl(tourLink);
+  const openEditor = (url: string) => {
+    if (!url) return;
+    const child = openTourEditorWindow(url);
+    if (!child) alert('ბრაუზერმა ახალი ტაბი დაბლოკა. ჩართეთ pop-up-ები ამ საიტისთვის.');
+  };
   const editUrlFor = (tourLink: string) => {
     const resolved = resolveTourPublicUrl(tourLink);
     const id = resolved.match(/\/v\/([^/?#]+)/)?.[1];
@@ -527,15 +532,14 @@ export default function AdminToursPage() {
                           >
                             👁️
                           </a>
-                          <a
-                            href={editUrlFor(p.tourLink)}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => openEditor(editUrlFor(p.tourLink))}
                             className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
                             title="3D ტურის რედაქტირება"
                           >
                             ✏️ ტური
-                          </a>
+                          </button>
                           <Link
                             href={`/property/${p._id}/edit`}
                             className="rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-700 hover:bg-amber-200"
@@ -655,15 +659,14 @@ export default function AdminToursPage() {
                           >
                             👁️
                           </a>
-                          <a
-                            href={getTourEditUrl(tour.id)}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => openEditor(getTourEditUrl(tour.id))}
                             className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
                             title="რედაქტირება"
                           >
                             ✏️ რედაქტირება
-                          </a>
+                          </button>
                           <button
                             onClick={() => handleDeleteStandaloneTour(tour.id)}
                             className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700"

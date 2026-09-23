@@ -60,8 +60,16 @@ export default function AdminTrashPage() {
   const [pages, setPages] = useState(1);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const [queryReady, setQueryReady] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('q') || '';
+    setSearch(q);
+    setQuery(q);
+    setQueryReady(true);
+  }, []);
 
   const fetchTrash = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -97,8 +105,9 @@ export default function AdminTrashPage() {
   }, [page, query, router]);
 
   useEffect(() => {
+    if (!queryReady) return;
     fetchTrash();
-  }, [fetchTrash]);
+  }, [fetchTrash, queryReady]);
 
   const handleRestore = async (id: string) => {
     if (!confirm('განცხადების აღდგენა?')) return;

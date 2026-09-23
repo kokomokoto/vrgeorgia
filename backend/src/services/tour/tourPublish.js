@@ -1,4 +1,11 @@
 import { getTourDraft, setPublishedSnapshot } from './tourDb.js';
+import { deleteSceneImageFile } from './sceneFiles.js';
+
+function imagePaths(snapshot) {
+  return new Set(
+    (snapshot?.scenes || []).map((scene) => scene?.image_path).filter(Boolean)
+  );
+}
 
 export async function buildSnapshot(tourId) {
   const draft = await getTourDraft(tourId);
@@ -18,6 +25,7 @@ export async function buildSnapshot(tourId) {
 }
 
 export async function publishTour(tourId) {
+  const previous = await getPublishedSnapshot(tourId);
   const snapshot = await buildSnapshot(tourId);
   if (!snapshot) {
     throw new Error('Tour not found');
@@ -27,6 +35,17 @@ export async function publishTour(tourId) {
   if (!tour) {
     throw new Error('Failed to save published snapshot');
   }
+
+  // ძველი პანორამა ღრუბლიდან მხოლოდ მაშინ იშლება, როცა ახალი
+  // გამოქვეყნებული ვერსია მას აღარ იყენებს. წინააღმდეგ შემთხვევაში
+  // უკვე გახსნილი ტური 404-ზე რჩება.
+  const nextPaths = imagePaths(snapshot);
+  for (const imagePath of imagePaths(previous)) {
+    if (!nextPaths.has(imagePath)) {
+      deleteSceneImageFile(snapshot.tourId, imagePath);
+    }
+  }
+
   return { tour, snapshot };
 }
 

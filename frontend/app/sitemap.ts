@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { absoluteListingImageUrl, getPropertyShareImageUrl } from '@/lib/propertyShareMetadata';
+import { seoDuplicateIdsToDrop, type SeoListing } from '@/lib/seoDuplicateCanonical';
 import { getSiteUrl } from '@/lib/siteUrl';
 import type { Property } from '@/lib/types';
 
@@ -10,8 +11,7 @@ function apiBase(): string {
   return 'http://localhost:5000';
 }
 
-type ListedProperty = {
-  _id: string;
+type ListedProperty = SeoListing & {
   createdAt?: string;
   updatedAt?: string;
   title?: string;
@@ -114,10 +114,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/mortgage-calculator`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
   ];
 
-  const [properties, agents] = await Promise.all([
+  const [listedProperties, agents] = await Promise.all([
     fetchPublicProperties(),
     fetchPublicAgents(),
   ]);
+  const duplicateIds = seoDuplicateIdsToDrop(listedProperties);
+  const properties = listedProperties.filter((p) => !duplicateIds.has(String(p._id)));
 
   const propertyRoutes: MetadataRoute.Sitemap = properties.map((p) => {
     const images = propertySitemapImages(p);

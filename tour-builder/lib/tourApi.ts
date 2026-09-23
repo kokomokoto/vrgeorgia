@@ -1,3 +1,5 @@
+import { readTourAuthToken } from "@/lib/tourAuth";
+
 const PRODUCTION_API_BASE = "https://vrgeorgia-api.onrender.com";
 
 function isSeparateTourDevServer(): boolean {
@@ -40,7 +42,12 @@ export function tourApiUrl(apiPath: string): string {
 }
 
 export function tourFetch(apiPath: string, init?: RequestInit): Promise<Response> {
-  return fetch(tourApiUrl(apiPath), init);
+  const headers = new Headers(init?.headers || undefined);
+  if (!headers.has("Authorization")) {
+    const token = readTourAuthToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+  }
+  return fetch(tourApiUrl(apiPath), { ...init, headers });
 }
 
 /** ძველი relative `/api/uploads/...` ან სრული URL — viewer-ისთვის */

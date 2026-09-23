@@ -7,6 +7,7 @@ import Message from '../models/Message.js';
 import { PageView } from '../models/PageView.js';
 import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import { requireAuth } from '../middleware/auth.js';
+import { writeAudit } from '../services/auditLog.js';
 import { getTourBuilderPublicBase, normalizeTourLink } from '../utils/tourLink.js';
 import { TourModel, SceneModel } from '../models/tourModels.js';
 import { deleteTour } from '../services/tour/tourDb.js';
@@ -49,14 +50,6 @@ import {
 } from '../services/duplicateProperties.js';
 
 const router = express.Router();
-
-async function writeAudit(adminId, action, targetType, targetId, meta = {}) {
-  try {
-    await AdminAuditLog.create({ adminId, action, targetType, targetId: String(targetId), meta });
-  } catch (_err) {
-    // audit logging must not block main flow
-  }
-}
 
 // Admin middleware - check if user is admin
 const adminMiddleware = async (req, res, next) => {
@@ -1126,6 +1119,138 @@ router.get('/messages', requireAuth, adminMiddleware, async (req, res) => {
   }
 });
 
+const AUDIT_STATUS_KA = {
+  active: 'აქტიური',
+  pending: 'მოლოდინში',
+  rejected: 'უარყოფილი',
+  sold: 'გაყიდული',
+};
+
+const AUDIT_VISIBILITY_KA = {
+  private: 'პირადი',
+  unlisted: 'მხოლოდ ბმულით',
+};
+
+const AUDIT_SITE_PAGES = {
+  faq: { label: 'კითხვები', href: '/faq' },
+  about: { label: 'ჩვენ შესახებ', href: '/about' },
+  'home-design': { label: 'მთავარი გვერდი', href: '/' },
+};
+
+function isAuditObjectId(value) {
+  return /^[a-f0-9]{24}$/i.test(String(value || ''));
+}
+
+function auditPropertySubject(property) {
+  if (!property) return null;
+  const numericId = property.numericId || null;
+  const title = property.title || '';
+  const deleted = Boolean(property.deletedAt);
+  const parts = [];
+  if (numericId) parts.push(`#${numericId}`);
+  if (title) parts.push(title);
+  if (deleted) parts.push('ნაგვის ყუთში');
+  else if (AUDIT_STATUS_KA[property.status]) parts.push(AUDIT_STATUS_KA[property.status]);
+  const visibility = AUDIT_VISIBILITY_KA[property.listingVisibility];
+  if (visibility) parts.push(visibility);
+  const search = numericId || title;
+  return {
+    label: numericId ? `#${numericId}` : (title || 'განცხადება'),
+    href: deleted
+      ? `/admin/trash?q=${encodeURIComponent(String(search || property._id))}`
+      : `/property/${property._id}`,
+    detail: parts.join(' · '),
+  };
+}
+
+async function attachAuditSubjects(logs) {
+  const propertyIds = new Set();
+  const userIds = new Set();
+  for (const log of logs) {
+    if (log.targetType === 'property' && isAuditObjectId(log.targetId)) propertyIds.add(String(log.targetId));
+    if (isAuditObjectId(log.meta?.propertyId)) propertyIds.add(String(log.meta.propertyId));
+    if (isAuditObjectId(log.meta?.ownerUserId)) userIds.add(String(log.meta.ownerUserId));
+    if (log.targetType === 'user' && isAuditObjectId(log.targetId)) userIds.add(String(log.targetId));
+  }
+
+  const [properties, users] = await Promise.all([
+    propertyIds.size
+      ? Property.find({ _id: { $in: [...propertyIds] } })
+          .select('title numericId status deletedAt listingVisibility')
+          .lean()
+      : [],
+    userIds.size
+      ? User.find({ _id: { $in: [...userIds] } }).select('name email').lean()
+      : [],
+  ]);
+  const propertyById = new Map(properties.map((item) => [String(item._id), item]));
+  const userById = new Map(users.map((item) => [String(item._id), item]));
+
+  return logs.map((log) => {
+    const meta = log.meta || {};
+    if (log.action === 'property.pins_reordered' || log.targetId === 'pins') {
+      const count = Number(meta.count) || (Array.isArray(meta.orderedIds) ? meta.orderedIds.length : 0);
+      return {
+        ...log,
+        subject: {
+          label: 'აპინული სია',
+          href: '/admin/properties?pinned=1',
+          detail: count ? `${count} აპინული განცხადება` : 'აპინული განცხადებების რიგი',
+        },
+      };
+    }
+
+    if (log.targetType === 'site_content') {
+      const page = AUDIT_SITE_PAGES[log.targetId];
+      return {
+        ...log,
+        subject: {
+          label: page?.label || log.targetId,
+          href: page?.href || null,
+          detail: page?.label || '',
+        },
+      };
+    }
+
+    const propertyId = log.targetType === 'property'
+      ? String(log.targetId)
+      : (isAuditObjectId(meta.propertyId) ? String(meta.propertyId) : '');
+    const property = propertyId ? propertyById.get(propertyId) : null;
+    const subject = auditPropertySubject(property);
+    const extra = [];
+    if (meta.sceneName) extra.push(`სცენა: ${meta.sceneName}`);
+    if (meta.previousName) extra.push(`იყო: ${meta.previousName}`);
+    if (meta.targetSceneName) extra.push(`→ ${meta.targetSceneName}`);
+    if (meta.imageRemoved === true) extra.push('ფოტოც წაიშალა');
+    if (typeof meta.sceneCount === 'number') extra.push(`${meta.sceneCount} სცენა`);
+    const owner = isAuditObjectId(meta.ownerUserId) ? userById.get(String(meta.ownerUserId)) : null;
+    if (owner?.name || owner?.email) extra.push(`მფლობელი: ${owner.name || owner.email}`);
+    if (log.targetType === 'user') {
+      const user = userById.get(String(log.targetId));
+      if (user) {
+        return {
+          ...log,
+          subject: {
+            label: user.name || user.email || 'მომხმარებელი',
+            href: '/admin/users',
+            detail: [user.name, user.email].filter(Boolean).join(' · '),
+          },
+        };
+      }
+    }
+    if (!subject && !extra.length) return log;
+    const detail = [subject?.detail, ...extra].filter(Boolean).join(' · ');
+    return {
+      ...log,
+      subject: {
+        label: subject?.label || (log.targetType === 'tour' ? '3D ტური' : log.targetId),
+        href: subject?.href || null,
+        detail,
+      },
+    };
+  });
+}
+
 router.get('/audit-logs', requireAuth, adminMiddleware, async (req, res) => {
   try {
     const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -1137,7 +1262,7 @@ router.get('/audit-logs', requireAuth, adminMiddleware, async (req, res) => {
     if (action) filter.action = action;
     if (targetType) filter.targetType = targetType;
 
-    const [total, logs] = await Promise.all([
+    const [total, rows] = await Promise.all([
       AdminAuditLog.countDocuments(filter),
       AdminAuditLog.find(filter)
         .populate('adminId', 'name email')
@@ -1146,6 +1271,7 @@ router.get('/audit-logs', requireAuth, adminMiddleware, async (req, res) => {
         .limit(limitNum)
         .lean(),
     ]);
+    const logs = await attachAuditSubjects(rows);
 
     res.json({
       logs,

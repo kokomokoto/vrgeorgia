@@ -113,7 +113,7 @@ const propertySchema = new mongoose.Schema(
     /** unlisted რეჟიმისთვის — კერძო ლინკი ?t= */
     shareToken: { type: String, trim: true, default: undefined },
 
-    status: { type: String, enum: ['pending', 'active', 'rejected', 'sold'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'active', 'rejected', 'sold'], default: 'active' },
     moderationHistory: [
       {
         status: { type: String, enum: ['pending', 'active', 'rejected', 'sold'], required: true },

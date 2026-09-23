@@ -161,7 +161,7 @@ function applyRoomLikeInFilter(filter, fieldName, rawJson) {
   }
 }
 
-/** საჯარო სიისთვის: აქტიური/მოდერაციაში + საჯარო ხილვადობა */
+/** საჯარო სიისთვის: აქტიური (ძველი მოლოდინიც) + საჯარო ხილვადობა */
 const PUBLIC_STATUS_OR = {
   $or: [
     { status: 'active' },
@@ -393,7 +393,7 @@ router.post(
           ? req.body.defaultMediaView
           : 'exterior',
         mediaLinks,
-        status: 'pending',
+        status: 'active',
         userId: req.user.id,
         agentId: agentProfile?._id || null,
         privateNotes: req.body.privateNotes || '',
@@ -429,7 +429,7 @@ router.post(
         if (createMode === 'sold') {
           existing.status = 'sold';
         } else if (createMode && existing.status === 'sold') {
-          existing.status = 'pending';
+          existing.status = 'active';
         }
         if (createMode === 'unlisted' && !existing.shareToken) {
           existing.shareToken = nanoid(16);

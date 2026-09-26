@@ -76,7 +76,7 @@ function HomePageContent() {
   }
 
   async function deleteTour(id: string) {
-    if (!confirm("Delete this tour and all its scenes?")) return;
+    if (!confirm("Move this tour to trash? It is deleted from the database and Cloudinary after 30 days.")) return;
     const res = await tourFetch(`/api/tours/${id}`, { method: "DELETE" });
     if (res.ok) load();
   }

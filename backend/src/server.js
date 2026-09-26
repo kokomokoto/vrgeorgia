@@ -298,6 +298,21 @@ async function start() {
 
   await verifyIdempotencyIndex();
 
+  const { purgeExpiredPropertyArchives } = await import('./services/propertyArchive.js');
+  const { purgeExpiredTourTrash } = await import('./services/tour/tourTrash.js');
+  const runArchivePurge = () => {
+    purgeExpiredPropertyArchives().catch((err) => {
+      console.error('Archive purge failed:', err?.message || err);
+    });
+    purgeExpiredTourTrash().catch((err) => {
+      console.error('Tour trash purge failed:', err?.message || err);
+    });
+  };
+  console.log('Archive purge scheduled: listings archived longer than 30 days');
+  console.log('Tour trash purge scheduled: 3D tours in trash longer than 30 days');
+  runArchivePurge();
+  setInterval(runArchivePurge, 6 * 60 * 60 * 1000);
+
   await attachTourUi(app);
 
   app.use((err, _req, res, _next) => {

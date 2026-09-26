@@ -43,7 +43,7 @@ function serverApiBase(): string {
 
 export async function fetchPropertyForShareMetadata(id: string): Promise<Property | null> {
   try {
-    const res = await fetch(`${serverApiBase()}/api/properties/${encodeURIComponent(id)}?lang=ka`, {
+    const res = await fetch(`${serverApiBase()}/api/properties/${encodeURIComponent(id)}?lang=ka&meta=1`, {
       next: { revalidate: 300 },
     });
     if (!res.ok) return null;

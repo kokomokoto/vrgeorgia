@@ -8,6 +8,7 @@ import { resolveImageUrl } from '@/lib/api';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
 import { getPropertyPrices, getDealTypeLabel } from '@/lib/propertyDisplay';
+import { propertyHref } from '@/lib/propertyPublicPath';
 
 export default function ComparePage() {
   const { t } = useTranslation();
@@ -169,7 +170,7 @@ export default function ComparePage() {
                         >
                           ✕
                         </button>
-                        <Link href={`/property/${property._id}`}>
+                        <Link href={propertyHref(property)}>
                           <div className="w-[168px] h-[126px] mx-auto rounded-lg overflow-hidden mb-2">
                             {photo ? (
                               <img

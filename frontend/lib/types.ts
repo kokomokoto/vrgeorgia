@@ -34,6 +34,8 @@ export type Amenities = {
 export type Property = {
   _id: string;
   numericId?: number;
+  /** საჯარო URL-ის ნაწილი: სათაური-numericId */
+  urlKey?: string;
   title: string;
   desc: string;
   price: number;

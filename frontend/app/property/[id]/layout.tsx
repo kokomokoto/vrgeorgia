@@ -36,11 +36,11 @@ export default async function PropertyDetailLayout({ children, params }: LayoutP
   const isEdit = pathname === `/property/${id}/edit` || pathname.startsWith(`/property/${id}/edit/`);
   if (!isEdit && property) {
     const target = canonicalPropertyPathId(id, property);
-    if (target && target !== id) {
+    if (target && target !== decodeURIComponent(id)) {
       permanentRedirect(`/property/${target}`);
     }
   }
-  const pageUrl = `${SITE_URL}/property/${property?._id || id}`;
+  const pageUrl = `${SITE_URL}/property/${property ? canonicalPropertyPathId(id, property) : id}`;
   const title = property?.title?.trim() || 'განცხადება';
   const typeLabel = propertyTypeLabel(property?.type);
 

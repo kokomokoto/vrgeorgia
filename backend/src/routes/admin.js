@@ -11,6 +11,7 @@ import { writeAudit } from '../services/auditLog.js';
 import { getTourBuilderPublicBase, normalizeTourLink } from '../utils/tourLink.js';
 import { TourModel, SceneModel } from '../models/tourModels.js';
 import { deleteTour } from '../services/tour/tourDb.js';
+import { listTrashedTours, restoreTrashedTour } from '../services/tour/tourTrash.js';
 import { syncAgentProfileForUser, backfillMissingAgentProfiles } from '../services/agentProfile.js';
 import { applyPropertyQueryFilters, applyListingVisibilityFilter, queryPropertiesSorted } from '../utils/propertyQueryFilters.js';
 import { getSearchAnalyticsStats } from '../utils/searchAnalyticsAgg.js';
@@ -26,6 +27,11 @@ import {
   softDeletePropertiesByUserId,
   restorePropertyById,
 } from '../utils/propertySoftDelete.js';
+import {
+  archiveTrashedProperty,
+  listArchivedProperties,
+  restoreArchivedProperty,
+} from '../services/propertyArchive.js';
 import {
   ensureFaqContent,
   ensureAboutContent,
@@ -724,16 +730,41 @@ router.post('/trash/:id/restore', requireAuth, adminMiddleware, async (req, res)
 
 router.delete('/trash/:id', requireAuth, adminMiddleware, async (req, res) => {
   try {
-    const property = await Property.findOneAndDelete({ _id: req.params.id, ...PROPERTY_DELETED });
+    const property = await archiveTrashedProperty(req.params.id, req.user.id);
     if (!property) {
       return res.status(404).json({ message: 'განცხადება ვერ მოიძებნა ნაგვის ყუთში' });
     }
-    await writeAudit(req.user.id, 'property.permanently_deleted', 'property', req.params.id, {
+    await writeAudit(req.user.id, 'property.archived', 'property', req.params.id, {
       ownerUserId: String(property.userId),
+      archived: true,
     });
-    res.json({ message: 'განცხადება სამუდამოდ წაიშალა' });
+    res.json({ message: 'განცხადება არქივში გადავიდა. მონაცემები შენარჩუნებულია და აღდგენა შესაძლებელია.' });
   } catch (error) {
-    res.status(500).json({ message: 'სამუდამო წაშლა ვერ მოხერხდა' });
+    res.status(500).json({ message: 'არქივში გადატანა ვერ მოხერხდა' });
+  }
+});
+
+router.get('/archive', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const data = await listArchivedProperties({
+      page: parseInt(req.query.page, 10) || 1,
+      limit: parseInt(req.query.limit, 10) || 20,
+      q: req.query.q || '',
+    });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: 'არქივის მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.post('/archive/:id/restore', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const result = await restoreArchivedProperty(req.params.id);
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    await writeAudit(req.user.id, 'property.restored_from_archive', 'property', req.params.id, {});
+    res.json({ message: 'განცხადება არქივიდან აღდგა' });
+  } catch (error) {
+    res.status(500).json({ message: 'არქივიდან აღდგენა ვერ მოხერხდა' });
   }
 });
 
@@ -993,14 +1024,40 @@ router.delete('/tours/records/:tourId', requireAuth, adminMiddleware, async (req
       });
     }
 
-    const ok = await deleteTour(tourId);
+    const ok = await deleteTour(tourId, req.user.id);
     if (!ok) return res.status(404).json({ message: 'ტური ვერ მოიძებნა' });
 
-    await writeAudit(req.user.id, 'tour.deleted', 'tour', tourId);
-    res.json({ message: '3D ტური წაიშალა' });
+    await writeAudit(req.user.id, 'tour.trashed', 'tour', tourId);
+    res.json({ message: '3D ტური ნაგვის ყუთში გადავიდა' });
   } catch (error) {
     console.error('admin tour record delete:', error);
     res.status(500).json({ message: 'წაშლა ვერ მოხერხდა' });
+  }
+});
+
+router.get('/tours/trash', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const q = String(req.query.q || req.query.search || '');
+    const data = await listTrashedTours({ page, limit, q });
+    res.json(data);
+  } catch (error) {
+    console.error('admin tour trash list:', error);
+    res.status(500).json({ message: 'ნაგვის ყუთის ჩატვირთვა ვერ მოხერხდა' });
+  }
+});
+
+router.post('/tours/trash/:tourId/restore', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const tourId = String(req.params.tourId || '').trim();
+    const result = await restoreTrashedTour(tourId);
+    if (!result.ok) return res.status(result.status || 400).json({ message: result.message });
+    await writeAudit(req.user.id, 'tour.restored_from_trash', 'tour', tourId);
+    res.json({ message: '3D ტური აღდგა', tourId: result.tourId });
+  } catch (error) {
+    console.error('admin tour trash restore:', error);
+    res.status(500).json({ message: 'აღდგენა ვერ მოხერხდა' });
   }
 });
 

@@ -84,7 +84,7 @@ export function buildOrganizationJsonLd() {
 /** RealEstateListing JSON-LD ერთი განცხადებისთვის */
 export function buildPropertyJsonLd(id: string, property: Property) {
   const title = buildPropertyDocumentTitle(property);
-  const pageUrl = `${SITE_URL}/property/${property.canonicalId || property._id || id}`;
+  const pageUrl = `${SITE_URL}/property/${property.urlKey || property.canonicalId || property._id || id}`;
   const address = getPropertyAddressLine(property);
   const { totalPrice } = getPropertyPrices(property);
   const image = getPropertyShareImageUrl(property);

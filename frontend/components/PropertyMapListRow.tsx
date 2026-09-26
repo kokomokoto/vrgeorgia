@@ -8,8 +8,10 @@ import { isPanoramaPhoto } from '@/lib/panorama';
 import { formatListedDate, getPropertyStreetLine } from '@/lib/propertyDisplay';
 import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
+import { propertyHref } from '@/lib/propertyPublicPath';
 import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
+import PinnedListingMark from './PinnedListingMark';
 
 /** ფიქსირებული სიმაღლე — ყველა ბარათი ერთნაირი (რუკის სია) */
 const MAP_LIST_ROW_H = 'h-[11rem]';
@@ -57,7 +59,7 @@ export function PropertyMapListRow({
       }`}
     >
       <Link
-        href={`/property/${p._id}`}
+        href={propertyHref(p)}
         className={`flex ${MAP_LIST_ROW_H} items-stretch gap-2 p-1.5 text-left transition-shadow hover:shadow-sm`}
       >
         <div className="relative h-full w-28 shrink-0 overflow-hidden rounded-md bg-slate-100 dark:bg-zinc-800 sm:w-32">
@@ -79,6 +81,7 @@ export function PropertyMapListRow({
             className="absolute right-0.5 top-0.5 z-10 flex flex-row gap-0.5"
             onClick={stopNav}
           >
+            <PinnedListingMark pinned={p.pinned} size="sm" />
             <CompareButton propertyId={p._id} size="sm" />
             <FavoriteButton propertyId={p._id} size="sm" />
           </div>

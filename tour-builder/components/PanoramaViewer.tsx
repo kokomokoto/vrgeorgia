@@ -10,6 +10,7 @@ import "@photo-sphere-viewer/virtual-tour-plugin/index.css";
 import { getNextSceneId } from "@/lib/scene-nav";
 import { sceneOrderKey, tourViewerKey } from "@/lib/scene-reorder";
 import {
+  buildPanWaypoints,
   getSceneEntryView,
   getViewerLimits,
   isPanningActive,
@@ -22,20 +23,241 @@ import { buildViewerNodes, sceneMarkers } from "@/lib/viewer-utils";
 
 export type ViewerMode = "edit" | "navigate";
 
+/**
+ * Street View–style handoff (avoids PSV fade wrong-frame flash):
+ * 1) zoom-in on the finishing frame (yaw locked) — “diving in”
+ * 2) freeze that frame as an overlay and keep diving with CSS scale
+ * 3) atomic swap underneath, already aimed at next pan-start (effect none)
+ * 4) fade the overlay out so the next photo appears from its start point
+ * 5) start pan — no second re-pose
+ */
+const APPROACH_ZOOM_DELTA = 36;
+const APPROACH_ZOOM_MS = 900;
+const DIVE_SCALE = 1.22;
+const DIVE_CROSSFADE_MS = 720;
+const SCENE_FADE_MS = 700;
+
 const SCENE_TRANSITION = {
   showLoader: false,
   effect: "fade" as const,
   rotation: false,
-  speed: 700,
+  speed: SCENE_FADE_MS,
 };
 
-/** VirtualTour / setPanorama options: fade in already looking at the pan start. */
-function transitionToSceneEntry(scene: Scene) {
+function clampViewerZoom(z: number): number {
+  if (!Number.isFinite(z)) return 50;
+  return Math.max(0, Math.min(100, z));
+}
+
+type SceneTransitionOpts = {
+  /** Atomic land + Street View dive (chain / hotspot / click-advance). */
+  chain?: boolean;
+};
+
+type SceneTransitionConfig = {
+  showLoader: false;
+  effect: "fade" | "none";
+  rotation: false;
+  speed: number;
+  rotateTo: { yaw: number; pitch: number };
+  zoomTo: number;
+};
+
+function prepareSceneApproachTransition(
+  viewer: Viewer | null | undefined,
+  scene: Scene,
+  opts?: SceneTransitionOpts
+): SceneTransitionConfig {
   const entry = getSceneEntryView(scene);
+  const endZoom = clampViewerZoom(entry.zoom);
+  if (viewer) {
+    try {
+      viewer.stopAnimation();
+    } catch {
+      /* viewer may be mid-dispose */
+    }
+  }
+
   return {
-    ...SCENE_TRANSITION,
+    showLoader: false,
+    // Chain: atomic land on pan-start (avoids PSV fade wrong-frame flash).
+    // Manual jumps keep a short fade.
+    effect: opts?.chain ? "none" : "fade",
+    rotation: false,
+    speed: opts?.chain ? 0 : SCENE_FADE_MS,
     rotateTo: { yaw: entry.yaw, pitch: entry.pitch },
-    zoomTo: entry.zoom,
+    zoomTo: endZoom,
+  };
+}
+
+async function approachZoomBeforeHandoff(
+  viewer: Viewer | null | undefined
+): Promise<void> {
+  if (!viewer) return;
+  try {
+    const pos = viewer.getPosition();
+    const current = clampViewerZoom(viewer.getZoomLevel());
+    const plunge = clampViewerZoom(Math.max(0, current - APPROACH_ZOOM_DELTA));
+    if (plunge >= current - 0.5) return;
+    viewer.stopAnimation();
+    await viewer.animate({
+      yaw: pos.yaw,
+      pitch: pos.pitch,
+      zoom: plunge,
+      speed: APPROACH_ZOOM_MS,
+    });
+  } catch {
+    /* viewer may be mid-dispose / animation aborted */
+  }
+}
+
+function waitPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+function delayMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Freeze the current WebGL frame as a full-bleed overlay so we can swap the
+ * panorama underneath without a black gap or wrong-yaw flash.
+ */
+function captureViewerDiveOverlay(
+  viewer: Viewer | null | undefined
+): HTMLImageElement | null {
+  if (!viewer?.container) return null;
+  const root = viewer.container as HTMLElement;
+  const canvas = root.querySelector("canvas");
+  if (!canvas) return null;
+
+  let url: string;
+  try {
+    url = canvas.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return null;
+  }
+
+  const host =
+    (root.parentElement as HTMLElement | null) &&
+    (root.parentElement as HTMLElement).classList.contains("relative")
+      ? (root.parentElement as HTMLElement)
+      : root;
+
+  if (getComputedStyle(host).position === "static") {
+    host.style.position = "relative";
+  }
+
+  const img = document.createElement("img");
+  img.src = url;
+  img.alt = "";
+  img.setAttribute("aria-hidden", "true");
+  img.dataset.tourDiveOverlay = "1";
+  Object.assign(img.style, {
+    position: "absolute",
+    inset: "0",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    zIndex: "6",
+    pointerEvents: "none",
+    transform: "scale(1)",
+    transformOrigin: "center center",
+    opacity: "1",
+    willChange: "transform, opacity",
+    transition: `transform ${DIVE_CROSSFADE_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${DIVE_CROSSFADE_MS}ms ease-out`,
+  });
+  host.appendChild(img);
+  return img;
+}
+
+function removeDiveOverlay(overlay: HTMLImageElement | null): void {
+  overlay?.remove();
+}
+
+/**
+ * Google Maps–like dive: approach-zoom → freeze frame → swap → overlay scales
+ * out while fading, revealing the next photo already at its start point.
+ * Falls back to a live CSS dive if the WebGL canvas cannot be snapshotted.
+ */
+async function runStreetViewHandoff(
+  viewer: Viewer | null | undefined,
+  performSwap: () => Promise<void>
+): Promise<void> {
+  if (!viewer) {
+    await performSwap();
+    return;
+  }
+
+  await approachZoomBeforeHandoff(viewer);
+  await waitPaint();
+
+  const overlay = captureViewerDiveOverlay(viewer);
+  if (!overlay) {
+    await runCssDiveHandoff(viewer, performSwap);
+    return;
+  }
+
+  // Kick CSS dive on the frozen frame while the mesh swaps underneath.
+  await waitPaint();
+  overlay.style.transform = `scale(${DIVE_SCALE})`;
+
+  try {
+    await performSwap();
+    await waitPaint();
+  } catch (err) {
+    removeDiveOverlay(overlay);
+    throw err;
+  }
+
+  overlay.style.opacity = "0";
+  overlay.style.transform = `scale(${DIVE_SCALE * 1.06})`;
+  await delayMs(DIVE_CROSSFADE_MS);
+  removeDiveOverlay(overlay);
+}
+
+/** Live-container dive when canvas snapshot is unavailable. */
+async function runCssDiveHandoff(
+  viewer: Viewer,
+  performSwap: () => Promise<void>
+): Promise<void> {
+  const el = viewer.container as HTMLElement;
+  const prevTransition = el.style.transition;
+  const prevTransform = el.style.transform;
+  const prevOpacity = el.style.opacity;
+  const half = Math.round(DIVE_CROSSFADE_MS * 0.5);
+
+  el.style.transition = `transform ${DIVE_CROSSFADE_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${half}ms ease`;
+  await waitPaint();
+  el.style.transform = `scale(${DIVE_SCALE})`;
+  el.style.opacity = "0";
+  await delayMs(half);
+
+  try {
+    await performSwap();
+    await waitPaint();
+  } finally {
+    el.style.opacity = "1";
+    el.style.transform = "scale(1)";
+    await delayMs(half);
+    el.style.transition = prevTransition;
+    el.style.transform = prevTransform;
+    el.style.opacity = prevOpacity || "1";
+  }
+}
+
+function panoramaTransitionConfig(
+  t: SceneTransitionConfig
+): false | { effect: "fade"; rotation: boolean; speed: number } {
+  if (t.effect === "none") return false;
+  return {
+    effect: "fade",
+    rotation: t.rotation,
+    speed: t.speed,
   };
 }
 
@@ -55,7 +277,7 @@ export interface PanoramaViewerProps {
   onActiveSceneChange?: (sceneId: string) => void;
   onSceneChange?: (sceneId: string) => void;
   onPlaceHotspot?: (yaw: number, pitch: number) => void;
-  onViewerReady?: (api: ViewerApi) => void;
+  onViewerReady?: (api: ViewerApi | null) => void;
   className?: string;
 }
 
@@ -98,6 +320,21 @@ export function PanoramaViewer({
   const panRef = useRef<PanController>({ token: 0, active: false, raf: 0 });
   /** After auto-advance, start panning on the next scene in edit mode too. */
   const chainPanRef = useRef(false);
+  /** Chain arrival: start next pan immediately — no static default-view hold. */
+  const seamlessPanRef = useRef(false);
+  /**
+   * While Street View handoff overlay is up, defer pan start so the next
+   * photo is revealed at its entry point (not mid-pan under the overlay).
+   */
+  const handoffHoldRef = useRef(false);
+  const pendingEntryRef = useRef<{
+    scene: Scene;
+    autoPan: boolean;
+    seamless: boolean;
+  } | null>(null);
+  const releaseHandoffHoldRef = useRef<(viewer: Viewer | null | undefined) => void>(
+    () => {}
+  );
 
   const scenesRef = useRef(scenes);
   const hotspotsRef = useRef(hotspots);
@@ -118,6 +355,26 @@ export function PanoramaViewer({
   onPlaceRef.current = onPlaceHotspot;
   onSceneChangeRef.current = onSceneChange ?? onActiveSceneChange;
   onPanCompleteRef.current = onPanComplete;
+
+  const releaseHandoffHold = (viewer: Viewer | null | undefined) => {
+    handoffHoldRef.current = false;
+    const pending = pendingEntryRef.current;
+    pendingEntryRef.current = null;
+    if (!viewer || !pending) return;
+    applySceneEntry(
+      viewer,
+      pending.scene,
+      panRef,
+      pending.autoPan,
+      (id) => {
+        chainPanRef.current = true;
+        seamlessPanRef.current = true;
+        onPanCompleteRef.current?.(id);
+      },
+      { seamless: pending.seamless }
+    );
+  };
+  releaseHandoffHoldRef.current = releaseHandoffHold;
 
   const activeScene = scenes.find((s) => s.id === activeSceneId);
 
@@ -166,7 +423,11 @@ export function PanoramaViewer({
           // Land each node on its pan-start view (not a random leftover angle).
           transitionOptions: (toNode: { id: string }) => {
             const scene = scenesRef.current.find((s) => s.id === toNode.id);
-            return scene ? transitionToSceneEntry(scene) : SCENE_TRANSITION;
+            return scene
+              ? prepareSceneApproachTransition(viewerRef.current, scene, {
+                  chain: chainPanRef.current,
+                })
+              : SCENE_TRANSITION;
           },
         },
       ]);
@@ -187,6 +448,8 @@ export function PanoramaViewer({
       mousemove: true,
       mousewheel: true,
       loadingTxt: "",
+      // Needed so Street View handoff can snapshot the canvas mid-dive.
+      rendererParameters: { preserveDrawingBuffer: true },
     });
 
     viewerRef.current = viewer;
@@ -214,14 +477,37 @@ export function PanoramaViewer({
         applyViewerLimits(viewer, scene, clampCleanupRef);
         syncMarkers(markers, sceneId);
 
-        // Same node while already panning â€” ignore duplicate setNodes events.
+        // Same node while already panning — ignore duplicate setNodes events.
         if (prevId === sceneId && panRef.current.active) return;
 
         stopPanLoop(viewer, panRef);
-        applySceneEntry(viewer, scene, panRef, true, (id) => {
-          chainPanRef.current = true;
-          onPanCompleteRef.current?.(id);
-        });
+        const fromOtherScene = prevId != null && prevId !== sceneId;
+        const seamless =
+          seamlessPanRef.current || fromOtherScene;
+        seamlessPanRef.current = false;
+        chainPanRef.current = false;
+
+        if (handoffHoldRef.current) {
+          pendingEntryRef.current = {
+            scene,
+            autoPan: true,
+            seamless,
+          };
+          return;
+        }
+
+        applySceneEntry(
+          viewer,
+          scene,
+          panRef,
+          true,
+          (id) => {
+            chainPanRef.current = true;
+            seamlessPanRef.current = true;
+            onPanCompleteRef.current?.(id);
+          },
+          { seamless }
+        );
       });
     }
 
@@ -234,15 +520,27 @@ export function PanoramaViewer({
         viewerReadyRef.current &&
         pluginsRef.current.vt
       ) {
-        try {
-          const target = scenesRef.current.find((s) => s.id === targetId);
-          pluginsRef.current.vt.setCurrentNode(
-            targetId,
-            target ? transitionToSceneEntry(target) : SCENE_TRANSITION
-          );
-        } catch {
-          /* plugin not ready */
-        }
+        const vt = pluginsRef.current.vt;
+        const target = scenesRef.current.find((s) => s.id === targetId);
+        void (async () => {
+          handoffHoldRef.current = true;
+          try {
+            await runStreetViewHandoff(viewerRef.current, async () => {
+              await vt.setCurrentNode(
+                targetId,
+                target
+                  ? prepareSceneApproachTransition(viewerRef.current, target, {
+                      chain: true,
+                    })
+                  : SCENE_TRANSITION
+              );
+            });
+          } catch {
+            /* plugin not ready / transition aborted */
+          } finally {
+            releaseHandoffHoldRef.current(viewerRef.current);
+          }
+        })();
       }
     };
 
@@ -296,7 +594,9 @@ export function PanoramaViewer({
               pendingId,
               (() => {
                 const target = scenesRef.current.find((s) => s.id === pendingId);
-                return target ? transitionToSceneEntry(target) : SCENE_TRANSITION;
+                return target
+                  ? prepareSceneApproachTransition(viewer, target)
+                  : SCENE_TRANSITION;
               })()
             );
           } else {
@@ -317,6 +617,7 @@ export function PanoramaViewer({
                 ) ?? scene;
               applySceneEntry(viewer, s, panRef, true, (id) => {
                 chainPanRef.current = true;
+                seamlessPanRef.current = true;
                 onPanCompleteRef.current?.(id);
               });
             }, 80);
@@ -330,6 +631,7 @@ export function PanoramaViewer({
           modeRef.current === "navigate",
           (id) => {
             chainPanRef.current = true;
+            seamlessPanRef.current = true;
             onPanCompleteRef.current?.(id);
           }
         );
@@ -355,9 +657,11 @@ export function PanoramaViewer({
           const once = Number(s.auto_advance_after_pan) === 1;
           void startPanLoop(viewer, s, panRef, {
             once,
+            immediate: true,
             onComplete: once
               ? () => {
                   chainPanRef.current = true;
+                  seamlessPanRef.current = true;
                   onPanCompleteRef.current?.(s.id);
                 }
               : undefined,
@@ -390,15 +694,27 @@ export function PanoramaViewer({
           pluginsRef.current.vt &&
           next !== current
         ) {
-          try {
-            const target = scenesRef.current.find((s) => s.id === next);
-            pluginsRef.current.vt.setCurrentNode(
-              next,
-              target ? transitionToSceneEntry(target) : SCENE_TRANSITION
-            );
-          } catch {
-            /* plugin not ready */
-          }
+          const vt = pluginsRef.current.vt;
+          const target = scenesRef.current.find((s) => s.id === next);
+          void (async () => {
+            handoffHoldRef.current = true;
+            try {
+              await runStreetViewHandoff(viewer, async () => {
+                await vt.setCurrentNode(
+                  next,
+                  target
+                    ? prepareSceneApproachTransition(viewer, target, {
+                        chain: true,
+                      })
+                    : SCENE_TRANSITION
+                );
+              });
+            } catch {
+              /* plugin not ready / transition aborted */
+            } finally {
+              releaseHandoffHoldRef.current(viewer);
+            }
+          })();
         }
       }
     });
@@ -415,6 +731,11 @@ export function PanoramaViewer({
       window.removeEventListener("resize", scheduleResize);
       viewerReadyRef.current = false;
       vtNodesKeyRef.current = null;
+      handoffHoldRef.current = false;
+      pendingEntryRef.current = null;
+      containerRef.current
+        ?.parentElement?.querySelectorAll("[data-tour-dive-overlay]")
+        .forEach((n) => n.remove());
       clampCleanupRef.current?.();
       clampCleanupRef.current = null;
       panRef.current.active = false;
@@ -429,6 +750,7 @@ export function PanoramaViewer({
       viewerRef.current = null;
       currentPanoramaRef.current = null;
       currentSceneIdRef.current = null;
+      onViewerReady?.(null);
       try {
         instance?.destroy();
       } catch {
@@ -448,41 +770,95 @@ export function PanoramaViewer({
       return;
     }
 
+    let cancelled = false;
     const url = resolvePanoramaUrl(activeScene.image_path);
     const scene = activeScene;
-    const entry = getSceneEntryView(scene);
-    viewer
-      .setPanorama(url, {
-        caption: scene.name,
-        showLoader: false,
-        position: { yaw: entry.yaw, pitch: entry.pitch },
-        zoom: entry.zoom,
-        transition: {
-          effect: "fade",
-          rotation: false,
-          speed: 700,
-        },
-      })
-      .then(() => {
-        if (viewerRef.current !== viewer) return;
+    const chain = chainPanRef.current;
+
+    void (async () => {
+      try {
+        const entryTx = prepareSceneApproachTransition(viewer, scene, { chain });
+        const doSwap = async () => {
+          await viewer.setPanorama(url, {
+            caption: scene.name,
+            showLoader: false,
+            position: entryTx.rotateTo,
+            zoom: entryTx.zoomTo,
+            transition: panoramaTransitionConfig(entryTx),
+          });
+        };
+
+        if (chain) {
+          await runStreetViewHandoff(viewer, doSwap);
+        } else {
+          await doSwap();
+        }
+        if (cancelled || viewerRef.current !== viewer) return;
         currentPanoramaRef.current = scene.image_path;
         currentSceneIdRef.current = scene.id;
         const markers = pluginsRef.current.markers;
         applyViewerLimits(viewer, scene, clampCleanupRef);
         if (markers) syncMarkers(markers, scene.id);
         stopPanLoop(viewer, panRef);
+        // Re-publish API after scene swap — ready only fires once on create.
+        onViewerReady?.({
+          getPosition: () => {
+            const p = viewer.getPosition();
+            const z = viewer.getZoomLevel();
+            return { yaw: p.yaw, pitch: p.pitch, zoom: z };
+          },
+          goToView: (yaw, pitch, zoom) => {
+            stopPanLoop(viewer, panRef);
+            viewer.stopAnimation();
+            void viewer.animate({ yaw, pitch, zoom, speed: "8rpm" });
+          },
+          startPan: () => {
+            const s =
+              scenesRef.current.find(
+                (sc) => sc.id === (currentSceneIdRef.current ?? activeScene.id)
+              ) ?? activeScene;
+            const once = Number(s.auto_advance_after_pan) === 1;
+            void startPanLoop(viewer, s, panRef, {
+              once,
+              immediate: true,
+              onComplete: once
+                ? () => {
+                    chainPanRef.current = true;
+                    seamlessPanRef.current = true;
+                    onPanCompleteRef.current?.(s.id);
+                  }
+                : undefined,
+            });
+          },
+          stopPan: () => stopPanLoop(viewer, panRef),
+        });
         if (!addHotspotRef.current) {
-          const chain = chainPanRef.current;
+          const chainNow = chainPanRef.current;
+          const seamless = seamlessPanRef.current || chainNow;
           chainPanRef.current = false;
-          applySceneEntry(viewer, scene, panRef, chain, (id) => {
-            chainPanRef.current = true;
-            onPanCompleteRef.current?.(id);
-          });
+          seamlessPanRef.current = false;
+          applySceneEntry(
+            viewer,
+            scene,
+            panRef,
+            chainNow,
+            (id) => {
+              chainPanRef.current = true;
+              seamlessPanRef.current = true;
+              onPanCompleteRef.current?.(id);
+            },
+            // setPanorama already landed on path-start — never hold on default.
+            { seamless: chainNow ? seamless : false }
+          );
         }
-      })
-      .catch(() => {
+      } catch {
         /* panorama swap aborted */
-      });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [mode, activeSceneId, activeScene?.image_path]);
 
   useEffect(() => {
@@ -509,15 +885,51 @@ export function PanoramaViewer({
     }
     const vt = pluginsRef.current.vt;
     if (!vt || currentSceneIdRef.current === navigateToSceneId) return;
-    try {
-      const target = scenesRef.current.find((s) => s.id === navigateToSceneId);
-      vt.setCurrentNode(
-        navigateToSceneId,
-        target ? transitionToSceneEntry(target) : SCENE_TRANSITION
-      );
-    } catch {
-      /* plugin not ready */
-    }
+
+    let cancelled = false;
+    const targetId = navigateToSceneId;
+    const target = scenesRef.current.find((s) => s.id === targetId);
+    const chain = chainPanRef.current;
+    const viewer = viewerRef.current;
+
+    void (async () => {
+      try {
+        // Pan finished → Street View dive, then land on next scene start point.
+        const doSwap = async () => {
+          await vt.setCurrentNode(
+            targetId,
+            target
+              ? prepareSceneApproachTransition(viewerRef.current, target, {
+                  chain,
+                })
+              : SCENE_TRANSITION
+          );
+        };
+        if (cancelled) return;
+        if (chain) {
+          handoffHoldRef.current = true;
+          try {
+            await runStreetViewHandoff(viewer, doSwap);
+          } finally {
+            if (!cancelled) releaseHandoffHold(viewer);
+            else {
+              handoffHoldRef.current = false;
+              pendingEntryRef.current = null;
+            }
+          }
+        } else {
+          await doSwap();
+        }
+      } catch {
+        handoffHoldRef.current = false;
+        pendingEntryRef.current = null;
+        /* plugin not ready / transition aborted */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [navigateToSceneId, mode]);
 
   useEffect(() => {
@@ -619,34 +1031,48 @@ function applyViewerLimits(
   }
 }
 
-/** Enter a scene: snap to pan-start view, then auto-pan when requested. */
+/**
+ * After fade lands on pan-start: start motion immediately.
+ * Never re-aim the camera here — a second rotate shows a wrong frame before pan.
+ */
 function applySceneEntry(
   viewer: Viewer,
   scene: Scene,
   panRef: { current: PanController },
   autoPan: boolean,
-  onPanComplete?: (sceneId: string) => void
+  onPanComplete?: (sceneId: string) => void,
+  opts?: { seamless?: boolean }
 ) {
-  viewer.stopAnimation();
   stopPanLoop(viewer, panRef);
   const entry = getSceneEntryView(scene);
-  try {
-    viewer.rotate({ yaw: entry.yaw, pitch: entry.pitch });
-    viewer.zoom(entry.zoom);
-  } catch {
-    /* viewer may be mid-dispose */
-  }
-  if (autoPan && isPanningActive(scene)) {
+  const token = panRef.current.token;
+
+  const startPan = () => {
+    if (token !== panRef.current.token) return;
+    if (!autoPan || !isPanningActive(scene)) return;
     const once = Number(scene.auto_advance_after_pan) === 1;
     void startPanLoop(viewer, scene, panRef, {
       once,
+      skipInitialPose: true,
+      immediate: true,
       onComplete: once
         ? () => {
             onPanComplete?.(scene.id);
           }
         : undefined,
     });
+  };
+
+  try {
+    if (!opts?.seamless) {
+      viewer.rotate({ yaw: entry.yaw, pitch: entry.pitch });
+      viewer.zoom(clampViewerZoom(entry.zoom));
+    }
+    // seamless: atomic swap already framed pan-start — do not touch pose.
+  } catch {
+    /* viewer may be mid-dispose */
   }
+  startPan();
 }
 
 /** Stop the current panning loop */
@@ -682,34 +1108,33 @@ function startPanLoop(
   viewer: Viewer,
   scene: Scene,
   panRef: { current: PanController },
-  options?: { once?: boolean; onComplete?: () => void }
+  options?: {
+    once?: boolean;
+    onComplete?: () => void;
+    /** Transition already set path-start — do not snap again (avoids a freeze). */
+    skipInitialPose?: boolean;
+    /** Advance the first frame immediately so motion is visible on arrival. */
+    immediate?: boolean;
+  }
 ) {
   const keyframes = parsePanKeyframes(scene);
   if ((scene.pan_enabled ?? 0) !== 1 || keyframes.length === 0) return;
+
+  const waypoints = buildPanWaypoints(scene);
 
   stopPanLoop(viewer, panRef);
   const token = panRef.current.token;
   panRef.current.active = true;
   const once = options?.once === true;
 
-  const waypoints: { yaw: number; pitch: number; zoom: number }[] = [];
-  if (scene.default_view_custom === 1) {
-    waypoints.push({
-      yaw: scene.default_yaw,
-      pitch: scene.default_pitch,
-      zoom: scene.default_zoom,
-    });
-  }
-  for (const kf of keyframes) {
-    waypoints.push({ yaw: kf.yaw, pitch: kf.pitch, zoom: kf.zoom });
-  }
-
   if (waypoints.length < 2) {
-    try {
-      viewer.rotate({ yaw: waypoints[0].yaw, pitch: waypoints[0].pitch });
-      viewer.zoom(waypoints[0].zoom);
-    } catch {
-      /* ignore */
+    if (!options?.skipInitialPose) {
+      try {
+        viewer.rotate({ yaw: waypoints[0].yaw, pitch: waypoints[0].pitch });
+        viewer.zoom(waypoints[0].zoom);
+      } catch {
+        /* ignore */
+      }
     }
     if (once) {
       panRef.current.active = false;
@@ -731,17 +1156,22 @@ function startPanLoop(
   const rpm = scene.pan_speed_rpm && scene.pan_speed_rpm > 0 ? scene.pan_speed_rpm : 1;
   const radPerMs = (rpm * 2 * Math.PI) / 60000;
 
-  try {
-    viewer.rotate({ yaw: path[0].yaw, pitch: path[0].pitch });
-    viewer.zoom(path[0].zoom);
-  } catch {
-    /* ignore */
+  if (!options?.skipInitialPose) {
+    try {
+      viewer.rotate({ yaw: path[0].yaw, pitch: path[0].pitch });
+      viewer.zoom(path[0].zoom);
+    } catch {
+      /* ignore */
+    }
   }
 
   let seg = 0;
   let segProgress = 0;
   let lastZoom = path[0].zoom;
-  let lastTime = performance.now();
+  // Prime so the first RAF tick already moves — no static hold on path-start.
+  let lastTime = options?.immediate
+    ? performance.now() - 32
+    : performance.now();
   let finished = false;
 
   const finishOnce = () => {
@@ -764,68 +1194,68 @@ function startPanLoop(
     lastTime = now;
 
     let advance = radPerMs * dt;
-  let guard = 0;
-  while (advance > 0 && guard < segments.length + 2) {
-    const s = segments[seg];
-    if (s.len <= 1e-6) {
-      if (once && seg >= segments.length - 1) {
-        finishOnce();
-        return;
-      }
-      if (once) {
-        seg += 1;
-        if (seg >= segments.length) {
+    let guard = 0;
+    while (advance > 0 && guard < segments.length + 2) {
+      const s = segments[seg];
+      if (s.len <= 1e-6) {
+        if (once && seg >= segments.length - 1) {
           finishOnce();
           return;
         }
-      } else {
-        seg = (seg + 1) % segments.length;
+        if (once) {
+          seg += 1;
+          if (seg >= segments.length) {
+            finishOnce();
+            return;
+          }
+        } else {
+          seg = (seg + 1) % segments.length;
+        }
+        segProgress = 0;
+        guard++;
+        continue;
       }
-      segProgress = 0;
+      const remaining = s.len - segProgress;
+      if (advance < remaining) {
+        segProgress += advance;
+        advance = 0;
+      } else {
+        advance -= remaining;
+        if (once && seg >= segments.length - 1) {
+          finishOnce();
+          return;
+        }
+        if (once) {
+          seg += 1;
+          if (seg >= segments.length) {
+            finishOnce();
+            return;
+          }
+        } else {
+          seg = (seg + 1) % segments.length;
+        }
+        segProgress = 0;
+      }
       guard++;
-      continue;
     }
-    const remaining = s.len - segProgress;
-    if (advance < remaining) {
-      segProgress += advance;
-      advance = 0;
-    } else {
-      advance -= remaining;
-      if (once && seg >= segments.length - 1) {
-        finishOnce();
-        return;
-      }
-      if (once) {
-        seg += 1;
-        if (seg >= segments.length) {
-          finishOnce();
-          return;
-        }
-      } else {
-        seg = (seg + 1) % segments.length;
-      }
-      segProgress = 0;
-    }
-    guard++;
-  }
 
-  const s = segments[seg];
-  const t = s.len > 1e-6 ? segProgress / s.len : 0;
-  const yaw = s.a.yaw + s.dyaw * t;
-  const pitch = s.a.pitch + s.dpitch * t;
-  const zoom = s.a.zoom + s.dzoom * t;
-  try {
-    viewer.rotate({ yaw, pitch });
-    if (Math.abs(zoom - lastZoom) > 0.05) {
-      viewer.zoom(zoom);
-      lastZoom = zoom;
+    const s = segments[seg];
+    const t = s.len > 1e-6 ? segProgress / s.len : 0;
+    const yaw = s.a.yaw + s.dyaw * t;
+    const pitch = s.a.pitch + s.dpitch * t;
+    const zoom = s.a.zoom + s.dzoom * t;
+    try {
+      viewer.rotate({ yaw, pitch });
+      if (Math.abs(zoom - lastZoom) > 0.05) {
+        viewer.zoom(zoom);
+        lastZoom = zoom;
+      }
+    } catch {
+      /* viewer disposed */
     }
-  } catch {
-    /* viewer disposed */
-  }
 
-  panRef.current.raf = requestAnimationFrame(step);
-};
+    panRef.current.raf = requestAnimationFrame(step);
+  };
 
   panRef.current.raf = requestAnimationFrame(step);
 }

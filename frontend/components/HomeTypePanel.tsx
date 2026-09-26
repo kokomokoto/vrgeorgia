@@ -792,6 +792,8 @@ type HomeTypePanelProps = {
   mobileOnly?: boolean;
   /** Hide the phone accordion (desktop grid only) */
   hideMobile?: boolean;
+  /** Map sidebar: same type photos as the homepage, always-open 2-column cards */
+  variant?: 'home' | 'sidebar';
 };
 
 /** Homepage property-type grid only (land status is a sibling outside the sized box) */
@@ -806,6 +808,7 @@ export function HomeTypePanel({
   designScale = 1,
   mobileOnly = false,
   hideMobile = false,
+  variant = 'home',
 }: HomeTypePanelProps) {
   const design = useHomeDesignOptional();
   const { activeModeId } = useTheme();
@@ -836,6 +839,68 @@ export function HomeTypePanel({
     designScale,
     48
   );
+
+  if (variant === 'sidebar') {
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        {PROPERTY_CATEGORIES.map((cat) => {
+          const item = itemById.get(cat.value) || {
+            id: cat.value,
+            label: '',
+            icon: cat.icon,
+            borderRadius: TYPE_PANEL_RADIUS_DEFAULT,
+          };
+          const media = mediaById[cat.value];
+          const hasMedia = Boolean(media?.url || media?.embedUrl);
+          const isFilterSelected = filters.type.includes(cat.value);
+          const displayLabel = typePanelDisplayLabel(cat.value, item.label, tr);
+          return (
+            <button
+              key={cat.value}
+              type="button"
+              title={displayLabel}
+              onClick={() =>
+                onPatch((prev) => togglePropertyType(prev, cat.value, isFilterSelected))
+              }
+              className={`flex h-11 min-w-0 items-center gap-1.5 overflow-hidden rounded-xl border px-1.5 text-left transition-colors ${
+                isFilterSelected
+                  ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500 dark:border-amber-500 dark:bg-amber-950/40 dark:ring-amber-500'
+                  : 'border-slate-200 bg-white hover:border-slate-300 dark:border-zinc-700 dark:bg-zinc-900'
+              }`}
+            >
+              <span
+                className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-zinc-800"
+                aria-hidden
+              >
+                {hasMedia ? (
+                  <TypeCoverMedia
+                    media={media}
+                    scale={clampMediaScale(item.mediaScale)}
+                    x={clampRailPercent(item.mediaX, TYPE_PANEL_MEDIA_POS_DEFAULT.x)}
+                    y={clampRailPercent(item.mediaY, TYPE_PANEL_MEDIA_POS_DEFAULT.y)}
+                    alt=""
+                  />
+                ) : (
+                  <span className="grid h-full w-full place-items-center text-base leading-none">
+                    {item.icon || cat.icon}
+                  </span>
+                )}
+              </span>
+              <span
+                className={`min-w-0 truncate text-[13px] font-medium leading-5 ${
+                  isFilterSelected
+                    ? 'text-blue-800 dark:text-amber-200'
+                    : 'text-slate-700 dark:text-zinc-200'
+                }`}
+              >
+                {displayLabel}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   const renderCards = (compact: boolean) =>
     PROPERTY_CATEGORIES.map((cat) => {

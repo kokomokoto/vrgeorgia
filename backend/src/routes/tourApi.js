@@ -188,11 +188,11 @@ router.patch('/tours/:id', async (req, res, next) => {
 router.delete('/tours/:id', async (req, res, next) => {
   try {
     const before = await getTour(req.params.id);
-    const ok = await deleteTour(req.params.id);
+    const ok = await deleteTour(req.params.id, req.user?.id || null);
     if (!ok) {
       return res.status(404).json({ error: 'Tour not found' });
     }
-    await auditTour(req, 'tour.deleted', req.params.id, { tourTitle: before?.title || '' });
+    await auditTour(req, 'tour.trashed', req.params.id, { tourTitle: before?.title || '' });
     res.json({ ok: true });
   } catch (err) {
     next(err);

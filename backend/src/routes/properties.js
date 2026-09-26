@@ -12,6 +12,7 @@ import { uploadPropertyPhotosFromFiles } from '../services/photoUpload.js';
 import { getJWTSecret } from '../config/jwt.js';
 import { normalizeTourLink } from '../utils/tourLink.js';
 import { buildPropertyTextSearchOr } from '../utils/propertySearch.js';
+import { buildPropertyUrlKey, numericIdFromPublicPath } from '../utils/propertyUrlKey.js';
 import { getUsdToGelRate } from '../utils/currency.js';
 import { applyPriceRangeFilter } from '../utils/priceFilter.js';
 import { applySqmRangeFilter } from '../utils/areaFilter.js';
@@ -528,7 +529,7 @@ router.get(
 
     const properties = rows.map((p) => {
       const { editDraft, ...rest } = p;
-      return { ...rest, hasEditDraft: Boolean(editDraft) };
+      return { ...rest, hasEditDraft: Boolean(editDraft), urlKey: buildPropertyUrlKey(p) };
     });
     res.json({ properties, total, totalAll });
   }
@@ -825,8 +826,9 @@ router.get(
     scheduleListTranslations(properties, lang);
 
     const translated = properties.map((p) => {
+      const urlKey = buildPropertyUrlKey(p);
       const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
-      return stripHiddenCadastral(safe);
+      return stripHiddenCadastral({ ...safe, urlKey });
     });
 
     const payload = {
@@ -869,8 +871,9 @@ router.get(
     scheduleListTranslations(properties, lang);
 
     const translated = properties.map((p) => {
+      const urlKey = buildPropertyUrlKey(p);
       const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
-      return stripHiddenCadastral(safe);
+      return stripHiddenCadastral({ ...safe, urlKey });
     });
     res.json({ properties: translated });
   }
@@ -942,13 +945,18 @@ router.get(
 
     const lang = pickLanguage(req);
 
-    const property = await Property.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { views: 1 } },
-      { new: true }
-    )
-      .populate('userId', 'email name phone avatar role')
-      .lean();
+    const rawId = decodeURIComponent(String(req.params.id || '')).trim();
+    const numericId = numericIdFromPublicPath(rawId);
+    let propertyId = /^[a-fA-F0-9]{24}$/.test(rawId) ? rawId : null;
+    if (!propertyId && numericId) {
+      const found = await Property.findOne({ numericId }).select('_id').lean();
+      propertyId = found?._id ? String(found._id) : null;
+    }
+    const property = propertyId
+      ? await Property.findByIdAndUpdate(propertyId, { $inc: { views: 1 } }, { new: true })
+          .populate('userId', 'email name phone avatar role')
+          .lean()
+      : null;
     if (!property) return res.status(404).json({ message: 'Not found' });
     if (property.deletedAt) return res.status(404).json({ message: 'Not found' });
 
@@ -1026,7 +1034,10 @@ router.get(
       }
     }
 
-    res.json({ property: applyTranslation(property, lang) });
+    const urlKey = buildPropertyUrlKey(property);
+    const translated = applyTranslation(property, lang);
+    translated.urlKey = urlKey;
+    res.json({ property: translated });
   }
 );
 

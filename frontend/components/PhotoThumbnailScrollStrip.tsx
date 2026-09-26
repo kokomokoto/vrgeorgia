@@ -133,7 +133,7 @@ export function PhotoThumbnailScrollStrip({ children, className = '' }: Props) {
     `absolute top-0 bottom-0 z-10 flex ${EDGE_WIDTH_CLASS} cursor-pointer items-center justify-center`;
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0 w-full max-w-full">
       {canScrollLeft && (
         <div
           className={`${edgeBase} left-0 bg-gradient-to-r from-white via-white/80 to-transparent`}

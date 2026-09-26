@@ -15,6 +15,101 @@ import { filterPropertiesByMapBounds, mapBoundsEqual, type MapBounds } from '@/l
 import { filtersToPropertyQuery, omitPriceAreaFilters, searchParamsToFiltersState } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 
+const FILTERS_WIDTH_KEY = 'vhome-map-filters-width';
+const LIST_WIDTH_KEY = 'vhome-map-list-width';
+const FILTERS_DEFAULT_W = 333;
+const LIST_DEFAULT_W = 416;
+const PANEL_MIN_W = 220;
+const MAP_MIN_W = 320;
+const COLLAPSED_W = 44;
+
+function readStoredWidth(key: string, fallback: number): number {
+  if (typeof window === 'undefined') return fallback;
+  const n = Number(window.localStorage.getItem(key));
+  return Number.isFinite(n) && n >= PANEL_MIN_W ? n : fallback;
+}
+
+function clampPanelWidth(width: number, otherWidth: number): number {
+  const max = Math.max(PANEL_MIN_W, window.innerWidth - otherWidth - MAP_MIN_W);
+  return Math.round(Math.min(max, Math.max(PANEL_MIN_W, width)));
+}
+
+function useLgViewport(): boolean {
+  const [lg, setLg] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const apply = () => setLg(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+  return lg;
+}
+
+function PanelEdgeHandle({
+  label,
+  width,
+  onWidth,
+  onDragChange,
+}: {
+  label: string;
+  width: number;
+  onWidth: (next: number) => void;
+  onDragChange: (dragging: boolean) => void;
+}) {
+  const dragRef = React.useRef<{ startX: number; startW: number } | null>(null);
+
+  const endDrag = (el: HTMLElement, pointerId: number) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    onDragChange(false);
+    try {
+      el.releasePointerCapture(pointerId);
+    } catch {
+      /* already released */
+    }
+  };
+
+  return (
+    <div
+      role="slider"
+      aria-orientation="vertical"
+      aria-label={label}
+      aria-valuemin={PANEL_MIN_W}
+      aria-valuenow={Math.round(width)}
+      tabIndex={0}
+      className="group absolute inset-y-0 right-0 z-30 hidden w-2 cursor-ew-resize touch-none lg:block"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dragRef.current = { startX: e.clientX, startW: width };
+        onDragChange(true);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          /* pointer capture is optional */
+        }
+      }}
+      onPointerMove={(e) => {
+        const drag = dragRef.current;
+        if (!drag) return;
+        onWidth(drag.startW + (e.clientX - drag.startX));
+      }}
+      onPointerUp={(e) => endDrag(e.currentTarget, e.pointerId)}
+      onPointerCancel={(e) => endDrag(e.currentTarget, e.pointerId)}
+      onKeyDown={(e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        onWidth(width + (e.key === 'ArrowRight' ? 24 : -24));
+      }}
+    >
+      <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-200 group-hover:bg-blue-400 group-focus-visible:bg-blue-500 dark:bg-zinc-700" />
+      <span className="pointer-events-none absolute left-1/2 top-1/2 h-8 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-400 shadow-sm group-hover:bg-blue-500 group-focus-visible:bg-blue-500 dark:bg-zinc-500" />
+    </div>
+  );
+}
+
 export default function MapSearchClient() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
@@ -23,7 +118,11 @@ export default function MapSearchClient() {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
   const tr = React.useCallback(
-    (key: string, fallback: string) => (mounted ? t(key) : fallback),
+    (key: string, fallback: string) => {
+      if (!mounted) return fallback;
+      const translated = t(key);
+      return !translated || translated === key ? fallback : translated;
+    },
     [mounted, t]
   );
 
@@ -131,6 +230,89 @@ export default function MapSearchClient() {
 
   const [filtersCollapsed, setFiltersCollapsed] = React.useState(false);
   const [listCollapsed, setListCollapsed] = React.useState(false);
+  const isLg = useLgViewport();
+  const [filtersWidth, setFiltersWidth] = React.useState(FILTERS_DEFAULT_W);
+  const [listWidth, setListWidth] = React.useState(LIST_DEFAULT_W);
+  const [widthsHydrated, setWidthsHydrated] = React.useState(false);
+  const [filtersDragging, setFiltersDragging] = React.useState(false);
+  const [listDragging, setListDragging] = React.useState(false);
+  const panelRef = React.useRef({
+    filters: FILTERS_DEFAULT_W,
+    list: LIST_DEFAULT_W,
+    filtersCollapsed: false,
+    listCollapsed: false,
+  });
+  panelRef.current = {
+    filters: filtersWidth,
+    list: listWidth,
+    filtersCollapsed,
+    listCollapsed,
+  };
+
+  React.useEffect(() => {
+    setFiltersWidth(readStoredWidth(FILTERS_WIDTH_KEY, FILTERS_DEFAULT_W));
+    setListWidth(readStoredWidth(LIST_WIDTH_KEY, LIST_DEFAULT_W));
+    setWidthsHydrated(true);
+  }, []);
+
+  const otherWidth = React.useCallback((which: 'filters' | 'list') => {
+    const s = panelRef.current;
+    if (which === 'filters') return s.listCollapsed ? COLLAPSED_W : s.list;
+    return s.filtersCollapsed ? COLLAPSED_W : s.filters;
+  }, []);
+
+  const applyFiltersWidth = React.useCallback(
+    (next: number) => {
+      const width = clampPanelWidth(next, otherWidth('filters'));
+      setFiltersWidth(width);
+      panelRef.current.filters = width;
+    },
+    [otherWidth]
+  );
+
+  const applyListWidth = React.useCallback(
+    (next: number) => {
+      const width = clampPanelWidth(next, otherWidth('list'));
+      setListWidth(width);
+      panelRef.current.list = width;
+    },
+    [otherWidth]
+  );
+
+  React.useEffect(() => {
+    if (!widthsHydrated || filtersDragging || listDragging) return;
+    try {
+      window.localStorage.setItem(FILTERS_WIDTH_KEY, String(filtersWidth));
+      window.localStorage.setItem(LIST_WIDTH_KEY, String(listWidth));
+    } catch {
+      /* ignore */
+    }
+  }, [filtersWidth, listWidth, widthsHydrated, filtersDragging, listDragging]);
+
+  React.useEffect(() => {
+    const dragging = filtersDragging || listDragging;
+    if (!dragging) return;
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+    };
+  }, [filtersDragging, listDragging]);
+
+  React.useEffect(() => {
+    const onResize = () => {
+      setFiltersWidth((w) => clampPanelWidth(w, otherWidth('filters')));
+      setListWidth((w) => clampPanelWidth(w, otherWidth('list')));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [otherWidth]);
+
+  const openPanelStyle = (width: number): React.CSSProperties | undefined =>
+    isLg ? { width, maxWidth: width, flex: '0 0 auto' } : undefined;
 
   React.useEffect(() => {
     if (!selectedId) return;
@@ -142,11 +324,14 @@ export default function MapSearchClient() {
     <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50 dark:bg-zinc-950">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <aside
-          className={`relative flex shrink-0 flex-col border-b border-slate-200 bg-white transition-[width,max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:border-b-0 lg:border-r ${
+          className={`relative flex shrink-0 flex-col border-b border-slate-200 bg-white transition-[max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:border-b-0 lg:border-r ${
+            filtersDragging ? '' : 'lg:transition-[width]'
+          } ${
             filtersCollapsed
               ? 'max-h-12 lg:w-11 lg:max-w-11'
-              : 'max-h-[min(62vh,560px)] lg:w-[min(20.8rem,74vw)] lg:max-w-[20.8rem]'
+              : 'max-h-[min(62vh,560px)] lg:max-h-none'
           }`}
+          style={filtersCollapsed ? undefined : openPanelStyle(filtersWidth)}
         >
           {filtersCollapsed ? (
             <button
@@ -195,14 +380,25 @@ export default function MapSearchClient() {
               </div>
             </>
           )}
+          {!filtersCollapsed ? (
+            <PanelEdgeHandle
+              label={tr('map_resize_filters', 'ფილტრების სიგანე')}
+              width={filtersWidth}
+              onWidth={applyFiltersWidth}
+              onDragChange={setFiltersDragging}
+            />
+          ) : null}
         </aside>
 
         <section
-          className={`relative flex min-h-0 min-w-0 flex-col border-b border-slate-200 bg-slate-50 transition-[width,max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-900 lg:border-b-0 lg:border-r ${
+          className={`relative flex min-h-0 min-w-0 flex-col border-b border-slate-200 bg-slate-50 transition-[max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-900 lg:border-b-0 lg:border-r ${
+            listDragging ? '' : 'lg:transition-[width]'
+          } ${
             listCollapsed
               ? 'max-h-12 shrink-0 lg:w-11 lg:max-w-11 lg:flex-none'
-              : 'flex-1 lg:flex-none lg:w-[min(26rem,36vw)] lg:max-w-md'
+              : 'max-lg:flex-1'
           }`}
+          style={listCollapsed ? undefined : openPanelStyle(listWidth)}
         >
           {listCollapsed ? (
             <button
@@ -291,6 +487,14 @@ export default function MapSearchClient() {
               </div>
             </>
           )}
+          {!listCollapsed ? (
+            <PanelEdgeHandle
+              label={tr('map_resize_list', 'სიის სიგანე')}
+              width={listWidth}
+              onWidth={applyListWidth}
+              onDragChange={setListDragging}
+            />
+          ) : null}
         </section>
 
         <div className="relative flex min-h-[min(42vh,320px)] min-w-0 flex-1 flex-col lg:min-h-0">

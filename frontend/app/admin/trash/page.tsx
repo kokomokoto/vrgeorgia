@@ -18,10 +18,12 @@ interface TrashProperty {
   status: string;
   numericId?: number;
   photos: string[];
-  deletedAt: string;
+  deletedAt?: string;
+  archivedAt?: string;
   createdAt: string;
   userId?: { name?: string; email?: string };
   deletedBy?: { name?: string; email?: string };
+  archivedBy?: { name?: string; email?: string };
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -63,6 +65,11 @@ export default function AdminTrashPage() {
   const [queryReady, setQueryReady] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [archiveItems, setArchiveItems] = useState<TrashProperty[]>([]);
+  const [archiveTotal, setArchiveTotal] = useState(0);
+  const [archivePage, setArchivePage] = useState(1);
+  const [archivePages, setArchivePages] = useState(1);
+  const [archiveLoading, setArchiveLoading] = useState(true);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('q') || '';
@@ -104,10 +111,37 @@ export default function AdminTrashPage() {
     }
   }, [page, query, router]);
 
+  const fetchArchive = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setArchiveLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(archivePage), limit: '20' });
+      if (query) params.set('q', query);
+      const res = await fetch(`${getApiBase()}/api/admin/archive?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('fetch failed');
+      const data = await res.json();
+      setArchiveItems(data.properties || []);
+      setArchiveTotal(data.total || 0);
+      setArchivePages(data.pages || 1);
+    } catch {
+      setError('არქივის ჩატვირთვა ვერ მოხერხდა');
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, [archivePage, query]);
+
   useEffect(() => {
     if (!queryReady) return;
     fetchTrash();
   }, [fetchTrash, queryReady]);
+
+  useEffect(() => {
+    if (!queryReady) return;
+    fetchArchive();
+  }, [fetchArchive, queryReady]);
 
   const handleRestore = async (id: string) => {
     if (!confirm('განცხადების აღდგენა?')) return;
@@ -128,7 +162,7 @@ export default function AdminTrashPage() {
   };
 
   const handlePermanentDelete = async (id: string) => {
-    if (!confirm('ნამდვილად გსურთ სამუდამო წაშლა? ეს ქმედება შეუქცევადია.')) return;
+    if (!confirm('განცხადება არქივში გადავა. საიტზე აღარ გამოჩნდება, მაგრამ მონაცემები და ფოტოები შენარჩუნდება და აქედან აღდგენა შეიძლება.')) return;
     const token = localStorage.getItem('token');
     setBusyId(id);
     try {
@@ -136,10 +170,33 @@ export default function AdminTrashPage() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) fetchTrash();
-      else alert('წაშლა ვერ მოხერხდა');
+      if (res.ok) {
+        fetchTrash();
+        fetchArchive();
+      } else alert('არქივში გადატანა ვერ მოხერხდა');
     } catch {
-      alert('წაშლა ვერ მოხერხდა');
+      alert('არქივში გადატანა ვერ მოხერხდა');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleArchiveRestore = async (id: string) => {
+    if (!confirm('არქივიდან აღდგენა? განცხადება ისევ გამოჩნდება საიტზე.')) return;
+    const token = localStorage.getItem('token');
+    setBusyId(id);
+    try {
+      const res = await fetch(`${getApiBase()}/api/admin/archive/${id}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) fetchArchive();
+      else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || 'აღდგენა ვერ მოხერხდა');
+      }
+    } catch {
+      alert('აღდგენა ვერ მოხერხდა');
     } finally {
       setBusyId(null);
     }
@@ -152,7 +209,7 @@ export default function AdminTrashPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-800">🗑️ ნაგვის ყუთი</h1>
           <p className="text-sm text-gray-500">
-            წაშლილი განცხადებები — შეგიძლიათ აღადგინოთ ან სამუდამოდ წაშალოთ
+            წაშლილი განცხადებები ჯერ ნაგვის ყუთშია. არქივში გადატანის შემდეგაც მონაცემები MongoDB-ში რჩება და აღდგენა შეიძლება.
           </p>
         </div>
 
@@ -162,6 +219,7 @@ export default function AdminTrashPage() {
             onSubmit={(e) => {
               e.preventDefault();
               setPage(1);
+              setArchivePage(1);
               setQuery(search.trim());
             }}
           >
@@ -265,7 +323,7 @@ export default function AdminTrashPage() {
                               onClick={() => handlePermanentDelete(item._id)}
                               className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
                             >
-                              სამუდამოდ
+                              არქივში
                             </button>
                           </div>
                         </td>
@@ -295,6 +353,107 @@ export default function AdminTrashPage() {
               type="button"
               disabled={page >= pages || loading}
               onClick={() => setPage((p) => p + 1)}
+              className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              →
+            </button>
+          </div>
+        )}
+
+        <div className="mt-10 mb-4">
+          <h2 className="text-xl font-bold text-gray-800">არქივი</h2>
+          <p className="text-sm text-gray-500">
+            ნაგვის ყუთიდან გადატანილი განცხადებები. 30 დღის შემდეგ ჩანაწერი და Cloudinary-ის ფოტოები თავისით იშლება. სულ: {archiveTotal}
+          </p>
+        </div>
+
+        <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+          {archiveLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-blue-600" />
+            </div>
+          ) : archiveItems.length === 0 ? (
+            <div className="py-16 text-center text-gray-400">არქივი ცარიელია</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead className="bg-gray-50 text-left text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">განცხადება</th>
+                    <th className="px-4 py-3 font-semibold">არქივში გადატანა</th>
+                    <th className="px-4 py-3 font-semibold">ვინ გადაიტანა</th>
+                    <th className="px-4 py-3 font-semibold text-right">მოქმედება</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {archiveItems.map((item) => {
+                    const thumb = item.photos?.[0];
+                    const busy = busyId === item._id;
+                    return (
+                      <tr key={item._id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="h-12 w-16 shrink-0 overflow-hidden rounded bg-gray-100">
+                              {thumb ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={resolveImageUrl(thumb)} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-gray-300">🏠</div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-800">{item.title}</p>
+                              <p className="text-xs text-gray-500">
+                                {TYPE_LABELS[item.type] || item.type}
+                                {item.numericId ? ` · #${item.numericId}` : ''}
+                                {item.city ? ` · ${item.city}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {item.archivedAt ? formatDate(item.archivedAt) : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-gray-800">{item.archivedBy?.name || '—'}</p>
+                          <p className="text-xs text-gray-500">{item.archivedBy?.email || ''}</p>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleArchiveRestore(item._id)}
+                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            აღდგენა
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {archivePages > 1 && (
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              disabled={archivePage <= 1 || archiveLoading}
+              onClick={() => setArchivePage((p) => Math.max(1, p - 1))}
+              className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              ←
+            </button>
+            <span className="text-sm text-gray-600">
+              {archivePage} / {archivePages}
+            </span>
+            <button
+              type="button"
+              disabled={archivePage >= archivePages || archiveLoading}
+              onClick={() => setArchivePage((p) => p + 1)}
               className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50"
             >
               →

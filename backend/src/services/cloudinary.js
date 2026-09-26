@@ -69,16 +69,20 @@ export function uploadPropertyPhotosMiddleware(maxFiles = 30) {
 }
 
 export async function deleteCloudinaryImage(imageUrl) {
-  if (!imageUrl || !imageUrl.includes('cloudinary')) return;
+  if (!imageUrl || !imageUrl.includes('cloudinary')) return true;
   try {
     const parts = imageUrl.split('/upload/');
-    if (parts.length < 2) return;
-    const pathWithVersion = parts[1];
+    if (parts.length < 2) return false;
+    const pathWithVersion = parts[1].split('?')[0];
     const pathWithoutVersion = pathWithVersion.replace(/^v\d+\//, '');
     const publicId = pathWithoutVersion.replace(/\.[^.]+$/, '');
-    await cloudinary.uploader.destroy(publicId);
+    if (!publicId) return false;
+    const result = await cloudinary.uploader.destroy(publicId);
+    const status = result?.result;
+    return status === 'ok' || status === 'not found';
   } catch (err) {
     console.error('Cloudinary delete error:', err.message);
+    return false;
   }
 }
 

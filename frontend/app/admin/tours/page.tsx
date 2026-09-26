@@ -14,7 +14,7 @@ import { DEFAULT_MAP_FILTERS, filtersToPropertyQuery } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 import type { Property } from '@/lib/types';
 
-type ToursTab = 'linked' | 'standalone';
+type ToursTab = 'linked' | 'standalone' | 'trash';
 
 interface TourProperty {
   _id: string;
@@ -32,6 +32,22 @@ interface TourProperty {
   tourLink: string;
   userId?: { name?: string; email?: string };
   createdAt: string;
+}
+
+interface TrashedTour {
+  id: string;
+  title: string;
+  sceneCount: number;
+  isPublished: boolean;
+  publishedAt: string | null;
+  trashedAt: string;
+  daysLeft: number;
+  previewImage?: string;
+  trashedBy?: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  } | null;
 }
 
 interface StandaloneTour {
@@ -106,6 +122,10 @@ export default function AdminToursPage() {
   const [rangeProperties, setRangeProperties] = useState<Property[]>([]);
   const [linkedTotal, setLinkedTotal] = useState(0);
   const [standaloneTotal, setStandaloneTotal] = useState(0);
+  const [trashedTours, setTrashedTours] = useState<TrashedTour[]>([]);
+  const [trashTotal, setTrashTotal] = useState(0);
+  const [trashSearch, setTrashSearch] = useState('');
+  const [restoreBusyId, setRestoreBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
   const [sortBy, setSortBy] = useState('date_desc');
@@ -155,6 +175,23 @@ export default function AdminToursPage() {
     []
   );
 
+  const fetchTrashedTours = useCallback(async (token: string, q: string) => {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set('q', q.trim());
+    const res = await fetch(`${getApiBase()}/api/admin/tours/trash?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 403) {
+      setError('წვდომა აკრძალულია. მხოლოდ ადმინისტრატორისთვის.');
+      return null;
+    }
+    if (!res.ok) {
+      setError('ნაგვის ყუთის ჩატვირთვა ვერ მოხერხდა');
+      return null;
+    }
+    return res.json() as Promise<{ tours: TrashedTour[]; total: number }>;
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -165,9 +202,10 @@ export default function AdminToursPage() {
     let alive = true;
     (async () => {
       try {
-        const [linkedData, standaloneData] = await Promise.all([
+        const [linkedData, standaloneData, trashData] = await Promise.all([
           fetchLinkedTours(token, 'limit=200&page=1'),
           fetchStandaloneTours(token, '', 'date_desc', false),
+          fetchTrashedTours(token, ''),
         ]);
         if (!alive) return;
         if (linkedData) {
@@ -176,6 +214,9 @@ export default function AdminToursPage() {
         }
         if (standaloneData) {
           setStandaloneTotal(standaloneData.total);
+        }
+        if (trashData) {
+          setTrashTotal(trashData.total);
         }
       } catch {
         if (alive) setError('სერვერთან კავშირი ვერ მოხერხდა');
@@ -187,7 +228,7 @@ export default function AdminToursPage() {
     return () => {
       alive = false;
     };
-  }, [router, fetchLinkedTours, fetchStandaloneTours]);
+  }, [router, fetchLinkedTours, fetchStandaloneTours, fetchTrashedTours]);
 
   useEffect(() => {
     if (loading) return;
@@ -211,7 +252,7 @@ export default function AdminToursPage() {
             sort: sortBy,
             resultCount: data.properties.length,
           });
-        } else {
+        } else if (activeTab === 'standalone') {
           const data = await fetchStandaloneTours(
             token,
             standaloneSearch,
@@ -221,6 +262,11 @@ export default function AdminToursPage() {
           if (!alive || !data) return;
           setStandaloneTours(data.tours);
           setStandaloneTotal(data.total);
+        } else {
+          const data = await fetchTrashedTours(token, trashSearch);
+          if (!alive || !data) return;
+          setTrashedTours(data.tours);
+          setTrashTotal(data.total);
         }
       } catch {
         if (alive) setError('სერვერთან კავშირი ვერ მოხერხდა');
@@ -240,9 +286,11 @@ export default function AdminToursPage() {
     loading,
     activeTab,
     standaloneSearch,
+    trashSearch,
     showDrafts,
     fetchLinkedTours,
     fetchStandaloneTours,
+    fetchTrashedTours,
   ]);
 
   const handleRemoveTour = async (id: string) => {
@@ -269,7 +317,7 @@ export default function AdminToursPage() {
   const handleDeleteStandaloneTour = async (tourId: string) => {
     if (
       !confirm(
-        'ნამდვილად გსურთ ამ 3D ტურის სრული წაშლა? (სცენები და პანორამები წაიშლება)'
+        'ტური ნაგვის ყუთში გადავა. 30 დღის შემდეგ ბაზიდან და Cloudinary-დან თავისით წაიშლება. გავაგრძელო?'
       )
     ) {
       return;
@@ -284,6 +332,7 @@ export default function AdminToursPage() {
       if (res.ok) {
         setStandaloneTours((prev) => prev.filter((tour) => tour.id !== tourId));
         setStandaloneTotal((count) => Math.max(0, count - 1));
+        setTrashTotal((count) => count + 1);
       } else {
         alert(data.message || 'წაშლა ვერ მოხერხდა');
       }
@@ -304,7 +353,33 @@ export default function AdminToursPage() {
     return id ? getTourEditUrl(id) : resolved;
   };
 
-  const currentTotal = activeTab === 'linked' ? linkedTotal : standaloneTotal;
+  const handleRestoreTour = async (tourId: string) => {
+    if (!confirm('ეს 3D ტური ისევ დაბრუნდეს სიაში?')) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setRestoreBusyId(tourId);
+    try {
+      const res = await fetch(`${getApiBase()}/api/admin/tours/trash/${tourId}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setTrashedTours((prev) => prev.filter((tour) => tour.id !== tourId));
+        setTrashTotal((count) => Math.max(0, count - 1));
+        setStandaloneTotal((count) => count + 1);
+      } else {
+        alert(data.message || 'აღდგენა ვერ მოხერხდა');
+      }
+    } catch {
+      alert('აღდგენა ვერ მოხერხდა');
+    } finally {
+      setRestoreBusyId(null);
+    }
+  };
+
+  const currentTotal =
+    activeTab === 'linked' ? linkedTotal : activeTab === 'standalone' ? standaloneTotal : trashTotal;
 
   if (error && loading) {
     return (
@@ -391,6 +466,24 @@ export default function AdminToursPage() {
               {standaloneTotal}
             </span>
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('trash')}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'trash'
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            ნაგვის ყუთი
+            <span
+              className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                activeTab === 'trash' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {trashTotal}
+            </span>
+          </button>
         </div>
 
         {activeTab === 'linked' ? (
@@ -406,6 +499,20 @@ export default function AdminToursPage() {
               onChange={setFilters}
               onClearAll={clearAllFilters}
               rangeProperties={rangeProperties}
+            />
+          </div>
+        ) : activeTab === 'trash' ? (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+            <p className="mb-3 text-sm text-red-900">
+              წაშლილი 3D ტურები აქ რჩება 30 დღე. ამ ვადის შემდეგ ჩანაწერი, სცენები და Cloudinary-ის
+              პანორამები თავისით იშლება. სულ: {trashTotal}
+            </p>
+            <input
+              type="search"
+              value={trashSearch}
+              onChange={(e) => setTrashSearch(e.target.value)}
+              placeholder="ტურის სახელით ძიება..."
+              className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-gray-800 sm:max-w-md"
             />
           </div>
         ) : (
@@ -561,7 +668,7 @@ export default function AdminToursPage() {
                 )}
               </tbody>
             </table>
-          ) : (
+          ) : activeTab === 'standalone' ? (
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -670,11 +777,71 @@ export default function AdminToursPage() {
                           <button
                             onClick={() => handleDeleteStandaloneTour(tour.id)}
                             className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700"
-                            title="ტურის სრული წაშლა"
+                            title="ნაგვის ყუთში გადატანა"
                           >
                             🗑️
                           </button>
                         </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ტური</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ვინ წაშალა</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">ნაგვის ყუთში</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">დარჩა</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">მოქმედებები</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loading || listLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                      იტვირთება...
+                    </td>
+                  </tr>
+                ) : trashedTours.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                      ნაგვის ყუთი ცარიელია
+                    </td>
+                  </tr>
+                ) : (
+                  trashedTours.map((tour) => (
+                    <tr key={tour.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-800">{tour.title || 'უსახელო ტური'}</div>
+                        <div className="text-sm text-gray-500">
+                          {tour.sceneCount} სცენა · {tour.isPublished ? 'გამოქვეყნებული იყო' : 'ნაბეჯვი'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {tour.trashedBy ? (
+                          <>
+                            <div className="text-gray-800">{tour.trashedBy.name || '—'}</div>
+                            <div className="text-sm text-gray-500">{tour.trashedBy.email || '—'}</div>
+                          </>
+                        ) : (
+                          <div className="text-sm text-gray-400">უცნობი</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{formatTourDate(tour.trashedAt)}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{tour.daysLeft} დღე</td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreTour(tour.id)}
+                          disabled={restoreBusyId === tour.id}
+                          className="rounded-lg bg-green-600 px-3 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {restoreBusyId === tour.id ? 'ბრუნდება...' : 'აღდგენა'}
+                        </button>
                       </td>
                     </tr>
                   ))

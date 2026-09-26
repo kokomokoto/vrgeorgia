@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
+import { propertyHref } from '@/lib/propertyPublicPath';
 import CompareButton from '@/components/CompareButton';
 import FavoriteButton from '@/components/FavoriteButton';
+import PinnedListingMark from '@/components/PinnedListingMark';
 import { getProperty, resolveImageUrl } from '@/lib/api';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
@@ -97,7 +99,7 @@ export default function FavoritesPage() {
                 key={property._id} 
                 className="rounded-lg border border-slate-200 bg-white overflow-hidden hover:shadow-lg transition-shadow"
               >
-                <Link href={`/property/${property._id}`}>
+                <Link href={propertyHref(property)}>
                   <div className="aspect-[4/3] relative">
                     {photo ? (
                       <img
@@ -116,6 +118,7 @@ export default function FavoritesPage() {
                       className="absolute right-2 top-2 flex flex-row gap-1.5"
                       onClick={(e) => e.preventDefault()}
                     >
+                      <PinnedListingMark pinned={property.pinned} size="sm" />
                       <CompareButton propertyId={property._id} size="sm" />
                       <FavoriteButton propertyId={property._id} size="sm" />
                     </div>

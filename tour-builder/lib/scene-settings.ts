@@ -140,24 +140,35 @@ export function getSceneEntryView(scene: Scene): {
   pitch: number;
   zoom: number;
 } {
-  if (scene.default_view_custom === 1) {
-    return {
-      yaw: scene.default_yaw,
-      pitch: scene.default_pitch,
-      zoom: scene.default_zoom,
-    };
-  }
-  const keyframes = parsePanKeyframes(scene);
-  if (keyframes.length > 0) {
-    return {
-      yaw: keyframes[0].yaw,
-      pitch: keyframes[0].pitch,
-      zoom: keyframes[0].zoom,
-    };
+  const path = buildPanWaypoints(scene);
+  if (path.length > 0) {
+    return { ...path[0] };
   }
   return {
     yaw: scene.default_yaw ?? 0,
     pitch: scene.default_pitch ?? 0,
     zoom: scene.default_zoom ?? 50,
   };
+}
+
+/**
+ * Ordered pan path: custom default view (if set), then keyframe points.
+ * Empty when panning has nothing to travel through.
+ */
+export function buildPanWaypoints(
+  scene: Scene
+): { yaw: number; pitch: number; zoom: number }[] {
+  const keyframes = parsePanKeyframes(scene);
+  const waypoints: { yaw: number; pitch: number; zoom: number }[] = [];
+  if (scene.default_view_custom === 1) {
+    waypoints.push({
+      yaw: scene.default_yaw,
+      pitch: scene.default_pitch,
+      zoom: scene.default_zoom,
+    });
+  }
+  for (const kf of keyframes) {
+    waypoints.push({ yaw: kf.yaw, pitch: kf.pitch, zoom: kf.zoom });
+  }
+  return waypoints;
 }

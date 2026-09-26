@@ -16,6 +16,7 @@ import {
   resolveMapTileConfig,
   type MapTileStyle,
 } from '@/lib/themePalettes';
+import { propertyHref } from '@/lib/propertyPublicPath';
 
 const MAP_BASEMAP_CLASSES = ['map-basemap--dark', 'map-basemap--positron'] as const;
 
@@ -84,7 +85,7 @@ function buildHoverTooltipHtml(p: Property): string {
   const areaHtml = area
     ? `<span class="map-property-card__area">${escapeHtml(area)}</span>`
     : '';
-  const href = `/property/${encodeURIComponent(p._id)}`;
+  const href = propertyHref(p);
   return `<a href="${href}" class="map-property-card__link" draggable="false">
 <div class="map-property-card">
 ${thumb}
@@ -263,7 +264,7 @@ export default function MapInner({
     tbilisiZonesAutoFit
   );
 
-  const propertyPath = (id: string) => `/property/${id}`;
+  const propertyPath = (p: { _id: string; urlKey?: string }) => propertyHref(p);
 
   const defaultCenter = center || { lat: 42.1, lng: 43.5 };
   const defaultZoom = zoom || 7;
@@ -597,7 +598,7 @@ export default function MapInner({
               if (ev.button !== 1) return;
               ev.preventDefault();
               ev.stopPropagation();
-              window.open(propertyPath(p._id), '_blank', 'noopener,noreferrer');
+              window.open(propertyPath(p), '_blank', 'noopener,noreferrer');
             };
             el.addEventListener('mousedown', openInNewTab);
             el.addEventListener('auxclick', openInNewTab);
@@ -607,12 +608,12 @@ export default function MapInner({
           if (el) el.style.cursor = 'pointer';
           marker.on('click', (e: any) => {
             L.DomEvent.stopPropagation(e);
-            onPropertyNavigateRef.current?.(p._id);
+            onPropertyNavigateRef.current?.(p.urlKey || p._id);
           });
         } else {
           marker.bindPopup(`
           <div style="min-width: 150px;">
-            <a href="/property/${p._id}" style="font-size: 14px; font-weight: 600; color: #1e40af; text-decoration: none; display: block; margin-bottom: 4px;">
+            <a href="${propertyHref(p)}" style="font-size: 14px; font-weight: 600; color: #1e40af; text-decoration: none; display: block; margin-bottom: 4px;">
               ${String(p.title).replace(/</g, '&lt;')}
             </a>
             <div style="font-size: 13px; color: #059669; font-weight: 500;">

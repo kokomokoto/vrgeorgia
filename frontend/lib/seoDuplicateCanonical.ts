@@ -19,6 +19,7 @@ export type SeoListing = {
   listingVisibility?: string;
   deletedAt?: string | null;
   canonicalId?: string;
+  urlKey?: string;
 };
 
 function normalizeSeoText(value?: string): string {
@@ -102,12 +103,13 @@ export function seoDuplicateIdsToDrop(properties: SeoListing[]): Set<string> {
   return drop;
 }
 
-/** საჯარო URL-ის ერთადერთი id: დუბლიკატის keeper, თორემ ბაზის _id */
+/** საჯარო URL: დუბლიკატი keeper-ზე, დანარჩენი urlKey-ზე (სათაური-numericId). */
 export function canonicalPropertyPathId(
   requestedId: string,
-  property: { _id?: string; canonicalId?: string }
+  property: { _id?: string; canonicalId?: string; urlKey?: string }
 ): string {
-  if (property.canonicalId) return String(property.canonicalId);
+  if (property.canonicalId && property.canonicalId !== property._id) return String(property.canonicalId);
+  if (property.urlKey) return property.urlKey;
   if (property._id) return String(property._id);
   return requestedId;
 }

@@ -20,6 +20,7 @@ import { trackSearchFilters } from '@/lib/searchAnalytics';
 import type { Property } from '@/lib/types';
 import { isAdminRole, isAgentRole } from '@/lib/userRoles';
 import { getPropertyOwnerLocationLine } from '@/lib/propertyDisplay';
+import { propertyHref } from '@/lib/propertyPublicPath';
 
 type BrokerListingMode = 'public' | 'unlisted' | 'private' | 'sold';
 
@@ -176,7 +177,7 @@ export default function ProfilePage() {
 
   const copyUnlistedLink = (property: Property) => {
     if (!property.shareToken) return;
-    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/property/${property._id}?t=${property.shareToken}`;
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}${propertyHref(property)}?t=${property.shareToken}`;
     void navigator.clipboard.writeText(url).then(() => {
       setLinkCopiedId(property._id);
       window.setTimeout(() => setLinkCopiedId(null), 2000);
@@ -622,7 +623,7 @@ export default function ProfilePage() {
                   >
                     <div className="flex items-start gap-3">
                       <Link
-                        href={`/property/${property._id}`}
+                        href={propertyHref(property)}
                         className="block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-md bg-slate-100 ring-offset-2 hover:ring-2 hover:ring-blue-500 sm:h-20 sm:w-28"
                         aria-label={property.title}
                       >
@@ -643,7 +644,7 @@ export default function ProfilePage() {
 
                       <div className="min-w-0 flex-1">
                         <Link
-                          href={`/property/${property._id}`}
+                          href={propertyHref(property)}
                           className="line-clamp-2 font-medium text-slate-800 hover:text-blue-600"
                         >
                           {property.title}

@@ -7,6 +7,7 @@ import {
   toTour,
 } from '../../models/tourModels.js';
 import { toScene } from './sceneSettings.js';
+import { trashTour } from './tourTrash.js';
 
 function slugify(title) {
   const base = title
@@ -70,20 +71,9 @@ export async function updateTour(id, data) {
   return getTour(id);
 }
 
-export async function deleteTour(id) {
-  const scenes = await SceneModel.find({ tour_id: id }).select('id').lean();
-  const sceneIds = scenes.map((s) => s.id);
-  if (sceneIds.length > 0) {
-    await HotspotModel.deleteMany({
-      $or: [
-        { scene_id: { $in: sceneIds } },
-        { target_scene_id: { $in: sceneIds } },
-      ],
-    });
-    await SceneModel.deleteMany({ tour_id: id });
-  }
-  const result = await TourModel.deleteOne({ id });
-  return result.deletedCount > 0;
+export async function deleteTour(id, trashedBy = null) {
+  const trashed = await trashTour(id, trashedBy);
+  return Boolean(trashed);
 }
 
 export async function touchTour(tourId) {

@@ -124,7 +124,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const propertyRoutes: MetadataRoute.Sitemap = properties.map((p) => {
     const images = propertySitemapImages(p);
     return {
-      url: `${SITE_URL}/property/${p._id}`,
+      url: `${SITE_URL}/property/${p.urlKey || p._id}`,
       lastModified: parseDate(p.updatedAt) || parseDate(p.createdAt) || now,
       changeFrequency: 'daily' as const,
       priority: 0.8,

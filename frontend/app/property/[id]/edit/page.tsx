@@ -366,6 +366,8 @@ export default function EditPropertyPage() {
   const mainPhotoIndexRef = useRef(mainPhotoIndex);
   const photosPersistRef = useRef<Promise<void> | null>(null);
   const photoPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileDropDepthRef = useRef(0);
+  const [photoFileDropActive, setPhotoFileDropActive] = useState(false);
 
   existingPhotosRef.current = existingPhotos;
   panoramaPhotosRef.current = panoramaPhotos;
@@ -659,7 +661,10 @@ export default function EditPropertyPage() {
       setError(t('max_photos_reached', { max: MAX_PROPERTY_PHOTOS }));
       return;
     }
-    const list = Array.from(files).slice(0, remaining);
+    const list = Array.from(files)
+      .filter((f) => f.type.startsWith('image/'))
+      .slice(0, remaining);
+    if (list.length === 0) return;
     setAddingPhotos(true);
     setError(null);
     setPhotoUploadProgress({ done: 0, total: list.length });
@@ -693,6 +698,40 @@ export default function EditPropertyPage() {
       setAddingPhotos(false);
       setPhotoUploadProgress({ done: 0, total: 0 });
     }
+  };
+
+  const isExternalFileDrag = (e: React.DragEvent) => {
+    if (draggingIndex !== null) return false;
+    return Array.from(e.dataTransfer.types).includes('Files');
+  };
+
+  const handlePhotoFileDragEnter = (e: React.DragEvent) => {
+    if (!isExternalFileDrag(e) || addingPhotos) return;
+    e.preventDefault();
+    fileDropDepthRef.current += 1;
+    setPhotoFileDropActive(true);
+  };
+
+  const handlePhotoFileDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggingIndex !== null) return;
+    fileDropDepthRef.current = Math.max(0, fileDropDepthRef.current - 1);
+    if (fileDropDepthRef.current === 0) setPhotoFileDropActive(false);
+  };
+
+  const handlePhotoFileDragOver = (e: React.DragEvent) => {
+    if (!isExternalFileDrag(e) || addingPhotos) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handlePhotoFileDrop = (e: React.DragEvent) => {
+    if (!isExternalFileDrag(e) || addingPhotos) return;
+    e.preventDefault();
+    e.stopPropagation();
+    fileDropDepthRef.current = 0;
+    setPhotoFileDropActive(false);
+    if (e.dataTransfer.files?.length) void handleAddMorePhotos(e.dataTransfer.files);
   };
 
   const handleSave = async () => {
@@ -1563,16 +1602,29 @@ export default function EditPropertyPage() {
               </div>
             </button>
             {currentStep === 6 && (
-              <div className="space-y-4 mt-4">
+              <div
+                className={`mt-4 min-h-[12rem] rounded-xl transition-all ${
+                  photoFileDropActive
+                    ? 'border-2 border-dashed border-blue-500 bg-blue-50/60 ring-2 ring-blue-200'
+                    : 'border-2 border-dashed border-transparent'
+                }`}
+                onDragEnter={handlePhotoFileDragEnter}
+                onDragLeave={handlePhotoFileDragLeave}
+                onDragOver={handlePhotoFileDragOver}
+                onDrop={handlePhotoFileDrop}
+              >
                 <input
                   ref={addPhotosInputRef}
                   type="file"
                   accept="image/*"
                   multiple
                   className="hidden"
-                  onChange={(e) => handleAddMorePhotos(e.target.files)}
+                  onChange={(e) => {
+                    void handleAddMorePhotos(e.target.files);
+                    e.target.value = '';
+                  }}
                 />
-                <div className="space-y-3">
+                <div className="space-y-3 p-1">
                   {existingPhotos.length > 0 && (
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-sm font-medium text-slate-700">
@@ -1590,7 +1642,7 @@ export default function EditPropertyPage() {
                   <p className="text-xs text-slate-500">
                     💡{' '}
                     {existingPhotos.length > 0
-                      ? `${t('click_main_photo')} · ${t('photo_drag_reorder_hint')} · ${t('photo_360_toggle_hint')}${panoramaSaving ? ` (${t('saving')}…)` : ''}`
+                      ? `${t('click_main_photo')} · ${t('photo_drag_reorder_hint')} · ${t('photos_drop_zone_hint')} · ${t('photo_360_toggle_hint')}${panoramaSaving ? ` (${t('saving')}…)` : ''}`
                       : t('photos_drop_zone_hint')}
                   </p>
                   {existingPhotos.length === 0 ? (
@@ -1602,7 +1654,9 @@ export default function EditPropertyPage() {
                         className={`flex aspect-square w-32 max-w-[40vw] flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors sm:w-36 ${
                           addingPhotos
                             ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                            : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
+                            : photoFileDropActive
+                              ? 'border-blue-500 bg-blue-100 text-blue-700'
+                              : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
                         }`}
                       >
                         <span className="text-2xl font-light leading-none">+</span>
@@ -1614,7 +1668,7 @@ export default function EditPropertyPage() {
                                   total: photoUploadProgress.total,
                                 })
                               : t('saving')
-                            : t('add_new_photos')}
+                            : t('choose_or_drop_photos')}
                         </span>
                         <span className="text-[10px] text-slate-400">
                           0/{MAX_PROPERTY_PHOTOS}
@@ -1638,7 +1692,9 @@ export default function EditPropertyPage() {
                           className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
                             addingPhotos
                               ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                              : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
+                              : photoFileDropActive
+                                ? 'border-blue-500 bg-blue-100 text-blue-700'
+                                : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
                           }`}
                         >
                           <span className="text-2xl font-light leading-none">+</span>

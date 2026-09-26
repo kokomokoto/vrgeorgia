@@ -1963,7 +1963,7 @@ export default function UploadPage() {
                       >
                         <span className="text-2xl font-light leading-none">+</span>
                         <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
-                          {t('add_new_photos')}
+                          {t('choose_or_drop_photos')}
                         </span>
                         <span className="text-[10px] text-slate-400">
                           {photoItems.length}/{MAX_PHOTOS}

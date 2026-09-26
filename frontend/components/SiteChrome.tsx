@@ -113,7 +113,11 @@ export function SiteChrome({
   const propertyPage = isPropertyRoute(pathname);
 
   if (mapFullscreen) {
-    return <div className="fixed inset-0 z-[200] flex flex-col bg-slate-50 dark:bg-zinc-950">{children}</div>;
+    return (
+      <HomeDesignProvider initialLayout={initialHomeDesign}>
+        <div className="fixed inset-0 z-[200] flex flex-col bg-slate-50 dark:bg-zinc-950">{children}</div>
+      </HomeDesignProvider>
+    );
   }
 
   return (

@@ -1834,42 +1834,20 @@ export function Filters({
           <div className="mb-2 text-xs font-semibold text-slate-600 dark:text-zinc-300">
             {mounted ? t('choose_property_type') : 'აირჩიეთ ქონების ტიპი'}
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {PROPERTY_TYPE_CHIPS.map((cat) => {
-              const isSelected = value.type.includes(cat.value);
-              return (
-                <button
-                  key={cat.value}
-                  type="button"
-                  title={t(cat.key)}
-                  onClick={() =>
-                    applyTypes(
-                      isSelected
-                        ? value.type.filter((x) => x !== cat.value)
-                        : [...value.type, cat.value]
-                    )
-                  }
-                  className={`flex min-h-11 min-w-0 items-center gap-1.5 overflow-hidden rounded-xl border px-1.5 py-1.5 text-left transition-colors ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50 text-blue-800 ring-2 ring-blue-500 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-500'
-                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500'
-                  }`}
-                >
-                  <span
-                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-base leading-none ${
-                      isSelected ? 'bg-blue-100 dark:bg-amber-950/50' : 'bg-slate-100 dark:bg-zinc-800'
-                    }`}
-                    aria-hidden
-                  >
-                    {cat.icon}
-                  </span>
-                  <span className="min-w-0 truncate text-[13px] font-medium leading-5">
-                    {t(cat.key)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <HomeTypePanel
+            variant="sidebar"
+            filters={value}
+            onPatch={(updater) => {
+              const next = updater(value);
+              applyTypes(next.type);
+            }}
+            categoryCounts={{}}
+            tr={(key, fallback) => {
+              if (!mounted) return fallback;
+              const translated = t(key);
+              return !translated || translated === key ? fallback : translated;
+            }}
+          />
           {value.type.includes('land') ? (
             <div className="mt-2">
               <div className="mb-1.5 text-xs font-semibold text-slate-500 dark:text-zinc-400">
@@ -2206,7 +2184,7 @@ export function Filters({
         <div
           className={
             mapSidebar
-              ? 'order-2 grid w-full grid-cols-3 gap-1.5'
+              ? 'order-2 flex w-full flex-col gap-1.5'
               : 'order-2 flex shrink-0 flex-wrap items-center gap-2 md:order-1 md:flex-nowrap'
           }
         >
@@ -2224,7 +2202,7 @@ export function Filters({
                 }}
                 className={
                   mapSidebar
-                    ? `inline-flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-xl border px-1.5 text-[12px] font-medium leading-none transition-all ${
+                    ? `inline-flex min-h-10 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-3 text-sm font-medium leading-none transition-all ${
                         isSelected
                           ? 'border-blue-500 bg-blue-600 text-white dark:border-amber-500 dark:bg-amber-500 dark:text-black'
                           : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
@@ -2239,7 +2217,7 @@ export function Filters({
                 <span className="inline-flex items-center leading-none" aria-hidden>
                   {dt.icon}
                 </span>
-                <span className={`inline-flex items-center leading-none ${mapSidebar ? 'truncate' : ''}`}>
+                <span className="inline-flex items-center whitespace-nowrap leading-none">
                   {t(dt.key)}
                 </span>
               </button>

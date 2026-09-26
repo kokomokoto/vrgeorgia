@@ -1,10 +1,14 @@
 import Agent from '../models/Agent.js';
 import { User } from '../models/User.js';
 
-const MIN_PHONE_DIGITS = 2;
+/** სუფთა ნომრის ძიება. 2–4 ციფრი სახლის ნომერია და ტელეფონად არ უნდა ემთხვეოდეს. */
+const MIN_PHONE_DIGITS = 5;
+/** ტექსტში ჩაყოლებული ნომერი (მისამართი + ტელეფონი) — მხოლოდ სრული ნომრის სიგრძით. */
+const MIN_EMBEDDED_PHONE_DIGITS = 6;
 const MIN_NAME_TOKEN_LEN = 2;
 const SEARCH_TRANSLATION_LANGS = ['ka', 'en', 'ru'];
 const SEARCH_TRANSLATION_FIELDS = ['title', 'desc', 'city', 'street'];
+const LOCATION_FIELDS = ['street', 'city', 'region', 'tbilisiDistrict', 'tbilisiSubdistricts'];
 
 export function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -25,17 +29,62 @@ function buildTextRegex(q) {
   return { $regex: escapeRegex(trimmed), $options: 'i' };
 }
 
-/** ციფრული ჯგუფები მთელი მოთხოვნიდან და ცალკე ტოკენებიდან */
+function isPhoneShaped(value) {
+  const trimmed = String(value || '').trim();
+  return trimmed.length > 0 && /^[\d\s.\-()+]+$/.test(trimmed);
+}
+
+/**
+ * ტელეფონის ციფრები მხოლოდ მაშინ, როცა მოთხოვნა ნომერია.
+ * „გამზირი 25“-დან 25 აღარ გამოიყოფა — ის სახლის ნომერია, არა ტელეფონის ნაწილი.
+ */
 function collectPhoneDigitGroups(q) {
   const trimmed = String(q).trim();
   const groups = new Set();
-  const all = trimmed.replace(/\D/g, '');
-  if (all.length >= MIN_PHONE_DIGITS) groups.add(all);
+  const phoneQuery = isPhoneShaped(trimmed);
+  if (phoneQuery) {
+    const all = trimmed.replace(/\D/g, '');
+    if (all.length >= MIN_PHONE_DIGITS) groups.add(all);
+  }
   for (const token of trimmed.split(/\s+/)) {
-    const d = token.replace(/\D/g, '');
-    if (d.length >= MIN_PHONE_DIGITS && /^[\d\s.\-()+]+$/.test(token)) groups.add(d);
+    if (!isPhoneShaped(token)) continue;
+    const digits = token.replace(/\D/g, '');
+    const min = phoneQuery ? MIN_PHONE_DIGITS : MIN_EMBEDDED_PHONE_DIGITS;
+    if (digits.length >= min) groups.add(digits);
   }
   return [...groups];
+}
+
+function locationFieldPaths() {
+  const fields = [...LOCATION_FIELDS];
+  for (const lang of SEARCH_TRANSLATION_LANGS) {
+    fields.push(`translations.${lang}.street`, `translations.${lang}.city`);
+  }
+  return fields;
+}
+
+function buildNumberTokenRegex(digits) {
+  return { $regex: `(?:^|[^0-9])${escapeRegex(digits)}(?:[^0-9]|$)`, $options: 'i' };
+}
+
+/**
+ * ბარათზე მისამართი არის „ქუჩა, ქალაქი“, ბაზაში კი ცალ-ცალკე ველებია.
+ * ყველა სიტყვა უნდა ემთხვეოდეს რომელიმე ლოკაციის ველს.
+ */
+function buildLocationPhraseAnd(q) {
+  const tokens = String(q)
+    .split(/[\s,]+/)
+    .map((token) => token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
+    .filter((token) => token.length >= 2);
+  if (tokens.length < 2) return null;
+
+  const fields = locationFieldPaths();
+  return {
+    $and: tokens.map((token) => {
+      const rx = /^\d+$/.test(token) ? buildNumberTokenRegex(token) : buildTextRegex(token);
+      return { $or: fields.map((field) => ({ [field]: rx })) };
+    }),
+  };
 }
 
 function phoneOrConditions(q) {
@@ -131,6 +180,9 @@ export async function buildPropertyTextSearchOr(q) {
         textOr.push({ [`translations.${lang}.${field}`]: textRx });
       }
     }
+
+    const locationPhrase = buildLocationPhraseAnd(trimmed);
+    if (locationPhrase) textOr.push(locationPhrase);
   }
 
   for (const digits of collectPhoneDigitGroups(trimmed)) {

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { getConversations, getMessages, sendMessage, Conversation, Message, resolveImageUrl } from '@/lib/api';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import { useAuth } from '@/components/AuthProvider';
+import { propertyHref } from '@/lib/propertyPublicPath';
 
 export default function MessagesPage() {
   return (
@@ -233,7 +234,7 @@ function MessagesContent() {
                             {/* Property reference if exists */}
                             {msg.property && (
                               <Link 
-                                href={`/property/${msg.property._id}`}
+                                href={propertyHref(msg.property)}
                                 className="block mb-2 p-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
                               >
                                 <div className="flex items-center gap-2">

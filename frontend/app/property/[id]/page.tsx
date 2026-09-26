@@ -421,16 +421,20 @@ function PropertyDetailInner() {
           type: [r.property.type],
         };
 
+        const street = r.property.street?.trim();
         return Promise.all([
           listProperties(
             r.property.region
               ? { ...sameTypeQuery, region: r.property.region }
               : sameTypeQuery
           ),
+          street
+            ? listProperties({ ...sameTypeQuery, q: street, limit: 40 })
+            : Promise.resolve({ properties: [] as typeof r.property[] }),
           getUsdToGelRate(),
-        ]).then(async ([localRes, usdToGel]) => {
+        ]).then(async ([localRes, streetRes, usdToGel]) => {
           if (!alive) return;
-          let pool = localRes.properties;
+          let pool = mergePropertyPools(streetRes.properties, localRes.properties);
           let similar = pickSimilarProperties(r.property, pool, { usdToGel });
 
           if (similar.length < 6 && r.property.region) {
@@ -1006,7 +1010,7 @@ function PropertyDetailInner() {
 
   const photoCollagePanel =
     photos.length > 0 ? (
-      <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+      <div className="min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
         {!usePhotoHero && (
           <div className="mb-2 text-sm font-semibold">
             {t('photos')} ({photos.length})
@@ -1273,7 +1277,7 @@ function PropertyDetailInner() {
 
         {/* მობილური: ფოტოების კოლაჟი პირდაპირ 3D/ფოტო ჰეროს ქვემოთ */}
         {photoCollagePanel && (
-          <div className="lg:hidden lg:col-start-1">{photoCollagePanel}</div>
+          <div className="min-w-0 lg:hidden lg:col-start-1">{photoCollagePanel}</div>
         )}
 
         <div className="flex flex-col gap-2 sm:gap-2.5 lg:col-start-2 lg:row-start-2 lg:h-full lg:self-stretch lg:justify-between">
@@ -1284,13 +1288,13 @@ function PropertyDetailInner() {
 
       {/* ფოტოები, აღწერა, დეტალები — სრული სიგანე */}
       <div
-        className={`grid w-full min-w-0 gap-2 sm:gap-2.5 ${
+        className={`grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-2 sm:gap-2.5 [&>*]:min-w-0 ${
           showMediaHero ? 'lg:col-span-2 lg:row-start-3' : 'lg:col-start-1 lg:row-start-2'
         }`}
       >
       {/* ფოტოების კოლაჟი — desktop / ჰეროს გარეშე (მობილურზე ჰეროს ქვემოთაა) */}
       {photos.length > 0 && (
-        <div className={showMediaHero ? 'hidden lg:block' : undefined}>
+        <div className={showMediaHero ? 'hidden min-w-0 lg:block' : 'min-w-0'}>
           {photoCollagePanel}
         </div>
       )}

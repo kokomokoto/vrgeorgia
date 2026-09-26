@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { canonicalPropertyPathId } from '@/lib/seoDuplicateCanonical';
 import { fetchPropertyForShareMetadata } from '@/lib/propertyShareMetadata';
 import {
   SOCIAL_CRAWLER_USER_AGENT,
@@ -22,7 +23,7 @@ export async function middleware(request: NextRequest) {
 
   const id = decodeURIComponent(match[1]);
   const property = await fetchPropertyForShareMetadata(id);
-  const canonicalId = property?.canonicalId || (property?._id ? String(property._id) : '');
+  const canonicalId = property ? canonicalPropertyPathId(id, property) : '';
   if (property && canonicalId && canonicalId !== id) {
     const dest = request.nextUrl.clone();
     dest.pathname = `/property/${canonicalId}`;

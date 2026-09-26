@@ -9,8 +9,10 @@ import { isPanoramaPhoto } from '@/lib/panorama';
 import { formatListedDate, getPropertyStreetLine } from '@/lib/propertyDisplay';
 import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
+import { propertyHref } from '@/lib/propertyPublicPath';
 import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
+import PinnedListingMark from './PinnedListingMark';
 import { Shimmer } from './Skeleton';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 
@@ -128,7 +130,7 @@ export function PropertyCard({
       data-property-card
       className="group overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-black/20"
     >
-      <Link href={`/property/${p._id}`} className="block">
+      <Link href={propertyHref(p)} className="block">
         <div
           className={`relative bg-slate-100 dark:bg-zinc-800 ${
             compactPhoto ? 'aspect-[3/2]' : 'aspect-[4/3]'
@@ -177,6 +179,7 @@ export function PropertyCard({
           )}
 
           <div className="absolute right-2 top-2 z-10 flex flex-row gap-1.5" onClick={stopNav}>
+            <PinnedListingMark pinned={p.pinned} size="md" />
             <CompareButton propertyId={p._id} size="md" />
             <FavoriteButton propertyId={p._id} size="md" />
           </div>

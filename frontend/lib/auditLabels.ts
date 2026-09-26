@@ -21,6 +21,8 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'tour.created': '3D ტური შეიქმნა',
   'tour.renamed': '3D ტურის სახელი შეიცვალა',
   'tour.deleted': '3D ტური წაიშალა',
+  'tour.trashed': '3D ტური ნაგვის ყუთში გადავიდა',
+  'tour.restored_from_trash': '3D ტური ნაგვის ყუთიდან აღდგა',
   'tour.removed': '3D ტური მოხსნილია',
   'tour.published': '3D ტური გამოქვეყნდა',
   'tour.scene_created': 'სცენა დაემატა',

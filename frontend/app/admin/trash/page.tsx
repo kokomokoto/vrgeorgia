@@ -39,7 +39,8 @@ const TYPE_LABELS: Record<string, string> = {
   business: 'ბიზნესი',
 };
 
-function formatDate(value: string) {
+function formatDate(value?: string | null) {
+  if (!value) return '—';
   try {
     return new Date(value).toLocaleString('ka-GE', {
       day: '2-digit',

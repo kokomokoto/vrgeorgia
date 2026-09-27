@@ -15,18 +15,25 @@ import { filterPropertiesByMapBounds, mapBoundsEqual, type MapBounds } from '@/l
 import { filtersToPropertyQuery, omitPriceAreaFilters, searchParamsToFiltersState } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 
-const FILTERS_WIDTH_KEY = 'vhome-map-filters-width';
-const LIST_WIDTH_KEY = 'vhome-map-list-width';
-const FILTERS_DEFAULT_W = 333;
-const LIST_DEFAULT_W = 416;
+const FILTERS_WIDTH_KEY = 'vhome-map-filters-width-v2';
+const LIST_WIDTH_KEY = 'vhome-map-list-width-v2';
+const FILTERS_WIDTH_KEY_V1 = 'vhome-map-filters-width';
+const LIST_WIDTH_KEY_V1 = 'vhome-map-list-width';
+const FILTERS_DEFAULT_W = 248;
+const LIST_DEFAULT_W = 300;
+const FILTERS_DEFAULT_W_V1 = 333;
+const LIST_DEFAULT_W_V1 = 416;
 const PANEL_MIN_W = 220;
 const MAP_MIN_W = 320;
 const COLLAPSED_W = 44;
 
-function readStoredWidth(key: string, fallback: number): number {
+function readStoredWidth(key: string, fallback: number, legacyKey: string, ignoreLegacy: number): number {
   if (typeof window === 'undefined') return fallback;
   const n = Number(window.localStorage.getItem(key));
-  return Number.isFinite(n) && n >= PANEL_MIN_W ? n : fallback;
+  if (Number.isFinite(n) && n >= PANEL_MIN_W) return n;
+  const legacy = Number(window.localStorage.getItem(legacyKey));
+  if (Number.isFinite(legacy) && legacy >= PANEL_MIN_W && legacy !== ignoreLegacy) return legacy;
+  return fallback;
 }
 
 function clampPanelWidth(width: number, otherWidth: number): number {
@@ -78,7 +85,7 @@ function PanelEdgeHandle({
       aria-valuemin={PANEL_MIN_W}
       aria-valuenow={Math.round(width)}
       tabIndex={0}
-      className="group absolute inset-y-0 right-0 z-30 hidden w-2 cursor-ew-resize touch-none lg:block"
+      className="group absolute inset-y-0 right-0 z-40 hidden w-4 translate-x-1/2 cursor-ew-resize touch-none lg:block"
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -104,8 +111,10 @@ function PanelEdgeHandle({
         onWidth(width + (e.key === 'ArrowRight' ? 24 : -24));
       }}
     >
-      <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-200 group-hover:bg-blue-400 group-focus-visible:bg-blue-500 dark:bg-zinc-700" />
-      <span className="pointer-events-none absolute left-1/2 top-1/2 h-8 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-400 shadow-sm group-hover:bg-blue-500 group-focus-visible:bg-blue-500 dark:bg-zinc-500" />
+      <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-300 group-hover:bg-blue-400 group-focus-visible:bg-blue-500 dark:bg-zinc-600" />
+      <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-14 w-3.5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white shadow-md group-hover:border-blue-400 group-focus-visible:border-blue-500 dark:border-zinc-600 dark:bg-zinc-900">
+        <span className="h-6 w-0.5 rounded-full bg-slate-400 group-hover:bg-blue-500 group-focus-visible:bg-blue-500 dark:bg-zinc-400" />
+      </span>
     </div>
   );
 }
@@ -250,8 +259,8 @@ export default function MapSearchClient() {
   };
 
   React.useEffect(() => {
-    setFiltersWidth(readStoredWidth(FILTERS_WIDTH_KEY, FILTERS_DEFAULT_W));
-    setListWidth(readStoredWidth(LIST_WIDTH_KEY, LIST_DEFAULT_W));
+    setFiltersWidth(readStoredWidth(FILTERS_WIDTH_KEY, FILTERS_DEFAULT_W, FILTERS_WIDTH_KEY_V1, FILTERS_DEFAULT_W_V1));
+    setListWidth(readStoredWidth(LIST_WIDTH_KEY, LIST_DEFAULT_W, LIST_WIDTH_KEY_V1, LIST_DEFAULT_W_V1));
     setWidthsHydrated(true);
   }, []);
 
@@ -324,7 +333,7 @@ export default function MapSearchClient() {
     <div className="flex h-full min-h-0 flex-1 flex-col bg-slate-50 dark:bg-zinc-950">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <aside
-          className={`relative flex shrink-0 flex-col border-b border-slate-200 bg-white transition-[max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:border-b-0 lg:border-r ${
+          className={`relative z-20 flex shrink-0 flex-col border-b border-slate-200 bg-white transition-[max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-950 lg:h-full lg:max-h-none lg:min-h-0 lg:border-b-0 lg:border-r ${
             filtersDragging ? '' : 'lg:transition-[width]'
           } ${
             filtersCollapsed
@@ -391,7 +400,7 @@ export default function MapSearchClient() {
         </aside>
 
         <section
-          className={`relative flex min-h-0 min-w-0 flex-col border-b border-slate-200 bg-slate-50 transition-[max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-900 lg:border-b-0 lg:border-r ${
+          className={`relative z-10 flex min-h-0 min-w-0 flex-col border-b border-slate-200 bg-slate-50 transition-[max-height] duration-200 dark:border-zinc-800 dark:bg-zinc-900 lg:border-b-0 lg:border-r ${
             listDragging ? '' : 'lg:transition-[width]'
           } ${
             listCollapsed
@@ -497,7 +506,7 @@ export default function MapSearchClient() {
           ) : null}
         </section>
 
-        <div className="relative flex min-h-[min(42vh,320px)] min-w-0 flex-1 flex-col lg:min-h-0">
+        <div className="relative z-0 flex min-h-[min(42vh,320px)] min-w-0 flex-1 flex-col lg:min-h-0">
           <div className="pointer-events-none absolute left-3 top-3 z-[500] sm:left-14">
             <div className="pointer-events-auto">
               <MapOverlaySearch filters={filters} onFiltersChange={setFilters} />

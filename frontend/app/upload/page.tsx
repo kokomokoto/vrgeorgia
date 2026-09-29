@@ -10,6 +10,7 @@ import { uploadPropertyPhotosInBatches } from '@/lib/propertyPhotoUpload';
 import {
   MAX_PROPERTY_PHOTOS,
   adjustMainIndexAfterRemoval,
+  isUploadImageFile,
   reorderArray,
 } from '@/lib/propertyPhotos';
 import { isAdminRole, isAgentRole } from '@/lib/userRoles';
@@ -308,7 +309,6 @@ export default function UploadPage() {
 
   const photoGridRef = React.useRef<HTMLDivElement>(null);
   const pendingFlipRef = React.useRef<Map<string, DOMRect> | null>(null);
-  const photoInputRef = React.useRef<HTMLInputElement>(null);
   const [photoFileDropActive, setPhotoFileDropActive] = React.useState(false);
   const fileDropDepthRef = React.useRef(0);
 
@@ -557,13 +557,13 @@ export default function UploadPage() {
     });
   }, []);
 
-  const { getThumbDragProps, isDragging, draggingIndex } = usePhotoDragReorder(handlePhotoReorder);
+  const { getThumbDragProps, isDragging, draggingIndex, wasPhotoDrag } = usePhotoDragReorder(handlePhotoReorder);
   const draggingFlipKey =
     draggingIndex !== null && photoItems[draggingIndex] ? photoItems[draggingIndex].id : null;
 
   const handlePhotoSelect = (files: FileList | null) => {
     if (!files?.length) return;
-    const incoming = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    const incoming = Array.from(files).filter(isUploadImageFile);
     if (incoming.length === 0) return;
     setPhotoItems((prev) => {
       const space = MAX_PHOTOS - prev.length;
@@ -608,8 +608,6 @@ export default function UploadPage() {
     setPhotoFileDropActive(false);
     if (e.dataTransfer.files?.length) handlePhotoSelect(e.dataTransfer.files);
   };
-
-  const openPhotoPicker = () => photoInputRef.current?.click();
 
   const removePhoto = (index: number) => {
     setPhotoItems((prev) => {
@@ -1911,18 +1909,6 @@ export default function UploadPage() {
                 onDragOver={handlePhotoFileDragOver}
                 onDrop={handlePhotoFileDrop}
               >
-                <input
-                  ref={photoInputRef}
-                  className="hidden"
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={(e) => {
-                    handlePhotoSelect(e.target.files);
-                    e.target.value = '';
-                  }}
-                />
-
                 <div className="space-y-3 p-1">
                   {photoItems.length > 0 && (
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1952,15 +1938,23 @@ export default function UploadPage() {
                   </p>
                   {photoItems.length === 0 ? (
                     <div className="flex justify-center py-4">
-                      <button
-                        type="button"
-                        onClick={openPhotoPicker}
-                        className={`flex aspect-square w-32 max-w-[40vw] flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors sm:w-36 ${
+                      <label
+                        className={`relative flex aspect-square w-32 max-w-[40vw] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors sm:w-36 ${
                           photoFileDropActive
                             ? 'border-blue-500 bg-blue-100 text-blue-700'
                             : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
                         }`}
                       >
+                        <input
+                          type="file"
+                          accept="image/*,.heic,.heif"
+                          multiple
+                          className="absolute inset-0 z-20 block h-full w-full cursor-pointer opacity-0"
+                          onChange={(e) => {
+                            handlePhotoSelect(e.target.files);
+                            e.target.value = '';
+                          }}
+                        />
                         <span className="text-2xl font-light leading-none">+</span>
                         <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
                           {t('choose_or_drop_photos')}
@@ -1968,7 +1962,7 @@ export default function UploadPage() {
                         <span className="text-[10px] text-slate-400">
                           {photoItems.length}/{MAX_PHOTOS}
                         </span>
-                      </button>
+                      </label>
                     </div>
                   ) : (
                   <PhotoSortableGrid
@@ -1979,16 +1973,24 @@ export default function UploadPage() {
                     draggingFlipKey={draggingFlipKey}
                   >
                     {photoItems.length < MAX_PHOTOS && (
-                      <button
-                        type="button"
+                      <label
                         data-flip-key="photo-add-slot"
-                        onClick={openPhotoPicker}
-                        className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
+                        className={`relative flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
                           photoFileDropActive
                             ? 'border-blue-500 bg-blue-100 text-blue-700'
                             : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
                         }`}
                       >
+                        <input
+                          type="file"
+                          accept="image/*,.heic,.heif"
+                          multiple
+                          className="absolute inset-0 z-20 block h-full w-full cursor-pointer opacity-0"
+                          onChange={(e) => {
+                            handlePhotoSelect(e.target.files);
+                            e.target.value = '';
+                          }}
+                        />
                         <span className="text-2xl font-light leading-none">+</span>
                         <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
                           {t('add_new_photos')}
@@ -1996,7 +1998,7 @@ export default function UploadPage() {
                         <span className="text-[10px] text-slate-400">
                           {photoItems.length}/{MAX_PHOTOS}
                         </span>
-                      </button>
+                      </label>
                     )}
                     {photoItems.map((item, index) => (
                         <div
@@ -2006,14 +2008,19 @@ export default function UploadPage() {
                           className={`relative group aspect-square cursor-grab active:cursor-grabbing ${
                             index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''
                           } ${isDragging(index) ? 'z-20 scale-[1.03] opacity-90 ring-2 ring-amber-400 ring-offset-1' : ''}`}
-                          onClick={() => setAsMainPhoto(index)}
+                          onClick={() => {
+                            if (wasPhotoDrag()) return;
+                            setAsMainPhoto(index);
+                          }}
                         >
                           <span className="absolute left-1 top-1 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
                             {index + 1}
                           </span>
                           <span
-                            className="absolute bottom-1 right-1 z-10 rounded bg-black/40 px-1 text-[10px] text-white opacity-80"
+                            data-photo-drag-handle
+                            className="absolute bottom-1 right-1 z-10 flex h-8 w-8 touch-none items-center justify-center rounded bg-black/55 text-sm text-white sm:h-auto sm:w-auto sm:bg-black/40 sm:px-1 sm:text-[10px]"
                             aria-hidden
+                            onClick={(e) => e.stopPropagation()}
                           >
                             ⋮⋮
                           </span>
@@ -2029,13 +2036,13 @@ export default function UploadPage() {
                               e.stopPropagation();
                               removePhoto(index);
                             }}
-                            className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                            className="absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-sm text-white shadow hover:bg-red-600 sm:h-6 sm:w-6 sm:text-xs sm:opacity-0 sm:shadow-none sm:transition-opacity sm:group-hover:opacity-100"
                           >
                             ✕
                           </button>
                           {index === mainPhotoIndex && (
-                            <span className="absolute bottom-1 left-1 rounded bg-blue-600 px-2 py-0.5 text-xs text-white">
-                              ⭐ {t('main_photo')}
+                            <span className="absolute bottom-1 left-1 z-10 max-w-[calc(100%-2.75rem)] truncate rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white">
+                              ⭐<span className="hidden sm:inline"> {t('main_photo')}</span>
                             </span>
                           )}
                         </div>

@@ -12,6 +12,7 @@ import { detectPanoramaFlags, isPanoramaPhoto, normalizePhotoUrl } from '@/lib/p
 import {
   MAX_PROPERTY_PHOTOS,
   adjustMainIndexAfterRemoval,
+  isUploadImageFile,
   reorderArray,
 } from '@/lib/propertyPhotos';
 import { captureFlipPositions } from '@/lib/flipAnimation';
@@ -179,7 +180,6 @@ export default function EditPropertyPage() {
   const [mainPhotoIndex, setMainPhotoIndex] = useState(0);
   const [addingPhotos, setAddingPhotos] = useState(false);
   const [photoUploadProgress, setPhotoUploadProgress] = useState({ done: 0, total: 0 });
-  const addPhotosInputRef = useRef<HTMLInputElement | null>(null);
 
   // დეტალური ინფორმაცია
   const [roomCount, setRoomCount] = useState<number | null>(null);
@@ -513,7 +513,7 @@ export default function EditPropertyPage() {
     [schedulePersistPhotosDraft]
   );
 
-  const { getThumbDragProps, isDragging, draggingIndex } = usePhotoDragReorder(handlePhotoReorder);
+  const { getThumbDragProps, isDragging, draggingIndex, wasPhotoDrag } = usePhotoDragReorder(handlePhotoReorder);
   const draggingFlipKey =
     draggingIndex !== null && existingPhotos[draggingIndex]
       ? existingPhotos[draggingIndex]
@@ -649,8 +649,10 @@ export default function EditPropertyPage() {
     }
   };
 
-  const handleAddMorePhotos = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const handleAddMorePhotos = async (files: FileList | File[] | null) => {
+    // FileList ცოცხალია — input-ის value გასუფთავება მას ცარიელებს, ამიტომ ასლი await-მდე
+    const picked = (files ? Array.from(files) : []).filter(isUploadImageFile);
+    if (picked.length === 0) return;
     try {
       await flushPersistPhotosDraft();
     } catch {
@@ -661,9 +663,7 @@ export default function EditPropertyPage() {
       setError(t('max_photos_reached', { max: MAX_PROPERTY_PHOTOS }));
       return;
     }
-    const list = Array.from(files)
-      .filter((f) => f.type.startsWith('image/'))
-      .slice(0, remaining);
+    const list = picked.slice(0, remaining);
     if (list.length === 0) return;
     setAddingPhotos(true);
     setError(null);
@@ -691,7 +691,6 @@ export default function EditPropertyPage() {
         mainPhotoIndexRef.current = nextMain;
         return nextMain;
       });
-      if (addPhotosInputRef.current) addPhotosInputRef.current.value = '';
     } catch (err: any) {
       setError(err.message || t('error_save_failed'));
     } finally {
@@ -849,7 +848,7 @@ export default function EditPropertyPage() {
   };
 
   return (
-    <div className="w-full min-w-0">
+    <div className="w-full min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
@@ -864,9 +863,9 @@ export default function EditPropertyPage() {
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[1fr_320px]">
         {/* მთავარი ფორმა — ქვედა ადგილი, რომ ბოლო ეტაპებიც ჰედერთან ამოვიდეს */}
-        <div className="space-y-4 pb-[45vh]">
+        <div className="min-w-0 space-y-4 pb-[45vh]">
           {/* ეტაპი 1: გარიგების და ქონების ტიპი */}
           <div
             ref={(el) => { stepCardRefs.current[1] = el; }}
@@ -895,7 +894,7 @@ export default function EditPropertyPage() {
                 <div>
                   <h4 className="mb-3 text-sm font-semibold text-slate-800">💼 {t('deal_type_select')}</h4>
                   <p className="mb-3 text-sm text-slate-500">{t('what_deal')}</p>
-                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                  <div className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
                     {DEAL_TYPES.map((item) => (
                       <button
                         key={item.value}
@@ -908,14 +907,14 @@ export default function EditPropertyPage() {
                             setDealType(item.value);
                           }
                         }}
-                        className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                        className={`min-w-0 overflow-hidden p-2 text-center rounded-xl border-2 transition-all sm:p-4 sm:hover:scale-105 ${
                           dealType === item.value
                             ? 'border-blue-500 bg-blue-50 shadow-md'
                             : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
                         }`}
                       >
-                        <div className="text-3xl mb-2">{item.icon}</div>
-                        <div className="font-medium text-slate-700 text-sm">{t(item.key)}</div>
+                        <div className="mb-1 text-2xl sm:mb-2 sm:text-3xl">{item.icon}</div>
+                        <div className="w-full break-words text-[11px] font-medium leading-tight text-slate-700 [overflow-wrap:anywhere] sm:text-sm">{t(item.key)}</div>
                       </button>
                     ))}
                   </div>
@@ -924,20 +923,20 @@ export default function EditPropertyPage() {
                   <div className="border-t border-slate-200 pt-6">
                     <h4 className="mb-3 text-sm font-semibold text-slate-800">🏠 {t('property_type_select')}</h4>
                     <p className="mb-3 text-sm text-slate-500">{t('what_selling')}</p>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid min-w-0 grid-cols-3 gap-2 sm:gap-3">
                       {PROPERTY_TYPES.map((item) => (
                         <button
                           key={item.value}
                           type="button"
                           onClick={() => setType(type === item.value ? '' : item.value)}
-                          className={`p-4 rounded-xl border-2 transition-all hover:scale-105 ${
+                          className={`min-w-0 overflow-hidden p-2 text-center rounded-xl border-2 transition-all sm:p-4 sm:hover:scale-105 ${
                             type === item.value
                               ? 'border-blue-500 bg-blue-50 shadow-md'
                               : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="text-3xl mb-2">{item.icon}</div>
-                          <div className="font-medium text-slate-700">{t(item.key)}</div>
+                          <div className="mb-1 text-2xl sm:mb-2 sm:text-3xl">{item.icon}</div>
+                          <div className="w-full break-words text-[11px] font-medium leading-tight text-slate-700 [overflow-wrap:anywhere] sm:text-sm">{t(item.key)}</div>
                         </button>
                       ))}
                     </div>
@@ -1329,9 +1328,9 @@ export default function EditPropertyPage() {
                           { key: 'water', label: t('amenity_water'), icon: '💧', state: water, setter: setWater },
                         ].map((item) => (
                           <button key={item.key} type="button" onClick={() => item.setter(!item.state)}
-                            className={`p-3 rounded-xl border-2 transition-all ${item.state ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
-                            <div className="text-2xl mb-1">{item.icon}</div>
-                            <div className="text-xs font-medium">{item.label}</div>
+                            className={`min-w-0 overflow-hidden p-2 text-center rounded-xl border-2 transition-all sm:p-3 ${item.state ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                            <div className="mb-1 text-2xl">{item.icon}</div>
+                            <div className="w-full break-words text-[11px] font-medium leading-tight [overflow-wrap:anywhere] sm:text-xs">{item.label}</div>
                           </button>
                         ))}
                       </div>
@@ -1359,7 +1358,7 @@ export default function EditPropertyPage() {
                       🏠 {t('building_project_label')}{' '}
                       <span className="font-normal text-slate-400">({t('cadastral_optional')})</span>
                     </label>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    <div className="grid min-w-0 grid-cols-3 gap-2 sm:grid-cols-4">
                       {[
                         { value: 'new_build', label: t('project_new_build') },
                         { value: 'czech', label: t('project_czech') },
@@ -1376,7 +1375,7 @@ export default function EditPropertyPage() {
                           key={proj.value}
                           type="button"
                           onClick={() => setBuildingProject(buildingProject === proj.value ? '' : proj.value)}
-                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                          className={`min-w-0 overflow-hidden px-1.5 py-2 rounded-lg border-2 text-center text-[11px] font-medium leading-tight break-words [overflow-wrap:anywhere] transition-all sm:px-3 sm:text-sm ${
                             buildingProject === proj.value
                               ? 'border-blue-500 bg-blue-50 text-blue-700'
                               : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
@@ -1402,7 +1401,7 @@ export default function EditPropertyPage() {
                           key={item.value}
                           type="button"
                           onClick={() => setBuildingStatus(buildingStatus === item.value ? '' : item.value)}
-                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                          className={`min-w-0 overflow-hidden px-1.5 py-2 rounded-lg border-2 text-center text-[11px] font-medium leading-tight break-words [overflow-wrap:anywhere] transition-all sm:px-3 sm:text-sm ${
                             buildingStatus === item.value
                               ? 'border-blue-500 bg-blue-50 text-blue-700'
                               : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300'
@@ -1474,7 +1473,7 @@ export default function EditPropertyPage() {
                           key={item.value}
                           type="button"
                           onClick={() => setRenovationStatus(renovationStatus === item.value ? '' : item.value)}
-                          className={`px-3 py-2 rounded-lg border-2 text-sm font-medium transition-all text-left ${
+                          className={`min-w-0 overflow-hidden px-1.5 py-2 rounded-lg border-2 text-left text-[11px] font-medium leading-tight break-words [overflow-wrap:anywhere] transition-all sm:px-3 sm:text-sm ${
                             renovationStatus === item.value
                               ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                               : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300'
@@ -1613,17 +1612,6 @@ export default function EditPropertyPage() {
                 onDragOver={handlePhotoFileDragOver}
                 onDrop={handlePhotoFileDrop}
               >
-                <input
-                  ref={addPhotosInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    void handleAddMorePhotos(e.target.files);
-                    e.target.value = '';
-                  }}
-                />
                 <div className="space-y-3 p-1">
                   {existingPhotos.length > 0 && (
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1647,18 +1635,26 @@ export default function EditPropertyPage() {
                   </p>
                   {existingPhotos.length === 0 ? (
                     <div className="flex justify-center py-4">
-                      <button
-                        type="button"
-                        disabled={addingPhotos}
-                        onClick={() => addPhotosInputRef.current?.click()}
-                        className={`flex aspect-square w-32 max-w-[40vw] flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors sm:w-36 ${
+                      <label
+                        className={`relative flex aspect-square w-32 max-w-[40vw] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors sm:w-36 ${
                           addingPhotos
-                            ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                            ? 'pointer-events-none border-slate-200 bg-slate-100 text-slate-400'
                             : photoFileDropActive
                               ? 'border-blue-500 bg-blue-100 text-blue-700'
                               : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
                         }`}
                       >
+                        <input
+                          type="file"
+                          accept="image/*,.heic,.heif"
+                          multiple
+                          disabled={addingPhotos}
+                          className="absolute inset-0 z-20 block h-full w-full cursor-pointer opacity-0 disabled:pointer-events-none"
+                          onChange={(e) => {
+                            void handleAddMorePhotos(e.target.files);
+                            e.target.value = '';
+                          }}
+                        />
                         <span className="text-2xl font-light leading-none">+</span>
                         <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
                           {addingPhotos
@@ -1673,7 +1669,7 @@ export default function EditPropertyPage() {
                         <span className="text-[10px] text-slate-400">
                           0/{MAX_PROPERTY_PHOTOS}
                         </span>
-                      </button>
+                      </label>
                     </div>
                   ) : (
                     <PhotoSortableGrid
@@ -1684,19 +1680,27 @@ export default function EditPropertyPage() {
                       draggingFlipKey={draggingFlipKey}
                     >
                       {existingPhotos.length < MAX_PROPERTY_PHOTOS && (
-                        <button
-                          type="button"
+                        <label
                           data-flip-key="photo-add-slot"
-                          disabled={addingPhotos}
-                          onClick={() => addPhotosInputRef.current?.click()}
-                          className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
+                          className={`relative flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed transition-colors ${
                             addingPhotos
-                              ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                              ? 'pointer-events-none border-slate-200 bg-slate-100 text-slate-400'
                               : photoFileDropActive
                                 ? 'border-blue-500 bg-blue-100 text-blue-700'
                                 : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-blue-400 hover:bg-blue-50/80 hover:text-blue-700'
                           }`}
                         >
+                          <input
+                            type="file"
+                            accept="image/*,.heic,.heif"
+                            multiple
+                            disabled={addingPhotos}
+                            className="absolute inset-0 z-20 block h-full w-full cursor-pointer opacity-0 disabled:pointer-events-none"
+                            onChange={(e) => {
+                              void handleAddMorePhotos(e.target.files);
+                              e.target.value = '';
+                            }}
+                          />
                           <span className="text-2xl font-light leading-none">+</span>
                           <span className="max-w-[90%] px-1 text-center text-[10px] font-semibold leading-tight sm:text-xs">
                             {addingPhotos
@@ -1711,7 +1715,7 @@ export default function EditPropertyPage() {
                           <span className="text-[10px] text-slate-400">
                             {existingPhotos.length}/{MAX_PROPERTY_PHOTOS}
                           </span>
-                        </button>
+                        </label>
                       )}
                       {existingPhotos.map((photo, index) => {
                         const is360 = isPanoramaPhoto(photo, panoramaPhotos);
@@ -1723,14 +1727,19 @@ export default function EditPropertyPage() {
                           className={`relative group aspect-square cursor-grab active:cursor-grabbing ${
                             index === mainPhotoIndex ? 'ring-2 ring-blue-500 ring-offset-2' : ''
                           } ${isDragging(index) ? 'z-20 scale-[1.03] opacity-90 ring-2 ring-amber-400 ring-offset-1' : ''}`}
-                          onClick={() => setMainPhotoIndex(index)}
+                          onClick={() => {
+                            if (wasPhotoDrag()) return;
+                            setMainPhotoIndex(index);
+                          }}
                         >
                           <span className="absolute left-1 top-1 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
                             {index + 1}
                           </span>
                           <span
-                            className="absolute bottom-1 right-1 z-10 rounded bg-black/40 px-1 text-[10px] text-white opacity-80"
+                            data-photo-drag-handle
+                            className="absolute bottom-1 right-1 z-10 flex h-8 w-8 touch-none items-center justify-center rounded bg-black/55 text-sm text-white sm:h-auto sm:w-auto sm:bg-black/40 sm:px-1 sm:text-[10px]"
                             aria-hidden
+                            onClick={(e) => e.stopPropagation()}
                           >
                             ⋮⋮
                           </span>
@@ -1748,7 +1757,7 @@ export default function EditPropertyPage() {
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); togglePanoramaPhoto(photo); }}
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold text-white shadow transition-colors ${
+                              className={`min-h-7 rounded px-1.5 py-1 text-[10px] font-bold text-white shadow transition-colors sm:min-h-0 sm:py-0.5 ${
                                 is360 ? 'bg-blue-600' : 'bg-slate-600/90 hover:bg-slate-700'
                               }`}
                               title={t('photo_360_toggle')}
@@ -1758,14 +1767,14 @@ export default function EditPropertyPage() {
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleDeletePhoto(index); }}
-                              className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                              className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-sm text-white shadow hover:bg-red-600 sm:h-5 sm:w-5 sm:text-xs sm:opacity-0 sm:shadow-none sm:transition-opacity sm:group-hover:opacity-100"
                             >
                               ✕
                             </button>
                           </div>
                           {index === mainPhotoIndex && (
-                            <span className="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded">
-                              ⭐ {t('main_photo')}
+                            <span className="absolute bottom-1 left-1 z-10 max-w-[calc(100%-2.75rem)] truncate rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white">
+                              ⭐<span className="hidden sm:inline"> {t('main_photo')}</span>
                             </span>
                           )}
                         </div>

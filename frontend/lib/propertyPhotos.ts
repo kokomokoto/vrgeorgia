@@ -1,6 +1,19 @@
 /** ობიექტზე ფოტოების მაქსიმუმი (backend-თან ერთად) */
 export const MAX_PROPERTY_PHOTOS = 30;
 
+const IMAGE_FILE_NAME = /\.(jpe?g|png|gif|webp|heic|heif|bmp|avif|jfif)$/i;
+
+/**
+ * ტელეფონის გალერეა ხშირად ცარიელ MIME-ს აბრუნებს. ასეთი ფაილი მაინც ფოტოა,
+ * თუ არჩევა `accept="image/*"`-ით მოხდა ან სახელი სურათის გაფართოებით მთავრდება.
+ */
+export function isUploadImageFile(file: File): boolean {
+  const type = (file.type || '').toLowerCase();
+  if (type.startsWith('image/')) return true;
+  if (IMAGE_FILE_NAME.test(file.name || '')) return true;
+  return !type;
+}
+
 /** ერთ მოთხოვნაში ატვირთვის მაქსიმუმი */
 export const MAX_PROPERTY_PHOTOS_PER_UPLOAD = 30;
 export type DropPlacement = 'before' | 'after';

@@ -13,6 +13,7 @@ import { propertyHref } from '@/lib/propertyPublicPath';
 import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
 import PinnedListingMark from './PinnedListingMark';
+import { PhotoWatermark } from './PhotoWatermark';
 import { Shimmer } from './Skeleton';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 
@@ -176,6 +177,10 @@ export function PropertyCard({
             <div className="flex h-full w-full items-center justify-center text-sm text-slate-400 dark:text-zinc-500">
               {t('no_photo')}
             </div>
+          )}
+
+          {photos.length > 0 && (
+            <PhotoWatermark size="sm" className="bottom-2 left-2 z-[2]" />
           )}
 
           <div className="absolute right-2 top-2 z-10 flex flex-row gap-1.5" onClick={stopNav}>

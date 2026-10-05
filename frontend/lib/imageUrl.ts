@@ -46,6 +46,19 @@ export function applyCloudinaryTransform(url: string, transform: string): string
 }
 
 /**
+ * გადმოწერის URL. ორიგინალი სუფთა რჩება — Cloudinary ტექსტს მხოლოდ ამ მოთხოვნაზე დებს.
+ * 360° აქ არ გადაეცემა.
+ */
+const WATERMARK_DOWNLOAD_TRANSFORM =
+  'w_1600,c_limit,q_auto,f_jpg/l_text:Arial_64_bold:vhome.ge,co_white,o_55,a_-22,g_center/fl_attachment:vhome';
+
+export function cloudinaryWatermarkedDownloadUrl(path: string | null | undefined): string {
+  const base = resolveBaseUrl(path);
+  if (!base) return '';
+  return applyCloudinaryTransform(base, WATERMARK_DOWNLOAD_TRANSFORM);
+}
+
+/**
  * ობიექტის ფოტოს URL — Cloudinary-ზე thumb/large AVIF (f_auto).
  * 360° პანორამა უცვლელ master URL-ით (viewer ცალკე ამუშავებს).
  */

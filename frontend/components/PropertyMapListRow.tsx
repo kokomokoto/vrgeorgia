@@ -11,6 +11,7 @@ import { PropertySpecChips } from '@/components/PropertySpecChips';
 import { propertyHref } from '@/lib/propertyPublicPath';
 import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
+import { PhotoWatermark } from './PhotoWatermark';
 import PinnedListingMark from './PinnedListingMark';
 
 /** ფიქსირებული სიმაღლე — ყველა ბარათი ერთნაირი (რუკის სია) */
@@ -77,6 +78,7 @@ export function PropertyMapListRow({
               {t('no_photo')}
             </div>
           )}
+          {img ? <PhotoWatermark size="sm" className="bottom-1 left-1 z-[2]" /> : null}
           <div
             className="absolute right-0.5 top-0.5 z-10 flex flex-row gap-0.5"
             onClick={stopNav}

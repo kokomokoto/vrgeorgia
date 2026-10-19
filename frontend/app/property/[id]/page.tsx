@@ -28,6 +28,7 @@ import {
   startPropertyGalleryPreload,
 } from '@/lib/preloadPropertyPhotos';
 import { LightboxZoomImage } from '@/components/LightboxZoomImage';
+import { cloudinaryWatermarkedDownloadUrl } from '@/lib/imageUrl';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { toYouTubeEmbedUrl } from '@/lib/youtubeEmbed';
 import { resolveTourPublicUrl } from '@/lib/tourBuilder';
@@ -62,6 +63,12 @@ function useShortLandscape() {
 }
 
 // Lightbox — ჩვეულებრივი ფოტო ან 360° პანორამა
+function photoDownloadLabel(lang: string): string {
+  if (lang.startsWith('en')) return 'Download';
+  if (lang.startsWith('ru')) return 'Скачать';
+  return 'გადმოწერა';
+}
+
 function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, t }: {
   photos: string[];
   panoramaPhotos?: string[];
@@ -70,11 +77,12 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
   onChangeIndex: (i: number) => void;
   t: (key: string) => string;
 }) {
+  const { i18n } = useTranslation();
   const photoUrl = photos[index];
   const is360 = isPanoramaPhoto(photoUrl, panoramaPhotos);
   const displayUrl = is360
     ? resolveImageUrl(photoUrl)
-    : resolveImageUrl(photoUrl, 'large', { isPanorama: false });
+    : resolveImageUrl(photoUrl, 'large', { isPanorama: false, watermark: true });
   const viewerUrl = resolveImageUrl(photoUrl);
   const viewerWrapRef = React.useRef<HTMLDivElement>(null);
   const [show360Ui, setShow360Ui] = React.useState(true);
@@ -262,6 +270,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
             <img
               src={resolveImageUrl(p, 'thumb', {
                 isPanorama: isPanoramaPhoto(p, panoramaPhotos),
+                watermark: !isPanoramaPhoto(p, panoramaPhotos),
               })}
               alt={`Photo ${i + 1}`}
               className="h-full w-full object-cover"
@@ -269,6 +278,19 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
           </button>
         ))}
       </div>
+
+      {!is360 && photoUrl && (
+        <a
+          href={cloudinaryWatermarkedDownloadUrl(photoUrl)}
+          className="absolute left-4 top-4 z-[10001] flex h-11 items-center gap-1.5 rounded-full bg-black/60 px-3.5 text-sm font-medium text-white shadow-lg transition-colors hover:bg-black/80"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14" />
+          </svg>
+          {photoDownloadLabel(i18n.language || 'ka')}
+        </a>
+      )}
 
       <button
         type="button"
@@ -1056,6 +1078,7 @@ function PropertyDetailInner() {
                 <img
                   src={resolveImageUrl(p, is360Thumb ? undefined : 'thumb', {
                     isPanorama: is360Thumb,
+                    watermark: !is360Thumb,
                   })}
                   alt={`Photo ${idx + 1}`}
                   className={`h-[140px] sm:h-[180px] w-auto rounded-lg ${is360Thumb ? 'object-contain bg-slate-900 min-w-[200px]' : 'object-cover'}`}

@@ -4,7 +4,13 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
-import { createProperty, getMe, updateProperty, type PhotoUploadFailure } from '@/lib/api';
+import {
+  createProperty,
+  getMe,
+  isRetriableApiError,
+  updateProperty,
+  type PhotoUploadFailure,
+} from '@/lib/api';
 import { detectPanoramaFlags } from '@/lib/panorama';
 import { uploadPropertyPhotosInBatches } from '@/lib/propertyPhotoUpload';
 import {
@@ -13,7 +19,7 @@ import {
   isUploadImageFile,
   reorderArray,
 } from '@/lib/propertyPhotos';
-import { isAdminRole, isAgentRole } from '@/lib/userRoles';
+import { isAdminRole, isAgentRole, isSearcherRole } from '@/lib/userRoles';
 import { captureFlipPositions } from '@/lib/flipAnimation';
 import { PhotoSortableGrid } from '@/components/PhotoSortableGrid';
 import { usePhotoDragReorder } from '@/components/usePhotoDragReorder';
@@ -152,6 +158,12 @@ export default function UploadPage() {
   const [draftHydrated, setDraftHydrated] = React.useState(false);
   const [draftRestored, setDraftRestored] = React.useState(false);
 
+  React.useEffect(() => {
+    if (user && isSearcherRole(user.role)) {
+      router.replace('/profile');
+    }
+  }, [user, router]);
+
   // მაკლერის პროფილი — დეფოლტად საკონტაქტო ტელ/ელფოსტა (რედაქტირებადი)
   React.useEffect(() => {
     if (!draftHydrated || !user || !isAgentRole(user.role)) return;
@@ -284,6 +296,8 @@ export default function UploadPage() {
    * დაჭერა ორივე შედიოდა handleSubmit-ში და ორ ობიექტს ქმნიდა.
    */
   const submittingRef = React.useRef(false);
+  /** ობიექტი უკვე შეიქმნა, ფოტოების ქსელი ჩავარდა — ერთხელ ავტომატურად ვაგრძელებთ */
+  const autoResumeRef = React.useRef(false);
 
   const photoItemsRef = React.useRef(photoItems);
   photoItemsRef.current = photoItems;
@@ -759,6 +773,7 @@ export default function UploadPage() {
 
     // ერთი ატვირთვის ყველა ცდას ერთი გასაღები აქვს, ამიტომ სერვერზე დუბლიკატი არ იქმნება
     let session: UploadSession = ensureUploadSession();
+    let shouldAutoResume = false;
 
     try {
       // ტოკენის შემოწმება
@@ -950,6 +965,7 @@ export default function UploadPage() {
 
       clearUploadDraftStorage();
       clearUploadSession();
+      autoResumeRef.current = false;
       router.push(`/property/${propertyId}`);
     } catch (e: unknown) {
       const msg =
@@ -961,11 +977,21 @@ export default function UploadPage() {
       const base = msg?.trim() ? msg.trim() : t('error');
       // ობიექტი უკვე შენახულია — აგენტმა უნდა იცოდეს, რომ გამეორება დუბლიკატს არ შექმნის
       setError(session.propertyId ? `${base} ${t('upload_resume_hint')}` : base);
+      shouldAutoResume =
+        Boolean(session.propertyId) &&
+        isRetriableApiError(e) &&
+        !autoResumeRef.current;
+      if (shouldAutoResume) autoResumeRef.current = true;
+      else autoResumeRef.current = false;
     } finally {
       submittingRef.current = false;
       setLoading(false);
       setUploadPhase('idle');
       setPhotoUploadProgress({ done: 0, total: 0 });
+    }
+    // ფოტოების ქსელის ჩავარდნისას ერთხელ თავად ვაგრძელებთ — ხელახლა დაწოლა აღარაა საჭირო
+    if (shouldAutoResume) {
+      void handleSubmit();
     }
   };
 
@@ -1765,13 +1791,13 @@ export default function UploadPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">🏠 {t('loggia')}</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">🏠 {t('loggia_label')}</label>
                     <PropertyCountSelector
                       value={loggia}
                       onChange={setLoggia}
                       presets={BALCONY_PRESETS}
                       customMin={BALCONY_CUSTOM_MIN}
-                      ariaLabel={t('loggia_count_custom') || t('loggia')}
+                      ariaLabel={t('loggia_count_custom') || t('loggia_label')}
                       theme={COUNT_THEME_PURPLE}
                     />
                   </div>

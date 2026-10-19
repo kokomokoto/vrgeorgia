@@ -8,7 +8,17 @@ import { useAuth } from '@/components/AuthProvider';
 import { Filters, type FiltersState } from '@/components/Filters';
 import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
-import { getMyProperties, deleteProperty, updateProfile, uploadAvatar, resolveImageUrl, updateProperty, changePassword } from '@/lib/api';
+import {
+  getMyProperties,
+  deleteProperty,
+  updateProfile,
+  uploadAvatar,
+  resolveImageUrl,
+  updateProperty,
+  changePassword,
+  listSearcherAgents,
+  type SearcherAgentRow,
+} from '@/lib/api';
 import { PropertyCardGridSkeleton } from '@/components/Skeleton';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import {
@@ -18,7 +28,7 @@ import {
 } from '@/lib/mapQuery';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 import type { Property } from '@/lib/types';
-import { isAdminRole, isAgentRole } from '@/lib/userRoles';
+import { isAdminRole, isAgentRole, isSearcherRole } from '@/lib/userRoles';
 import { getPropertyOwnerLocationLine } from '@/lib/propertyDisplay';
 import { propertyHref } from '@/lib/propertyPublicPath';
 
@@ -64,10 +74,14 @@ export default function ProfilePage() {
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  const isSearcher = Boolean(user && isSearcherRole(user.role));
   const canSetListingVisibility = user ? isAgentRole(user.role) || isAdminRole(user.role) : false;
   const canChangePassword = user
-    ? isAgentRole(user.role) || isAdminRole(user.role)
+    ? isAgentRole(user.role) || isAdminRole(user.role) || isSearcher
     : false;
+
+  const [searcherAgents, setSearcherAgents] = useState<SearcherAgentRow[]>([]);
+  const [searcherLoading, setSearcherLoading] = useState(false);
 
   const clearAllFilters = useCallback(() => {
     setFilters({ ...DEFAULT_MAP_FILTERS });
@@ -86,6 +100,20 @@ export default function ProfilePage() {
     }
   }, [t]);
 
+  const loadSearcherAgents = useCallback(async () => {
+    setSearcherLoading(true);
+    try {
+      const res = await listSearcherAgents();
+      setSearcherAgents(res.agents || []);
+      setError(null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('error_load_failed'));
+    } finally {
+      setSearcherLoading(false);
+      setInitLoading(false);
+    }
+  }, [t]);
+
   useEffect(() => setHydrated(true), []);
 
   useEffect(() => {
@@ -94,11 +122,15 @@ export default function ProfilePage() {
     setEditName((user as { name?: string }).name || '');
     setEditEmail(user.email || '');
     setInitLoading(true);
-    void loadInitial();
-  }, [hydrated, user, loadInitial]);
+    if (isSearcherRole(user.role)) {
+      void loadSearcherAgents();
+    } else {
+      void loadInitial();
+    }
+  }, [hydrated, user, loadInitial, loadSearcherAgents]);
 
   useEffect(() => {
-    if (!hydrated || !user || initLoading) return;
+    if (!hydrated || !user || initLoading || isSearcherRole(user.role)) return;
 
     let alive = true;
     const timer = window.setTimeout(async () => {
@@ -436,12 +468,22 @@ export default function ProfilePage() {
                   >
                     {t('editProfile')}
                   </button>
-                  <Link
-                    href="/upload"
-                    className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                  >
-                    {t('upload')}
-                  </Link>
+                  {user.agentRequestFeatureEnabled && !isSearcher && (
+                    <Link
+                      href="/profile/requests"
+                      className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
+                    >
+                      {t('agent_request')}
+                    </Link>
+                  )}
+                  {!isSearcher && (
+                    <Link
+                      href="/upload"
+                      className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                      {t('upload')}
+                    </Link>
+                  )}
                   <button
                     onClick={logout}
                     className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
@@ -455,7 +497,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {photolessProperties.length > 0 && (
+      {!isSearcher && photolessProperties.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-6">
           <h2 className="mb-4 text-lg font-semibold text-slate-800">
             📷 {t('photoless_listings_title')}
@@ -527,6 +569,66 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {isSearcher ? (
+      <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-6">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-slate-800">
+            {t('searcher_agents_title')} ({searcherAgents.length})
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">{t('searcher_agents_subtitle')}</p>
+        </div>
+        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+        {initLoading || searcherLoading ? (
+          <p className="py-8 text-center text-sm text-slate-500">{t('loading')}</p>
+        ) : searcherAgents.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
+            {t('searcher_no_agents')}
+          </div>
+        ) : (
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {searcherAgents.map((a) => (
+              <li key={a.userId}>
+                <Link
+                  href={`/profile/searcher/${a.userId}`}
+                  className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4 transition hover:border-teal-300 hover:bg-teal-50/50"
+                >
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-100">
+                    {a.photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={resolveImageUrl(a.photo, 'thumb')}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-slate-500">
+                        {(a.name?.[0] || '?').toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-800">{a.name || a.email}</p>
+                    {a.company ? (
+                      <p className="truncate text-xs text-slate-500">{a.company}</p>
+                    ) : null}
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+                        {a.totalCount} {t('agent_requests_title').toLowerCase()}
+                      </span>
+                      {a.pendingCount > 0 ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+                          {a.pendingCount} {t('searcher_pending_short')}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      ) : (
       <div className="rounded-lg border border-slate-200 bg-white p-3 sm:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-slate-800">
@@ -774,6 +876,7 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

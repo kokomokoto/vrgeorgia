@@ -17,29 +17,12 @@ type LayoutProps = {
 export async function generateMetadata({ params }: Pick<LayoutProps, 'params'>): Promise<Metadata> {
   const { slug } = await params;
   const site = getSiteUrl();
-  const valid = isServiceSectionId(slug);
-  const seo = valid ? SERVICE_SEO[slug] : null;
-  const title = seo?.title || 'სერვისი ვერ მოიძებნა';
+  const seo = SERVICE_SEO[slug];
+  const known = isServiceSectionId(slug) || Boolean(seo);
+  const title = seo?.title || 'მომსახურება';
   const description =
-    seo?.description || 'ეს სერვისის გვერდი არ არსებობს ან გადატანილია.';
+    seo?.description || 'Vhome-ის არქიტექტურული და დიზაინის მომსახურებები.';
   const url = `${site}/services/${slug}`;
-
-  if (!valid) {
-    return {
-      title,
-      description,
-      alternates: { canonical: url },
-      robots: { index: false, follow: false },
-      openGraph: {
-        title: `${title} | Vhome`,
-        description,
-        url,
-        siteName: 'Vhome',
-        locale: 'ka_GE',
-        type: 'website',
-      },
-    };
-  }
 
   return {
     title,
@@ -52,7 +35,7 @@ export async function generateMetadata({ params }: Pick<LayoutProps, 'params'>):
       siteName: 'Vhome',
       locale: 'ka_GE',
       type: 'website',
-      images: [DEFAULT_OG_IMAGE],
+      images: known ? [DEFAULT_OG_IMAGE] : undefined,
     },
     robots: { index: true, follow: true },
   };
@@ -60,10 +43,6 @@ export async function generateMetadata({ params }: Pick<LayoutProps, 'params'>):
 
 export default async function ServiceDetailLayout({ children, params }: LayoutProps) {
   const { slug } = await params;
-  if (!isServiceSectionId(slug)) {
-    return children;
-  }
-
   const seo = SERVICE_SEO[slug];
   const title = seo?.title || 'სერვისი';
   const description = seo?.description || '';

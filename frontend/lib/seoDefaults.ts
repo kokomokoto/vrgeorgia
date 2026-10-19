@@ -1,6 +1,6 @@
 /** Default social / Open Graph image (absolute via metadataBase). */
 export const DEFAULT_OG_IMAGE = {
-  url: '/images/home-hero.jpg',
+  url: '/images/home-hero-zgva.jpg',
   width: 1200,
   height: 630,
   alt: 'Vhome — უძრავი ქონება საქართველოში',

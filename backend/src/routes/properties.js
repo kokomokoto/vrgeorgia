@@ -16,7 +16,7 @@ import { buildPropertyUrlKey, numericIdFromPublicPath } from '../utils/propertyU
 import { getUsdToGelRate } from '../utils/currency.js';
 import { applyPriceRangeFilter } from '../utils/priceFilter.js';
 import { applySqmRangeFilter } from '../utils/areaFilter.js';
-import { isAdminRole, isAgentRole } from '../utils/userRoles.js';
+import { isAdminRole, isAgentRole, isSearcherRole } from '../utils/userRoles.js';
 import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import {
   PROPERTY_NOT_DELETED,
@@ -222,10 +222,23 @@ async function findReusablePropertyForCreate(req, clientRequestId) {
   return byContent ? { doc: byContent, reason: 'photoless-retry' } : null;
 }
 
+async function blockSearcherPropertyWrite(req, res, next) {
+  try {
+    const me = await User.findById(req.user.id).select('role').lean();
+    if (isSearcherRole(me?.role)) {
+      return res.status(403).json({ message: 'მაძებარს განცხადების ატვირთვა არ შეუძლია' });
+    }
+  } catch (err) {
+    console.warn('blockSearcherPropertyWrite:', err?.message || err);
+  }
+  next();
+}
+
 // CREATE (protected) - multipart with photos
 router.post(
   '/',
   requireAuth,
+  blockSearcherPropertyWrite,
   uploadPropertyPhotosMiddleware(30),
   [
     body('title').isString().trim().isLength({ min: 2, max: 120 }).withMessage('სათაური უნდა იყოს 2-120 სიმბოლო'),

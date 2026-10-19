@@ -115,6 +115,7 @@ export default function EditPropertyPage() {
   const [hydrated, setHydrated] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [propertyOwnerId, setPropertyOwnerId] = useState<string | null>(null);
 
@@ -366,6 +367,7 @@ export default function EditPropertyPage() {
   const mainPhotoIndexRef = useRef(mainPhotoIndex);
   const photosPersistRef = useRef<Promise<void> | null>(null);
   const photoPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addingPhotosPromiseRef = useRef<Promise<void> | null>(null);
   const fileDropDepthRef = useRef(0);
   const [photoFileDropActive, setPhotoFileDropActive] = useState(false);
 
@@ -434,6 +436,25 @@ export default function EditPropertyPage() {
     }
     await runPersistPhotosDraft();
   }, [runPersistPhotosDraft]);
+
+  /**
+   * ფინალურ შენახვამდე: გადადებული დრაფტი აღარ გაეშვას და მიმდინარე დრაფტს დაველოდოთ.
+   * ახალ დრაფტ PUT-ს აღარ ვაგზავნით — ფოტოები მაინც მიდის ფინალურ PUT-ში.
+   * დრაფტის ჩავარდნა შენახვას აღარ აგდებს.
+   */
+  const settlePhotoPersistBeforeFinalSave = useCallback(async () => {
+    if (photoPersistTimerRef.current) {
+      clearTimeout(photoPersistTimerRef.current);
+      photoPersistTimerRef.current = null;
+    }
+    if (photosPersistRef.current) {
+      try {
+        await photosPersistRef.current;
+      } catch {
+        /* ფინალური PUT მაინც გააგზავნის მიმდინარე ფოტოებს */
+      }
+    }
+  }, []);
 
   const handleDeletePhoto = (index: number) => {
     const removed = existingPhotosRef.current[index];
@@ -631,7 +652,7 @@ export default function EditPropertyPage() {
     { num: 4, title: t('details_step'), icon: '📝', complete: isStep4Complete },
     { num: 5, title: t('detailed_info_step'), icon: '🔧', complete: isStep5Complete },
     { num: 6, title: t('photos_step'), icon: '📷', complete: isStep6Complete },
-    { num: 7, title: t('private_notes_step'), icon: '🔒', complete: isStep7Complete },
+    { num: 7, title: t('private_notes_header'), icon: '🔒', complete: isStep7Complete },
   ];
 
   const togglePanoramaPhoto = async (photoUrl: string) => {
@@ -668,34 +689,48 @@ export default function EditPropertyPage() {
     setAddingPhotos(true);
     setError(null);
     setPhotoUploadProgress({ done: 0, total: list.length });
-    try {
-      const panoramaFlags = await detectPanoramaFlags(list, (done, total) =>
-        setPhotoUploadProgress({ done, total })
-      );
-      const items = list.map((file, index) => ({ id: `add-${Date.now()}-${index}`, file }));
-      const res = await uploadPropertyPhotosInBatches(id, items, panoramaFlags, (p) =>
-        setPhotoUploadProgress({ done: p.uploaded, total: p.total })
-      , { draft: true });
-      if (res.failures.length) {
-        setError(res.failures.map((f) => `${f.name}: ${f.message}`).join('; '));
+    const work = (async () => {
+      try {
+        const panoramaFlags = await detectPanoramaFlags(list, (done, total) =>
+          setPhotoUploadProgress({ done, total })
+        );
+        const items = list.map((file, index) => ({ id: `add-${Date.now()}-${index}`, file }));
+        const res = await uploadPropertyPhotosInBatches(
+          id,
+          items,
+          panoramaFlags,
+          (p) => setPhotoUploadProgress({ done: p.uploaded, total: p.total }),
+          { draft: true }
+        );
+        if (res.failures.length) {
+          setError(res.failures.map((f) => `${f.name}: ${f.message}`).join('; '));
+        }
+        const savedPhotos = res.photos || [];
+        const savedPanorama = res.panoramaPhotos || [];
+        existingPhotosRef.current = savedPhotos;
+        panoramaPhotosRef.current = savedPanorama;
+        setExistingPhotos(savedPhotos);
+        setPanoramaPhotos(savedPanorama);
+        setMainPhotoIndex((prev) => {
+          const nextLen = savedPhotos.length;
+          const nextMain = prev >= nextLen ? Math.max(0, nextLen - 1) : prev;
+          mainPhotoIndexRef.current = nextMain;
+          return nextMain;
+        });
+      } catch (err: any) {
+        setError(err.message || t('error_save_failed'));
+      } finally {
+        setAddingPhotos(false);
+        setPhotoUploadProgress({ done: 0, total: 0 });
       }
-      const savedPhotos = res.photos || [];
-      const savedPanorama = res.panoramaPhotos || [];
-      existingPhotosRef.current = savedPhotos;
-      panoramaPhotosRef.current = savedPanorama;
-      setExistingPhotos(savedPhotos);
-      setPanoramaPhotos(savedPanorama);
-      setMainPhotoIndex((prev) => {
-        const nextLen = savedPhotos.length;
-        const nextMain = prev >= nextLen ? Math.max(0, nextLen - 1) : prev;
-        mainPhotoIndexRef.current = nextMain;
-        return nextMain;
-      });
-    } catch (err: any) {
-      setError(err.message || t('error_save_failed'));
+    })();
+    addingPhotosPromiseRef.current = work;
+    try {
+      await work;
     } finally {
-      setAddingPhotos(false);
-      setPhotoUploadProgress({ done: 0, total: 0 });
+      if (addingPhotosPromiseRef.current === work) {
+        addingPhotosPromiseRef.current = null;
+      }
     }
   };
 
@@ -734,10 +769,17 @@ export default function EditPropertyPage() {
   };
 
   const handleSave = async () => {
+    // ორმაგი დაწოლა React re-render-მდე ორ პარალელურ PUT-ს იწყებდა
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     try {
-      await flushPersistPhotosDraft();
+      // ფოტოების ატვირთვა თუ მიმდინარეობს — ჯერ დავასრულოთ, რომ სია არ დაიკარგოს
+      if (addingPhotosPromiseRef.current) {
+        await addingPhotosPromiseRef.current;
+      }
+      await settlePhotoPersistBeforeFinalSave();
       if (lat === null || lng === null) throw new Error(t('error_select_location'));
       if (!type) throw new Error(t('error_select_type'));
       if (!dealType) throw new Error(t('error_select_deal_type'));
@@ -801,6 +843,11 @@ export default function EditPropertyPage() {
       const roomsPayload = landListing ? 0 : roomCount === null ? 0 : roomCount;
       const bedroomsPayload = landListing ? 0 : bedroomCount === null ? 0 : bedroomCount;
 
+      // refs — უახლესი ფოტოები (ატვირთვა/გადალაგება შეიძლება state-ს უსწრებდეს)
+      const photosNow = existingPhotosRef.current;
+      const panoramaNow = cleanPanoramaList(panoramaPhotosRef.current, photosNow);
+      const mainNow = mainPhotoIndexRef.current;
+
       await updateProperty(id, {
         title, desc,
         price: Number(price),
@@ -816,9 +863,9 @@ export default function EditPropertyPage() {
         exteriorLink, interiorLink, tourLink, defaultMediaView,
         contactPhone, contactEmail,
         location: { lat, lng },
-        photos: existingPhotos,
-        panoramaPhotos: cleanPanoramaList(panoramaPhotos, existingPhotos),
-        mainPhoto: mainPhotoIndex,
+        photos: photosNow,
+        panoramaPhotos: panoramaNow,
+        mainPhoto: mainNow,
         floor: landListing ? 0 : Number(floor) || 0,
         totalFloors: landListing ? 0 : Number(totalFloors) || 0,
         constructionYear: landListing ? null : constructionYear ? Number(constructionYear) : null,
@@ -843,6 +890,7 @@ export default function EditPropertyPage() {
     } catch (err: any) {
       setError(err.message || t('error_save_failed'));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -969,7 +1017,7 @@ export default function EditPropertyPage() {
                   <h3 className="text-lg font-semibold text-slate-800">🗺️ {t('map_marking')}</h3>
                   <p className="text-sm text-slate-500">{t('specify_exact_location')}</p>
                 </div>
-                {isStep2Complete && <span className="ml-auto text-green-600 font-medium">📍 {t('map_marked')}</span>}
+                {isStep2Complete && <span className="ml-auto text-green-600 font-medium">📍 {t('location_marked')}</span>}
               </div>
             </button>
             {currentStep === 2 && (
@@ -978,7 +1026,7 @@ export default function EditPropertyPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-2">📋 {t('cadastral_code')} <span className="text-slate-400 text-xs">({t('cadastral_optional')})</span></label>
                   <input
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                    placeholder={t('cadastral_placeholder')}
+                    placeholder={t('cadastral_example')}
                     value={cadastralCode}
                     onChange={(e) => setCadastralCode(e.target.value)}
                   />
@@ -1083,7 +1131,7 @@ export default function EditPropertyPage() {
               <div className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">🏙️ {t('city_label')}</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">🏙️ {t('city')}</label>
                     <CityCombobox
                       value={city}
                       onChange={(newCity) => {
@@ -1101,7 +1149,7 @@ export default function EditPropertyPage() {
                   </div>
                   {city.toLowerCase() !== 'თბილისი' ? (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">🗺️ {t('region_label')}</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">🗺️ {t('region')}</label>
                       <select
                         className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                         value={region}
@@ -1116,7 +1164,7 @@ export default function EditPropertyPage() {
                   ) : (
                     <div className="flex items-end">
                       <div className="w-full rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-blue-700">
-                        📍 {t('region_label')}: {t('region_tbilisi')}
+                        📍 {t('region')}: {t('region_tbilisi')}
                       </div>
                     </div>
                   )}
@@ -1500,13 +1548,13 @@ export default function EditPropertyPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">🏠 {t('loggia')}</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">🏠 {t('loggia_label')}</label>
                     <PropertyCountSelector
                       value={loggia}
                       onChange={setLoggia}
                       presets={BALCONY_PRESETS}
                       customMin={BALCONY_CUSTOM_MIN}
-                      ariaLabel={t('loggia_count_custom') || t('loggia')}
+                      ariaLabel={t('loggia_count_custom') || t('loggia_label')}
                       theme={COUNT_THEME_PURPLE}
                     />
                   </div>
@@ -1838,13 +1886,16 @@ export default function EditPropertyPage() {
                   ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl'
                   : 'bg-slate-200 text-slate-500 cursor-not-allowed'
               }`}
-              disabled={saving || completedSteps < 4}
+              disabled={saving || addingPhotos || panoramaSaving || completedSteps < 4}
               onClick={handleSave}
             >
-              {saving ? (
+              {saving || addingPhotos ? (
                 <span className="flex items-center justify-center gap-2">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  {t('saving')}
+                  {addingPhotos && !saving ? t('photos_upload_progress', {
+                    done: photoUploadProgress.done,
+                    total: photoUploadProgress.total,
+                  }) : t('saving')}
                 </span>
               ) : (
                 <span>💾 {t('save_changes')}</span>

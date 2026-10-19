@@ -51,6 +51,7 @@ function targetLink(log: AuditLog): string | null {
   if (log.targetType === 'user') return `/admin/users`;
   if (log.targetType === 'site_content' && log.targetId === 'faq') return '/faq';
   if (log.targetType === 'site_content' && log.targetId === 'about') return '/about';
+  if (log.targetType === 'site_content' && log.targetId === 'services') return '/services';
   return null;
 }
 

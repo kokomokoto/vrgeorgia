@@ -15,6 +15,8 @@ import messageRoutes from './routes/messages.js';
 import adminRoutes from './routes/admin.js';
 import contentRoutes from './routes/content.js';
 import analyticsRoutes from './routes/analytics.js';
+import agentRequestRoutes from './routes/agentRequests.js';
+import searcherRoutes from './routes/searcher.js';
 import tourApiRoutes from './routes/tourApi.js';
 import tourEmbedRoutes from './routes/tourEmbed.js';
 import { attachTourUi } from './tourUiServer.js';
@@ -211,6 +213,8 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/agent-requests', agentRequestRoutes);
+app.use('/api/searcher', searcherRoutes);
 // ყოველთვის ლოკალური tour API — create/edit არ უნდა იყოს დამოკიდებული Render-ზე
 app.use('/api', tourApiRoutes);
 app.use('/api', (_req, res) => {

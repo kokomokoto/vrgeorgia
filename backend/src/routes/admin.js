@@ -36,11 +36,17 @@ import {
   ensureFaqContent,
   ensureAboutContent,
   ensureHomeDesignContent,
+  ensureServicesContent,
+  ensureBrandingContent,
   faqPublicPayload,
   aboutPublicPayload,
   homeDesignAdminPayload,
+  servicesAdminPayload,
+  brandingPublicPayload,
   normalizeFaqItems,
   normalizeAboutByLang,
+  normalizeServicesContent,
+  normalizeBranding,
   normalizeHomeDesignLayout,
   normalizeHomeDesignPresets,
   MAX_HOME_DESIGN_PRESETS,
@@ -458,6 +464,32 @@ router.put('/agents/:id/verify', requireAuth, adminMiddleware, async (req, res) 
     }
     
     await writeAudit(req.user.id, verified ? 'agent.verified' : 'agent.unverified', 'agent', req.params.id);
+    res.json(agent);
+  } catch (error) {
+    res.status(500).json({ message: 'განახლება ვერ მოხერხდა' });
+  }
+});
+
+// ჩართვა/გამორთვა — აგენტის „მოთხოვნა“ ფუნქცია
+router.put('/agents/:id/request-feature', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const enabled = Boolean(req.body?.enabled);
+    const agent = await Agent.findByIdAndUpdate(
+      req.params.id,
+      { requestFeatureEnabled: enabled },
+      { new: true }
+    );
+
+    if (!agent) {
+      return res.status(404).json({ message: 'აგენტი ვერ მოიძებნა' });
+    }
+
+    await writeAudit(
+      req.user.id,
+      enabled ? 'agent.request_feature_enabled' : 'agent.request_feature_disabled',
+      'agent',
+      req.params.id
+    );
     res.json(agent);
   } catch (error) {
     res.status(500).json({ message: 'განახლება ვერ მოხერხდა' });
@@ -1191,7 +1223,9 @@ const AUDIT_VISIBILITY_KA = {
 const AUDIT_SITE_PAGES = {
   faq: { label: 'კითხვები', href: '/faq' },
   about: { label: 'ჩვენ შესახებ', href: '/about' },
+  services: { label: 'მომსახურება', href: '/services' },
   'home-design': { label: 'მთავარი გვერდი', href: '/' },
+  branding: { label: 'ლოგო / ბრენდინგი', href: '/' },
 };
 
 function isAuditObjectId(value) {
@@ -1605,6 +1639,216 @@ router.put('/content/about', requireAuth, adminMiddleware, async (req, res) => {
     console.error('PUT /api/admin/content/about:', error);
     res.status(500).json({ message: 'About შენახვა ვერ მოხერხდა' });
   }
+});
+
+/** Services კონტენტი — ადმინი */
+router.get('/content/services', requireAuth, adminMiddleware, async (_req, res) => {
+  try {
+    const doc = await ensureServicesContent();
+    res.json(servicesAdminPayload(doc));
+  } catch (error) {
+    console.error('GET /api/admin/content/services:', error);
+    res.status(500).json({ message: 'მომსახურებების კონტენტის მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.put('/content/services', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const normalized = normalizeServicesContent({
+      page: req.body?.page,
+      sections: req.body?.sections,
+    });
+    if (normalized.sections.length === 0) {
+      return res.status(400).json({ message: 'მინიმუმ ერთი მომსახურება საჭიროა' });
+    }
+    if (!normalized.page.title.ka.trim() || !normalized.page.lead.ka.trim()) {
+      return res.status(400).json({ message: 'ქართულ ვერსიას სჭირდება გვერდის სათაური და აღწერა' });
+    }
+    const emptyKa = normalized.sections.some(
+      (it) => !it.hidden && (!it.title.ka.trim() || !it.body.ka.trim())
+    );
+    if (emptyKa) {
+      return res.status(400).json({
+        message: 'გამოქვეყნებულ მომსახურებებს სჭირდება ქართული სათაური და ტექსტი (ან დამალე)',
+      });
+    }
+
+    const doc = await ensureServicesContent();
+    doc.servicesPage = normalized.page;
+    doc.servicesSections = normalized.sections;
+    doc.updatedBy = req.user.id;
+    await doc.save();
+    await writeAudit(req.user.id, 'update_site_content', 'site_content', 'services', {
+      sectionCount: normalized.sections.length,
+      hiddenCount: normalized.sections.filter((s) => s.hidden).length,
+    });
+    res.json(servicesAdminPayload(doc));
+  } catch (error) {
+    console.error('PUT /api/admin/content/services:', error);
+    res.status(500).json({ message: 'მომსახურებების შენახვა ვერ მოხერხდა' });
+  }
+});
+
+const uploadServicesMedia = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const mime = String(file.mimetype || '');
+    if (mime.startsWith('image/')) cb(null, true);
+    else cb(new Error('მხოლოდ სურათის ატვირთვაა დაშვებული'));
+  },
+});
+
+/** მომსახურების ფოტო → Cloudinary */
+router.post('/content/services/media', requireAuth, adminMiddleware, (req, res) => {
+  uploadServicesMedia.single('file')(req, res, async (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'ფაილი ძალიან დიდია (მაქს. 10 MB)' });
+      }
+      console.error('POST /api/admin/content/services/media multer:', err);
+      return res.status(400).json({ message: err.message || 'ფაილის ატვირთვა ვერ მოხერხდა' });
+    }
+    try {
+      if (!req.file?.buffer) {
+        return res.status(400).json({ message: 'ფაილი არ არის მიღებული' });
+      }
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'vrgeorgia/services',
+            resource_type: 'image',
+          },
+          (uploadErr, uploaded) => {
+            if (uploadErr) reject(uploadErr);
+            else resolve(uploaded);
+          }
+        );
+        stream.end(req.file.buffer);
+      });
+
+      const url = result?.secure_url || result?.url;
+      if (!url) {
+        return res.status(500).json({ message: 'Cloudinary-მ URL არ დააბრუნა' });
+      }
+
+      res.json({
+        url,
+        publicId: result.public_id || null,
+      });
+    } catch (error) {
+      console.error('POST /api/admin/content/services/media:', error);
+      res.status(500).json({
+        message: error?.message || 'მომსახურების ფოტოს ატვირთვა ვერ მოხერხდა',
+      });
+    }
+  });
+});
+
+const LOGO_MIME_OK = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+  'image/avif',
+  'image/bmp',
+  'image/heic',
+  'image/heif',
+  'application/octet-stream',
+]);
+
+const LOGO_EXT_OK = /\.(png|jpe?g|gif|webp|svg|ico|avif|bmp|heic|heif)$/i;
+
+const uploadBrandingMedia = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const mime = String(file.mimetype || '').toLowerCase();
+    const name = String(file.originalname || '');
+    if (mime.startsWith('image/') || LOGO_MIME_OK.has(mime) || LOGO_EXT_OK.test(name)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('ლოგოსთვის მხარდაჭერილია სურათის ფორმატები (PNG, JPG, SVG, WebP, GIF, ICO და სხვ.)'));
+  },
+});
+
+router.get('/content/branding', requireAuth, adminMiddleware, async (_req, res) => {
+  try {
+    const doc = await ensureBrandingContent();
+    res.json(brandingPublicPayload(doc));
+  } catch (error) {
+    console.error('GET /api/admin/content/branding:', error);
+    res.status(500).json({ message: 'ბრენდინგის მიღება ვერ მოხერხდა' });
+  }
+});
+
+router.put('/content/branding', requireAuth, adminMiddleware, async (req, res) => {
+  try {
+    const normalized = normalizeBranding(req.body || {});
+    const doc = await ensureBrandingContent();
+    doc.branding = normalized;
+    doc.updatedBy = req.user.id;
+    await doc.save();
+    await writeAudit(req.user.id, 'update_site_content', 'site_content', 'branding', {
+      hasLogo: Boolean(normalized.logoUrl),
+    });
+    res.json(brandingPublicPayload(doc));
+  } catch (error) {
+    console.error('PUT /api/admin/content/branding:', error);
+    res.status(500).json({ message: 'ბრენდინგის შენახვა ვერ მოხერხდა' });
+  }
+});
+
+/** საიტის ლოგო → Cloudinary (ნებისმიერი სურათის ფორმატი) */
+router.post('/content/branding/media', requireAuth, adminMiddleware, (req, res) => {
+  uploadBrandingMedia.single('file')(req, res, async (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'ფაილი ძალიან დიდია (მაქს. 10 MB)' });
+      }
+      console.error('POST /api/admin/content/branding/media multer:', err);
+      return res.status(400).json({ message: err.message || 'ფაილის ატვირთვა ვერ მოხერხდა' });
+    }
+    try {
+      if (!req.file?.buffer) {
+        return res.status(400).json({ message: 'ფაილი არ არის მიღებული' });
+      }
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'vrgeorgia/branding',
+            resource_type: 'auto',
+          },
+          (uploadErr, uploaded) => {
+            if (uploadErr) reject(uploadErr);
+            else resolve(uploaded);
+          }
+        );
+        stream.end(req.file.buffer);
+      });
+
+      const url = result?.secure_url || result?.url;
+      if (!url) {
+        return res.status(500).json({ message: 'Cloudinary-მ URL არ დააბრუნა' });
+      }
+
+      res.json({
+        url,
+        publicId: result.public_id || null,
+        format: result.format || null,
+      });
+    } catch (error) {
+      console.error('POST /api/admin/content/branding/media:', error);
+      res.status(500).json({
+        message: error?.message || 'ლოგოს ატვირთვა ვერ მოხერხდა',
+      });
+    }
+  });
 });
 
 const uploadHomeDesignMedia = multer({

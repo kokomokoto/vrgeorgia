@@ -147,7 +147,10 @@ function SocialGlyph({ network }: { network: SiteSocialNetwork }) {
 
 function ContactIcon({ children }: { children: React.ReactNode }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center" style={{ color: 'var(--theme-accent)' }} aria-hidden>
+    <span
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white ring-1 ring-white/10"
+      aria-hidden
+    >
       {children}
     </span>
   );
@@ -157,7 +160,7 @@ const iconSvg = 'h-[18px] w-[18px]';
 
 function ColumnTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-zinc-100">
+    <h2 className="flex items-center gap-2.5 text-[13px] font-semibold uppercase tracking-[0.16em] text-white/90">
       <span className="h-4 w-1 rounded-full" style={{ backgroundColor: 'var(--theme-accent)' }} aria-hidden />
       {children}
     </h2>
@@ -165,48 +168,79 @@ function ColumnTitle({ children }: { children: React.ReactNode }) {
 }
 
 const pillClass =
-  'inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm transition hover:border-[var(--theme-accent)] hover:text-[var(--theme-accent)] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200';
+  'inline-flex rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-sm text-slate-100 transition hover:border-transparent hover:bg-[var(--theme-accent)] hover:text-white';
 
 const siteLinkClass =
-  'block rounded-lg px-2 py-1.5 text-sm text-slate-700 transition hover:bg-white hover:text-[var(--theme-accent)] dark:text-zinc-300 dark:hover:bg-zinc-900';
+  'group flex items-center justify-between rounded-xl px-3 py-2 text-sm text-slate-300 no-underline transition hover:bg-white/[0.06] hover:text-white';
+
+function scrollPageToHeader() {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+}
 
 export function Footer() {
   const { t } = useTranslation();
   const [mounted, setMounted] = React.useState(false);
+  const [atEnd, setAtEnd] = React.useState(false);
   const design = useHomeDesignOptional();
+  const endRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
+  React.useEffect(() => {
+    const node = endRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setAtEnd(entry.isIntersecting),
+      { threshold: 0.6 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const tx = (key: string, fallback: string) => (mounted ? t(key) : fallback);
   const socials = configuredSiteSocials(design?.layout.socialLinks ?? EMPTY_SITE_SOCIAL_LINKS);
 
+  const contactLink =
+    'flex items-center gap-3 rounded-2xl px-2 py-1.5 text-sm font-medium text-slate-100 no-underline transition hover:bg-white/[0.06]';
+
   return (
-    <footer className="border-t border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, var(--theme-accent), transparent)' }} />
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 lg:grid-cols-12 lg:gap-12">
+    <footer className="relative bg-[#0c1222] text-slate-300">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div
+          className="absolute -left-24 top-0 h-64 w-64 rounded-full opacity-30 blur-3xl"
+          style={{ background: 'var(--theme-accent)' }}
+        />
+        <div className="absolute bottom-0 right-0 h-48 w-72 rounded-full bg-sky-400/10 blur-3xl" />
+      </div>
+      <div
+        className="h-px w-full"
+        style={{ background: 'linear-gradient(90deg, transparent, var(--theme-accent), transparent)' }}
+      />
+
+      <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 lg:grid-cols-12 lg:gap-10 lg:py-16">
         <div className="lg:col-span-4">
-          <Link href="/" className="inline-flex items-center gap-2.5 text-slate-900 no-underline dark:text-zinc-100">
-            <BrandLogo sizePx={40} decorative />
-            <span className="text-xl font-semibold tracking-tight">Vhome</span>
+          <Link href="/" className="inline-flex items-center gap-3 text-white no-underline">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-lg shadow-black/20">
+              <BrandLogo sizePx={32} decorative />
+            </span>
+            <span className="text-2xl font-semibold tracking-tight">Vhome</span>
           </Link>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-slate-600 dark:text-zinc-400">
+          <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-400">
             {tx(
               'footer_blurb',
               'Vhome არის უძრავი ქონების პლატფორმა საქართველოში — განცხადებები, რუკა და 3D ტურები.'
             )}
           </p>
 
-          <h2 className="mt-6 text-sm font-semibold text-slate-900 dark:text-zinc-100">
+          <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.16em] text-white/80">
             {tx('footer_col_contact', 'კონტაქტი')}
           </h2>
-          <ul className="mt-3 space-y-1.5">
+          <ul className="mt-3 space-y-1">
             <li>
-              <a
-                href={SITE_WEB_HREF}
-                className="flex items-center gap-2 text-sm font-medium text-slate-800 no-underline hover:text-[var(--theme-accent)] dark:text-zinc-100"
-              >
+              <a href={SITE_WEB_HREF} className={contactLink}>
                 <ContactIcon>
                   <svg className={iconSvg} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
@@ -216,10 +250,7 @@ export function Footer() {
               </a>
             </li>
             <li>
-              <a
-                href={`tel:${SITE_PHONE_TEL}`}
-                className="flex items-center gap-2 text-sm font-medium text-slate-800 no-underline hover:text-[var(--theme-accent)] dark:text-zinc-100"
-              >
+              <a href={`tel:${SITE_PHONE_TEL}`} className={contactLink}>
                 <ContactIcon>
                   <svg className={iconSvg} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -229,10 +260,7 @@ export function Footer() {
               </a>
             </li>
             <li>
-              <a
-                href={`mailto:${SITE_EMAIL}`}
-                className="flex items-center gap-2 text-sm font-medium text-slate-800 no-underline hover:text-[var(--theme-accent)] dark:text-zinc-100"
-              >
+              <a href={`mailto:${SITE_EMAIL}`} className={contactLink}>
                 <ContactIcon>
                   <svg className={iconSvg} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -244,7 +272,7 @@ export function Footer() {
           </ul>
 
           {socials.length > 0 ? (
-            <ul className="mt-5 flex flex-wrap gap-2">
+            <ul className="mt-6 flex flex-wrap gap-2.5">
               {socials.map(({ network, href }) => (
                 <li key={network}>
                   <a
@@ -253,7 +281,7 @@ export function Footer() {
                     rel="noopener noreferrer"
                     aria-label={SOCIAL_NAME[network]}
                     title={SOCIAL_NAME[network]}
-                    className={`flex h-9 w-9 items-center justify-center rounded-full text-white no-underline shadow-sm transition hover:brightness-110 ${SOCIAL_BTN[network]}`}
+                    className={`flex h-10 w-10 items-center justify-center rounded-full text-white no-underline shadow-lg shadow-black/20 ring-2 ring-white/10 transition hover:-translate-y-0.5 hover:brightness-110 ${SOCIAL_BTN[network]}`}
                   >
                     <SocialGlyph network={network} />
                   </a>
@@ -265,13 +293,13 @@ export function Footer() {
 
         <nav aria-label={tx('footer_col_search', 'ძიება')} className="lg:col-span-5">
           <ColumnTitle>{tx('footer_col_search', 'ძიება')}</ColumnTitle>
-          <div className="mt-4 space-y-4">
+          <div className="mt-5 space-y-5 rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             {SEARCH_GROUPS.map((group) => (
               <div key={group.labelKey}>
-                <p className="text-xs font-medium text-slate-500 dark:text-zinc-500">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                   {tx(group.labelKey, group.labelFallback)}
                 </p>
-                <ul className="mt-2 flex flex-wrap gap-2">
+                <ul className="mt-2.5 flex flex-wrap gap-2">
                   {group.items.map((item) => (
                     <li key={item.href}>
                       <Link href={item.href} className={pillClass}>
@@ -287,11 +315,14 @@ export function Footer() {
 
         <nav aria-label={tx('footer_col_site', 'საიტი')} className="lg:col-span-3">
           <ColumnTitle>{tx('footer_col_site', 'საიტი')}</ColumnTitle>
-          <ul className="mt-4 space-y-0.5">
+          <ul className="mt-5 space-y-1">
             {SITE_LINKS.map((item) => (
               <li key={item.href}>
                 <Link href={item.href} className={siteLinkClass}>
-                  {tx(item.key, item.fallback)}
+                  <span>{tx(item.key, item.fallback)}</span>
+                  <span className="text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-white" aria-hidden>
+                    →
+                  </span>
                 </Link>
               </li>
             ))}
@@ -299,11 +330,26 @@ export function Footer() {
         </nav>
       </div>
 
-      <div className="border-t border-slate-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-7xl px-4 py-4 text-sm text-slate-500 dark:text-zinc-500">
-          © {new Date().getFullYear()} Vhome
+      <div ref={endRef} className="relative border-t border-white/10">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-sm text-slate-500 sm:px-6">
+          <span>© {new Date().getFullYear()} Vhome</span>
+          <span className="text-slate-600">www.vhome.ge</span>
         </div>
       </div>
+      <button
+        type="button"
+        onClick={scrollPageToHeader}
+        aria-label={tx('footer_back_to_top', 'ზემოთ')}
+        className={`fixed bottom-6 left-1/2 z-40 flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full text-white shadow-lg shadow-black/30 ring-4 ring-[#0c1222] transition duration-300 hover:-translate-y-0.5 hover:brightness-110 ${
+          atEnd ? 'translate-y-0 scale-100 opacity-100' : 'pointer-events-none translate-y-3 scale-90 opacity-0'
+        }`}
+        style={{ backgroundColor: 'var(--theme-accent)' }}
+        tabIndex={atEnd ? 0 : -1}
+      >
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4} aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+        </svg>
+      </button>
     </footer>
   );
 }

@@ -113,6 +113,259 @@ export function normalizeBoxLayout(
   };
 }
 
+/** რუკის პანელი / სხივი — რეჟიმის ვიზუალი (byMode[modeId]) */
+export type MapModeVisual = {
+  panelBg?: string;
+  panelBorderColor?: string;
+  panelBorderRadius?: number;
+  headerTextColor?: string;
+  beamEnabled?: boolean;
+  beamWidthPct?: number;
+  beamHeightPct?: number;
+  beamSkewDeg?: number;
+  beamDurationSec?: number;
+  beamColorCenter?: string;
+  beamColorSide?: string;
+  beamOpacity?: number;
+  beamBlurPx?: number;
+};
+
+/** მთავარი გვერდის რუკის ჩამოსაშლელი პანელი + გადამავალი სხივი */
+export type MapLayout = BoxLayout &
+  MapModeVisual & {
+    /** თემის რეჟიმის მიხედვით ცალკე ფერები/სხივი */
+    byMode?: Record<string, MapModeVisual>;
+  };
+
+export const DEFAULT_MAP_NIGHT_VISUAL: MapModeVisual = {
+  panelBg: '#18181b',
+  panelBorderColor: '#3f3f46',
+  panelBorderRadius: 12,
+  headerTextColor: '#e4e4e7',
+  beamEnabled: true,
+  beamWidthPct: 55,
+  beamHeightPct: 100,
+  beamSkewDeg: -12,
+  beamDurationSec: 2.6,
+  beamColorCenter: '#ffffff',
+  beamColorSide: '#fbbf24',
+  beamOpacity: 1,
+  beamBlurPx: 0,
+};
+
+export const DEFAULT_MAP: MapLayout = {
+  x: 0,
+  y: 0,
+  w: 1280,
+  h: 360,
+  panelBg: '#ffffff',
+  panelBorderColor: '#e2e8f0',
+  panelBorderRadius: 12,
+  headerTextColor: '#334155',
+  beamEnabled: true,
+  beamWidthPct: 55,
+  beamHeightPct: 100,
+  beamSkewDeg: -12,
+  beamDurationSec: 2.6,
+  beamColorCenter: '#ffffff',
+  beamColorSide: '#38bdf8',
+  beamOpacity: 1,
+  beamBlurPx: 0,
+  byMode: {
+    night: { ...DEFAULT_MAP_NIGHT_VISUAL },
+  },
+};
+
+function clampMapNum(
+  n: number | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+  decimals = 0
+): number {
+  const raw = typeof n === 'number' && Number.isFinite(n) ? n : fallback;
+  const stepped =
+    decimals > 0
+      ? Math.round(raw * 10 ** decimals) / 10 ** decimals
+      : Math.round(raw);
+  return Math.max(min, Math.min(max, stepped));
+}
+
+export function pickMapModeVisual(map: MapModeVisual): MapModeVisual {
+  return {
+    panelBg: map.panelBg,
+    panelBorderColor: map.panelBorderColor,
+    panelBorderRadius: map.panelBorderRadius,
+    headerTextColor: map.headerTextColor,
+    beamEnabled: map.beamEnabled,
+    beamWidthPct: map.beamWidthPct,
+    beamHeightPct: map.beamHeightPct,
+    beamSkewDeg: map.beamSkewDeg,
+    beamDurationSec: map.beamDurationSec,
+    beamColorCenter: map.beamColorCenter,
+    beamColorSide: map.beamColorSide,
+    beamOpacity: map.beamOpacity,
+    beamBlurPx: map.beamBlurPx,
+  };
+}
+
+export function normalizeMapModeVisual(
+  raw: Partial<MapModeVisual> | null | undefined,
+  fallback: MapModeVisual = DEFAULT_MAP
+): MapModeVisual | null {
+  if (!raw || typeof raw !== 'object') return null;
+  return {
+    panelBg: asOptionalHexColor(raw.panelBg) ?? fallback.panelBg ?? DEFAULT_MAP.panelBg,
+    panelBorderColor:
+      asOptionalHexColor(raw.panelBorderColor) ??
+      fallback.panelBorderColor ??
+      DEFAULT_MAP.panelBorderColor,
+    panelBorderRadius: clampMapNum(
+      raw.panelBorderRadius,
+      fallback.panelBorderRadius ?? DEFAULT_MAP.panelBorderRadius!,
+      0,
+      48
+    ),
+    headerTextColor:
+      asOptionalHexColor(raw.headerTextColor) ??
+      fallback.headerTextColor ??
+      DEFAULT_MAP.headerTextColor,
+    beamEnabled:
+      typeof raw.beamEnabled === 'boolean'
+        ? raw.beamEnabled
+        : (fallback.beamEnabled ?? DEFAULT_MAP.beamEnabled),
+    beamWidthPct: clampMapNum(
+      raw.beamWidthPct,
+      fallback.beamWidthPct ?? DEFAULT_MAP.beamWidthPct!,
+      8,
+      100
+    ),
+    beamHeightPct: clampMapNum(
+      raw.beamHeightPct,
+      fallback.beamHeightPct ?? DEFAULT_MAP.beamHeightPct!,
+      20,
+      100
+    ),
+    beamSkewDeg: clampMapNum(
+      raw.beamSkewDeg,
+      fallback.beamSkewDeg ?? DEFAULT_MAP.beamSkewDeg!,
+      -45,
+      45
+    ),
+    beamDurationSec: clampMapNum(
+      raw.beamDurationSec,
+      fallback.beamDurationSec ?? DEFAULT_MAP.beamDurationSec!,
+      0.6,
+      16,
+      1
+    ),
+    beamColorCenter:
+      asOptionalHexColor(raw.beamColorCenter) ??
+      fallback.beamColorCenter ??
+      DEFAULT_MAP.beamColorCenter,
+    beamColorSide:
+      asOptionalHexColor(raw.beamColorSide) ??
+      fallback.beamColorSide ??
+      DEFAULT_MAP.beamColorSide,
+    beamOpacity: clampOpacity(
+      raw.beamOpacity,
+      fallback.beamOpacity ?? DEFAULT_MAP.beamOpacity ?? 1
+    ),
+    beamBlurPx: clampMapNum(
+      raw.beamBlurPx,
+      fallback.beamBlurPx ?? DEFAULT_MAP.beamBlurPx!,
+      0,
+      8
+    ),
+  };
+}
+
+/** აქტიური თემის რეჟიმის რუკის სტილი (byMode override) */
+export function resolveMapForMode(map: MapLayout, modeId: string): MapLayout {
+  const { byMode, ...base } = map;
+  const ov = modeId ? byMode?.[modeId] : undefined;
+  if (!ov) return { ...base };
+  return { ...base, ...ov };
+}
+
+/**
+ * პანელი/სხივის ცვლილება მხოლოდ მოცემულ რეჟიმში.
+ * პირველ რედაქტზე ძველი გლობალური სტილი იკეტება ამ რეჟიმში; სხვა რეჟიმები DEFAULT-ს იღებენ.
+ */
+export function applyMapStyleModePatch(
+  map: MapLayout,
+  modeId: string,
+  patch: Partial<MapModeVisual>
+): MapLayout {
+  const hasAnyMode = Boolean(map.byMode && Object.keys(map.byMode).length > 0);
+  const resolved = resolveMapForMode(map, modeId);
+  const snapshot =
+    normalizeMapModeVisual(
+      { ...pickMapModeVisual(resolved), ...patch },
+      DEFAULT_MAP
+    ) || pickMapModeVisual(DEFAULT_MAP);
+
+  if (!modeId) {
+    return { ...map, ...snapshot };
+  }
+
+  if (!hasAnyMode) {
+    const { byMode: _drop, ...rest } = map;
+    const seeded: Record<string, MapModeVisual> = {
+      [modeId]: snapshot,
+    };
+    if (modeId !== 'night') {
+      seeded.night = {
+        ...(normalizeMapModeVisual(DEFAULT_MAP_NIGHT_VISUAL, DEFAULT_MAP_NIGHT_VISUAL) ||
+          DEFAULT_MAP_NIGHT_VISUAL),
+      };
+    }
+    return {
+      ...rest,
+      ...pickMapModeVisual(DEFAULT_MAP),
+      byMode: seeded,
+    };
+  }
+
+  return {
+    ...map,
+    byMode: {
+      ...(map.byMode || {}),
+      [modeId]: snapshot,
+    },
+  };
+}
+
+export function normalizeMapLayout(
+  raw: Partial<MapLayout> | null | undefined,
+  fallback: MapLayout = DEFAULT_MAP
+): MapLayout {
+  const base = normalizeBoxLayout(raw, fallback, { stackMobile: true });
+  const visual =
+    normalizeMapModeVisual(raw, fallback) || pickMapModeVisual(fallback);
+  const byMode = normalizeByModeMap<MapModeVisual>(
+    raw?.byMode ?? fallback.byMode,
+    (v) => normalizeMapModeVisual(v, visual)
+  );
+  return {
+    ...base,
+    ...visual,
+    ...(byMode ? { byMode } : {}),
+  };
+}
+
+/** #RRGGBB → rgba() — სხივის გრადიენტისთვის */
+export function hexToRgba(hex: string, alpha: number): string {
+  const raw = String(hex || '').replace('#', '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return `rgba(56,189,248,${alpha})`;
+  const n = parseInt(raw, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const a = Math.max(0, Math.min(1, alpha));
+  return `rgba(${r},${g},${b},${a})`;
+}
+
 /** Homepage hero search bar — frame + filter / input / button styles */
 export type SearchLayout = BoxLayout & {
   /** Inner padding of the white shell (px) */
@@ -1390,7 +1643,7 @@ export type HomeDesignLayout = {
     /** each circle height */
     itemH: number;
   };
-  map: BoxLayout;
+  map: MapLayout;
   /** Property results: found count, sort, cards, pagination */
   listings: BoxLayout;
   quickRail: RailSectionLayout & {
@@ -1686,7 +1939,7 @@ export const DEFAULT_HOME_DESIGN: HomeDesignLayout = {
     title: 'მომსახურება',
     items: DEFAULT_SERVICE_ITEMS,
   },
-  map: { x: 0, y: 0, w: 1280, h: 360 },
+  map: { ...DEFAULT_MAP },
   /** h = min-height; რეალური სიმაღლე იზრდება ბარათების რაოდენობით */
   listings: { x: 0, y: 0, w: 1280, h: 480 },
   quickRail: {
@@ -1831,7 +2084,7 @@ export const DESIGNABLE_HINTS: Record<DesignableId, string> = {
   typePanel: 'ქონების ტიპები — ფოტო გადაათრიე/გაადიდე, წარწერები გადაადგილე; ფერი/ფოტო რეჟიმის მიხედვით.',
   serviceRail:
     'მარცხენა წრეები — ფორმა/სურათი/ტექსტი; ჩვენება/დამალვა რეჟიმის მიხედვით.',
-  map: 'მთავარი გვერდის რუკის ზომა და პოზიცია.',
+  map: 'რუკის პანელი — ზომა, ფერები და გადამავალი სხივის სილუეტი/ფერები.',
   listings:
     'ობიექტების ჩამონათვალი — ნაპოვნია/სორტი/ბარათები/პაგინაცია; ტელეფონზე ზედა ზოლიდან გადაათრიე.',
   quickRail:
@@ -2979,7 +3232,7 @@ function migrateFromV1(raw: Record<string, unknown>): HomeDesignLayout {
   return {
     ...DEFAULT_HOME_DESIGN,
     search: { ...DEFAULT_HOME_DESIGN.search, ...old.search },
-    map: { ...DEFAULT_HOME_DESIGN.map, ...old.map },
+    map: normalizeMapLayout(old.map as Partial<MapLayout> | null | undefined),
     heroText: { ...DEFAULT_HOME_DESIGN.heroText },
     serviceRail: {
       ...DEFAULT_HOME_DESIGN.serviceRail,
@@ -3093,7 +3346,7 @@ export function normalizeHomeDesignInput(
     search: normalizeSearch(parsed.search),
     dealBar: normalizeDealBar(parsed.dealBar as Partial<DealBarLayout> | null | undefined),
     typePanel: normalizeTypePanel(parsed.typePanel),
-    map: normalizeBoxLayout(parsed.map, DEFAULT_HOME_DESIGN.map, { stackMobile: true }),
+    map: normalizeMapLayout(parsed.map as Partial<MapLayout> | null | undefined, DEFAULT_HOME_DESIGN.map),
     listings: normalizeBoxLayout(parsed.listings, DEFAULT_HOME_DESIGN.listings, {
       stackMobile: true,
     }),

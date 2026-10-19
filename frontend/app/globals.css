@@ -32,6 +32,12 @@
   color-scheme: light;
 }
 
+@keyframes header-badge-pop {
+  0% { transform: scale(0.35); }
+  70% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
 /* ჰედერი: მსუბუქი შუშა ეფექტი — ფერი Design Mode-დან */
 [data-site-header] {
   background-color: var(--theme-header-bg) !important;
@@ -298,6 +304,52 @@ a:hover {
     rgb(39 39 42 / 0.95) 100%
   );
   background-size: 200% 100%;
+}
+
+/* მთავარი გვერდი — რუკის ჰედერ-ზოლზე მსუბუქი სხივი (მხოლოდ transform = იაფი GPU) */
+@keyframes home-map-panel-beam-x {
+  0% {
+    transform: translate3d(-130%, 0, 0) skewX(var(--home-map-beam-skew, -12deg));
+  }
+  100% {
+    transform: translate3d(230%, 0, 0) skewX(var(--home-map-beam-skew, -12deg));
+  }
+}
+
+.home-map-panel {
+  position: relative;
+}
+
+.home-map-panel__header {
+  position: relative;
+  overflow: hidden;
+}
+
+.home-map-panel__beam {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  border-radius: inherit;
+  animation-name: home-map-panel-beam-x;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+  contain: layout style paint;
+}
+
+.home-map-panel__beam.is-paused {
+  animation-play-state: paused;
+  will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-map-panel__beam {
+    animation: none;
+    display: none;
+  }
 }
 
 /* ნავიგაციის SVG-ები — CSS/Tailwind ჩატვირთვის გარეშეც ზომა არ გაიზარდოს */

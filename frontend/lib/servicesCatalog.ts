@@ -1,5 +1,13 @@
-/** Shared catalog for /services and /services/[slug] */
+/** Visual themes + path helpers for /services (content lives in servicesContent / API) */
 
+import type { ServiceStyleKey } from './servicesContent';
+import { servicePath as contentServicePath, isServiceStyleKey } from './servicesContent';
+
+export type { ServiceStyleKey };
+export { SERVICE_STYLE_KEYS } from './servicesContent';
+export { servicePath } from './servicesContent';
+
+/** @deprecated Prefer dynamic sections from API; kept for SEO/layout fallbacks */
 export const SERVICE_SECTION_IDS = [
   'arch',
   'docs',
@@ -17,12 +25,12 @@ export function isServiceSectionId(value: string): value is ServiceSectionId {
   return (SERVICE_SECTION_IDS as readonly string[]).includes(value);
 }
 
-export function servicePath(id: ServiceSectionId) {
-  return `/services/${id}`;
+export function resolveServiceStyleKey(value: string): ServiceStyleKey {
+  return isServiceStyleKey(value) ? value : 'arch';
 }
 
 export const SERVICE_SECTION_STYLE: Record<
-  ServiceSectionId,
+  ServiceStyleKey,
   {
     gradient: string;
     ring: string;
@@ -79,3 +87,6 @@ export const SERVICE_SECTION_STYLE: Record<
     blob: 'bg-cyan-400/30',
   },
 };
+
+/** Alias kept so older imports of servicePath from this module stay valid */
+export const pathForService = contentServicePath;

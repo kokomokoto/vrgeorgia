@@ -6,10 +6,17 @@ import {
   FACTORY_DESIGN_PRESET_ID,
   type DesignEditParam,
 } from '@/components/home-design/HomeDesignContext';
+import { useBranding } from '@/components/BrandingProvider';
+import { BrandLogo } from '@/components/BrandLogo';
+import { uploadBrandingLogoFile } from '@/lib/api';
+import { DEFAULT_BRAND_LOGO_SRC } from '@/lib/branding';
 import {
   DESIGNABLE_HINTS,
   DESIGNABLE_LABELS,
+  DEFAULT_MAP,
   DEFAULT_SEARCH,
+  applyMapStyleModePatch,
+  resolveMapForMode,
   SEARCH_CONTROL_IDS,
   SEARCH_CONTROL_LABELS,
   DEAL_CHIP_IDS,
@@ -76,6 +83,8 @@ import {
   type HeaderLayout,
   type HeroTransition,
   type HomeDesignLayout,
+  type MapLayout,
+  type MapModeVisual,
   type RailItem,
   type SearchLayout,
   type HeaderItemStyle,
@@ -630,6 +639,85 @@ export function DesignInspector() {
     };
   }, [ctx?.designMode, ctx?.canDesignMode, isDesktopLayout, ui.collapsed]);
 
+  const {
+    logoDirty,
+    commitLogoDraft,
+    discardLogoDraft,
+  } = useBranding();
+
+  const isDirty = Boolean(ctx?.isDirty);
+  const designMode = Boolean(ctx?.designMode);
+  const panelDirty = isDirty || logoDirty;
+  const saveDesignChanges = ctx?.saveDesignChanges;
+  const discardDesignChanges = ctx?.discardDesignChanges;
+  const setDesignMode = ctx?.setDesignMode;
+  const saving = Boolean(ctx?.saving);
+
+  const onSave = React.useCallback(async () => {
+    if (saveDesignChanges) await saveDesignChanges();
+    if (logoDirty) {
+      try {
+        await commitLogoDraft();
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : 'ლოგოს შენახვა ვერ მოხერხდა';
+        window.alert(msg);
+        return;
+      }
+    }
+    setSaveFlash(true);
+    window.setTimeout(() => setSaveFlash(false), 1600);
+  }, [saveDesignChanges, logoDirty, commitLogoDraft]);
+
+  const onDiscard = React.useCallback(async () => {
+    if (isDirty && discardDesignChanges) await discardDesignChanges();
+    if (logoDirty) discardLogoDraft();
+  }, [isDirty, discardDesignChanges, logoDirty, discardLogoDraft]);
+
+  const onExitDesignMode = React.useCallback(() => {
+    if (!setDesignMode) return;
+    if (!panelDirty) {
+      setDesignMode(false);
+      return;
+    }
+    const ok = window.confirm(
+      'უშენახავი ცვლილებები დაიკარგება.\nგამოვრთოთ Design Mode შენახვის გარეშე?'
+    );
+    if (!ok) return;
+    void (async () => {
+      if (isDirty && discardDesignChanges) await discardDesignChanges();
+      if (logoDirty) discardLogoDraft();
+      setDesignMode(false);
+    })();
+  }, [
+    panelDirty,
+    isDirty,
+    logoDirty,
+    discardDesignChanges,
+    discardLogoDraft,
+    setDesignMode,
+  ]);
+
+  // Ctrl+S: layout + logo ერთად (capture — HomeDesignContext-ის Ctrl+S-ს უსწრებს)
+  React.useEffect(() => {
+    if (!designMode) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key.toLowerCase() !== 's') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      void onSave();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [designMode, onSave]);
+
+  // Design Mode-ის გათიშვისას დარჩენილი ლოგოს დრაფტი გავასუფთაოთ
+  React.useEffect(() => {
+    if (designMode) return;
+    if (logoDirty) discardLogoDraft();
+  }, [designMode, logoDirty, discardLogoDraft]);
+
   if (!ctx?.designMode || !ctx.canDesignMode) return null;
 
   const {
@@ -684,22 +772,11 @@ export function DesignInspector() {
     applyDesignPreset,
     overwriteDesignPreset,
     removeDesignPreset,
-    setDesignMode,
-    isDirty,
-    saving,
-    saveDesignChanges,
-    discardDesignChanges,
     canUndo,
     canRedo,
     undo,
     redo,
   } = ctx;
-
-  const onSave = async () => {
-    await saveDesignChanges();
-    setSaveFlash(true);
-    window.setTimeout(() => setSaveFlash(false), 1600);
-  };
 
   const collapsed = ui.collapsed;
 
@@ -793,7 +870,7 @@ export function DesignInspector() {
             <div className="truncate text-sm font-bold text-slate-800 dark:text-zinc-100">
               რედაქტირება
             </div>
-            {isDirty ? (
+            {panelDirty ? (
               <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
                 შეუნახავი
               </span>
@@ -816,7 +893,7 @@ export function DesignInspector() {
         </button>
         <button
           type="button"
-          onClick={() => setDesignMode(false)}
+          onClick={onExitDesignMode}
           className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200/80 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           ✕
@@ -829,7 +906,7 @@ export function DesignInspector() {
             <button
               type="button"
               onClick={() => void onSave()}
-              disabled={!isDirty}
+              disabled={!panelDirty}
               className="flex-[1.6] rounded-md bg-emerald-600 px-2 py-1.5 text-[11px] font-bold text-white shadow-sm enabled:hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
               title="გამოქვეყნება ყველა ბრაუზერზე (Ctrl+S)"
             >
@@ -837,8 +914,8 @@ export function DesignInspector() {
             </button>
             <button
               type="button"
-              onClick={() => void discardDesignChanges()}
-              disabled={!isDirty}
+              onClick={() => void onDiscard()}
+              disabled={!panelDirty}
               className="rounded-md border border-slate-300 px-2 py-1.5 text-[11px] font-semibold text-slate-700 enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600 dark:text-zinc-200 dark:enabled:hover:bg-zinc-800"
               title="ცვლილებების გაუქმება"
             >
@@ -1439,6 +1516,19 @@ export function DesignInspector() {
                 უფრო მაღლა / ნაკლები დაშორება.
               </p>
             </div>
+          ) : null}
+
+          {selectedId === 'map' ? (
+            <MapPanelStyleEditor
+              map={resolveMapForMode(layout.map, activeModeId || 'day')}
+              modeLabel={activeModeLabel}
+              onChange={(patch) =>
+                updateBox(
+                  'map',
+                  applyMapStyleModePatch(layout.map, activeModeId || 'day', patch)
+                )
+              }
+            />
           ) : null}
 
       {selectedId === 'serviceRail' ? (
@@ -2246,6 +2336,9 @@ function HeaderEditor({
         <p className="text-[10px] leading-snug text-slate-400">
           გამოიყენება ელემენტებზე, რომლებსაც ცალკე ზომა/ფერი არ აქვთ.
         </p>
+        <p className="text-[10px] leading-snug text-slate-400">
+          ლოგოს ფაილის შეცვლა: ჰედერზე აირჩიე „ლოგოს იკონი“, ან ქვემოთ ელემენტების სიიდან.
+        </p>
         <div className="grid grid-cols-2 gap-2">
           <NumField
             label="იკონის ზომა"
@@ -2519,6 +2612,12 @@ function HeaderItemEditor({
   onBack: () => void;
   onUpdate: (patch: Partial<HeaderLayout>) => void;
 }) {
+  const { logoUrl, logoSrc, logoDirty, stageLogoUrl, publishedLogoUrl } = useBranding();
+  const logoFileRef = React.useRef<HTMLInputElement | null>(null);
+  const [logoUploading, setLogoUploading] = React.useState(false);
+  const [logoError, setLogoError] = React.useState('');
+  const [logoStatus, setLogoStatus] = React.useState('');
+
   const labelKey = headerItemLabelKey(itemId);
   const labelValue = labelKey ? header[labelKey] || '' : '';
   const pos = resolveHeaderItemPos(header.itemPositions, itemId);
@@ -2536,6 +2635,39 @@ function HeaderItemEditor({
   const color =
     itemStyle?.color ||
     (isBrand ? header.brandColor || brandFallbackColor : header.navColor || navFallbackColor);
+
+  const stageLogo = (nextUrl: string) => {
+    setLogoError('');
+    stageLogoUrl(nextUrl);
+    setLogoStatus(
+      nextUrl
+        ? 'ლოგო დრაფტშია — დააჭირე „შენახვა“ გამოქვეყნებისთვის'
+        : 'ნაგულისხმევი ლოგო დრაფტშია — დააჭირე „შენახვა“'
+    );
+  };
+
+  const onLogoFile = async (file: File | null) => {
+    if (!file) return;
+    setLogoUploading(true);
+    setLogoError('');
+    setLogoStatus('');
+    try {
+      const uploaded = await uploadBrandingLogoFile(file);
+      if (!uploaded?.url) {
+        setLogoError('ლოგოს ატვირთვა ვერ მოხერხდა');
+        return;
+      }
+      stageLogo(uploaded.url);
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'ლოგოს ატვირთვა ვერ მოხერხდა';
+      setLogoError(msg);
+    } finally {
+      setLogoUploading(false);
+    }
+  };
 
   /** Write the exact coordinates the admin asked for (drag/inspector agree). */
   const setPos = (next: { x: number; y: number }) => {
@@ -2671,9 +2803,66 @@ function HeaderItemEditor({
             onCommit={(value) => onUpdate({ [labelKey]: value })}
           />
         ) : isBrandLogo ? (
-          <p className="text-[10px] leading-snug text-slate-400">
-            იკონის ზომა და პოზიცია ცალკე იცვლება — ტექსტი („Vhome“) სხვა ელემენტია.
-          </p>
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-zinc-700 dark:bg-zinc-950">
+            <p className="text-[10px] leading-snug text-slate-400">
+              საიტის ლოგო — ატვირთე ახალი ფაილი (PNG, JPG, SVG, WebP, GIF, ICO და სხვ.).
+              ტექსტი („Vhome“) ცალკე ელემენტია.
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+                <BrandLogo sizePx={40} decorative srcOverride={logoSrc} />
+              </div>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <input
+                  ref={logoFileRef}
+                  type="file"
+                  accept="image/*,.svg,.ico,.webp,.avif,.bmp,.heic,.heif"
+                  className="hidden"
+                  onChange={(e) => {
+                    void onLogoFile(e.target.files?.[0] || null);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={logoUploading}
+                  onClick={() => logoFileRef.current?.click()}
+                  className="rounded-md bg-slate-800 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-900 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                >
+                  {logoUploading
+                    ? 'იტვირთება...'
+                    : logoUrl
+                      ? 'ლოგოს შეცვლა'
+                      : 'ლოგოს ატვირთვა'}
+                </button>
+                {logoUrl || publishedLogoUrl ? (
+                  <button
+                    type="button"
+                    disabled={logoUploading}
+                    onClick={() => stageLogo('')}
+                    className="ml-1.5 rounded-md border border-slate-300 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-white disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200"
+                  >
+                    ნაგულისხმევზე დაბრუნება
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <p className="truncate text-[10px] text-slate-400" title={logoSrc}>
+              {logoUrl
+                ? logoDirty
+                  ? 'მორგებული ლოგო (შეუნახავი)'
+                  : 'მორგებული ლოგო'
+                : `ნაგულისხმევი: ${DEFAULT_BRAND_LOGO_SRC}`}
+            </p>
+            {logoError ? (
+              <p className="text-[10px] font-medium text-red-600 dark:text-red-400">{logoError}</p>
+            ) : null}
+            {logoStatus ? (
+              <p className="text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                {logoStatus}
+              </p>
+            ) : null}
+          </div>
         ) : (
           <p className="text-[10px] leading-snug text-slate-400">
             ამ ელემენტს ტექსტი არ აქვს — მხოლოდ პოზიცია იცვლება.
@@ -4571,6 +4760,121 @@ function RailItemsEditor({
       {items.length === 0 ? (
         <p className="text-[11px] text-slate-400">ცარიელია — დააჭირე „+ ამ რეჟიმში“.</p>
       ) : null}
+    </div>
+  );
+}
+
+function MapPanelStyleEditor({
+  map,
+  modeLabel,
+  onChange,
+}: {
+  map: MapLayout;
+  modeLabel: string;
+  onChange: (patch: Partial<MapModeVisual>) => void;
+}) {
+  const m = { ...DEFAULT_MAP, ...map };
+  return (
+    <div className="space-y-2">
+      <p className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-[10px] leading-snug text-sky-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+        პანელი და სხივი ინახება <strong>რეჟიმის მიხედვით</strong>: {modeLabel}. სხვა რეჟიმზე
+        გადართე და ცალკე დააყენე.
+      </p>
+      <InspectorFold title="პანელის ფერები" defaultOpen>
+        <ColorField
+          label="პანელის ფონი"
+          value={m.panelBg || DEFAULT_MAP.panelBg!}
+          onChange={(panelBg) => onChange({ panelBg })}
+        />
+        <ColorField
+          label="პანელის ჩარჩო"
+          value={m.panelBorderColor || DEFAULT_MAP.panelBorderColor!}
+          onChange={(panelBorderColor) => onChange({ panelBorderColor })}
+        />
+        <ColorField
+          label="ტექსტი (რუკა)"
+          value={m.headerTextColor || DEFAULT_MAP.headerTextColor!}
+          onChange={(headerTextColor) => onChange({ headerTextColor })}
+        />
+        <NumField
+          label="კუთხეები (px)"
+          value={m.panelBorderRadius ?? DEFAULT_MAP.panelBorderRadius!}
+          min={0}
+          max={48}
+          onCommit={(panelBorderRadius) => onChange({ panelBorderRadius })}
+        />
+      </InspectorFold>
+
+      <InspectorFold title="გადამავალი სხივი" defaultOpen>
+        <label className="flex cursor-pointer items-center gap-2 text-[11px] text-slate-700 dark:text-zinc-200">
+          <input
+            type="checkbox"
+            checked={m.beamEnabled !== false}
+            onChange={(e) => onChange({ beamEnabled: e.target.checked })}
+          />
+          სხივი ჩართულია
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <NumField
+            label="სიგანე %"
+            value={m.beamWidthPct ?? DEFAULT_MAP.beamWidthPct!}
+            min={8}
+            max={100}
+            onCommit={(beamWidthPct) => onChange({ beamWidthPct })}
+          />
+          <NumField
+            label="სიმაღლე %"
+            value={m.beamHeightPct ?? DEFAULT_MAP.beamHeightPct!}
+            min={20}
+            max={100}
+            onCommit={(beamHeightPct) => onChange({ beamHeightPct })}
+          />
+          <NumField
+            label="დახრა °"
+            value={m.beamSkewDeg ?? DEFAULT_MAP.beamSkewDeg!}
+            min={-45}
+            max={45}
+            onCommit={(beamSkewDeg) => onChange({ beamSkewDeg })}
+          />
+          <NumField
+            label="სიჩქარე (წმ)"
+            value={m.beamDurationSec ?? DEFAULT_MAP.beamDurationSec!}
+            min={0.6}
+            max={16}
+            decimals={1}
+            nudge={0.1}
+            onCommit={(beamDurationSec) => onChange({ beamDurationSec })}
+          />
+          <NumField
+            label="გადაფარვა"
+            value={Math.round((m.beamOpacity ?? DEFAULT_MAP.beamOpacity!) * 100)}
+            min={0}
+            max={100}
+            onCommit={(pct) => onChange({ beamOpacity: pct / 100 })}
+          />
+          <NumField
+            label="ბლური (px)"
+            value={m.beamBlurPx ?? DEFAULT_MAP.beamBlurPx!}
+            min={0}
+            max={8}
+            onCommit={(beamBlurPx) => onChange({ beamBlurPx })}
+          />
+        </div>
+        <ColorField
+          label="სხივის ცენტრი"
+          value={m.beamColorCenter || DEFAULT_MAP.beamColorCenter!}
+          onChange={(beamColorCenter) => onChange({ beamColorCenter })}
+        />
+        <ColorField
+          label="სხივის კიდე"
+          value={m.beamColorSide || DEFAULT_MAP.beamColorSide!}
+          onChange={(beamColorSide) => onChange({ beamColorSide })}
+        />
+        <p className="text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
+          სხივი მხოლოდ ზედა ზოლზეა (რუკის შიგნით არა) — ასე უფრო მსუბუქია. ბლური მაქს. 8px;
+          მაღალი მნიშვნელობა გვერდს აჭედავს.
+        </p>
+      </InspectorFold>
     </div>
   );
 }

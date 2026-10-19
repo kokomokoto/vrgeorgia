@@ -36,13 +36,45 @@ const aboutLangSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const servicesSectionSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    styleKey: { type: String, default: 'arch', trim: true },
+    featured: { type: Boolean, default: false },
+    /** დამალული — პუბლიკურ გვერდზე არ ჩანს; ადმინი რედაქტირებაში ხედავს */
+    hidden: { type: Boolean, default: false },
+    /** სერვისის ფოტო (Cloudinary URL); ცარიელი = სტილის შაბლონის აიქონი */
+    imageUrl: { type: String, default: '', trim: true },
+    title: localizedStringSchema,
+    body: localizedStringSchema,
+  },
+  { _id: false }
+);
+
+const servicesPageSchema = new mongoose.Schema(
+  {
+    title: localizedStringSchema,
+    lead: localizedStringSchema,
+    footerNote: localizedStringSchema,
+  },
+  { _id: false }
+);
+
+const brandingSchema = new mongoose.Schema(
+  {
+    /** Cloudinary URL; ცარიელი = დეფოლტი /images/vhome-icon.png */
+    logoUrl: { type: String, default: '', trim: true },
+  },
+  { _id: false }
+);
+
 const siteContentSchema = new mongoose.Schema(
   {
     key: {
       type: String,
       required: true,
       unique: true,
-      enum: ['faq', 'about', 'home-design'],
+      enum: ['faq', 'about', 'home-design', 'services', 'branding'],
       trim: true,
     },
     /** FAQ */
@@ -56,6 +88,11 @@ const siteContentSchema = new mongoose.Schema(
       },
       default: undefined,
     },
+    /** Services page */
+    servicesPage: { type: servicesPageSchema, default: undefined },
+    servicesSections: { type: [servicesSectionSchema], default: undefined },
+    /** Site logo / branding */
+    branding: { type: brandingSchema, default: undefined },
     /** Homepage Design Mode layout (JSON) */
     layout: { type: mongoose.Schema.Types.Mixed, default: undefined },
     /** Named layout presets (admin-only; multiple “defaults”) */

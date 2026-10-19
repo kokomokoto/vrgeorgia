@@ -3,9 +3,13 @@ import {
   ensureFaqContent,
   ensureAboutContent,
   ensureHomeDesignContent,
+  ensureServicesContent,
+  ensureBrandingContent,
   faqPublicPayload,
   aboutPublicPayload,
   homeDesignPublicPayload,
+  servicesPublicPayload,
+  brandingPublicPayload,
 } from '../utils/siteContentService.js';
 
 const router = express.Router();
@@ -30,6 +34,16 @@ router.get('/about', async (_req, res) => {
   }
 });
 
+router.get('/services', async (_req, res) => {
+  try {
+    const doc = await ensureServicesContent();
+    res.json(servicesPublicPayload(doc));
+  } catch (error) {
+    console.error('GET /api/content/services:', error);
+    res.status(500).json({ message: 'მომსახურებების კონტენტის მიღება ვერ მოხერხდა' });
+  }
+});
+
 /** Homepage Design Mode layout — საჯარო (ყველა ვიზიტორი) */
 router.get('/home-design', async (_req, res) => {
   try {
@@ -38,6 +52,17 @@ router.get('/home-design', async (_req, res) => {
   } catch (error) {
     console.error('GET /api/content/home-design:', error);
     res.status(500).json({ message: 'მთავარი გვერდის დიზაინის მიღება ვერ მოხერხდა' });
+  }
+});
+
+/** საიტის ლოგო / ბრენდინგი — საჯარო */
+router.get('/branding', async (_req, res) => {
+  try {
+    const doc = await ensureBrandingContent();
+    res.json(brandingPublicPayload(doc));
+  } catch (error) {
+    console.error('GET /api/content/branding:', error);
+    res.status(500).json({ message: 'ბრენდინგის მიღება ვერ მოხერხდა' });
   }
 });
 

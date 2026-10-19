@@ -112,4 +112,15 @@ export type Property = {
   shareToken?: string;
 };
 
-export type User = { id: string; _id?: string; email: string; phone?: string; avatar?: string; name?: string; role?: 'user' | 'agent' | 'admin' | 'agent_admin'; status?: 'pending' | 'approved' | 'rejected' };
+export type User = {
+  id: string;
+  _id?: string;
+  email: string;
+  phone?: string;
+  avatar?: string;
+  name?: string;
+  role?: 'user' | 'agent' | 'admin' | 'agent_admin' | 'searcher';
+  status?: 'pending' | 'approved' | 'rejected';
+  /** ადმინმა ჩართო თუ არა პროფილის „მოთხოვნა“ */
+  agentRequestFeatureEnabled?: boolean;
+};

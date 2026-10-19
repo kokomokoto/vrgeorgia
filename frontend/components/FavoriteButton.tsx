@@ -16,15 +16,43 @@ function getFavorites(): string[] {
   if (typeof window === 'undefined') return [];
   try {
     const stored = localStorage.getItem(FAVORITES_KEY);
-    return stored ? JSON.parse(stored) : [];
+    const parsed = stored ? JSON.parse(stored) : [];
+    if (!Array.isArray(parsed)) return [];
+    const ids = parsed.filter((id): id is string => typeof id === 'string' && id.trim().length >= 5);
+    return [...new Set(ids)];
   } catch {
     return [];
   }
 }
 
+const FAVORITES_EVENT = 'vrgeorgia-favorites-changed';
+
 function saveFavorites(favorites: string[]) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  window.dispatchEvent(new CustomEvent(FAVORITES_EVENT));
+}
+
+export function replaceStoredFavorites(ids: string[]) {
+  saveFavorites([...new Set(ids.filter((id) => typeof id === 'string' && id.trim().length >= 5))]);
+}
+
+/** Header badge — follows localStorage, including ids removed after a failed open. */
+export function useFavoriteCount() {
+  const [count, setCount] = React.useState(0);
+
+  React.useEffect(() => {
+    const sync = () => setCount(getFavorites().length);
+    sync();
+    window.addEventListener(FAVORITES_EVENT, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(FAVORITES_EVENT, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  return count;
 }
 
 export function useFavorites() {

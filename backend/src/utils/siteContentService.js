@@ -1,5 +1,21 @@
 import { SiteContent } from '../models/SiteContent.js';
-import { DEFAULT_FAQ_ITEMS, DEFAULT_ABOUT_BY_LANG } from './siteContentDefaults.js';
+import {
+  DEFAULT_FAQ_ITEMS,
+  DEFAULT_ABOUT_BY_LANG,
+  DEFAULT_SERVICES_CONTENT,
+  DEFAULT_BRANDING,
+} from './siteContentDefaults.js';
+
+const SERVICE_STYLE_KEYS = new Set([
+  'arch',
+  'docs',
+  'planning',
+  'interior',
+  'landscape',
+  'vis',
+  'heritage',
+  'consult',
+]);
 
 function slugifyId(raw, fallback) {
   const base = String(raw || '')
@@ -100,6 +116,79 @@ export function aboutPublicPayload(doc) {
   };
 }
 
+export function normalizeServicesContent(raw = {}) {
+  const pageSrc = raw.page || {};
+  const page = {
+    title: normalizeLocalized(pageSrc.title),
+    lead: normalizeLocalized(pageSrc.lead),
+    footerNote: normalizeLocalized(pageSrc.footerNote),
+  };
+
+  const seen = new Set();
+  const sectionsIn = Array.isArray(raw.sections) ? raw.sections : [];
+  const sections = sectionsIn.map((item, index) => {
+    let id = slugifyId(item?.id, `service-${index + 1}`);
+    if (seen.has(id)) id = `${id}-${index + 1}`;
+    seen.add(id);
+    const styleRaw = String(item?.styleKey || 'arch').trim();
+    const styleKey = SERVICE_STYLE_KEYS.has(styleRaw) ? styleRaw : 'arch';
+    const imageUrl = String(item?.imageUrl || '').trim().slice(0, 2000);
+    return {
+      id,
+      styleKey,
+      featured: Boolean(item?.featured),
+      hidden: Boolean(item?.hidden),
+      imageUrl,
+      title: normalizeLocalized(item?.title),
+      body: normalizeLocalized(item?.body),
+    };
+  });
+
+  return { page, sections };
+}
+
+export async function ensureServicesContent() {
+  let doc = await SiteContent.findOne({ key: 'services' });
+  if (!doc) {
+    doc = await SiteContent.create({
+      key: 'services',
+      servicesPage: DEFAULT_SERVICES_CONTENT.page,
+      servicesSections: DEFAULT_SERVICES_CONTENT.sections,
+    });
+  } else if (!Array.isArray(doc.servicesSections) || doc.servicesSections.length === 0) {
+    doc.servicesPage = DEFAULT_SERVICES_CONTENT.page;
+    doc.servicesSections = DEFAULT_SERVICES_CONTENT.sections;
+    await doc.save();
+  }
+  return doc;
+}
+
+export function servicesAdminPayload(doc) {
+  const normalized = normalizeServicesContent({
+    page: doc.servicesPage || DEFAULT_SERVICES_CONTENT.page,
+    sections: doc.servicesSections || DEFAULT_SERVICES_CONTENT.sections,
+  });
+  if (normalized.sections.length === 0) {
+    return {
+      ...normalizeServicesContent(DEFAULT_SERVICES_CONTENT),
+      updatedAt: doc.updatedAt || null,
+    };
+  }
+  return {
+    ...normalized,
+    updatedAt: doc.updatedAt || null,
+  };
+}
+
+/** პუბლიკური — დამალული სექციები ამოიღება */
+export function servicesPublicPayload(doc) {
+  const full = servicesAdminPayload(doc);
+  return {
+    ...full,
+    sections: full.sections.filter((s) => !s.hidden),
+  };
+}
+
 export async function ensureHomeDesignContent() {
   let doc = await SiteContent.findOne({ key: 'home-design' });
   if (!doc) {
@@ -172,6 +261,32 @@ export function homeDesignAdminPayload(doc) {
     presets: normalizeHomeDesignPresets(doc.presets),
     updatedAt: doc.updatedAt || null,
     maxPresets: MAX_HOME_DESIGN_PRESETS,
+  };
+}
+
+export function normalizeBranding(raw = {}) {
+  const logoUrl = String(raw?.logoUrl ?? '').trim().slice(0, 2000);
+  return { logoUrl };
+}
+
+export async function ensureBrandingContent() {
+  let doc = await SiteContent.findOne({ key: 'branding' });
+  if (!doc) {
+    doc = await SiteContent.create({
+      key: 'branding',
+      branding: DEFAULT_BRANDING,
+    });
+  } else if (!doc.branding) {
+    doc.branding = DEFAULT_BRANDING;
+    await doc.save();
+  }
+  return doc;
+}
+
+export function brandingPublicPayload(doc) {
+  return {
+    ...normalizeBranding(doc.branding || DEFAULT_BRANDING),
+    updatedAt: doc.updatedAt || null,
   };
 }
 

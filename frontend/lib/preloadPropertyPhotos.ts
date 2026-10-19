@@ -9,6 +9,7 @@ export function resolveGalleryPhotoUrl(photo: string, panoramaPhotos?: string[])
   const variant = galleryVariant(photo, panoramaPhotos);
   return resolvePropertyImageUrl(photo, variant, {
     isPanorama: variant === 'original',
+    watermark: variant !== 'original',
   });
 }
 

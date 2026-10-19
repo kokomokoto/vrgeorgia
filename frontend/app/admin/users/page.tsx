@@ -219,6 +219,7 @@ export default function AdminUsers() {
               <option value="user">მომხმარებელი</option>
               <option value="agent">აგენტი</option>
               <option value="agent_admin">აგენტი-ადმინი</option>
+              <option value="searcher">მაძებარი</option>
               <option value="admin">ადმინი</option>
             </select>
             <button
@@ -383,6 +384,7 @@ export default function AdminUsers() {
                     <option value="user">მომხმარებელი</option>
                     <option value="agent">აგენტი</option>
                     <option value="agent_admin">აგენტი-ადმინი</option>
+                    <option value="searcher">მაძებარი</option>
                     <option value="admin">ადმინი</option>
                   </select>
                 </div>

@@ -12,7 +12,7 @@ import { propertyHref } from '@/lib/propertyPublicPath';
 
 export default function ComparePage() {
   const { t } = useTranslation();
-  const { compareProperties, removeFromCompare, clearCompare } = useCompare();
+  const { compareList, compareProperties, compareLoading, removeFromCompare, clearCompare } = useCompare();
   const [mounted, setMounted] = React.useState(false);
   const [sortKey, setSortKey] = React.useState<string | null>(null);
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc');
@@ -27,7 +27,7 @@ export default function ComparePage() {
       label: t('pricePerSqm'),
       getValue: (p) => getPropertyPrices(p).pricePerSqm ?? 0,
     },
-    { key: 'floor', label: t('floor'), getValue: (p) => p.floor || 0 },
+    { key: 'floor', label: t('floor_number'), getValue: (p) => p.floor || 0 },
     { key: 'constructionYear', label: t('construction_year'), getValue: (p) => p.constructionYear || 0 },
     { key: 'renovationYear', label: t('renovation_year'), getValue: (p) => p.renovationYear || 0 },
   ];
@@ -53,7 +53,9 @@ export default function ComparePage() {
     });
   }, [compareProperties, sortKey, sortDir]);
 
-  if (!mounted) return null;
+  if (!mounted || compareLoading) {
+    return <div className="text-sm text-slate-500">{mounted ? t('loading') : ''}</div>;
+  }
 
   const specs = [
     { key: 'price', label: t('price'), format: (p: Property) => `$${p.price.toLocaleString()}` },
@@ -67,11 +69,11 @@ export default function ComparePage() {
     { key: 'dealType', label: t('dealType'), format: (p: Property) => getDealTypeLabel(p.dealType, t, p.status) },
     { key: 'city', label: t('city'), format: (p: Property) => p.city || '-' },
     { key: 'region', label: t('region'), format: (p: Property) => p.region ? t(`region_${p.region}`) : '-' },
-    { key: 'floor', label: t('floor'), format: (p: Property) => p.floor ? `${p.floor}${p.totalFloors ? ` / ${p.totalFloors}` : ''}` : '-' },
+    { key: 'floor', label: t('floor_number'), format: (p: Property) => p.floor ? `${p.floor}${p.totalFloors ? ` / ${p.totalFloors}` : ''}` : '-' },
     { key: 'constructionYear', label: t('construction_year'), format: (p: Property) => p.constructionYear ? p.constructionYear.toString() : '-' },
     { key: 'renovationYear', label: t('renovation_year'), format: (p: Property) => p.renovationYear ? p.renovationYear.toString() : '-' },
     { key: 'balcony', label: t('balcony'), format: (p: Property) => (p.balcony ?? 0) > 0 ? String(p.balcony) : '-' },
-    { key: 'bathroom', label: t('bathroom'), format: (p: Property) => p.bathroom ? p.bathroom.toString() : '-' },
+    { key: 'bathroom', label: t('bathroom_label'), format: (p: Property) => p.bathroom ? p.bathroom.toString() : '-' },
     { key: 'elevator', label: `🛗 ${t('amenity_elevator')}`, format: (p: Property) => p.amenities?.elevator ? '✓' : '✗' },
     { key: 'furniture', label: `🛋️ ${t('amenity_furniture')}`, format: (p: Property) => p.amenities?.furniture ? '✓' : '✗' },
     { key: 'internet', label: `📶 ${t('amenity_internet')}`, format: (p: Property) => p.amenities?.internet ? '✓' : '✗' },
@@ -85,6 +87,16 @@ export default function ComparePage() {
     { key: 'amenityTerrace', label: `🏞️ ${t('terrace')}`, format: (p: Property) => p.amenities?.terrace ? '✓' : '✗' },
     { key: 'has3d', label: t('has3d'), format: (p: Property) => (p.exteriorLink || p.interiorLink || p.threeDLink || p.tourLink) ? '✓' : '✗' },
   ];
+
+  if (compareProperties.length === 0 && compareList.length > 0) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-slate-600">
+          {t('error_load_failed')}
+        </div>
+      </div>
+    );
+  }
 
   if (compareProperties.length === 0) {
     return (

@@ -29,8 +29,11 @@ import { Designable } from '@/components/home-design/Designable';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { useTheme } from '@/components/ThemeProvider';
 import {
+  DEFAULT_MAP,
   DEFAULT_TYPE_PANEL_ITEMS,
+  hexToRgba,
   isRailSectionHiddenForMode,
+  resolveMapForMode,
   resolveTypePanelItemsForMode,
   typePanelNeedsCountQuery,
 } from '@/lib/homeDesignLayout';
@@ -46,8 +49,74 @@ export default function HomePage() {
   const designMode = homeDesign?.designMode ?? false;
   const modeId = activeModeId || 'day';
   const serviceItemW = homeDesign?.layout.serviceRail.itemW ?? 200;
-  const mapW = homeDesign?.layout.map.w ?? 1280;
-  const mapH = homeDesign?.layout.map.h ?? 360;
+  const mapLayout = resolveMapForMode(
+    homeDesign?.layout.map ?? DEFAULT_MAP,
+    modeId
+  );
+  const mapW = mapLayout.w ?? 1280;
+  const mapH = mapLayout.h ?? 360;
+  const mapPanelBg = mapLayout.panelBg ?? DEFAULT_MAP.panelBg!;
+  const mapPanelBorder = mapLayout.panelBorderColor ?? DEFAULT_MAP.panelBorderColor!;
+  const mapPanelRadius = mapLayout.panelBorderRadius ?? DEFAULT_MAP.panelBorderRadius!;
+  const mapHeaderText = mapLayout.headerTextColor ?? DEFAULT_MAP.headerTextColor!;
+  const mapBeamEnabled = mapLayout.beamEnabled !== false;
+  const mapBeamWidthPct = mapLayout.beamWidthPct ?? DEFAULT_MAP.beamWidthPct!;
+  const mapBeamHeightPct = mapLayout.beamHeightPct ?? DEFAULT_MAP.beamHeightPct!;
+  const mapBeamSkew = mapLayout.beamSkewDeg ?? DEFAULT_MAP.beamSkewDeg!;
+  const mapBeamDur = mapLayout.beamDurationSec ?? DEFAULT_MAP.beamDurationSec!;
+  const mapBeamCenter = mapLayout.beamColorCenter ?? DEFAULT_MAP.beamColorCenter!;
+  const mapBeamSide = mapLayout.beamColorSide ?? DEFAULT_MAP.beamColorSide!;
+  const mapBeamOpacity = mapLayout.beamOpacity ?? DEFAULT_MAP.beamOpacity!;
+  /** blur ძვირია — 8px-ზე მეტს არ ვხატავთ ანიმაციაზე */
+  const mapBeamBlur = Math.min(mapLayout.beamBlurPx ?? DEFAULT_MAP.beamBlurPx!, 8);
+  const mapPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const [mapBeamInView, setMapBeamInView] = React.useState(true);
+  const [mapPageVisible, setMapPageVisible] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!mapBeamEnabled) return;
+    const onVis = () => setMapPageVisible(document.visibilityState === 'visible');
+    onVis();
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [mapBeamEnabled]);
+
+  React.useEffect(() => {
+    if (!mapBeamEnabled) return;
+    const el = mapPanelRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      ([entry]) => setMapBeamInView(Boolean(entry?.isIntersecting)),
+      { root: null, threshold: 0.05, rootMargin: '40px' }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [mapBeamEnabled]);
+
+  const mapBeamPaused = !mapBeamInView || !mapPageVisible;
+  const mapBeamStyle = React.useMemo(() => {
+    const side = mapBeamSide;
+    const center = mapBeamCenter;
+    return {
+      width: `${mapBeamWidthPct}%`,
+      height: `${mapBeamHeightPct}%`,
+      top: `calc((100% - ${mapBeamHeightPct}%) / 2)`,
+      opacity: mapBeamOpacity,
+      filter: mapBeamBlur > 0 ? `blur(${mapBeamBlur}px)` : undefined,
+      animationDuration: `${mapBeamDur}s`,
+      ['--home-map-beam-skew' as string]: `${mapBeamSkew}deg`,
+      background: `linear-gradient(105deg, transparent 0%, ${hexToRgba(side, 0)} 30%, ${hexToRgba(side, 0.2)} 44%, ${hexToRgba(center, 0.9)} 50%, ${hexToRgba(side, 0.28)} 56%, ${hexToRgba(side, 0)} 70%, transparent 100%)`,
+    } as React.CSSProperties;
+  }, [
+    mapBeamWidthPct,
+    mapBeamHeightPct,
+    mapBeamOpacity,
+    mapBeamBlur,
+    mapBeamDur,
+    mapBeamSkew,
+    mapBeamSide,
+    mapBeamCenter,
+  ]);
   const listingsW = homeDesign?.layout.listings?.w ?? 1280;
   const listingsMinH = homeDesign?.layout.listings?.h ?? 480;
   const typePanelW = homeDesign?.layout.typePanel.w ?? 1280;
@@ -390,20 +459,32 @@ export default function HomePage() {
 
               <Designable id="map">
                 <div
-                  className="mx-auto w-full max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 md:max-w-[var(--map-w)]"
+                  ref={mapPanelRef}
+                  className="home-map-panel mx-auto w-full max-w-full overflow-hidden border md:max-w-[var(--map-w)]"
                   style={
                     {
                       width: '100%',
                       '--map-w': `${mapW}px`,
+                      backgroundColor: mapPanelBg,
+                      borderColor: mapPanelBorder,
+                      borderRadius: mapPanelRadius,
                     } as React.CSSProperties
                   }
                 >
-                  <div className="flex min-h-11 items-center gap-2 px-3 py-2">
+                  <div className="home-map-panel__header relative z-[1] flex min-h-11 items-center gap-2 px-3 py-2">
+                    {mapBeamEnabled ? (
+                      <span
+                        className={`home-map-panel__beam${mapBeamPaused ? ' is-paused' : ''}`}
+                        aria-hidden
+                        style={mapBeamStyle}
+                      />
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setMapOpen((open) => !open)}
                       onPointerDown={(e) => e.stopPropagation()}
-                      className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left text-slate-700 dark:text-zinc-200"
+                      className="pointer-events-auto relative z-[2] flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left"
+                      style={{ color: mapHeaderText }}
                       aria-expanded={mapOpen}
                       aria-label={
                         mapOpen
@@ -426,7 +507,7 @@ export default function HomePage() {
                     </button>
                     <Link
                       href={mapHref}
-                      className="pointer-events-auto shrink-0 whitespace-nowrap rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400 md:px-3 md:py-2 md:text-sm"
+                      className="pointer-events-auto relative z-[2] shrink-0 whitespace-nowrap rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 dark:bg-amber-500 dark:text-black dark:hover:bg-amber-400 md:px-3 md:py-2 md:text-sm"
                       onPointerDown={(e) => e.stopPropagation()}
                     >
                       {tr('map_open_full_view', 'რუკაზე ძებნა')}

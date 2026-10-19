@@ -3,6 +3,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiLang } from '@/lib/apiLang';
+import { changeAppLanguage } from '@/lib/i18n';
 
 const langs = [
   { code: 'ka', label: 'KA' },
@@ -23,7 +24,7 @@ export function LanguageSwitcher() {
       suppressHydrationWarning
       className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
       value={current}
-      onChange={(e) => i18n.changeLanguage(e.target.value)}
+      onChange={(e) => void changeAppLanguage(e.target.value)}
       aria-label="Language"
     >
       {langs.map((l) => (

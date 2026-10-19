@@ -68,6 +68,14 @@ function primarySortKey(sortRaw) {
 }
 
 /**
+ * ნაგულისხმევი browse (date_desc / ცარიელი) — აპინულები ზემოთ.
+ * ნებისმიერი სხვა სორტი — მხოლოდ სორტის წესები (აპინი არ ფარავს).
+ */
+export function preferPinnedInSort(sortRaw) {
+  return primarySortKey(sortRaw) === 'date_desc';
+}
+
+/**
  * Simple Mongo `.sort()` object.
  * Prefer `queryPropertiesSorted` — raw `pinned` sort treats missing ≠ false.
  */
@@ -85,7 +93,10 @@ export function parsePropertySortOption(sortRaw) {
     sortOption = { createdAt: -1 };
   }
   // Note: callers that still use find().sort(this) will mis-order docs with missing `pinned`.
-  return { pinned: -1, pinOrder: -1, pinnedAt: -1, ...sortOption };
+  if (preferPinnedInSort(sortRaw)) {
+    return { pinned: -1, pinOrder: -1, pinnedAt: -1, ...sortOption };
+  }
+  return sortOption;
 }
 
 /**
@@ -128,7 +139,8 @@ export function getPropertySortPlan(sortRaw) {
 
 /**
  * List properties with correct ordering:
- * - pinned (missing treated as false)
+ * - default date_desc: pinned first (missing pinned treated as false)
+ * - any other sort: follow sort rules only (pins do not float to top)
  * - price normalized to USD total; area uses max(sqm, houseSqm)
  * @param {import('mongoose').Model} PropertyModel
  * @param {Record<string, unknown>} filter
@@ -138,6 +150,7 @@ export function getPropertySortPlan(sortRaw) {
 export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts = {}) {
   const { skip = 0, limit, select } = opts;
   const plan = getPropertySortPlan(sortRaw);
+  const preferPinned = preferPinnedInSort(sortRaw);
 
   // aggregate $match არ ასრულებს mongoose cast-ს — string userId ObjectId ველს ვერ ემთხვევა
   // (countDocuments კასტავს → total > 0, სია კი ცარიელი რჩება)
@@ -149,41 +162,44 @@ export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts
 
   // missing `pinned` must sort like false — raw { pinned: -1 } sends those docs to the end
   // pinOrder: admin drag order; fallback to pinnedAt ms for older docs without pinOrder
-  const addFields = {
-    _sortPinned: { $cond: [{ $eq: ['$pinned', true] }, 1, 0] },
-    _sortPinOrder: {
-      $ifNull: [
-        '$pinOrder',
-        {
-          $convert: {
-            input: '$pinnedAt',
-            to: 'long',
-            onError: 0,
-            onNull: 0,
-          },
+  const pinFields = preferPinned
+    ? {
+        _sortPinned: { $cond: [{ $eq: ['$pinned', true] }, 1, 0] },
+        _sortPinOrder: {
+          $ifNull: [
+            '$pinOrder',
+            {
+              $convert: {
+                input: '$pinnedAt',
+                to: 'long',
+                onError: 0,
+                onNull: 0,
+              },
+            },
+          ],
         },
-      ],
-    },
-  };
+      }
+    : null;
 
   /** @type {Record<string, 1|-1>} */
-  let sortSpec = {
-    _sortPinned: -1,
-    _sortPinOrder: -1,
-    pinnedAt: -1,
-  };
+  let sortSpec = preferPinned
+    ? {
+        _sortPinned: -1,
+        _sortPinOrder: -1,
+        pinnedAt: -1,
+      }
+    : {};
 
   if (plan.needsComputed) {
     const usdToGel = plan.computed === 'price' ? await getUsdToGelRate() : 1;
-    addFields._sortValue =
+    const sortValueExpr =
       plan.computed === 'price'
         ? buildComparableTotalPriceUsdExpr(usdToGel)
         : buildSortAreaExpr();
-    pipeline.push({ $addFields: { _sortValue: addFields._sortValue } });
+    pipeline.push({ $addFields: { _sortValue: sortValueExpr } });
     pipeline.push({
       $addFields: {
-        _sortPinned: addFields._sortPinned,
-        _sortPinOrder: addFields._sortPinOrder,
+        ...(pinFields || {}),
         _sortMissing: {
           $cond: [
             {
@@ -195,19 +211,25 @@ export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts
         },
       },
     });
-    sortSpec = {
-      _sortPinned: -1,
-      _sortPinOrder: -1,
-      pinnedAt: -1,
-      _sortMissing: 1,
-      _sortValue: plan.direction,
-      createdAt: -1,
-    };
-  } else {
+    sortSpec = preferPinned
+      ? {
+          _sortPinned: -1,
+          _sortPinOrder: -1,
+          pinnedAt: -1,
+          _sortMissing: 1,
+          _sortValue: plan.direction,
+          createdAt: -1,
+        }
+      : {
+          _sortMissing: 1,
+          _sortValue: plan.direction,
+          createdAt: -1,
+        };
+  } else if (preferPinned) {
     pipeline.push({
       $addFields: {
-        _sortPinned: addFields._sortPinned,
-        _sortPinOrder: addFields._sortPinOrder,
+        _sortPinned: pinFields._sortPinned,
+        _sortPinOrder: pinFields._sortPinOrder,
       },
     });
     sortSpec = {
@@ -216,15 +238,18 @@ export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts
       pinnedAt: -1,
       ...plan.fieldSort,
     };
+  } else {
+    sortSpec = { ...plan.fieldSort };
   }
 
   pipeline.push({ $sort: sortSpec });
   if (skip) pipeline.push({ $skip: skip });
   if (limit != null) pipeline.push({ $limit: limit });
 
-  const helperFields = plan.needsComputed
-    ? ['_sortPinned', '_sortPinOrder', '_sortValue', '_sortMissing']
-    : ['_sortPinned', '_sortPinOrder'];
+  const helperFields = [
+    ...(preferPinned ? ['_sortPinned', '_sortPinOrder'] : []),
+    ...(plan.needsComputed ? ['_sortValue', '_sortMissing'] : []),
+  ];
 
   if (select) {
     const include = {};
@@ -241,8 +266,10 @@ export async function queryPropertiesSorted(PropertyModel, filter, sortRaw, opts
           hasInclude = true;
         }
       });
-    pipeline.push({ $project: hasInclude ? include : exclude });
-  } else {
+    if (hasInclude || helperFields.length > 0) {
+      pipeline.push({ $project: hasInclude ? include : exclude });
+    }
+  } else if (helperFields.length > 0) {
     pipeline.push({ $unset: helperFields });
   }
 

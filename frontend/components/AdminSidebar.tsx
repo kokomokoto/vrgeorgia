@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getApiBase } from '@/lib/config';
+import { BrandLogo } from '@/components/BrandLogo';
 
 type Item = { href: string; icon: string; label: string; exact?: boolean; badgeKey?: 'registrations' | 'properties' | 'trash' | 'duplicates' };
 
@@ -90,10 +91,17 @@ export function AdminSidebar({
 
   return (
     <div className="fixed left-0 top-0 h-full w-64 overflow-y-auto bg-gray-900 p-4 text-white">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold">🏠 VR Georgia</h1>
-        <p className="text-sm text-gray-400">ადმინისტრატორის პანელი</p>
-      </div>
+      <Link
+        href="/"
+        className="mb-8 block rounded-lg px-1 py-1 text-white no-underline transition hover:bg-gray-800"
+        aria-label="Vhome — მთავარ გვერდზე დაბრუნება"
+      >
+        <span className="flex items-center gap-2.5">
+          <BrandLogo sizePx={32} decorative />
+          <span className="text-2xl font-bold leading-none">Vhome</span>
+        </span>
+        <span className="mt-1.5 block text-sm text-gray-400">ადმინისტრატორის პანელი</span>
+      </Link>
 
       <nav className="space-y-2">
         {ITEMS.map((item) => {

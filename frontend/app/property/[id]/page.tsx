@@ -28,7 +28,6 @@ import {
   startPropertyGalleryPreload,
 } from '@/lib/preloadPropertyPhotos';
 import { LightboxZoomImage } from '@/components/LightboxZoomImage';
-import { PhotoWatermark } from '@/components/PhotoWatermark';
 import { cloudinaryWatermarkedDownloadUrl } from '@/lib/imageUrl';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { toYouTubeEmbedUrl } from '@/lib/youtubeEmbed';
@@ -83,7 +82,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
   const is360 = isPanoramaPhoto(photoUrl, panoramaPhotos);
   const displayUrl = is360
     ? resolveImageUrl(photoUrl)
-    : resolveImageUrl(photoUrl, 'large', { isPanorama: false });
+    : resolveImageUrl(photoUrl, 'large', { isPanorama: false, watermark: true });
   const viewerUrl = resolveImageUrl(photoUrl);
   const viewerWrapRef = React.useRef<HTMLDivElement>(null);
   const [show360Ui, setShow360Ui] = React.useState(true);
@@ -213,7 +212,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
           className={
             shortLandscape
               ? 'absolute inset-0 flex items-center justify-center'
-              : 'relative flex h-[min(86vh,calc(100dvh-10rem))] w-[min(96vw,calc(100vw-3rem))] max-w-[1600px] items-center justify-center'
+              : 'flex h-[min(86vh,calc(100dvh-10rem))] w-[min(96vw,calc(100vw-3rem))] max-w-[1600px] items-center justify-center'
           }
           onClick={(e) => e.stopPropagation()}
         >
@@ -223,14 +222,6 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
             alt={`Photo ${index + 1}`}
             onSwipeLeft={lightboxGoNext}
             onSwipeRight={lightboxGoPrev}
-          />
-          <PhotoWatermark
-            size="lg"
-            className={
-              shortLandscape
-                ? 'bottom-16 left-6 z-[3]'
-                : 'bottom-24 left-8 z-[3]'
-            }
           />
         </div>
       )}
@@ -279,6 +270,7 @@ function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, 
             <img
               src={resolveImageUrl(p, 'thumb', {
                 isPanorama: isPanoramaPhoto(p, panoramaPhotos),
+                watermark: !isPanoramaPhoto(p, panoramaPhotos),
               })}
               alt={`Photo ${i + 1}`}
               className="h-full w-full object-cover"
@@ -775,7 +767,6 @@ function PropertyDetailInner() {
           {displayPhotoUrl && !loadedGalleryPhotos.has(displayPhotoUrl) && (
             <Shimmer className="absolute inset-0 rounded-none" />
           )}
-          <PhotoWatermark size="md" className="bottom-3 left-3 z-[2]" />
         </button>
       )}
       {photos.length > 1 && (
@@ -1087,6 +1078,7 @@ function PropertyDetailInner() {
                 <img
                   src={resolveImageUrl(p, is360Thumb ? undefined : 'thumb', {
                     isPanorama: is360Thumb,
+                    watermark: !is360Thumb,
                   })}
                   alt={`Photo ${idx + 1}`}
                   className={`h-[140px] sm:h-[180px] w-auto rounded-lg ${is360Thumb ? 'object-contain bg-slate-900 min-w-[200px]' : 'object-cover'}`}

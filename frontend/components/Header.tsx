@@ -8,8 +8,10 @@ import { BrandLogo } from './BrandLogo';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from './AuthProvider';
+import { useCompare } from './CompareProvider';
+import { useFavoriteCount } from './FavoriteButton';
 import { useTheme } from './ThemeProvider';
-import { isAdminRole, isAgentRole } from '@/lib/userRoles';
+import { isAdminRole, isAgentRole, isSearcherRole } from '@/lib/userRoles';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { DesignableBadge } from '@/components/home-design/DesignableBadge';
 import {
@@ -553,9 +555,23 @@ function HeaderFreeItem({
   );
 }
 
+function NavCountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      key={count}
+      className="absolute -right-2.5 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-white animate-[header-badge-pop_0.35s_ease-out] dark:ring-zinc-950"
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
 export function Header() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const favoriteCount = useFavoriteCount();
+  const { compareCount } = useCompare();
   const { theme, activeModeId } = useTheme();
   const design = useHomeDesignOptional();
   const designMode = design?.designMode ?? false;
@@ -718,6 +734,7 @@ export function Header() {
     headerLayout?.adminLabel?.trim() || (mounted ? t('admin_panel') : 'ადმინ პანელი');
   const isAdmin = isAdminRole(user?.role);
   const isAgent = isAgentRole(user?.role);
+  const isSearcher = isSearcherRole(user?.role);
 
   React.useLayoutEffect(() => {
     if (!freeLayoutUsable) {
@@ -960,6 +977,7 @@ export function Header() {
         </span>
       </HeaderFreeItem>
 
+      {!isSearcher ? (
       <HeaderFreeItem
         itemId="upload"
         pos={pos('upload')}
@@ -978,6 +996,7 @@ export function Header() {
       >
         {uploadText}
       </HeaderFreeItem>
+      ) : null}
 
       <HeaderFreeItem
         itemId="favorites"
@@ -992,9 +1011,12 @@ export function Header() {
         onClick={designMode ? onDesignItemClick('favorites') : undefined}
       >
         <span data-theme-nav className="flex items-center gap-1">
-          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
+          <span className="relative inline-flex">
+            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+            <NavCountBadge count={favoriteCount} />
+          </span>
           {favoritesText}
         </span>
       </HeaderFreeItem>
@@ -1012,14 +1034,17 @@ export function Header() {
         onClick={designMode ? onDesignItemClick('compare') : undefined}
       >
         <span data-theme-nav className="flex items-center gap-1">
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-            />
-          </svg>
+          <span className="relative inline-flex">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+            <NavCountBadge count={compareCount} />
+          </span>
           {compareText}
         </span>
       </HeaderFreeItem>
@@ -1278,6 +1303,7 @@ export function Header() {
               </svg>
               {agentsText}
             </Link>
+            {!isSearcher ? (
             <Link
               href="/upload"
               className={uploadLinkClass}
@@ -1286,21 +1312,28 @@ export function Header() {
             >
               {uploadText}
             </Link>
+            ) : null}
             <Link href="/favorites" data-theme-nav className="flex items-center gap-1" style={navStyle}>
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
+              <span className="relative inline-flex">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                <NavCountBadge count={favoriteCount} />
+              </span>
               {favoritesText}
             </Link>
             <Link href="/compare" data-theme-nav className="flex items-center gap-1" style={navStyle}>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
+              <span className="relative inline-flex">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                  />
+                </svg>
+                <NavCountBadge count={compareCount} />
+              </span>
               {compareText}
             </Link>
             {!user ? (
@@ -1396,6 +1429,7 @@ export function Header() {
             <Link href="/agents" data-theme-nav onClick={() => setOpen(false)} className="flex flex-row items-center gap-2 py-2" style={navStyle}>
               {agentsText}
             </Link>
+            {!isSearcher ? (
             <Link
               href="/upload"
               onClick={() => setOpen(false)}
@@ -1404,10 +1438,23 @@ export function Header() {
             >
               {uploadText}
             </Link>
-            <Link href="/favorites" data-theme-nav onClick={() => setOpen(false)} className="py-2" style={navStyle}>
+            ) : null}
+            <Link href="/favorites" data-theme-nav onClick={() => setOpen(false)} className="flex items-center gap-2 py-2" style={navStyle}>
+              <span className="relative inline-flex">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                <NavCountBadge count={favoriteCount} />
+              </span>
               {favoritesText}
             </Link>
-            <Link href="/compare" data-theme-nav onClick={() => setOpen(false)} className="py-2" style={navStyle}>
+            <Link href="/compare" data-theme-nav onClick={() => setOpen(false)} className="flex items-center gap-2 py-2" style={navStyle}>
+              <span className="relative inline-flex">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <NavCountBadge count={compareCount} />
+              </span>
               {compareText}
             </Link>
             {!user ? (

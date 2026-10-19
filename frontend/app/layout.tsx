@@ -59,7 +59,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ka" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
         <meta name="theme-color" content="#22c55e" />

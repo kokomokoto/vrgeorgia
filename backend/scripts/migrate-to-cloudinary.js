@@ -21,7 +21,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
+// სკრიპტი backend/scripts/-შია; uploads საქაღალდე backend/-ის root-შია
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 
 // Cache: localPath -> cloudinaryUrl  (avoid re-uploading duplicates)
 const urlCache = new Map();

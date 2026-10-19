@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { propertyHref } from '@/lib/propertyPublicPath';
 import CompareButton from '@/components/CompareButton';
-import FavoriteButton from '@/components/FavoriteButton';
+import FavoriteButton, { replaceStoredFavorites } from '@/components/FavoriteButton';
 import PinnedListingMark from '@/components/PinnedListingMark';
-import { getProperty, resolveImageUrl } from '@/lib/api';
+import { ApiHttpError, getProperty, resolveImageUrl } from '@/lib/api';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import type { Property } from '@/lib/types';
 
@@ -27,6 +27,7 @@ export default function FavoritesPage() {
   const { t } = useTranslation();
   const [favorites, setFavorites] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => setHydrated(true), []);
@@ -42,13 +43,22 @@ export default function FavoritesPage() {
 
     // თითოეული ფავორიტის ჩატვირთვა
     Promise.all(
-      favoriteIds.map(id => 
-        getProperty(id)
-          .then(res => res.property)
-          .catch(() => null)
-      )
-    ).then(properties => {
-      setFavorites(properties.filter((p): p is Property => p !== null));
+      favoriteIds.map(async (id) => {
+        try {
+          const res = await getProperty(id);
+          return { id, property: res.property, missing: false, failed: false };
+        } catch (err) {
+          const missing = err instanceof ApiHttpError && (err.status === 404 || err.status === 400);
+          return { id, property: null, missing, failed: !missing };
+        }
+      })
+    ).then((rows) => {
+      const gone = rows.filter((row) => row.missing).map((row) => row.id);
+      if (gone.length > 0) {
+        replaceStoredFavorites(favoriteIds.filter((id) => !gone.includes(id)));
+      }
+      setFavorites(rows.flatMap((row) => (row.property ? [row.property] : [])));
+      setLoadFailed(rows.some((row) => row.failed) && rows.every((row) => !row.property));
       setLoading(false);
     });
   }, [hydrated]);
@@ -77,7 +87,11 @@ export default function FavoritesPage() {
         </h1>
       </div>
 
-      {favorites.length === 0 ? (
+      {loadFailed ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-slate-600">
+          {t('error_load_failed')}
+        </div>
+      ) : favorites.length === 0 ? (
         <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
           <div className="text-6xl mb-4">💔</div>
           <div className="text-slate-600 mb-4">{t('noFavorites')}</div>

@@ -8,7 +8,11 @@ const userSchema = new mongoose.Schema(
     personalId: { type: String, default: '' },
     avatar: { type: String, default: '' },
     name: { type: String, default: '' },
-    role: { type: String, enum: ['user', 'agent', 'admin', 'agent_admin'], default: 'user' },
+    role: {
+      type: String,
+      enum: ['user', 'agent', 'admin', 'agent_admin', 'searcher'],
+      default: 'user',
+    },
     // რეგისტრაციის სტატუსი — ახალი მომხმარებლები იქმნება 'pending'-ით და ვერ
     // შედიან სანამ ადმინი არ დაამტკიცებს. ძველი მომხმარებლები (ველი არ აქვთ)
     // ითვლებიან დამტკიცებულად (default 'approved').

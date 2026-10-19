@@ -15,11 +15,12 @@ export { resolvePropertyImageUrl, applyCloudinaryTransform } from './imageUrl';
  * - ავატარი/აგენტი: variant-ის გარეშე
  * - ობიექტის ფოტო: variant 'thumb' | 'large' (Cloudinary f_auto → AVIF)
  * - 360°: isPanorama: true → master URL უცვლელად
+ * - watermark: true მხოლოდ განცხადების გვერდზე (მთავარი/სია სუფთა)
  */
 export function resolveImageUrl(
   path: string | null | undefined,
   variant?: PropertyImageVariant,
-  options?: { isPanorama?: boolean }
+  options?: { isPanorama?: boolean; watermark?: boolean }
 ): string {
   if (variant) {
     return resolvePropertyImageUrl(path, variant, options);
@@ -156,18 +157,8 @@ function formatNetworkError(base: string, init: RequestInit): string {
   );
 }
 
-/** UI catch ბლოკებისთვის: ადმინი/dev — დეტალი, სხვა — ზოგადი. */
-export function getNetworkErrorMessage(opts?: { upload?: boolean; timedOut?: boolean }): string {
-  const init: RequestInit = opts?.upload ? { body: new FormData() } : {};
-  const msg = formatNetworkError(getApiBase(), init);
-  if (opts?.timedOut && canSeeTechnicalErrors()) {
-    return `${msg} (დრო ამოიწურა — სცადეთ ხელახლა 1–2 წუთში)`;
-  }
-  return msg;
-}
-
 /** ტრანსპორტის დონის ჩავარდნა (კავშირი გაწყდა / დრო ამოიწურა) — გამეორება აზრიანია */
-export class ApiNetworkError extends Error {
+class ApiNetworkError extends Error {
   readonly transport = true;
   readonly timedOut: boolean;
   constructor(message: string, timedOut = false) {
@@ -629,11 +620,245 @@ export async function uploadHomeDesignMediaFile(file: File) {
   });
 }
 
-// Get properties by user id
-export async function getUserProperties(userId: string) {
-  return request<{ properties: Property[] }>(`/api/properties/user/${userId}`);
+/** მომსახურების ფოტო → Cloudinary */
+export async function uploadServicesMediaFile(file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return request<{
+    url: string;
+    publicId?: string | null;
+  }>('/api/admin/content/services/media', {
+    method: 'POST',
+    body: form,
+    timeoutMs: 180_000,
+  });
 }
 
+/** საიტის ლოგო → Cloudinary */
+export async function uploadBrandingLogoFile(file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return request<{
+    url: string;
+    publicId?: string | null;
+    format?: string | null;
+  }>('/api/admin/content/branding/media', {
+    method: 'POST',
+    body: form,
+    timeoutMs: 180_000,
+  });
+}
+
+export async function saveSiteBranding(payload: { logoUrl: string }) {
+  return request<{ logoUrl: string; updatedAt?: string | null }>(
+    '/api/admin/content/branding',
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+      timeoutMs: 30_000,
+    }
+  );
+}
+
+export type AgentRequestResult = {
+  propertyId?: string | null;
+  numericId?: number | null;
+  title: string;
+  summary: string;
+  city?: string;
+  district?: string;
+  rooms?: number | null;
+  price?: number | null;
+  priceCurrency?: string;
+  dealType?: string;
+  type?: string;
+  photo?: string;
+  source?: string;
+  sourceUrl?: string;
+};
+
+export type AgentRequestComment = {
+  id: string;
+  authorUserId?: string;
+  authorName?: string;
+  authorRole?: string;
+  body: string;
+  sold?: boolean;
+  soldAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type AgentRequestItem = {
+  id: string;
+  agentUserId?: string;
+  agentName?: string;
+  agentEmail?: string;
+  prompt: string;
+  requestNumber?: number | null;
+  status: 'pending' | 'processing' | 'done' | 'failed' | 'sold';
+  paused?: boolean;
+  isPublic?: boolean;
+  isOwner?: boolean;
+  sold?: boolean;
+  soldAt?: string | null;
+  parsedFilters?: {
+    rooms?: number | null;
+    district?: string;
+    city?: string;
+    propertyType?: string;
+    dealType?: string;
+  };
+  results: AgentRequestResult[];
+  resultCount: number;
+  comments?: AgentRequestComment[];
+  botMessage: string;
+  errorMessage?: string;
+  unread?: boolean;
+  createdAt?: string;
+  processedAt?: string | null;
+};
+
+export type AgentRequestPrefs = {
+  notifyTime1: string;
+  notifyTime2: string;
+  contacts: {
+    whatsapp: string;
+    facebook: string;
+    viber: string;
+    telegram: string;
+    other: string;
+  };
+};
+
+export async function listAgentRequests() {
+  return request<{ requests: AgentRequestItem[] }>('/api/agent-requests');
+}
+
+export async function listPublicAgentRequests() {
+  return request<{ requests: AgentRequestItem[] }>('/api/agent-requests/public');
+}
+
+export async function setAgentRequestVisibility(id: string, isPublic: boolean) {
+  return request<{ request: AgentRequestItem }>(`/api/agent-requests/${id}/visibility`, {
+    method: 'POST',
+    body: JSON.stringify({ isPublic }),
+  });
+}
+
+export async function createAgentRequests(prompts: string[]) {
+  return request<{ request: AgentRequestItem; requests: AgentRequestItem[] }>(
+    '/api/agent-requests',
+    {
+      method: 'POST',
+      body: JSON.stringify({ prompts }),
+    }
+  );
+}
+
+export async function markAgentRequestRead(id: string) {
+  return request<{ request: AgentRequestItem }>(`/api/agent-requests/${id}/read`, {
+    method: 'POST',
+  });
+}
+
+export async function addAgentRequestComment(id: string, body: string) {
+  return request<{ request: AgentRequestItem }>(`/api/agent-requests/${id}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  });
+}
+
+export async function pauseAgentRequest(id: string) {
+  return request<{ request: AgentRequestItem }>(`/api/agent-requests/${id}/pause`, {
+    method: 'POST',
+  });
+}
+
+export async function resumeAgentRequest(id: string) {
+  return request<{ request: AgentRequestItem }>(`/api/agent-requests/${id}/resume`, {
+    method: 'POST',
+  });
+}
+
+export async function deleteAgentRequest(id: string) {
+  return request<{ ok: boolean; id: string }>(`/api/agent-requests/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getAgentRequestPrefs() {
+  return request<{ prefs: AgentRequestPrefs }>('/api/agent-requests/prefs');
+}
+
+export async function saveAgentRequestPrefs(prefs: AgentRequestPrefs) {
+  return request<{ prefs: AgentRequestPrefs }>('/api/agent-requests/prefs', {
+    method: 'PUT',
+    body: JSON.stringify(prefs),
+  });
+}
+// ========== SEARCHER (მაძებარი) ==========
+
+export type SearcherAgentRow = {
+  agentId: string;
+  userId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  photo?: string;
+  company?: string;
+  pendingCount: number;
+  totalCount: number;
+  notifyTime1?: string;
+  notifyTime2?: string;
+};
+
+export async function listSearcherAgents() {
+  return request<{ agents: SearcherAgentRow[] }>('/api/searcher/agents');
+}
+
+export async function listSearcherAgentRequests(agentUserId: string) {
+  return request<{
+    agent: SearcherAgentRow;
+    requests: AgentRequestItem[];
+  }>(`/api/searcher/agents/${agentUserId}/requests`);
+}
+
+export async function addSearcherRequestComment(requestId: string, body: string) {
+  return request<{ request: AgentRequestItem }>(
+    `/api/searcher/requests/${requestId}/comments`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }
+  );
+}
+
+export async function updateSearcherRequestComment(
+  requestId: string,
+  commentId: string,
+  body: string
+) {
+  return request<{ request: AgentRequestItem }>(
+    `/api/searcher/requests/${requestId}/comments/${commentId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ body }),
+    }
+  );
+}
+
+export async function deleteSearcherRequestComment(
+  requestId: string,
+  commentId: string
+) {
+  return request<{ request: AgentRequestItem }>(
+    `/api/searcher/requests/${requestId}/comments/${commentId}`,
+    {
+      method: 'DELETE',
+    }
+  );
+}
 // ========== FAVORITES ==========
 
 export async function getFavorites() {
@@ -651,11 +876,6 @@ export async function removeFromFavorites(propertyId: string) {
     method: 'DELETE'
   });
 }
-
-export async function checkFavorite(propertyId: string) {
-  return request<{ isFavorite: boolean }>(`/api/auth/favorites/check/${propertyId}`);
-}
-
 // ========== AGENTS ==========
 
 export interface Agent {
@@ -761,30 +981,12 @@ export async function getAgentReviews(agentId: string) {
   return request<AgentReview[]>(`/api/agents/${agentId}/reviews`);
 }
 
-export async function createOrUpdateAgentProfile(form: FormData) {
-  return request<Agent>('/api/agents/profile', {
-    method: 'POST',
-    body: form
-  });
-}
-
-export async function getMyAgentProfile() {
-  return request<Agent>('/api/agents/me/profile');
-}
-
 export async function addAgentReview(agentId: string, score: number, review?: string) {
   return request<{ avgRating: number; totalReviews: number }>(`/api/agents/${agentId}/review`, {
     method: 'POST',
     body: JSON.stringify({ score, review })
   });
 }
-
-export async function deleteAgentReview(agentId: string) {
-  return request<{ message: string; avgRating: number; totalReviews: number }>(`/api/agents/${agentId}/review`, {
-    method: 'DELETE'
-  });
-}
-
 // ========== MESSAGES ==========
 
 export interface Message {
@@ -827,13 +1029,6 @@ export async function sendMessage(receiverId: string, content: string, propertyI
 export async function getUnreadCount() {
   return request<{ count: number }>('/api/messages/unread-count');
 }
-
-export async function markConversationRead(userId: string) {
-  return request<{ ok: boolean }>(`/api/messages/read/${userId}`, {
-    method: 'PUT'
-  });
-}
-
 export async function contactPropertyOwner(propertyId: string, content: string) {
   return request<{ ok: boolean; message: Message }>(`/api/messages/contact-owner/${propertyId}`, {
     method: 'POST',

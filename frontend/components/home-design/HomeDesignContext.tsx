@@ -200,6 +200,7 @@ type HomeDesignContextValue = {
   updateBox: (
     id: 'heroText' | 'search' | 'map' | 'typePanel' | 'dealBar' | 'listings',
     patch: Partial<HomeDesignLayout['search']> &
+      Partial<HomeDesignLayout['map']> &
       Partial<Pick<HomeDesignLayout['typePanel'], 'pad' | 'gap'>>
   ) => void;
   updateSearch: (patch: Partial<SearchLayout>) => void;
@@ -684,6 +685,7 @@ export function HomeDesignProvider({
     (
       id: 'heroText' | 'search' | 'map' | 'typePanel' | 'dealBar' | 'listings',
       patch: Partial<HomeDesignLayout['search']> &
+        Partial<HomeDesignLayout['map']> &
         Partial<Pick<HomeDesignLayout['typePanel'], 'pad' | 'gap'>> & {
           mobileX?: number;
           mobileY?: number;

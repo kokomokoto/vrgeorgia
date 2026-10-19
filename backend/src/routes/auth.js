@@ -96,7 +96,22 @@ router.post(
       expiresIn: getJWTExpiresIn()
     });
 
-    res.json({ token, user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role, status: user.status } });
+    const { userCanUseAgentRequests } = await import('../utils/agentRequestAccess.js');
+    const agentRequestFeatureEnabled = await userCanUseAgentRequests(user._id, user.role);
+
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
+        name: user.name,
+        role: user.role,
+        status: user.status,
+        agentRequestFeatureEnabled,
+      },
+    });
   }
 );
 
@@ -104,7 +119,20 @@ router.post(
 router.get('/me', requireAuth, async (req, res) => {
   const user = await User.findById(req.user.id);
   if (!user) return res.status(404).json({ message: 'User not found' });
-  res.json({ user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name, role: user.role, status: user.status } });
+  const { userCanUseAgentRequests } = await import('../utils/agentRequestAccess.js');
+  const agentRequestFeatureEnabled = await userCanUseAgentRequests(user._id, user.role);
+  res.json({
+    user: {
+      id: user._id,
+      email: user.email,
+      phone: user.phone,
+      avatar: user.avatar,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+      agentRequestFeatureEnabled,
+    },
+  });
 });
 
 /**
@@ -126,6 +154,9 @@ router.post('/refresh', requireAuth, async (req, res) => {
     expiresIn: getJWTExpiresIn(),
   });
 
+  const { userCanUseAgentRequests } = await import('../utils/agentRequestAccess.js');
+  const agentRequestFeatureEnabled = await userCanUseAgentRequests(user._id, user.role);
+
   res.json({
     token,
     user: {
@@ -136,6 +167,7 @@ router.post('/refresh', requireAuth, async (req, res) => {
       name: user.name,
       role: user.role,
       status: user.status,
+      agentRequestFeatureEnabled,
     },
   });
 });

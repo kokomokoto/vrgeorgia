@@ -75,6 +75,11 @@ const agentSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  /** ადმინის მონიშვნა — აგენტს გამოუჩნდება პროფილში „მოთხოვნა“ */
+  requestFeatureEnabled: {
+    type: Boolean,
+    default: false
+  },
   active: {
     type: Boolean,
     default: true

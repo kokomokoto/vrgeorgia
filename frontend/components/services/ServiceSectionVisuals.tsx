@@ -3,12 +3,14 @@
 import React from 'react';
 import {
   SERVICE_SECTION_STYLE,
-  type ServiceSectionId,
+  resolveServiceStyleKey,
+  type ServiceStyleKey,
 } from '@/lib/servicesCatalog';
 
-export function ServiceSectionIcon({ id }: { id: ServiceSectionId }) {
+export function ServiceSectionIcon({ id }: { id: string }) {
+  const key = resolveServiceStyleKey(id);
   const common = 'h-8 w-8 text-white drop-shadow-sm';
-  switch (id) {
+  switch (key) {
     case 'arch':
       return (
         <svg className={common} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -90,13 +92,14 @@ export function ServiceSectionVisualAccent({
   id,
   stripe,
 }: {
-  id: ServiceSectionId;
+  id: string;
   stripe: string;
 }) {
+  const styleKey: ServiceStyleKey = resolveServiceStyleKey(id);
   return (
     <div className="relative mt-5 overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-zinc-600/60 dark:bg-zinc-950/50">
       <div
-        className={`pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full blur-2xl ${SERVICE_SECTION_STYLE[id].blob}`}
+        className={`pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full blur-2xl ${SERVICE_SECTION_STYLE[styleKey].blob}`}
         aria-hidden
       />
       <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

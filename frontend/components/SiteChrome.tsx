@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import { DesignBranchBanner } from '@/components/DesignBranchBanner';
 import { Header } from '@/components/Header';
@@ -9,10 +10,35 @@ import {
   HomeDesignProvider,
   useHomeDesignOptional,
 } from '@/components/home-design/HomeDesignContext';
-import { DesignInspector } from '@/components/home-design/DesignInspector';
-import { DesignSnapGuides } from '@/components/home-design/DesignSnapGuides';
 import { ThemePaletteApplier } from '@/components/ThemePaletteApplier';
 import type { HomeDesignLayout } from '@/lib/homeDesignLayout';
+
+/**
+ * Design Mode ედიტორი (~5.5k ხაზი) მხოლოდ ადმინს სჭირდება და მხოლოდ მაშინ, როცა
+ * რეჟიმი ჩართულია — ცალკე chunk-ად იტვირთება, რომ ჩვეულებრივ ვიზიტორს არ გაეგზავნოს.
+ */
+const DesignInspector = dynamic(
+  () =>
+    import('@/components/home-design/DesignInspector').then((m) => m.DesignInspector),
+  { ssr: false }
+);
+const DesignSnapGuides = dynamic(
+  () =>
+    import('@/components/home-design/DesignSnapGuides').then((m) => m.DesignSnapGuides),
+  { ssr: false }
+);
+
+/** ედიტორი მხოლოდ მაშინ რენდერდება/იტვირთება, როცა ადმინმა Design Mode ჩართო */
+function DesignModeTools() {
+  const design = useHomeDesignOptional();
+  if (!design?.designMode || !design.canDesignMode) return null;
+  return (
+    <>
+      <DesignSnapGuides />
+      <DesignInspector />
+    </>
+  );
+}
 
 /** სრული ეკრანის რეჟიმი — რუკაზე ძებნა (ჰედერი/ფუტერი არ ჩანს) */
 export function isFullscreenMapRoute(pathname: string): boolean {
@@ -129,12 +155,7 @@ export function SiteChrome({
         {children}
       </SiteMain>
       {!adminPanel && <Footer />}
-      {homePage ? (
-        <>
-          <DesignSnapGuides />
-          <DesignInspector />
-        </>
-      ) : null}
+      {homePage ? <DesignModeTools /> : null}
     </HomeDesignProvider>
   );
 }

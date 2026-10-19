@@ -1,11 +1,21 @@
+import 'dotenv/config';
 import mongoose from 'mongoose';
 
-// Source: Local MongoDB
-const LOCAL_URI = 'mongodb://127.0.0.1:27017/vrgeorgia';
-// Destination: Atlas
-const ATLAS_URI = 'mongodb+srv://alambarimalambari_db_user:q7M624akMsDUx9v2@vrgeorgia.jwbtwjc.mongodb.net/vrgeorgia?retryWrites=true&w=majority&appName=vrgeorgia';
+// ერთჯერადი მიგრაცია: ლოკალური MongoDB → Atlas.
+// კავშირის სტრიქონები მხოლოდ გარემოს ცვლადებიდან — კოდში credentials არ ინახება.
+//   MIGRATE_SOURCE_URI=mongodb://127.0.0.1:27017/vrgeorgia MIGRATE_TARGET_URI=<atlas uri> node scripts/migrate-to-atlas.js
+const LOCAL_URI = process.env.MIGRATE_SOURCE_URI || 'mongodb://127.0.0.1:27017/vrgeorgia';
+const ATLAS_URI = process.env.MIGRATE_TARGET_URI || process.env.MONGODB_URI || '';
 
 async function migrate() {
+  if (!ATLAS_URI) {
+    console.error('❌ MIGRATE_TARGET_URI (ან MONGODB_URI) არ არის მითითებული');
+    process.exit(1);
+  }
+  if (ATLAS_URI === LOCAL_URI) {
+    console.error('❌ წყარო და სამიზნე ერთი და იგივე ბაზაა');
+    process.exit(1);
+  }
   console.log('🔗 Connecting to LOCAL MongoDB...');
   const localConn = await mongoose.createConnection(LOCAL_URI).asPromise();
   console.log('✅ Connected to LOCAL');

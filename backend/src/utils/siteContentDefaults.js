@@ -157,3 +157,166 @@ export const DEFAULT_ABOUT_BY_LANG = {
       'Для покупателей и арендаторов — быстрый поиск и визуальный обзор. Для агентов и владельцев — размещение объявлений и контакт с заинтересованными.',
   },
 };
+
+
+export const DEFAULT_SERVICES_CONTENT = {
+  page: {
+    title: {
+      ka: 'არქიტექტურული მომსახურება',
+      en: 'Architecture & design services',
+      ru: 'Архитектурные услуги',
+    },
+    lead: {
+      ka: 'ქვემოთ მოცემულია მიმართულებები, რომლებიც ეხება პროექტირებას, გეგმარებას, ინტერიერის დიზაინს, ვიზუალიზაციას და მშენებლობისწინა მზადებას — ერთი სივრციდან შეგიძლიათ გაეცნოთ სერვისების სპექტრს.',
+      en: 'Below is an overview of areas related to design, planning, interior design, visualization, and pre-construction preparation — so you can see the full spectrum of professional support in one place.',
+      ru: 'Ниже — направления, связанные с проектированием, планировкой, дизайном интерьера, визуализацией и подготовкой к строительству: обзор спектра услуг на одной странице.',
+    },
+    footerNote: {
+      ka: 'Vhome უძრავი ქონების განცხადებების პლატფორმაა; აღნიშნული მომსახურებების მიწოდება ხდება პროფესიონალებთან პირდაპირი შეთანხმებით.',
+      en: 'Vhome is a real-estate listings platform; delivery of these services is agreed directly with qualified professionals.',
+      ru: 'Vhome — платформа объявлений о недвижимости; оказание перечисленных услуг согласуется напрямую с квалифицированными специалистами.',
+    },
+  },
+  sections: [
+    {
+      id: 'arch',
+      styleKey: 'arch',
+      featured: true,
+      hidden: false,
+      imageUrl: '',
+      title: {
+        ka: 'არქიტექტურული პროექტირება',
+        en: 'Architectural design',
+        ru: 'Архитектурное проектирование',
+      },
+      body: {
+        ka: 'კერძო სახლის, ბინის, კომერციული ობიექტისა და საჯარო დანიშნულების შენობების იდეის განვითარება, მოცულობითი გადაწყვეტა, ფასადის კონცეფცია, არქიტექტურული ნახაზები და ესკიზები.',
+        en: 'Concept development for houses, apartments, commercial buildings, and public facilities: massing, façade concept, drawings, and design development.',
+        ru: 'Концепция для частных и многоквартирных домов, коммерческих и общественных зданий: объёмно-планировочное решение, фасад, архитектурные чертежи и эскизы.',
+      },
+    },
+    {
+      id: 'docs',
+      styleKey: 'docs',
+      featured: false,
+      hidden: false,
+      imageUrl: '',
+      title: {
+        ka: 'სამშენებლო დოკუმენტაცია და ტექნიკური პროექტი',
+        en: 'Construction documentation & technical design',
+        ru: 'Строительная документация и техпроект',
+      },
+      body: {
+        ka: 'პროექტის სრული ან ეტაპობრივი ნაკვეთი, ტექნიკური პასპორტი, არსებულ შენობაზე ცვლილებები, ნებართვებთან შესაბამისობა და კოორდინაცია სპეციალისტებთან.',
+        en: 'Full or phased drawing packages, technical passports, alterations to existing buildings, compliance with permits, and coordination with engineers.',
+        ru: 'Полный или поэтапный комплект чертежей, технический паспорт, перепланировки, согласование с разрешениями и координация со смежными специалистами.',
+      },
+    },
+    {
+      id: 'planning',
+      styleKey: 'planning',
+      featured: false,
+      hidden: false,
+      imageUrl: '',
+      title: {
+        ka: 'გეგმარება და ტერიტორიის ანალიზი',
+        en: 'Planning & site analysis',
+        ru: 'Планирование и анализ участка',
+      },
+      body: {
+        ka: 'ნაკვეთის პოტენციალი, ზონირება და შეზღუდვები, სიმძლავრე, ფუნქციური განაწილება, იდეის შემოწმება ინვესტიციამდე ან შესყიდვამდე.',
+        en: 'Site potential, zoning and constraints, capacity, functional layout, and feasibility checks before purchase or investment.',
+        ru: 'Потенциал участка, зонирование и ограничения, вместимость, функциональное зонирование, проверка идеи до покупки или инвестиций.',
+      },
+    },
+    {
+      id: 'interior',
+      styleKey: 'interior',
+      featured: true,
+      hidden: false,
+      imageUrl: '',
+      title: {
+        ka: 'ინტერიერის დიზაინი',
+        en: 'Interior design',
+        ru: 'Дизайн интерьера',
+      },
+      body: {
+        ka: 'განლაგება, მასალებისა და ფერების პალიტრა, ავეჯის კონცეფცია, განათება, სანტექნიკა და ელექტრობა ერთი სტილის ფარგლებში, მშენებლობის ეტაპზე ზედამხედველობა.',
+        en: 'Layouts, materials and colour palettes, furniture concept, lighting, sanitary and electrical coordination in one style, and site supervision during build-out.',
+        ru: 'Планировки, материалы и палитра, концепция мебели, освещение, сантехника и электрика в едином стиле, авторский надзор на этапе отделки.',
+      },
+    },
+    {
+      id: 'landscape',
+      styleKey: 'landscape',
+      featured: false,
+      hidden: false,
+      imageUrl: '',
+      title: {
+        ka: 'ლანდშაფტის არქიტექტურა',
+        en: 'Landscape architecture',
+        ru: 'Ландшафтная архитектура',
+      },
+      body: {
+        ka: 'ეზოს პროექტი, მწვანე ზონები, შემოსასვლელი, ტერასა, საფეხური და გარე განათება — ფუნქციისა და ესთეტიკის ბალანსი.',
+        en: 'Garden design, green zones, entrances, terraces, paths, and outdoor lighting — balancing function and aesthetics.',
+        ru: 'Проект двора, озеленение, входные группы, террасы, дорожки и наружное освещение — баланс функции и эстетики.',
+      },
+    },
+    {
+      id: 'vis',
+      styleKey: 'vis',
+      featured: true,
+      hidden: false,
+      imageUrl: '',
+      title: {
+        ka: 'ვიზუალიზაცია, 3D და ვირტუალური ტური',
+        en: 'Visualization, 3D & virtual tours',
+        ru: 'Визуализация, 3D и виртуальные туры',
+      },
+      body: {
+        ka: 'ფოტორეალისტული რენდერები, ანიმაცია, ვირტუალური გასეირნება, ინვესტორის ან მყიდველისთვის პრეზენტაცია.',
+        en: 'Photorealistic renders, animation, walkthroughs, and presentations for investors or buyers.',
+        ru: 'Фотореалистичные рендеры, анимация, виртуальные прогулки и презентации для инвесторов или покупателей.',
+      },
+    },
+    {
+      id: 'heritage',
+      styleKey: 'heritage',
+      featured: false,
+      hidden: false,
+      imageUrl: '',
+      title: {
+        ka: 'რეკონსტრუქცია, გაძლიერება და მემკვიდრეობა',
+        en: 'Renovation, strengthening & heritage',
+        ru: 'Реконструкция, усиление и наследие',
+      },
+      body: {
+        ka: 'არსებული კონსტრუქციის შეფასება, გამაგრება, ფუნქციის შეცვლა, ისტორიული ფასადის შენარჩუნება და ადაპტაცია თანამედროვე მოთხოვნებზე.',
+        en: 'Assessment of existing structures, strengthening, change of use, retention of historic façades, and adaptation to modern requirements.',
+        ru: 'Обследование несущих конструкций, усиление, смена назначения, сохранение исторических фасадов и адаптация к современным требованиям.',
+      },
+    },
+    {
+      id: 'consult',
+      styleKey: 'consult',
+      featured: false,
+      hidden: false,
+      imageUrl: '',
+      title: {
+        ka: 'კონსულტაცია',
+        en: 'Consulting',
+        ru: 'Консультации',
+      },
+      body: {
+        ka: 'ერთჯერადი შეხვედრა ან ონლაინ ზარი: ბიუჯეტი, ეტაპები, კონტრაქტორის არჩევა, რისკები და რეგულაციების მოკლე მიმოხილვა.',
+        en: 'One-off meeting or online call: budget, phasing, contractor selection, risks, and a concise overview of regulations.',
+        ru: 'Разовая встреча или онлайн-звонок: бюджет, этапы, выбор подрядчика, риски и краткий обзор нормативов.',
+      },
+    },
+  ],
+};
+
+export const DEFAULT_BRANDING = {
+  logoUrl: '',
+};

@@ -249,14 +249,14 @@ export function normalizeMapModeVisual(
     beamSkewDeg: clampMapNum(
       raw.beamSkewDeg,
       fallback.beamSkewDeg ?? DEFAULT_MAP.beamSkewDeg!,
-      -45,
-      45
+      -80,
+      80
     ),
     beamDurationSec: clampMapNum(
       raw.beamDurationSec,
       fallback.beamDurationSec ?? DEFAULT_MAP.beamDurationSec!,
-      0.6,
-      16,
+      0.2,
+      20,
       1
     ),
     beamColorCenter:

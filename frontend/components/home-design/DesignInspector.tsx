@@ -4832,15 +4832,15 @@ function MapPanelStyleEditor({
           <NumField
             label="დახრა °"
             value={m.beamSkewDeg ?? DEFAULT_MAP.beamSkewDeg!}
-            min={-45}
-            max={45}
+            min={-80}
+            max={80}
             onCommit={(beamSkewDeg) => onChange({ beamSkewDeg })}
           />
           <NumField
-            label="სიჩქარე (წმ)"
+            label="გავლის დრო (წმ)"
             value={m.beamDurationSec ?? DEFAULT_MAP.beamDurationSec!}
-            min={0.6}
-            max={16}
+            min={0.2}
+            max={20}
             decimals={1}
             nudge={0.1}
             onCommit={(beamDurationSec) => onChange({ beamDurationSec })}
@@ -4871,8 +4871,8 @@ function MapPanelStyleEditor({
           onChange={(beamColorSide) => onChange({ beamColorSide })}
         />
         <p className="text-[10px] leading-snug text-slate-500 dark:text-zinc-400">
-          სხივი მხოლოდ ზედა ზოლზეა (რუკის შიგნით არა) — ასე უფრო მსუბუქია. ბლური მაქს. 8px;
-          მაღალი მნიშვნელობა გვერდს აჭედავს.
+          დახრა: −80°…+80°. გავლის დრო: ნაკლები წამი = უფრო სწრაფი სხივი (0.2–20 წმ). სხივი
+          მხოლოდ ზედა ზოლზეა — ბლური მაქს. 8px.
         </p>
       </InspectorFold>
     </div>

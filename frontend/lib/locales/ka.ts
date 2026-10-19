@@ -98,11 +98,14 @@ const ka = {
   agent_requests_subtitle:
     'დაწერეთ რა გჭირდებათ — მაძებარი წაიკითხავს მოთხოვნას და აქ დაგიწერს პასუხს.',
   searcher_workspace: 'მაძებრის სამუშაო',
-  searcher_agents_title: 'აგენტები',
+  searcher_agents_title: 'აგენტები განცხადებებით',
   searcher_agents_subtitle:
-    'აგენტები, რომლებსაც ძებნის ფუნქცია ჩართული აქვთ და გაგზავნილი აქვთ მინიმუმ ერთი მოთხოვნა.',
-  searcher_no_agents: 'აგენტები მოთხოვნებით ჯერ არ არის',
-  searcher_requests_title: 'აგენტის მოთხოვნები',
+    'ჯერ აირჩიე აგენტი, რომელმაც განცხადება შეავსო — შემდეგ ნახავ მის მონაცემებს და განცხადებებს.',
+  searcher_no_agents: 'აგენტები განცხადებებით ჯერ არ არის',
+  searcher_requests_title: 'აგენტის განცხადებები',
+  searcher_agent_data_title: 'აგენტის მონაცემები',
+  searcher_agent_listings_title: 'განცხადებები',
+  searcher_agent_listings_count: 'განცხადება',
   searcher_back_agents: 'აგენტების სიაში',
   searcher_reply_placeholder: 'დაწერე პასუხი აგენტისთვის…',
   searcher_reply_send: 'პასუხის გაგზავნა',
@@ -115,6 +118,12 @@ const ka = {
   searcher_mark_sold: 'გაყიდულად მონიშვნა',
   searcher_unmark_sold: 'გაყიდულის მოხსნა',
   searcher_comment_sold_badge: 'გაყიდულია',
+  searcher_agent_service_info: 'სერვისის ინფორმაცია',
+  searcher_agent_service_hint:
+    'აგენტის მიერ მითითებული დროები, მისამართები და სოცქსელები — ამით მიაწოდე სიახლეები.',
+  searcher_agent_prefs_empty: 'აგენტს ჯერ არ მიუთითებია დროები და საკონტაქტო არხები.',
+  searcher_agent_addresses: 'მისამართები',
+  searcher_agent_socials: 'სოცქსელები',
   agent_request_placeholder:
     'მაგ: მჭირდება 2 ოთახიანი ბინა ფონიჭალაში, იყიდება…',
   agent_request_submit: 'მოთხოვნის გაგზავნა',

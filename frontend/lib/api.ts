@@ -811,6 +811,8 @@ export type SearcherAgentRow = {
   totalCount: number;
   notifyTime1?: string;
   notifyTime2?: string;
+  contacts?: AgentRequestPrefs['contacts'];
+  prefsFilled?: boolean;
 };
 
 export async function listSearcherAgents() {

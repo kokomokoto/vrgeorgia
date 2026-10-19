@@ -12,9 +12,213 @@ import {
   listSearcherAgentRequests,
   updateSearcherRequestComment,
   type AgentRequestItem,
+  type AgentRequestPrefs,
   type SearcherAgentRow,
 } from '@/lib/api';
+import { telegramWebUrl, viberUrl, whatsAppUrl } from '@/lib/phoneLinks';
 import { isSearcherRole } from '@/lib/userRoles';
+
+const CONTACT_KEYS = ['whatsapp', 'facebook', 'viber', 'telegram', 'other'] as const;
+
+function formatTimeDisplay(value?: string) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const [h, m] = raw.split(':');
+  if (h == null || m == null) return raw;
+  return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+}
+
+function contactHref(
+  key: (typeof CONTACT_KEYS)[number] | 'email' | 'phone',
+  value: string
+): string | null {
+  const v = String(value || '').trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (key === 'email') return `mailto:${v}`;
+  if (key === 'phone') {
+    const digits = v.replace(/[^\d+]/g, '');
+    return digits ? `tel:${digits}` : null;
+  }
+  if (key === 'whatsapp') return whatsAppUrl(v);
+  if (key === 'viber') return viberUrl(v);
+  if (key === 'telegram') {
+    const handle = v.replace(/^@/, '');
+    if (/^[A-Za-z0-9_]{3,}$/.test(handle) && !/^\d+$/.test(handle)) {
+      return `https://t.me/${handle}`;
+    }
+    return telegramWebUrl(v);
+  }
+  if (key === 'facebook') {
+    const handle = v.replace(/^@/, '');
+    if (/facebook\.com|fb\.com/i.test(v)) {
+      return v.startsWith('http') ? v : `https://${v.replace(/^\/+/, '')}`;
+    }
+    return `https://www.facebook.com/${encodeURIComponent(handle)}`;
+  }
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return `mailto:${v}`;
+  return null;
+}
+
+function ContactValue({
+  href,
+  children,
+}: {
+  href: string | null;
+  children: React.ReactNode;
+}) {
+  if (!href) {
+    return <span className="break-all font-medium text-slate-800">{children}</span>;
+  }
+  return (
+    <a
+      href={href}
+      target={href.startsWith('http') ? '_blank' : undefined}
+      rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+      className="break-all font-medium text-teal-800 hover:underline"
+    >
+      {children}
+    </a>
+  );
+}
+
+function AgentServiceInfoCard({ agent }: { agent: SearcherAgentRow }) {
+  const { t } = useTranslation();
+  const contacts: AgentRequestPrefs['contacts'] = agent.contacts || {
+    whatsapp: '',
+    facebook: '',
+    viber: '',
+    telegram: '',
+    other: '',
+  };
+  const time1 = formatTimeDisplay(agent.notifyTime1);
+  const time2 = formatTimeDisplay(agent.notifyTime2);
+  const socials = CONTACT_KEYS.map((key) => ({
+    key,
+    label:
+      key === 'other'
+        ? t('agent_request_contact_other')
+        : key === 'whatsapp'
+          ? 'WhatsApp'
+          : key === 'facebook'
+            ? 'Facebook'
+            : key === 'viber'
+              ? 'Viber'
+              : 'Telegram',
+    value: String(contacts[key] || '').trim(),
+  })).filter((row) => row.value);
+  const hasTimes = Boolean(time1 || time2);
+  const hasAddresses = Boolean(agent.email || agent.phone);
+  const hasInfo = hasTimes || hasAddresses || socials.length > 0;
+
+  return (
+    <section className="rounded-xl border border-teal-200 bg-teal-50/40 p-4 shadow-sm">
+      <h2 className="text-sm font-bold text-slate-800">{t('searcher_agent_data_title')}</h2>
+      <p className="mt-1 text-[11px] leading-snug text-slate-500">
+        {t('searcher_agent_service_hint')}
+      </p>
+
+      {!hasInfo ? (
+        <p className="mt-3 text-sm text-slate-500">{t('searcher_agent_prefs_empty')}</p>
+      ) : (
+        <>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="min-w-0">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              {t('agent_request_notify_times')}
+            </h3>
+            {hasTimes ? (
+              <dl className="mt-2 grid grid-cols-2 gap-2">
+                <div className="rounded-md border border-white bg-white px-2 py-1.5">
+                  <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+                    {t('agent_request_time_1')}
+                  </dt>
+                  <dd className="mt-0.5 text-sm font-semibold text-slate-800">
+                    {time1 || '—'}
+                  </dd>
+                </div>
+                <div className="rounded-md border border-white bg-white px-2 py-1.5">
+                  <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+                    {t('agent_request_time_2')}
+                  </dt>
+                  <dd className="mt-0.5 text-sm font-semibold text-slate-800">
+                    {time2 || '—'}
+                  </dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="mt-2 text-sm text-slate-400">—</p>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              {t('searcher_agent_addresses')}
+            </h3>
+            {hasAddresses ? (
+              <dl className="mt-2 space-y-2">
+                {agent.email ? (
+                  <div className="rounded-md border border-white bg-white px-2 py-1.5">
+                    <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+                      {t('email')}
+                    </dt>
+                    <dd className="mt-0.5 text-sm">
+                      <ContactValue href={contactHref('email', agent.email)}>
+                        {agent.email}
+                      </ContactValue>
+                    </dd>
+                  </div>
+                ) : null}
+                {agent.phone ? (
+                  <div className="rounded-md border border-white bg-white px-2 py-1.5">
+                    <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+                      {t('phone')}
+                    </dt>
+                    <dd className="mt-0.5 text-sm">
+                      <ContactValue href={contactHref('phone', agent.phone)}>
+                        {agent.phone}
+                      </ContactValue>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : (
+              <p className="mt-2 text-sm text-slate-400">—</p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 min-w-0">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            {t('searcher_agent_socials')}
+          </h3>
+          {socials.length ? (
+            <dl className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {socials.map((row) => (
+                <div
+                  key={row.key}
+                  className="min-w-0 rounded-md border border-white bg-white px-2 py-1.5"
+                >
+                  <dt className="text-[10px] uppercase tracking-wide text-slate-400">
+                    {row.label}
+                  </dt>
+                  <dd className="mt-0.5 text-sm">
+                    <ContactValue href={contactHref(row.key, row.value)}>
+                      {row.value}
+                    </ContactValue>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="mt-2 text-sm text-slate-400">—</p>
+          )}
+        </div>
+        </>
+      )}
+    </section>
+  );
+}
 
 function statusLabel(t: (k: string) => string, status: AgentRequestItem['status']) {
   switch (status) {
@@ -215,6 +419,14 @@ export default function SearcherAgentRequestsPage() {
           {error}
         </div>
       ) : null}
+
+      {agent ? <AgentServiceInfoCard agent={agent} /> : null}
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold text-slate-800">
+          {t('searcher_agent_listings_title')}
+          {!loading && requests.length > 0 ? ` (${requests.length})` : ''}
+        </h2>
 
       {loading ? (
         <p className="text-sm text-slate-500">{t('loading')}</p>
@@ -428,6 +640,7 @@ export default function SearcherAgentRequestsPage() {
           })}
         </div>
       )}
+      </section>
     </div>
   );
 }

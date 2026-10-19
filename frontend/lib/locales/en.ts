@@ -97,11 +97,14 @@ const en = {
   agent_requests_subtitle:
     'Write what you need — a searcher will read it and reply here.',
   searcher_workspace: 'Searcher workspace',
-  searcher_agents_title: 'Agents',
+  searcher_agents_title: 'Agents with requests',
   searcher_agents_subtitle:
-    'Agents with search enabled who sent at least one request.',
+    'First pick an agent who submitted a request — then you will see their details and listings.',
   searcher_no_agents: 'No agents with requests yet',
-  searcher_requests_title: 'Agent requests',
+  searcher_requests_title: 'Agent listings',
+  searcher_agent_data_title: 'Agent details',
+  searcher_agent_listings_title: 'Listings',
+  searcher_agent_listings_count: 'listings',
   searcher_back_agents: 'Back to agents',
   searcher_reply_placeholder: 'Write a reply for the agent…',
   searcher_reply_send: 'Send reply',
@@ -114,6 +117,12 @@ const en = {
   searcher_mark_sold: 'Mark as sold',
   searcher_unmark_sold: 'Unmark sold',
   searcher_comment_sold_badge: 'Sold',
+  searcher_agent_service_info: 'Service details',
+  searcher_agent_service_hint:
+    'Times, addresses and social channels specified by the agent — use these to send updates.',
+  searcher_agent_prefs_empty: 'This agent has not set times or contact channels yet.',
+  searcher_agent_addresses: 'Addresses',
+  searcher_agent_socials: 'Social networks',
   agent_request_placeholder:
     'e.g. I need a 2-room apartment in Ponichala for sale…',
   agent_request_submit: 'Send request',

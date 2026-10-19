@@ -3,7 +3,10 @@ import { requireAuth } from '../middleware/auth.js';
 import { User } from '../models/User.js';
 import Agent from '../models/Agent.js';
 import { getAgentRequestModel } from '../models/AgentRequest.js';
-import { getAgentRequestPrefsModel } from '../models/AgentRequestPrefs.js';
+import {
+  getAgentRequestPrefsModel,
+  serializePrefs,
+} from '../models/AgentRequestPrefs.js';
 import { isSearcherRole } from '../utils/userRoles.js';
 
 /** აგენტმა შეავსო შეტყობინების დროები ან საკონტაქტო არხი */
@@ -15,6 +18,25 @@ function prefsAreFilled(prefs) {
     c.whatsapp || c.facebook || c.viber || c.telegram || c.other
   );
   return hasTime || hasContact;
+}
+
+function serializeSearcherAgent(agent, agentUserId, prefs, counts = {}) {
+  const p = serializePrefs(prefs);
+  return {
+    agentId: String(agent._id),
+    userId: String(agentUserId),
+    name: agent.name || agent.user?.name || '',
+    email: agent.email || agent.user?.email || '',
+    phone: agent.phone || agent.user?.phone || '',
+    photo: agent.photo || agent.user?.avatar || '',
+    company: agent.company || '',
+    pendingCount: counts.pendingCount || 0,
+    totalCount: counts.totalCount || 0,
+    notifyTime1: p.notifyTime1,
+    notifyTime2: p.notifyTime2,
+    contacts: p.contacts,
+    prefsFilled: prefsAreFilled(prefs),
+  };
 }
 
 const router = express.Router();
@@ -134,20 +156,12 @@ router.get('/agents', requireAuth, requireSearcher, async (req, res) => {
 
       const prefs = await Prefs.findOne({ agentUserId: uid }).lean();
 
-      list.push({
-        agentId: String(agent._id),
-        userId: uid,
-        name: agent.name || agent.user?.name || '',
-        email: agent.email || agent.user?.email || '',
-        phone: agent.phone || agent.user?.phone || '',
-        photo: agent.photo || agent.user?.avatar || '',
-        company: agent.company || '',
-        pendingCount: row.pendingCount || 0,
-        totalCount: row.totalCount || 0,
-        notifyTime1: prefs?.notifyTime1 || '',
-        notifyTime2: prefs?.notifyTime2 || '',
-        prefsFilled: prefsAreFilled(prefs),
-      });
+      list.push(
+        serializeSearcherAgent(agent, uid, prefs, {
+          pendingCount: row.pendingCount || 0,
+          totalCount: row.totalCount || 0,
+        })
+      );
     }
 
     list.sort((a, b) => a.name.localeCompare(b.name, 'ka'));
@@ -172,21 +186,25 @@ router.get('/agents/:userId/requests', requireAuth, requireSearcher, async (req,
     }
 
     const AgentRequest = await getAgentRequestModel();
-    const rows = await AgentRequest.find({ agentUserId })
-      .sort({ createdAt: -1 })
-      .limit(200)
-      .lean();
+    const Prefs = await getAgentRequestPrefsModel();
+    const [rows, prefs] = await Promise.all([
+      AgentRequest.find({ agentUserId }).sort({ createdAt: -1 }).limit(200).lean(),
+      Prefs.findOne({ agentUserId }).lean(),
+    ]);
+
+    const pendingCount = rows.filter(
+      (r) =>
+        !r.paused &&
+        !r.sold &&
+        r.status !== 'sold' &&
+        (r.status === 'pending' || r.status === 'processing')
+    ).length;
 
     res.json({
-      agent: {
-        agentId: String(agent._id),
-        userId: agentUserId,
-        name: agent.name || agent.user?.name || '',
-        email: agent.email || agent.user?.email || '',
-        phone: agent.phone || agent.user?.phone || '',
-        photo: agent.photo || agent.user?.avatar || '',
-        company: agent.company || '',
-      },
+      agent: serializeSearcherAgent(agent, agentUserId, prefs, {
+        pendingCount,
+        totalCount: rows.length,
+      }),
       requests: rows.map(serializeRequest),
     });
   } catch (err) {

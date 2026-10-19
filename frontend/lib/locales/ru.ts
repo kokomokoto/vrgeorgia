@@ -106,11 +106,14 @@ const ru = {
   agent_requests_subtitle:
     'Опишите, что нужно — искатель прочитает запрос и ответит здесь.',
   searcher_workspace: 'Кабинет искателя',
-  searcher_agents_title: 'Агенты',
+  searcher_agents_title: 'Агенты с заявками',
   searcher_agents_subtitle:
-    'Агенты с включённым поиском, у которых есть хотя бы один запрос.',
-  searcher_no_agents: 'Агентов с запросами пока нет',
-  searcher_requests_title: 'Запросы агента',
+    'Сначала выберите агента, который заполнил заявку — затем увидите его данные и объявления.',
+  searcher_no_agents: 'Агентов с заявками пока нет',
+  searcher_requests_title: 'Объявления агента',
+  searcher_agent_data_title: 'Данные агента',
+  searcher_agent_listings_title: 'Объявления',
+  searcher_agent_listings_count: 'объявл.',
   searcher_back_agents: 'К списку агентов',
   searcher_reply_placeholder: 'Напишите ответ агенту…',
   searcher_reply_send: 'Отправить ответ',
@@ -123,6 +126,12 @@ const ru = {
   searcher_mark_sold: 'Отметить как проданное',
   searcher_unmark_sold: 'Снять отметку продажи',
   searcher_comment_sold_badge: 'Продано',
+  searcher_agent_service_info: 'Данные для обслуживания',
+  searcher_agent_service_hint:
+    'Время, адреса и соцсети, указанные агентом — по ним отправляйте обновления.',
+  searcher_agent_prefs_empty: 'Агент пока не указал время и каналы связи.',
+  searcher_agent_addresses: 'Адреса',
+  searcher_agent_socials: 'Соцсети',
   agent_request_placeholder:
     'напр.: нужна 2-комнатная квартира в Поничала, продажа…',
   agent_request_submit: 'Отправить запрос',

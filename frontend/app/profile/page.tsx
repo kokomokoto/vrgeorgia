@@ -613,11 +613,16 @@ export default function ProfilePage() {
                     ) : null}
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
-                        {a.totalCount} {t('agent_requests_title').toLowerCase()}
+                        {a.totalCount} {t('searcher_agent_listings_count')}
                       </span>
                       {a.pendingCount > 0 ? (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
                           {a.pendingCount} {t('searcher_pending_short')}
+                        </span>
+                      ) : null}
+                      {a.notifyTime1 || a.notifyTime2 ? (
+                        <span className="rounded-full bg-teal-100 px-2 py-0.5 font-medium text-teal-800">
+                          {[a.notifyTime1, a.notifyTime2].filter(Boolean).join(' / ')}
                         </span>
                       ) : null}
                     </div>

@@ -2,8 +2,8 @@
 
 /**
  * Design Mode chrome for admins on the homepage.
- * â€” Off: compact â€œáƒ áƒ”áƒ“áƒáƒ¥áƒ¢áƒ˜áƒ áƒ”áƒ‘áƒâ€ control (visitors never see it).
- * â€” On: status bar + áƒ’áƒáƒ›áƒáƒ áƒ—áƒ•áƒ â€” same bottom dock as the edit button so it
+ * — Off: compact “რედაქტირება” control (visitors never see it).
+ * — On: status bar + გამორთვა — same bottom dock as the edit button so it
  *   never covers the header labels the admin is trying to position.
  */
 import { useSitePathname } from '@/lib/useSitePathname';
@@ -25,13 +25,13 @@ export function DesignBranchBanner() {
           role="status"
           className="pointer-events-auto flex items-center justify-center gap-2 rounded-full bg-blue-700 px-3 py-1.5 text-center text-xs font-semibold text-white shadow-lg"
         >
-          <span>áƒ áƒ”áƒ“áƒáƒ¥áƒ¢áƒ˜áƒ áƒ”áƒ‘áƒ˜áƒ¡ áƒ áƒ”áƒŸáƒ˜áƒ›áƒ˜{design?.isDirty ? ' Â· áƒ¨áƒ”áƒ£áƒœáƒáƒ®áƒáƒ•áƒ˜' : ''}</span>
+          <span>რედაქტირების რეჟიმი{design?.isDirty ? ' · შეუნახავი' : ''}</span>
           <button
             type="button"
             onClick={() => design?.setDesignMode(false)}
             className="rounded-md bg-white/15 px-2.5 py-0.5 text-[11px] font-bold hover:bg-white/25"
           >
-            áƒ’áƒáƒ›áƒáƒ áƒ—áƒ•áƒ
+            გამორთვა
           </button>
         </div>
       </div>
@@ -45,7 +45,7 @@ export function DesignBranchBanner() {
         onClick={() => design?.setDesignMode(true)}
         className="pointer-events-auto rounded-full border border-slate-200 bg-white/95 px-3.5 py-2 text-xs font-bold text-slate-800 shadow-lg backdrop-blur hover:bg-white dark:border-zinc-600 dark:bg-zinc-900/95 dark:text-zinc-100"
       >
-        áƒ áƒ”áƒ“áƒáƒ¥áƒ¢áƒ˜áƒ áƒ”áƒ‘áƒ
+        რედაქტირება
       </button>
     </div>
   );

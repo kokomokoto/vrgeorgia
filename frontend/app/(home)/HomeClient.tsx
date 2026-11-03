@@ -2,11 +2,12 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { listProperties } from '@/lib/api';
 import { apiLang } from '@/lib/apiLang';
-import { buildMapHref, filtersToPropertyQuery } from '@/lib/mapQuery';
+import { browserHrefMatches, buildFilteredHref, buildMapHref, filtersToPropertyQuery, listingFiltersToSearchString, readListingSearch } from '@/lib/mapQuery';
 import type { Property } from '@/lib/types';
 import { Filters, type FiltersState } from '@/components/Filters';
 import {
@@ -41,6 +42,7 @@ import {
   scaleDesignPx,
   useHomeDesignScale,
 } from '@/lib/useIsDesignDesktop';
+import { useLocalizeHref } from '@/lib/useSitePathname';
 
 export type HomeInitialListings = {
   properties: Property[];
@@ -49,6 +51,10 @@ export type HomeInitialListings = {
   typeCounts?: Record<string, number>;
   /** Language the server fetched the listings in. */
   lang: string;
+  /** Filters the server already applied, so the first paint matches the URL. */
+  filters?: FiltersState;
+  sort?: string;
+  page?: number;
 };
 
 type HomeClientProps = {
@@ -64,6 +70,8 @@ function plainLabel(value: string): string {
 
 export default function HomeClient({ initialListings = null }: HomeClientProps) {
   const { t, i18n } = useTranslation();
+  const router = useRouter();
+  const localizeHref = useLocalizeHref();
   const homeDesign = useHomeDesignOptional();
   const { activeModeId } = useTheme();
   const designMode = homeDesign?.designMode ?? false;
@@ -162,10 +170,16 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
     showQuickCol ? quickW : 0
   );
   const ssrListings = initialListings?.properties ?? [];
+  const seedFilters = initialListings?.filters ?? HOME_FILTERS_INITIAL;
+  const seedSort = initialListings?.sort ?? 'date_desc';
+  const seedPage = initialListings?.page ?? 1;
   const [mounted, setMounted] = React.useState(false);
-  const [filters, setFilters] = React.useState<FiltersState>(HOME_FILTERS_INITIAL);
+  const [filters, setFilters] = React.useState<FiltersState>(seedFilters);
   const [filtersHydrated, setFiltersHydrated] = React.useState(false);
   const [properties, setProperties] = React.useState<Property[]>(ssrListings);
+  const [listedKey, setListedKey] = React.useState(() =>
+    listingFiltersToSearchString(seedFilters, seedSort, seedPage)
+  );
   const [mapProperties, setMapProperties] = React.useState<Property[]>([]);
   const [totalCount, setTotalCount] = React.useState(initialListings?.total ?? 0);
   const [totalPages, setTotalPages] = React.useState(
@@ -177,8 +191,8 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
   const [loading, setLoading] = React.useState(ssrListings.length === 0);
   const [hasLoadedOnce, setHasLoadedOnce] = React.useState(ssrListings.length > 0);
   const [error, setError] = React.useState<string | null>(null);
-  const [currentPage, setCurrentPage] = React.useState(1);
-  const [sortBy, setSortBy] = React.useState('date_desc');
+  const [currentPage, setCurrentPage] = React.useState(seedPage);
+  const [sortBy, setSortBy] = React.useState(seedSort);
   const [mapOpen, setMapOpen] = React.useState(false);
   const [selectedMapPropertyId, setSelectedMapPropertyId] = React.useState<string | null>(null);
   const ITEMS_PER_PAGE = 40;
@@ -195,15 +209,22 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
 
   React.useEffect(() => {
     setMounted(true);
-    const saved = consumeHomeSearchOnMount();
-    if (saved) {
-      setFilters(saved.filters);
-      setSortBy(saved.sort);
-      setCurrentPage(saved.page);
+    const fromUrl = readListingSearch(new URLSearchParams(window.location.search));
+    if (listingFiltersToSearchString(fromUrl.filters, fromUrl.sort, fromUrl.page)) {
+      setFilters(fromUrl.filters);
+      setSortBy(fromUrl.sort);
+      setCurrentPage(fromUrl.page);
     } else {
-      setFilters({ ...HOME_FILTERS_INITIAL });
-      setSortBy('date_desc');
-      setCurrentPage(1);
+      const saved = consumeHomeSearchOnMount();
+      if (saved) {
+        setFilters(saved.filters);
+        setSortBy(saved.sort);
+        setCurrentPage(saved.page);
+      } else {
+        setFilters({ ...HOME_FILTERS_INITIAL });
+        setSortBy('date_desc');
+        setCurrentPage(1);
+      }
     }
     setFiltersHydrated(true);
   }, []);
@@ -257,21 +278,11 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
   );
 
   React.useEffect(() => {
-    if (!filtersHydrated || typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const amenitiesParam = params.get('amenities');
-    if (amenitiesParam) {
-      try {
-        const amenities = JSON.parse(amenitiesParam);
-        if (Array.isArray(amenities) && amenities.length > 0) {
-          setFilters((prev) => ({ ...prev, amenities }));
-          window.history.replaceState({}, '', '/');
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [filtersHydrated]);
+    if (!filtersHydrated) return;
+    const href = localizeHref(buildFilteredHref('/', filters, sortBy, currentPage));
+    if (browserHrefMatches(href)) return;
+    router.replace(href, { scroll: false });
+  }, [filters, sortBy, currentPage, filtersHydrated, localizeHref, router]);
 
   const needTypeCounts = React.useMemo(() => {
     const fromLayout = homeDesign?.layout.typePanel.items;
@@ -301,6 +312,7 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
     if (!filtersHydrated) return;
 
     let alive = true;
+    const requestKey = listingFiltersToSearchString(filters, sortBy, currentPage);
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
@@ -315,6 +327,7 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
         .then((listRes) => {
           if (!alive) return;
           setProperties(listRes.properties);
+          setListedKey(requestKey);
           setTotalCount(listRes.total ?? listRes.properties.length);
           setTotalPages(listRes.totalPages ?? 1);
           trackSearchFilters('home', filters, {
@@ -350,6 +363,7 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
       prevMapOpenRef.current = true;
       return;
     }
+    setMapProperties([]);
 
     const justOpened = !prevMapOpenRef.current;
     prevMapOpenRef.current = true;
@@ -385,10 +399,14 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
   };
 
   const searchQuery = filters.q.trim();
-  // Keep SSR cards visible for crawlers and first paint; skeleton only when we have nothing to show.
-  const showSkeleton = properties.length === 0 && (loading || !filtersHydrated);
-  const showEmptyResults = filtersHydrated && hasLoadedOnce && !loading && !error && totalCount === 0;
-  const mapHref = buildMapHref(filters, sortBy);
+  const viewKey = listingFiltersToSearchString(filters, sortBy, currentPage);
+  // A previous page (including pinned cards) stays visible only while it is the
+  // list for the filters now on screen. A new filter hides non-matching pins immediately.
+  const listMatchesView = viewKey === listedKey;
+  const showSkeleton = !listMatchesView || (properties.length === 0 && (loading || !filtersHydrated));
+  const showEmptyResults =
+    listMatchesView && filtersHydrated && hasLoadedOnce && !loading && !error && totalCount === 0;
+  const mapHref = localizeHref(buildMapHref(filters, sortBy));
 
   return (
     <div className="text-slate-900">
@@ -693,7 +711,7 @@ export default function HomeClient({ initialListings = null }: HomeClientProps) 
             </div>
           )}
 
-          {totalPages > 1 && (
+          {!showSkeleton && totalPages > 1 && (
             <div className="mt-6 flex items-center justify-center gap-2">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}

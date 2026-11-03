@@ -12,7 +12,8 @@ import { MapView } from '@/components/MapView';
 import { PropertyMapListRow } from '@/components/PropertyMapListRow';
 import { PropertyMapListSkeleton } from '@/components/Skeleton';
 import { filterPropertiesByMapBounds, mapBoundsEqual, type MapBounds } from '@/lib/mapBounds';
-import { filtersToPropertyQuery, omitPriceAreaFilters, searchParamsToFiltersState } from '@/lib/mapQuery';
+import { browserHrefMatches, buildFilteredHref, filtersToPropertyQuery, omitPriceAreaFilters, readListingSearch } from '@/lib/mapQuery';
+import { useLocalizeHref } from '@/lib/useSitePathname';
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 
 const FILTERS_WIDTH_KEY = 'vhome-map-filters-width-v2';
@@ -122,6 +123,7 @@ function PanelEdgeHandle({
 export default function MapSearchClient() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
+  const localizeHref = useLocalizeHref();
   const searchParams = useSearchParams();
   const spStr = searchParams.toString();
   const [mounted, setMounted] = React.useState(false);
@@ -136,9 +138,9 @@ export default function MapSearchClient() {
   );
 
   const [filters, setFilters] = React.useState<FiltersState>(() =>
-    searchParamsToFiltersState(new URLSearchParams(spStr)).filters
+    readListingSearch(new URLSearchParams(spStr)).filters
   );
-  const [sortBy, setSortBy] = React.useState(() => searchParamsToFiltersState(new URLSearchParams(spStr)).sort);
+  const [sortBy, setSortBy] = React.useState(() => readListingSearch(new URLSearchParams(spStr)).sort);
   const [properties, setProperties] = React.useState<Property[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -174,10 +176,17 @@ export default function MapSearchClient() {
   );
 
   React.useEffect(() => {
-    const next = searchParamsToFiltersState(new URLSearchParams(spStr));
+    const next = readListingSearch(new URLSearchParams(spStr));
     setFilters(next.filters);
     setSortBy(next.sort);
   }, [spStr]);
+
+  React.useEffect(() => {
+    if (!mounted) return;
+    const href = localizeHref(buildFilteredHref('/map', filters, sortBy));
+    if (browserHrefMatches(href)) return;
+    router.replace(href, { scroll: false });
+  }, [filters, sortBy, mounted, localizeHref, router]);
 
   React.useEffect(() => {
     let alive = true;

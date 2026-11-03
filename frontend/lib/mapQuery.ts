@@ -169,8 +169,48 @@ export function omitPriceAreaFilters(filters: FiltersState): FiltersState {
   };
 }
 
-/** `lang` არ უნდა იყოს URL-ში მთავარი გვერდის ბმულზე — SSR vs კლიენტი სხვადასხვა `i18n.language`-ს იძლევა და hydration error-ს იწვევს. `/map` გვერდი ისევ იყენებს `useTranslation().language` API-ზე. */
-export function buildMapHref(filters: FiltersState, sort: string, lang?: string): string {
-  const qs = propertyQueryToSearchString(filtersToPropertyQuery(filters, sort, lang));
-  return qs ? `/map?${qs}` : '/map';
+/**
+ * Shareable query string. Omits language (that lives in /en /ru) and defaults
+ * (`sort=date_desc`, `priceType=total` with no price) so an unfiltered page stays `/`.
+ */
+export function listingFiltersToSearchString(filters: FiltersState, sort: string, page = 1): string {
+  const q: PropertyQuery = { ...filtersToPropertyQuery(filters, sort) };
+  delete q.lang;
+  if (!filters.minPrice && !filters.maxPrice) delete q.priceType;
+  if (!sort || sort === 'date_desc') delete q.sort;
+  const params = new URLSearchParams(propertyQueryToSearchString(q));
+  if (page > 1) params.set('page', String(page));
+  return params.toString();
+}
+
+export function readListingSearch(sp: URLSearchParams): { filters: FiltersState; sort: string; page: number } {
+  const { filters, sort } = searchParamsToFiltersState(sp);
+  const n = Number(sp.get('page'));
+  const page = Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+  return { filters, sort, page };
+}
+
+export function buildFilteredHref(pathname: string, filters: FiltersState, sort: string, page = 1): string {
+  const qs = listingFiltersToSearchString(filters, sort, page);
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+/** True when the address bar already shows this href (encoding differences ignored). */
+export function browserHrefMatches(href: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const current = new URL(window.location.pathname + window.location.search, 'http://local');
+  const next = new URL(href, 'http://local');
+  if (current.pathname !== next.pathname) return false;
+  const a = current.searchParams;
+  const b = next.searchParams;
+  const keys = new Set([...a.keys(), ...b.keys()]);
+  for (const key of keys) {
+    if (a.get(key) !== b.get(key)) return false;
+  }
+  return true;
+}
+
+/** `lang` არ უნდა იყოს URL-ში — ენა ბილიკშია (`/en`, `/ru`). */
+export function buildMapHref(filters: FiltersState, sort: string, _lang?: string): string {
+  return buildFilteredHref('/map', filters, sort);
 }

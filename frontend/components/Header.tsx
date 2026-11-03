@@ -12,6 +12,7 @@ import { useCompare } from './CompareProvider';
 import { useFavoriteCount } from './FavoriteButton';
 import { useTheme } from './ThemeProvider';
 import { isAdminRole, isAgentRole, isSearcherRole } from '@/lib/userRoles';
+import { useLocalizeHref } from '@/lib/useSitePathname';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import { DesignableBadge } from '@/components/home-design/DesignableBadge';
 import {
@@ -569,6 +570,7 @@ function NavCountBadge({ count }: { count: number }) {
 
 export function Header() {
   const { t, i18n } = useTranslation();
+  const localizeHref = useLocalizeHref();
   const { user } = useAuth();
   const favoriteCount = useFavoriteCount();
   const { compareCount } = useCompare();
@@ -593,7 +595,6 @@ export function Header() {
   const hasHeaderMedia = Boolean(headerBgMedia?.url || headerBgMedia?.embedUrl);
 
   const [open, setOpen] = React.useState(false);
-  const [mounted, setMounted] = React.useState(false);
 
   const headerHRaw = headerLayout?.h ?? DEFAULT_HEADER.h;
   // Same reference as free-nav authoring (max-w-6xl column). Fonts must not
@@ -634,10 +635,6 @@ export function Header() {
     },
     [design]
   );
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   React.useEffect(() => {
     document.documentElement.style.setProperty('--site-header-height', `${headerH}px`);
@@ -700,7 +697,7 @@ export function Header() {
     e.preventDefault();
     // ლოგო = ახალი ძიება — შენახული ფილტრები/სორტი იშლება
     clearHomeFiltersStorage();
-    window.location.href = '/';
+    window.location.href = localizeHref('/');
   };
 
   const handleBrandItemClick = (itemId: 'brand' | 'brandLogo') => (e: React.MouseEvent) => {
@@ -714,24 +711,22 @@ export function Header() {
   };
 
   const appName = headerLayout?.brandLabel?.trim() || 'Vhome';
-  const uploadText =
-    headerLayout?.uploadLabel?.trim() || (mounted ? t('upload') : 'განცხადების დამატება');
-  const loginText =
-    headerLayout?.loginLabel?.trim() || (mounted ? t('login') : 'შესვლა');
-  const favoritesText =
-    headerLayout?.favoritesLabel?.trim() || (mounted ? t('favorites') : 'ფავორიტები');
-  const compareText =
-    headerLayout?.compareLabel?.trim() || (mounted ? t('compare') : 'შედარება');
-  const agentsText =
-    headerLayout?.agentsLabel?.trim() || (mounted ? t('agents') : 'აგენტები');
-  const servicesNavText =
-    headerLayout?.servicesLabel?.trim() || (mounted ? t('services_nav') : 'მომსახურება');
-  const aboutNavText =
-    headerLayout?.aboutLabel?.trim() || (mounted ? t('about_nav') : 'შესახებ');
-  const profileText =
-    headerLayout?.profileLabel?.trim() || (mounted ? t('profile') : 'პროფილი');
-  const adminText =
-    headerLayout?.adminLabel?.trim() || (mounted ? t('admin_panel') : 'ადმინ პანელი');
+  const navLabel = (custom: string | undefined, key: string, fallback: string) => {
+    const designed = custom?.trim() || '';
+    const lang = (i18n.language || 'ka').split('-')[0];
+    if (lang === 'ka' && designed) return designed;
+    const value = t(key);
+    return !value || value === key ? designed || fallback : value;
+  };
+  const uploadText = navLabel(headerLayout?.uploadLabel, 'upload', 'განცხადების დამატება');
+  const loginText = navLabel(headerLayout?.loginLabel, 'login', 'შესვლა');
+  const favoritesText = navLabel(headerLayout?.favoritesLabel, 'favorites', 'ფავორიტები');
+  const compareText = navLabel(headerLayout?.compareLabel, 'compare', 'შედარება');
+  const agentsText = navLabel(headerLayout?.agentsLabel, 'agents', 'აგენტები');
+  const servicesNavText = navLabel(headerLayout?.servicesLabel, 'services_nav', 'მომსახურება');
+  const aboutNavText = navLabel(headerLayout?.aboutLabel, 'about_nav', 'შესახებ');
+  const profileText = navLabel(headerLayout?.profileLabel, 'profile', 'პროფილი');
+  const adminText = navLabel(headerLayout?.adminLabel, 'admin_panel', 'ადმინ პანელი');
   const isAdmin = isAdminRole(user?.role);
   const isAgent = isAgentRole(user?.role);
   const isSearcher = isSearcherRole(user?.role);
@@ -817,7 +812,6 @@ export function Header() {
     headerHRaw,
     headerLayout?.itemGapPx,
     i18n.language,
-    mounted,
     fontScale,
   ]);
 
@@ -888,7 +882,7 @@ export function Header() {
         selected={selectedHeaderItemId === 'brandLogo'}
         drag={drag}
         as="a"
-        href="/"
+        href={localizeHref('/')}
         onClick={handleBrandItemClick('brandLogo')}
         className="inline-flex items-center justify-center leading-none"
         style={{
@@ -905,7 +899,7 @@ export function Header() {
         selected={selectedHeaderItemId === 'brand'}
         drag={drag}
         as="a"
-        href="/"
+        href={localizeHref('/')}
         onClick={handleBrandItemClick('brand')}
         className="font-semibold leading-none"
         style={itemStyle('brand')}
@@ -1218,7 +1212,7 @@ export function Header() {
           ) : null}
           <div className="flex min-w-0 shrink-0 items-center gap-3">
             <a
-              href="/"
+              href={localizeHref('/')}
               onClick={designMode ? undefined : handleLogoNavigate}
               data-theme-brand
               className={`inline-flex cursor-pointer items-center gap-2 font-semibold leading-none ${
@@ -1371,7 +1365,7 @@ export function Header() {
           <DesignableBadge id="header" selected={selected} placement="inside" />
         ) : null}
         <a
-          href="/"
+          href={localizeHref('/')}
           onClick={designMode ? undefined : handleLogoNavigate}
           data-theme-brand
           className="inline-flex cursor-pointer items-center gap-2 font-semibold leading-none"

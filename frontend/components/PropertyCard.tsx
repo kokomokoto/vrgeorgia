@@ -5,11 +5,14 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Property } from '@/lib/types';
 import { resolveImageUrl } from '@/lib/api';
+import { PROPERTY_CARD_SIZES, propertyThumbSrcSet } from '@/lib/imageUrl';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import { formatListedDate, getPropertyStreetLine } from '@/lib/propertyDisplay';
+import { cleanListingTitle } from '@/lib/propertyShareMetadata';
 import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
 import { propertyHref } from '@/lib/propertyPublicPath';
+import { useLocalizeHref } from '@/lib/useSitePathname';
 import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
 import PinnedListingMark from './PinnedListingMark';
@@ -20,14 +23,18 @@ export function PropertyCard({
   p,
   compactPhoto = false,
   denseMeta = false,
+  priority = false,
 }: {
   p: Property;
   /** უფრო დაბალი ფოტო (მთავარი გვერდი) */
   compactPhoto?: boolean;
   /** ბეჯები და ფასი ერთ ხაზზე (აგენტის გვერდი) */
   denseMeta?: boolean;
+  /** Above-the-fold card: eager + high-priority main photo (LCP). */
+  priority?: boolean;
 }) {
   const { t, i18n } = useTranslation();
+  const localizeHref = useLocalizeHref();
   const mainPhotoIndex = Math.min(p.mainPhoto ?? 0, Math.max(0, (p.photos?.length ?? 1) - 1));
   const photos = p.photos?.length ? p.photos : [];
   const [activeIndex, setActiveIndex] = React.useState(mainPhotoIndex);
@@ -77,7 +84,7 @@ export function PropertyCard({
   // ტექსტი უკვე ნათარგმნია სერვერზე (?lang=) და ქეშირებულია ბაზაში —
   // client-ზე თითო იუზერისთვის თავიდან თარგმნა აღარ ხდება.
   const currentLang = i18n.language || 'ka';
-  const displayTitle = p.title;
+  const displayTitle = cleanListingTitle(p.title) || p.title;
   const displayStreet = getPropertyStreetLine(p);
   const displayCity = p.city || '';
   const listedAt = formatListedDate(p.createdAt, currentLang);
@@ -130,7 +137,7 @@ export function PropertyCard({
       data-property-card
       className="group overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-black/20"
     >
-      <Link href={propertyHref(p)} className="block">
+      <Link href={localizeHref(propertyHref(p))} className="block">
         <div
           className={`relative bg-slate-100 dark:bg-zinc-800 ${
             compactPhoto ? 'aspect-[3/2]' : 'aspect-[4/3]'
@@ -154,15 +161,20 @@ export function PropertyCard({
               )}
               {photos.map((photo, i) => {
                 if (!loadedIndices.has(i)) return null;
+                const isPanorama = isPanoramaPhoto(photo, p.panoramaPhotos);
+                const isMain = i === mainPhotoIndex;
                 return (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     key={`${photo}-${i}`}
-                    src={resolveImageUrl(photo, 'thumb', {
-                      isPanorama: isPanoramaPhoto(photo, p.panoramaPhotos),
-                    })}
-                    alt={i === shownIndex ? displayTitle : ''}
-                    loading={i === mainPhotoIndex ? 'lazy' : undefined}
+                    src={resolveImageUrl(photo, 'thumb', { isPanorama })}
+                    srcSet={propertyThumbSrcSet(photo, { isPanorama })}
+                    sizes={PROPERTY_CARD_SIZES}
+                    width={400}
+                    height={300}
+                    alt={i === shownIndex ? [displayTitle, displayStreet, displayCity].filter(Boolean).join(', ') : ''}
+                    loading={isMain ? (priority ? 'eager' : 'lazy') : undefined}
+                    fetchPriority={isMain && priority ? 'high' : 'auto'}
                     decoding="async"
                     className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
                       i === shownIndex ? 'opacity-100' : 'opacity-0'

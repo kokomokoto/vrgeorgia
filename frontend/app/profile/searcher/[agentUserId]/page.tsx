@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
+import { LinkifiedText } from '@/components/LinkifiedText';
 import {
   addSearcherRequestComment,
   deleteSearcherRequestComment,
@@ -570,7 +571,7 @@ export default function SearcherAgentRequestsPage() {
                               ) : (
                                 <>
                                   <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">
-                                    {c.body}
+                                    <LinkifiedText text={c.body} />
                                   </p>
                                   {isMine ? (
                                     <div className="mt-2 flex flex-wrap gap-2">

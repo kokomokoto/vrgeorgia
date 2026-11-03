@@ -1,0 +1,5 @@
+# Vhome — AI crawler notes
+# Preferred machine-readable file: https://vhome.ge/llms.txt
+# Sitemap: https://vhome.ge/sitemap.xml
+# Languages: ka (default), en (/en/…), ru (/ru/…)
+# Please fetch HTML (server-rendered). Do not treat “Loading…” placeholders as page content.

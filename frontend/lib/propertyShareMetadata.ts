@@ -5,34 +5,18 @@ import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay
 import { canonicalPropertyPathId } from '@/lib/seoDuplicateCanonical';
 import { SITE_NAME, getSiteHost, getSiteUrl } from '@/lib/siteUrl';
 import { DEFAULT_OG_IMAGE } from '@/lib/seoDefaults';
+import { DEFAULT_SITE_LANG, localizePath, ogLocale, SITE_LANGS, type SiteLang } from '@/lib/siteLang';
+import {
+  SEO_WORDS,
+  SITE_META,
+  TYPE_LABELS_I18N,
+  buildLanguageAlternates,
+  dealLabel,
+  typeLabel,
+} from '@/lib/seoI18n';
 
 const SITE_URL = getSiteUrl();
 const SITE_HOST = getSiteHost();
-
-const DEAL_LABELS: Record<string, string> = {
-  sale: 'იყიდება',
-  rent: 'ქირავდება',
-  mortgage: 'გირავდება',
-};
-
-const DEAL_SOLD_LABELS: Record<string, string> = {
-  sale: 'გაიყიდა',
-  rent: 'გაქირავდა',
-  mortgage: 'გირავნობით გაიცა',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  apartment: 'ბინა',
-  house: 'სახლი',
-  commercial: 'კომერციული',
-  land: 'მიწა',
-  cottage: 'კოტეჯი',
-  hotel: 'სასტუმრო',
-  building: 'შენობა',
-  warehouse: 'საწყობი',
-  parking: 'პარკინგი',
-  business: 'ბიზნესი',
-};
 
 function serverApiBase(): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();
@@ -41,11 +25,20 @@ function serverApiBase(): string {
   return 'http://localhost:5000';
 }
 
-export async function fetchPropertyForShareMetadata(id: string): Promise<Property | null> {
+/**
+ * Server-side property fetch used by metadata, middleware (social crawlers),
+ * the server-rendered listing page and the sitemap. Cached per id+lang for
+ * 5 minutes; Next dedupes identical calls within one request.
+ */
+export async function fetchPropertyForShareMetadata(
+  id: string,
+  lang: SiteLang = DEFAULT_SITE_LANG
+): Promise<Property | null> {
   try {
-    const res = await fetch(`${serverApiBase()}/api/properties/${encodeURIComponent(id)}?lang=ka&meta=1`, {
-      next: { revalidate: 300 },
-    });
+    const res = await fetch(
+      `${serverApiBase()}/api/properties/${encodeURIComponent(id)}?lang=${lang}&meta=1`,
+      { next: { revalidate: 300 } }
+    );
     if (!res.ok) return null;
     const data = (await res.json()) as { property?: Property };
     return data.property ?? null;
@@ -99,22 +92,32 @@ function getOwnerName(property: Property): string | undefined {
   return owner.name?.trim() || undefined;
 }
 
-export function buildPropertyShareDescription(property: Property): string {
+function formatPriceBit(property: Property): string {
+  const { currencySymbol, totalPrice, pricePerSqm } = getPropertyPrices(property);
+  if (totalPrice != null) return `${currencySymbol}${totalPrice.toLocaleString('en-US')}`;
+  if (pricePerSqm != null) return `${currencySymbol}${pricePerSqm.toLocaleString('en-US')}/m²`;
+  return '';
+}
+
+export function buildPropertyShareDescription(
+  property: Property,
+  lang: SiteLang = DEFAULT_SITE_LANG
+): string {
   const parts: string[] = [];
-  const typeLabel = TYPE_LABELS[property.type] || property.type;
-  const dealMap = property.status === 'sold' ? DEAL_SOLD_LABELS : DEAL_LABELS;
-  const dealLabel = dealMap[property.dealType || 'sale'] || '';
-  if (typeLabel && dealLabel) parts.push(`${typeLabel} ${dealLabel}`);
+  const type = typeLabel(property.type, lang);
+  const deal = dealLabel(property.dealType, lang, property.status);
+  if (type && deal) parts.push(`${type} ${deal}`);
 
   const address = getPropertyAddressLine(property);
   if (address) parts.push(address);
 
-  const { currencySymbol, totalPrice, pricePerSqm } = getPropertyPrices(property);
-  if (totalPrice != null) {
-    parts.push(`${currencySymbol}${totalPrice.toLocaleString('en-US')}`);
-  } else if (pricePerSqm != null) {
-    parts.push(`${currencySymbol}${pricePerSqm.toLocaleString('en-US')}/m²`);
-  }
+  const specs: string[] = [];
+  if (property.rooms) specs.push(`${property.rooms} ${SEO_WORDS.rooms[lang]}`);
+  if (property.sqm) specs.push(`${property.sqm} ${SEO_WORDS.sqm[lang]}`);
+  if (specs.length) parts.push(specs.join(', '));
+
+  const price = formatPriceBit(property);
+  if (price) parts.push(price);
 
   parts.push(SITE_HOST);
   return parts.join(' · ');
@@ -125,35 +128,54 @@ export function buildPropertyShareDescription(property: Property): string {
  * რომ ერთნაირი „იყიდება“ განცხადებები დუბლიკატად არ ჩაითვალოს.
  * ეკრანზე H1 უცვლელია.
  */
-export function buildPropertyDocumentTitle(property: Property): string {
-  const base = property.title?.trim() || 'განცხადება';
+function titleKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function buildPropertyDocumentTitle(property: Property, lang: SiteLang = DEFAULT_SITE_LANG): string {
+  const base = cleanListingTitle(property.title) || `${typeLabel(property.type, lang)} ${dealLabel(property.dealType, lang, property.status)}`.trim();
   const street = property.street?.trim() || '';
-  const { currencySymbol, totalPrice, pricePerSqm } = getPropertyPrices(property);
-  const price =
-    totalPrice != null
-      ? `${currencySymbol}${totalPrice.toLocaleString('en-US')}`
-      : pricePerSqm != null
-        ? `${currencySymbol}${pricePerSqm.toLocaleString('en-US')}/m²`
-        : '';
+  const price = formatPriceBit(property);
   const idBit = property.numericId ? `#${property.numericId}` : '';
-  const baseLower = base.toLowerCase();
+  const baseKey = titleKey(base);
   const parts = [street, price, idBit].filter((part) => {
     if (!part) return false;
-    return !baseLower.includes(part.toLowerCase());
+    const key = titleKey(part);
+    return key && !baseKey.includes(key);
   });
   return parts.length ? `${base} — ${parts.join(' · ')}` : base;
 }
 
-function buildKeywords(property: Property): string[] {
-  const dealMap = property.status === 'sold' ? DEAL_SOLD_LABELS : DEAL_LABELS;
+/**
+ * Agents sometimes paste titles with stray punctuation / double spaces /
+ * trailing separators ("ბინა იყიდება - - ", "ბინა ,,საბურთალოზე").
+ * Normalise for `<title>`, H1 and schema while leaving the DB untouched.
+ */
+export function cleanListingTitle(raw: string | undefined | null): string {
+  if (!raw) return '';
+  return String(raw)
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/([,.;:!?\-–—|/])\1+/g, '$1')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/^[\s,.;:!?\-–—|/]+/, '')
+    .replace(/[\s,;:\-–—|/]+$/, '')
+    .trim();
+}
+
+function buildKeywords(property: Property, lang: SiteLang): string[] {
   const keywords = [
-    'უძრავი ქონება',
-    'საქართველო',
+    SEO_WORDS.realEstateGeorgia[lang],
     SITE_NAME,
     property.city,
     property.tbilisiDistrict,
-    TYPE_LABELS[property.type],
-    dealMap[property.dealType || 'sale'],
+    typeLabel(property.type, lang),
+    dealLabel(property.dealType, lang, property.status),
+    TYPE_LABELS_I18N[property.type]?.en,
     'real estate',
     'Georgia',
     'Tbilisi',
@@ -189,14 +211,19 @@ function buildOgImage(id: string, title: string, property: Property): OgImage {
  * მუშაობს: Facebook, Instagram (ლინკი), WhatsApp, Telegram, Viber, TikTok,
  * LinkedIn, X/Twitter, Discord, Slack, iMessage, Pinterest და სხვ.
  */
-export function buildPropertyShareMetadata(id: string, property: Property): Metadata {
-  const title = buildPropertyDocumentTitle(property);
-  const description = buildPropertyShareDescription(property);
+export function buildPropertyShareMetadata(
+  id: string,
+  property: Property,
+  lang: SiteLang = DEFAULT_SITE_LANG
+): Metadata {
+  const title = buildPropertyDocumentTitle(property, lang);
+  const description = buildPropertyShareDescription(property, lang);
   const canonicalId = canonicalPropertyPathId(id, property);
-  const pageUrl = `${SITE_URL}/property/${canonicalId}`;
+  const path = `/property/${canonicalId}`;
+  const pageUrl = `${SITE_URL}${localizePath(path, lang)}`;
   const isDuplicate = Boolean(property.canonicalId && property.canonicalId !== id);
   const ownerName = getOwnerName(property);
-  const keywords = buildKeywords(property);
+  const keywords = buildKeywords(property, lang);
   const ogImage = buildOgImage(id, title, property);
   const primaryImage = ogImage.url;
 
@@ -209,9 +236,7 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
     publisher: SITE_NAME,
     category: 'real estate',
     metadataBase: new URL(SITE_URL),
-    alternates: {
-      canonical: pageUrl,
-    },
+    alternates: buildLanguageAlternates(path, lang),
     robots: isDuplicate
       ? { index: false, follow: true }
       : {
@@ -230,8 +255,8 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
       title,
       description,
       siteName: SITE_NAME,
-      locale: 'ka_GE',
-      alternateLocale: ['en_US', 'ru_RU'],
+      locale: ogLocale(lang),
+      alternateLocale: SITE_LANGS.filter((l) => l !== lang).map(ogLocale),
       images: [ogImage],
     },
     twitter: {
@@ -254,10 +279,9 @@ export function buildPropertyShareMetadata(id: string, property: Property): Meta
   };
 }
 
-export function buildDefaultShareMetadata(): Metadata {
-  const title = `${SITE_NAME} — უძრავი ქონება საქართველოში`;
-  const description =
-    'იპოვეთ სახლი, ბინა, კომერციული ფართი და მიწის ნაკვეთი საქართველოში. ვირტუალური ტურები და სანდო აგენტები.';
+export function buildDefaultShareMetadata(lang: SiteLang = DEFAULT_SITE_LANG): Metadata {
+  const title = SITE_META[lang].shortTitle;
+  const description = SITE_META[lang].description;
 
   return {
     title,
@@ -265,12 +289,12 @@ export function buildDefaultShareMetadata(): Metadata {
     metadataBase: new URL(SITE_URL),
     openGraph: {
       type: 'website',
-      url: SITE_URL,
+      url: `${SITE_URL}${localizePath('/', lang)}`,
       title,
       description,
       siteName: SITE_NAME,
-      locale: 'ka_GE',
-      alternateLocale: ['en_US', 'ru_RU'],
+      locale: ogLocale(lang),
+      alternateLocale: SITE_LANGS.filter((l) => l !== lang).map(ogLocale),
       images: [DEFAULT_OG_IMAGE],
     },
     twitter: {
@@ -290,21 +314,23 @@ export function buildDefaultShareMetadata(): Metadata {
 }
 
 /** Missing property / soft-404 — keep URL out of Google index. */
-export function buildMissingPropertyMetadata(id: string): Metadata {
-  const pageUrl = `${SITE_URL}/property/${id}`;
+export function buildMissingPropertyMetadata(id: string, lang: SiteLang = DEFAULT_SITE_LANG): Metadata {
+  const pageUrl = `${SITE_URL}${localizePath(`/property/${id}`, lang)}`;
+  const title = SEO_WORDS.notFoundListing[lang];
+  const description = SEO_WORDS.notFoundListingDesc[lang];
   return {
-    title: 'განცხადება ვერ მოიძებნა',
-    description: 'ეს განცხადება აღარ არის ხელმისაწვდომი ან წაშლილია.',
+    title,
+    description,
     metadataBase: new URL(SITE_URL),
     alternates: { canonical: pageUrl },
     robots: { index: false, follow: false },
     openGraph: {
       type: 'website',
       url: pageUrl,
-      title: 'განცხადება ვერ მოიძებნა | Vhome',
-      description: 'ეს განცხადება აღარ არის ხელმისაწვდომი.',
+      title: `${title} | ${SITE_NAME}`,
+      description,
       siteName: SITE_NAME,
-      locale: 'ka_GE',
+      locale: ogLocale(lang),
     },
   };
 }

@@ -48,7 +48,7 @@ export function PropertyPriceRow({
           }`}
         >
           {symbol}
-          {displayTotal.toLocaleString()}
+          {displayTotal.toLocaleString('en-US')}
         </span>
       )}
 
@@ -63,9 +63,7 @@ export function PropertyPriceRow({
           compact ? '' : 'sm:h-[1.5rem]'
         }`}
         aria-label={
-          displayCurrency === 'GEL'
-            ? 'ფასი ლარში. დააწკაპუნეთ დოლარზე გადასართავად'
-            : 'ფასი დოლარში. დააწკაპუნეთ ლარზე გადასართავად'
+          displayCurrency === 'GEL' ? t('price_switch_to_usd') : t('price_switch_to_gel')
         }
       >
         <span
@@ -100,7 +98,7 @@ export function PropertyPriceRow({
         >
           <span className={`${compact ? '' : 'truncate'} font-medium text-slate-700 dark:text-zinc-300`}>
             {symbol}
-            {displayPerSqm.toLocaleString()}
+            {displayPerSqm.toLocaleString('en-US')}
           </span>
           <span className="shrink-0">/ {t('sqm_unit_short')}</span>
         </span>

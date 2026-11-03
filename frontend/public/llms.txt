@@ -1,55 +1,85 @@
 # Vhome
 
-> Real-estate marketplace for Georgia (Sakartvelo): apartments, houses, land, commercial spaces, with VR/3D tours, map search and agent listings.
+> Vhome (vhome.ge) is a real estate marketplace in Georgia where buyers and renters can explore properties in Tbilisi and Batumi through immersive 3D tours, including Gaussian-splat walkthroughs, alongside map search and trusted local agents.
 
 ## Preferred languages
-- Georgian (ka) — primary site language
-- English (en) — UI + translated listing fields
-- Russian (ru) — UI + translated listing fields
+- Georgian (ka) — default URLs, no prefix
+- English (en) — `/en/…`
+- Russian (ru) — `/ru/…`
+- hreflang is published on every public page
 
 ## Main pages
 - Home / search: https://vhome.ge/
 - Map search: https://vhome.ge/map
+- 3D tours hub: https://vhome.ge/3d-tours
 - Agents directory: https://vhome.ge/agents
 - Architecture services: https://vhome.ge/services
 - About: https://vhome.ge/about
 - FAQ: https://vhome.ge/faq
+- Contact: https://vhome.ge/contact
+- Privacy: https://vhome.ge/privacy
+- Terms: https://vhome.ge/terms
 - Sitemap: https://vhome.ge/sitemap.xml
 - Robots: https://vhome.ge/robots.txt
+- This file: https://vhome.ge/llms.txt
+
+## City and district hubs (crawlable, unique copy)
+- https://vhome.ge/tbilisi
+- https://vhome.ge/tbilisi/apartments-for-sale
+- https://vhome.ge/tbilisi/apartments-for-rent
+- https://vhome.ge/tbilisi/saburtalo/apartments-for-sale
+- https://vhome.ge/tbilisi/vake/apartments-for-sale
+- https://vhome.ge/batumi
+- https://vhome.ge/batumi/apartments-for-sale
+- Same pattern for Kutaisi, Rustavi, Mtskheta, Gori
+- English/Russian: prefix `/en` or `/ru` (e.g. https://vhome.ge/en/tbilisi/apartments-for-sale)
 
 ## What the product does
 - Public search for sale, rent and mortgage listings across Georgia
-- Filters: property type, price, area, rooms, city/district, land agricultural status, amenities
-- Property detail pages with photos, optional 360/VR tours, price and contact
+- Filters: property type, price, area, rooms, city/district, land status, amenities, has-3D
+- Property detail pages with photos, optional 360/VR/Gaussian-splat tours, price and contact
 - Agent profiles with portfolio listings
-- Structured data: Organization, WebSite, RealEstateListing, FAQPage, BreadcrumbList, AboutPage
+- Structured data: Organization, WebSite, RealEstateListing, FAQPage, BreadcrumbList, AboutPage, ContactPage, CollectionPage, ItemList, VideoObject (tours)
 
 ## Listings
 - URL pattern: https://vhome.ge/property/{id}
 - Fields typically include: title, description, price (USD/GEL), sqm, rooms, address, city, deal type, photos, tour links
+- HTML is server-rendered (H1, description, specs, photos with alt, agent, tour)
 
 ## Agents
 - Directory: https://vhome.ge/agents
 - Profile: https://vhome.ge/agents/{id}
 
+## 3D tours / Gaussian Splatting
+- Hub: https://vhome.ge/3d-tours
+- A listing may include an interactive 3DGS walkthrough, a 360° panorama, or both
+- Filter: homepage / map “Has 3D”, or the hub gallery
+
 ## FAQ topics covered on /faq
 - What is Vhome
 - How to find apartments/houses in Tbilisi
-- What VR/3D tours are
+- What VR/3D / Gaussian-splat tours are
 - How to find agents
 - Price currency (USD/GEL)
 - Agricultural vs non-agricultural land
 - Contacting listing owners
 
 ## Machine-readable API (public read)
-- Properties list: https://vrgeorgia-api.onrender.com/api/properties
+- Properties list (paginated, default 40, max 5000): https://vrgeorgia-api.onrender.com/api/properties?page=1&limit=40
 - Single property: https://vrgeorgia-api.onrender.com/api/properties/{id}
 - Agents list: https://vrgeorgia-api.onrender.com/api/agents
 - Optional query: `?lang=ka|en|ru` for translated title/city/street/description
+- Public responses omit internal fields (moderation history, drafts, deletion records, owner-only notes)
+
+## Entity
+- Legal name: Vhome (Virtual Home Georgia)
+- Founded: 2024, Tbilisi, Georgia
+- Email: virtualhome.ge@gmail.com
+- Phone: +995 597 046 604
+- YouTube: https://www.youtube.com/@vhome.georgia
+- TikTok: https://www.tiktok.com/@vhome.ge
+- Instagram: https://www.instagram.com/vhome.ge
+- Facebook: https://www.facebook.com/vhome.ge
 
 ## What not to index
 - /admin, /login, /register, /profile, /upload, /favorites, /compare, /messages, /analytics, property edit pages
-
-## Contact
-- Website: https://vhome.ge
-- (Social profiles and public phone/email will be added when available)

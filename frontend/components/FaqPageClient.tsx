@@ -39,7 +39,6 @@ export function FaqPageClient() {
   const { user, profileLoaded } = useAuth();
   const isAdmin = profileLoaded && isAdminRole(user?.role);
 
-  const [mounted, setMounted] = React.useState(false);
   const [items, setItems] = React.useState<FaqItem[]>(FAQ_ITEMS);
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState<FaqItem[]>([]);
@@ -47,10 +46,6 @@ export function FaqPageClient() {
   const [saving, setSaving] = React.useState(false);
   const [status, setStatus] = React.useState('');
   const [error, setError] = React.useState('');
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   React.useEffect(() => {
     let alive = true;
@@ -71,8 +66,11 @@ export function FaqPageClient() {
     };
   }, []);
 
-  const lang = mounted ? pickFaqLang(i18n.language) : 'ka';
-  const tx = (key: string, fallback: string) => (mounted ? t(key) : fallback);
+  const lang = pickFaqLang(i18n.language);
+  const tx = (key: string, fallback: string) => {
+    const value = t(key);
+    return !value || value === key ? fallback : value;
+  };
 
   const startEdit = () => {
     setDraft(cloneItems(items));

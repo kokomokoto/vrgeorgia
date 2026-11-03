@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from './ThemeProvider';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import {
@@ -118,6 +119,7 @@ export function ThemeToggle() {
   const { toggle, modeInfos, activeModeId } = useTheme();
   const design = useHomeDesignOptional();
   const designMode = design?.designMode ?? false;
+  const { t } = useTranslation();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => setMounted(true), []);
@@ -144,13 +146,12 @@ export function ThemeToggle() {
     displayModeDef?.toggleIconMediaKind
   );
 
-  const label = !mounted
-    ? 'შემდეგი რეჟიმი'
-    : designMode && displayInfo
-      ? `რეჟიმის იკონი: ${displayInfo.label}`
+  const label =
+    designMode && displayInfo
+      ? t('theme_mode_icon', { name: displayInfo.label })
       : next
-        ? `შემდეგი: ${next.label}`
-        : 'რეჟიმი';
+        ? t('theme_next_named', { name: next.label })
+        : t('theme_mode');
 
   const emojiFallback = !mounted
     ? '🌅'

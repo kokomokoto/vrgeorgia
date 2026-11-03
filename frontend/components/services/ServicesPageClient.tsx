@@ -86,7 +86,6 @@ export function ServicesPageClient() {
   const { user, profileLoaded } = useAuth();
   const isAdmin = profileLoaded && isAdminRole(user?.role);
 
-  const [mounted, setMounted] = React.useState(false);
   const [content, setContent] = React.useState<ServicesPageContent>(DEFAULT_SERVICES_CONTENT);
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState<ServicesPageContent | null>(null);
@@ -96,10 +95,6 @@ export function ServicesPageClient() {
   const [status, setStatus] = React.useState('');
   const [error, setError] = React.useState('');
   const fileInputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const applyPayload = React.useCallback((data: ServicesPageContent) => {
     if (!data?.page || !Array.isArray(data.sections) || data.sections.length === 0) return;
@@ -141,8 +136,11 @@ export function ServicesPageClient() {
     };
   }, [profileLoaded, isAdmin, applyPayload]);
 
-  const lang = mounted ? pickServicesLang(i18n.language) : 'ka';
-  const tx = (key: string, fallback: string) => (mounted ? t(key) : fallback);
+  const lang = pickServicesLang(i18n.language);
+  const tx = (key: string, fallback: string) => {
+    const value = t(key);
+    return !value || value === key ? fallback : value;
+  };
   const view = editing && draft ? draft : content;
   const publicSections = visibleServiceSections(view.sections);
   const featured = featuredServiceSections(view.sections);

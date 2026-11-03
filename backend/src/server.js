@@ -90,15 +90,36 @@ for (const o of LOCAL_DEV_FRONTENDS) {
   if (!allowedOrigins.includes(o)) allowedOrigins.push(o);
 }
 
-app.use(cors({
-  origin: NODE_ENV === 'production'
-    ? (origin, cb) => {
-        if (!origin || allowedOrigins.includes(origin)) cb(null, true);
-        else cb(new Error('CORS not allowed'));
-      }
-    : true,
-  credentials: true
-}));
+/**
+ * CORS: browsers from unknown origins get a clean 403 JSON (not a 500 stack
+ * trace); server-to-server / same-origin requests without an Origin header pass.
+ * Public read-only GET endpoints stay readable (they are the documented public API),
+ * but no credentials / write methods are granted to foreign origins.
+ */
+const PUBLIC_READ_ONLY_PREFIXES = ['/api/properties', '/api/agents', '/api/health', '/api/currency'];
+
+function corsOriginCheck(origin, cb) {
+  if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+  const err = new Error('CORS not allowed');
+  err.status = 403;
+  err.code = 'CORS_ORIGIN_REJECTED';
+  return cb(err);
+}
+
+app.use((req, res, next) => {
+  if (NODE_ENV !== 'production') return cors({ origin: true, credentials: true })(req, res, next);
+
+  const origin = req.headers.origin;
+  const isPublicRead =
+    (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') &&
+    PUBLIC_READ_ONLY_PREFIXES.some((p) => req.path === p || req.path.startsWith(`${p}/`));
+
+  if (origin && !allowedOrigins.includes(origin) && isPublicRead) {
+    // Anonymous read access for public data: no credentials, GET only.
+    return cors({ origin: true, credentials: false, methods: ['GET', 'HEAD', 'OPTIONS'] })(req, res, next);
+  }
+  return cors({ origin: corsOriginCheck, credentials: true })(req, res, next);
+});
 
 /**
  * ლიმიტის გასაღები: ავტორიზებულ მომხმარებელს — მისივე id, სხვას — IP.
@@ -320,9 +341,14 @@ async function start() {
   await attachTourUi(app);
 
   app.use((err, _req, res, _next) => {
-    console.error('Unhandled error:', err);
-    res.status(err.status || 500).json({
-      message: NODE_ENV === 'production' ? 'Internal server error' : err.message
+    if (err?.code === 'CORS_ORIGIN_REJECTED' || err?.message === 'CORS not allowed') {
+      // Expected client error — no stack trace noise, clean 4xx for the browser.
+      return res.status(403).json({ message: 'Origin not allowed', code: 'CORS_ORIGIN_REJECTED' });
+    }
+    const status = Number(err?.status || err?.statusCode) || 500;
+    if (status >= 500) console.error('Unhandled error:', err);
+    res.status(status).json({
+      message: status >= 500 && NODE_ENV === 'production' ? 'Internal server error' : err.message
     });
   });
 

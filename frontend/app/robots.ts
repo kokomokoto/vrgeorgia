@@ -14,6 +14,37 @@ const PRIVATE_PATHS = [
   '/property/*/edit',
 ];
 
+const BOTS = [
+  '*',
+  'Googlebot',
+  'Bingbot',
+  'GPTBot',
+  'ChatGPT-User',
+  'OAI-SearchBot',
+  'ClaudeBot',
+  'Claude-User',
+  'PerplexityBot',
+  'Google-Extended',
+  'Applebot',
+  'CCBot',
+  'Amazonbot',
+] as const;
+
+const SOCIAL_BOTS = [
+  'facebookexternalhit',
+  'Facebot',
+  'WhatsApp',
+  'meta-externalagent',
+  'meta-externalfetcher',
+  'FacebookBot',
+  'LinkedInBot',
+  'TelegramBot',
+  'Twitterbot',
+  'Discordbot',
+  'Slackbot',
+  'Viber',
+] as const;
+
 export default function robots(): MetadataRoute.Robots {
   const site = getSiteUrl();
 
@@ -23,107 +54,21 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: '*',
         disallow: '/',
       },
-      host: site,
     };
   }
 
   return {
     rules: [
-      {
-        userAgent: '*',
+      ...BOTS.map((userAgent) => ({
+        userAgent,
         allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'Googlebot',
+        disallow: [...PRIVATE_PATHS],
+      })),
+      ...SOCIAL_BOTS.map((userAgent) => ({
+        userAgent,
         allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'Bingbot',
-        allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'GPTBot',
-        allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'ChatGPT-User',
-        allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'ClaudeBot',
-        allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'PerplexityBot',
-        allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'Google-Extended',
-        allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'Applebot',
-        allow: '/',
-        disallow: PRIVATE_PATHS,
-      },
-      {
-        userAgent: 'facebookexternalhit',
-        allow: '/',
-      },
-      {
-        userAgent: 'Facebot',
-        allow: '/',
-      },
-      {
-        userAgent: 'WhatsApp',
-        allow: '/',
-      },
-      {
-        userAgent: 'meta-externalagent',
-        allow: '/',
-      },
-      {
-        userAgent: 'meta-externalfetcher',
-        allow: '/',
-      },
-      {
-        userAgent: 'FacebookBot',
-        allow: '/',
-      },
-      {
-        userAgent: 'LinkedInBot',
-        allow: '/',
-      },
-      {
-        userAgent: 'TelegramBot',
-        allow: '/',
-      },
-      {
-        userAgent: 'Twitterbot',
-        allow: '/',
-      },
-      {
-        userAgent: 'Discordbot',
-        allow: '/',
-      },
-      {
-        userAgent: 'Slackbot',
-        allow: '/',
-      },
-      {
-        userAgent: 'Viber',
-        allow: '/',
-      },
+      })),
     ],
     sitemap: `${site}/sitemap.xml`,
-    host: site,
   };
 }

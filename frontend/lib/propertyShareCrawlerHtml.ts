@@ -13,9 +13,9 @@ import {
   SITE_URL,
   buildPropertyJsonLd,
   jsonLdScript,
-  propertyDealLabel,
-  propertyTypeLabel,
 } from '@/lib/structuredData';
+import { DEFAULT_SITE_LANG, localizePath, ogLocale, type SiteLang } from '@/lib/siteLang';
+import { SEO_WORDS, dealLabel as dealLabelI18n, typeLabel as typeLabelI18n } from '@/lib/seoI18n';
 
 /**
  * Social / messenger preview bots only.
@@ -40,6 +40,7 @@ type ShareCrawlerInput = {
   image?: string;
   bodyHtml?: string;
   jsonLd?: unknown;
+  lang?: SiteLang;
 };
 
 function buildShareCrawlerHtml({
@@ -49,6 +50,7 @@ function buildShareCrawlerHtml({
   image,
   bodyHtml,
   jsonLd,
+  lang = DEFAULT_SITE_LANG,
 }: ShareCrawlerInput): string {
   const tags = [
     '<meta charset="utf-8"/>',
@@ -61,7 +63,7 @@ function buildShareCrawlerHtml({
     `<meta property="og:title" content="${escapeHtml(title)}"/>`,
     `<meta property="og:description" content="${escapeHtml(description)}"/>`,
     `<meta property="og:site_name" content="${SITE_NAME}"/>`,
-    '<meta property="og:locale" content="ka_GE"/>',
+    `<meta property="og:locale" content="${ogLocale(lang)}"/>`,
     image ? `<meta property="og:image" content="${escapeHtml(image)}"/>` : '',
     image ? `<meta property="og:image:secure_url" content="${escapeHtml(image)}"/>` : '',
     image ? '<meta property="og:image:width" content="1200"/>' : '',
@@ -80,7 +82,7 @@ function buildShareCrawlerHtml({
     : '';
 
   return `<!DOCTYPE html>
-<html lang="ka">
+<html lang="${lang}">
 <head>
   ${tags.join('\n  ')}
   ${jsonLdBlock}
@@ -91,16 +93,17 @@ function buildShareCrawlerHtml({
 </html>`;
 }
 
-function buildDefaultShareCrawlerHtml(): string {
-  const meta = buildDefaultShareMetadata();
+function buildDefaultShareCrawlerHtml(lang: SiteLang): string {
+  const meta = buildDefaultShareMetadata(lang);
   const path = DEFAULT_OG_IMAGE.url.startsWith('/')
     ? DEFAULT_OG_IMAGE.url
     : `/${DEFAULT_OG_IMAGE.url}`;
   return buildShareCrawlerHtml({
     title: typeof meta.title === 'string' ? meta.title : SITE_NAME,
     description: meta.description ?? '',
-    pageUrl: SITE_URL,
+    pageUrl: `${SITE_URL}${localizePath('/', lang)}`,
     image: `${SITE_URL}${path}`,
+    lang,
     bodyHtml: `
   <main>
     <h1>${escapeHtml(SITE_NAME)}</h1>
@@ -112,25 +115,31 @@ function buildDefaultShareCrawlerHtml(): string {
   });
 }
 
-function buildPropertyBodyHtml(id: string, property: Property, pageUrl: string, image?: string): string {
+function buildPropertyBodyHtml(
+  id: string,
+  property: Property,
+  pageUrl: string,
+  image: string | undefined,
+  lang: SiteLang
+): string {
   const title = property.title?.trim() || 'განცხადება';
-  const typeLabel = propertyTypeLabel(property.type);
-  const dealLabel = propertyDealLabel(property.dealType);
+  const typeLabel = typeLabelI18n(property.type, lang);
+  const dealLabel = dealLabelI18n(property.dealType, lang, property.status);
   const address = getPropertyAddressLine(property);
   const { currencySymbol, totalPrice, pricePerSqm } = getPropertyPrices(property);
   const desc = (property.desc || '').trim();
   const facts: string[] = [];
   if (typeLabel) facts.push(typeLabel);
   if (dealLabel) facts.push(dealLabel);
-  if (property.sqm) facts.push(`${property.sqm} მ²`);
-  if (property.houseSqm) facts.push(`სახლი ${property.houseSqm} მ²`);
-  if (property.rooms) facts.push(`${property.rooms} ოთახი`);
-  if (property.bedrooms) facts.push(`${property.bedrooms} საძინებელი`);
+  if (property.sqm) facts.push(`${property.sqm} ${SEO_WORDS.sqm[lang]}`);
+  if (property.houseSqm) facts.push(`${typeLabelI18n('house', lang)} ${property.houseSqm} ${SEO_WORDS.sqm[lang]}`);
+  if (property.rooms) facts.push(`${property.rooms} ${SEO_WORDS.rooms[lang]}`);
+  if (property.bedrooms) facts.push(`${property.bedrooms} ${SEO_WORDS.bedrooms[lang]}`);
   if (property.floor) {
     facts.push(
       property.totalFloors
-        ? `სართული ${property.floor}/${property.totalFloors}`
-        : `სართული ${property.floor}`
+        ? `${SEO_WORDS.floor[lang]} ${property.floor}/${property.totalFloors}`
+        : `${SEO_WORDS.floor[lang]} ${property.floor}`
     );
   }
 
@@ -151,20 +160,24 @@ function buildPropertyBodyHtml(id: string, property: Property, pageUrl: string, 
       ${address ? `<p itemprop="address">${escapeHtml(address)}</p>` : ''}
       ${image ? `<p><img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" width="1200" height="630" itemprop="image"/></p>` : ''}
       ${desc ? `<div itemprop="description"><p>${escapeHtml(desc).replace(/\n/g, '<br/>')}</p></div>` : ''}
-      <p><a href="${escapeHtml(pageUrl)}" itemprop="url">განცხადების ნახვა / View listing</a></p>
-      <p><a href="${SITE_URL}">${SITE_NAME}</a> · <a href="${SITE_URL}/map">რუკა</a> · <a href="${SITE_URL}/sitemap.xml">Sitemap</a></p>
+      <p><a href="${escapeHtml(pageUrl)}" itemprop="url">${escapeHtml(SEO_WORDS.viewListing[lang])}</a></p>
+      <p><a href="${SITE_URL}${localizePath('/', lang)}">${SITE_NAME}</a> · <a href="${SITE_URL}${localizePath('/map', lang)}">${escapeHtml(SEO_WORDS.map[lang])}</a> · <a href="${SITE_URL}/sitemap.xml">Sitemap</a></p>
     </article>
   </main>`;
 }
 
-export function buildPropertyShareCrawlerHtml(id: string, property: Property | null): string {
+export function buildPropertyShareCrawlerHtml(
+  id: string,
+  property: Property | null,
+  lang: SiteLang = DEFAULT_SITE_LANG
+): string {
   if (!property) {
-    return buildDefaultShareCrawlerHtml();
+    return buildDefaultShareCrawlerHtml(lang);
   }
 
   const title = property.title?.trim() || 'განცხადება';
-  const description = buildPropertyShareDescription(property);
-  const pageUrl = `${SITE_URL}/property/${canonicalPropertyPathId(id, property)}`;
+  const description = buildPropertyShareDescription(property, lang);
+  const pageUrl = `${SITE_URL}${localizePath(`/property/${canonicalPropertyPathId(id, property)}`, lang)}`;
   const image = getPropertyOpenGraphImageUrl(id, property);
   const bodyImage = getPropertyShareImageUrl(property) || image;
 
@@ -173,7 +186,8 @@ export function buildPropertyShareCrawlerHtml(id: string, property: Property | n
     description,
     pageUrl,
     image,
-    bodyHtml: buildPropertyBodyHtml(id, property, pageUrl, bodyImage),
-    jsonLd: buildPropertyJsonLd(id, property),
+    lang,
+    bodyHtml: buildPropertyBodyHtml(id, property, pageUrl, bodyImage, lang),
+    jsonLd: buildPropertyJsonLd(id, property, lang),
   });
 }

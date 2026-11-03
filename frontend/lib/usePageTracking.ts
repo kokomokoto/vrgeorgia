@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef } from 'react';
-import { usePathname } from 'next/navigation';
+import { useSitePathname } from './useSitePathname';
 import { API_BASE } from './config';
 
 const SESSION_KEY = 'vrgeorgia_session';
@@ -43,7 +43,7 @@ async function collectDeviceInfo() {
     hardwareConcurrency: navigator.hardwareConcurrency || null,
   };
 
-  // ბატარეა
+  // áƒ‘áƒáƒ¢áƒáƒ áƒ”áƒ
   try {
     if ('getBattery' in navigator) {
       const battery: any = await (navigator as any).getBattery();
@@ -52,7 +52,7 @@ async function collectDeviceInfo() {
     }
   } catch { /* not supported */ }
 
-  // ინტერნეტ კავშირი
+  // áƒ˜áƒœáƒ¢áƒ”áƒ áƒœáƒ”áƒ¢ áƒ™áƒáƒ•áƒ¨áƒ˜áƒ áƒ˜
   try {
     const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
     if (conn) {
@@ -65,7 +65,7 @@ async function collectDeviceInfo() {
 }
 
 export function usePageTracking() {
-  const pathname = usePathname();
+  const pathname = useSitePathname();
   const lastTracked = useRef('');
   const enterTime = useRef(Date.now());
 
@@ -73,7 +73,7 @@ export function usePageTracking() {
     if (pathname.startsWith('/admin') || pathname.startsWith('/analytics')) return;
     if (lastTracked.current === pathname) return;
 
-    // გაუშვა duration წინა გვერდისთვის
+    // áƒ’áƒáƒ£áƒ¨áƒ•áƒ duration áƒ¬áƒ˜áƒœáƒ áƒ’áƒ•áƒ”áƒ áƒ“áƒ˜áƒ¡áƒ—áƒ•áƒ˜áƒ¡
     if (lastTracked.current) {
       const duration = Math.round((Date.now() - enterTime.current) / 1000);
       if (duration > 0) {
@@ -118,7 +118,7 @@ export function usePageTracking() {
     });
   }, [pathname]);
 
-  // გვერდის დატოვებისას duration-ის გაგზავნა
+  // áƒ’áƒ•áƒ”áƒ áƒ“áƒ˜áƒ¡ áƒ“áƒáƒ¢áƒáƒ•áƒ”áƒ‘áƒ˜áƒ¡áƒáƒ¡ duration-áƒ˜áƒ¡ áƒ’áƒáƒ’áƒ–áƒáƒ•áƒœáƒ
   useEffect(() => {
     const handleUnload = () => {
       const duration = Math.round((Date.now() - enterTime.current) / 1000);

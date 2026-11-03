@@ -8,6 +8,8 @@ const webpack = require('webpack');
 const nextConfig = {
   htmlLimitedBots: HTML_LIMITED_BOTS,
   reactStrictMode: true,
+  // Do not advertise the framework (audit: X-Powered-By leak)
+  poweredByHeader: false,
   webpack: (config) => {
     config.plugins.push(
       new webpack.ProvidePlugin({
@@ -94,16 +96,37 @@ const nextConfig = {
       },
     ];
   },
-  // Security headers
+  // Security headers (Content-Security-Policy is set per-request in middleware.ts with a nonce)
   async headers() {
-    return [
+    const isProd = process.env.NODE_ENV === 'production';
+    const common = [
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'X-DNS-Prefetch-Control', value: 'on' },
       {
-        source: '/(.*)',
-        headers: [
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
-        ],
+        key: 'Permissions-Policy',
+        value:
+          'camera=(), microphone=(), payment=(), usb=(), interest-cohort=(), browsing-topics=(), geolocation=(self)',
+      },
+      { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+    ];
+    if (isProd) {
+      common.push({
+        key: 'Strict-Transport-Security',
+        value: 'max-age=63072000; includeSubDomains; preload',
+      });
+    }
+    return [
+      { source: '/(.*)', headers: common },
+      {
+        // Long-lived immutable cache for static icons / manifest
+        source: '/(favicon.ico|favicon-16x16.png|favicon-32x32.png|apple-touch-icon.png|android-chrome-192x192.png|android-chrome-512x512.png)',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=86400' }],
+      },
+      {
+        source: '/.well-known/security.txt',
+        headers: [{ key: 'Content-Type', value: 'text/plain; charset=utf-8' }],
       },
     ];
   },

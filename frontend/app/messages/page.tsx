@@ -97,16 +97,23 @@ function MessagesContent() {
 
   function formatTime(dateStr: string) {
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return '';
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (diffDays < 7) {
-      return date.toLocaleDateString([], { weekday: 'short' });
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZone: 'Asia/Tbilisi',
+    }).formatToParts(date);
+    const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value || '';
+
+    if (diffDays === 0) return `${get('hour')}:${get('minute')}`;
+    if (diffDays < 7) return get('weekday');
+    return `${get('day')} ${get('month')}`;
   }
 
   if (!user) {

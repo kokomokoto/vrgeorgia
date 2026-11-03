@@ -76,6 +76,31 @@ export function cloudinaryWatermarkedDownloadUrl(path: string | null | undefined
 }
 
 /**
+ * Responsive `srcSet` for card thumbnails (Cloudinary only). 1x/2x card widths so
+ * phones download ~30 KB instead of the 400px-fixed asset scaled up on retina.
+ * Returns undefined for non-Cloudinary / panorama sources.
+ */
+export function propertyThumbSrcSet(
+  path: string | null | undefined,
+  options?: ResolvePropertyImageOptions
+): string | undefined {
+  const base = resolveBaseUrl(path);
+  if (!base || options?.isPanorama || !base.includes('res.cloudinary.com')) return undefined;
+  const widths = [400, 640, 800];
+  return widths
+    .map((w) => {
+      const h = Math.round((w * 3) / 4);
+      const size = `w_${w},h_${h},c_fill,f_auto,q_auto`;
+      const transform = options?.watermark === true ? `${size}/${WATERMARK_LAYER.thumb}` : size;
+      return `${applyCloudinaryTransform(base, transform)} ${w}w`;
+    })
+    .join(', ');
+}
+
+/** Matching `sizes` for the listing grids (1 col mobile → 4 col desktop). */
+export const PROPERTY_CARD_SIZES = '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 320px';
+
+/**
  * ობიექტის ფოტოს URL — Cloudinary thumb/large.
  * ვოთერმარკი მხოლოდ options.watermark === true-ზე (განცხადების გვერდი).
  * 360° / original — სუფთა master.

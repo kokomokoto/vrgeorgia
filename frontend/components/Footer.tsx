@@ -7,6 +7,10 @@ import { BrandLogo } from '@/components/BrandLogo';
 import { useHomeDesignOptional } from '@/components/home-design/HomeDesignContext';
 import type { FiltersState } from '@/components/Filters';
 import { DEFAULT_MAP_FILTERS, buildMapHref } from '@/lib/mapQuery';
+import { HomeSeoIntro } from '@/components/HomeSeoIntro';
+import { FEATURED_LANDING_PATHS, LANDING_CITIES, cityHubPath } from '@/lib/landingPages';
+import { normalizeSiteLang } from '@/lib/siteLang';
+import { useLocalizeHref } from '@/lib/useSitePathname';
 import {
   EMPTY_SITE_SOCIAL_LINKS,
   configuredSiteSocials,
@@ -16,8 +20,8 @@ import {
 const SITE_PHONE_DISPLAY = '+995 597 046 604';
 const SITE_PHONE_TEL = '+995597046604';
 const SITE_EMAIL = 'virtualhome.ge@gmail.com';
-const SITE_WEB_DISPLAY = 'www.vhome.ge';
-const SITE_WEB_HREF = 'https://www.vhome.ge';
+const SITE_WEB_DISPLAY = 'vhome.ge';
+const SITE_WEB_HREF = 'https://vhome.ge';
 
 function searchHref(patch: Partial<Pick<FiltersState, 'dealType' | 'type' | 'city' | 'has3d'>>): string {
   return buildMapHref({ ...DEFAULT_MAP_FILTERS, ...patch }, 'date_desc');
@@ -30,8 +34,8 @@ const SEARCH_GROUPS: { labelKey: string; labelFallback: string; items: FooterLin
     labelKey: 'dealType',
     labelFallback: 'გარიგება',
     items: [
-      { key: 'deal_sale', fallback: 'იყიდება', href: searchHref({ dealType: ['sale'] }) },
-      { key: 'deal_rent', fallback: 'ქირავდება', href: searchHref({ dealType: ['rent'] }) },
+      { key: 'deal_sale', fallback: 'იყიდება', href: '/tbilisi/apartments-for-sale' },
+      { key: 'deal_rent', fallback: 'ქირავდება', href: '/tbilisi/apartments-for-rent' },
       { key: 'deal_mortgage', fallback: 'გირავდება', href: searchHref({ dealType: ['mortgage'] }) },
     ],
   },
@@ -39,30 +43,29 @@ const SEARCH_GROUPS: { labelKey: string; labelFallback: string; items: FooterLin
     labelKey: 'type',
     labelFallback: 'ტიპი',
     items: [
-      { key: 'apartment', fallback: 'ბინა', href: searchHref({ type: ['apartment'] }) },
-      { key: 'house', fallback: 'კერძო სახლი', href: searchHref({ type: ['house'] }) },
-      { key: 'commercial', fallback: 'კომერციული', href: searchHref({ type: ['commercial'] }) },
-      { key: 'has3d', fallback: '3D აქვს', href: searchHref({ has3d: 'true' }) },
-    ],
-  },
-  {
-    labelKey: 'city',
-    labelFallback: 'ქალაქი',
-    items: [
-      { key: 'region_tbilisi', fallback: 'თბილისი', href: searchHref({ city: 'თბილისი' }) },
-      { key: 'footer_city_batumi', fallback: 'ბათუმი', href: searchHref({ city: 'ბათუმი' }) },
+      { key: 'apartment', fallback: 'ბინა', href: '/tbilisi/apartments-for-sale' },
+      { key: 'house', fallback: 'კერძო სახლი', href: '/tbilisi/houses-for-sale' },
+      { key: 'commercial', fallback: 'კომერციული', href: '/tbilisi/commercial-for-sale' },
+      { key: 'has3d', fallback: '3D აქვს', href: '/3d-tours' },
     ],
   },
 ];
 
 const SITE_LINKS: FooterLink[] = [
   { key: 'map', fallback: 'რუკა', href: '/map' },
+  { key: 'tours3d_nav', fallback: '3D ტურები', href: '/3d-tours' },
   { key: 'upload', fallback: 'განცხადების დამატება', href: '/upload' },
   { key: 'agents', fallback: 'აგენტები', href: '/agents' },
   { key: 'mortgageCalculator', fallback: 'იპოთეკის კალკულატორი', href: '/mortgage-calculator' },
   { key: 'services_nav', fallback: 'მომსახურება', href: '/services' },
   { key: 'faq_nav', fallback: 'FAQ', href: '/faq' },
   { key: 'about_nav', fallback: 'შესახებ', href: '/about' },
+  { key: 'contact_nav', fallback: 'კონტაქტი', href: '/contact' },
+];
+
+const LEGAL_LINKS: FooterLink[] = [
+  { key: 'privacy_nav', fallback: 'კონფიდენციალურობა', href: '/privacy' },
+  { key: 'terms_nav', fallback: 'წესები', href: '/terms' },
 ];
 
 const SOCIAL_NAME: Record<SiteSocialNetwork, string> = {
@@ -179,15 +182,12 @@ function scrollPageToHeader() {
 }
 
 export function Footer() {
-  const { t } = useTranslation();
-  const [mounted, setMounted] = React.useState(false);
+  const { t, i18n } = useTranslation();
+  const lang = normalizeSiteLang(i18n.language) || 'ka';
+  const localizeHref = useLocalizeHref();
   const [atEnd, setAtEnd] = React.useState(false);
   const design = useHomeDesignOptional();
   const endRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   React.useEffect(() => {
     const node = endRef.current;
@@ -200,7 +200,10 @@ export function Footer() {
     return () => observer.disconnect();
   }, []);
 
-  const tx = (key: string, fallback: string) => (mounted ? t(key) : fallback);
+  const tx = (key: string, fallback: string) => {
+    const value = t(key);
+    return !value || value === key ? fallback : value;
+  };
   const socials = configuredSiteSocials(design?.layout.socialLinks ?? EMPTY_SITE_SOCIAL_LINKS);
 
   const contactLink =
@@ -220,9 +223,9 @@ export function Footer() {
         style={{ background: 'linear-gradient(90deg, transparent, var(--theme-accent), transparent)' }}
       />
 
-      <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 lg:grid-cols-12 lg:gap-10 lg:py-16">
+      <div className="relative mx-auto grid max-w-7xl items-start gap-8 px-4 py-8 sm:px-6 lg:grid-cols-12 lg:gap-8 lg:py-10">
         <div className="lg:col-span-4">
-          <Link href="/" className="inline-flex items-center gap-3 text-white no-underline">
+          <Link href={localizeHref('/')} className="inline-flex items-center gap-3 text-white no-underline">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-lg shadow-black/20">
               <BrandLogo sizePx={32} decorative />
             </span>
@@ -235,7 +238,7 @@ export function Footer() {
             )}
           </p>
 
-          <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.16em] text-white/80">
+          <h2 className="mt-6 text-[13px] font-semibold uppercase tracking-[0.16em] text-white/80">
             {tx('footer_col_contact', 'კონტაქტი')}
           </h2>
           <ul className="mt-3 space-y-1">
@@ -272,7 +275,7 @@ export function Footer() {
           </ul>
 
           {socials.length > 0 ? (
-            <ul className="mt-6 flex flex-wrap gap-2.5">
+            <ul className="mt-4 flex flex-wrap gap-2.5">
               {socials.map(({ network, href }) => (
                 <li key={network}>
                   <a
@@ -293,16 +296,16 @@ export function Footer() {
 
         <nav aria-label={tx('footer_col_search', 'ძიება')} className="lg:col-span-5">
           <ColumnTitle>{tx('footer_col_search', 'ძიება')}</ColumnTitle>
-          <div className="mt-5 space-y-5 rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <div className="mt-3 space-y-3.5 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
             {SEARCH_GROUPS.map((group) => (
               <div key={group.labelKey}>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                   {tx(group.labelKey, group.labelFallback)}
                 </p>
-                <ul className="mt-2.5 flex flex-wrap gap-2">
+                <ul className="mt-2 flex flex-wrap gap-2">
                   {group.items.map((item) => (
-                    <li key={item.href}>
-                      <Link href={item.href} className={pillClass}>
+                    <li key={`${group.labelKey}-${item.key}`}>
+                      <Link href={localizeHref(item.href)} className={pillClass}>
                         {tx(item.key, item.fallback)}
                       </Link>
                     </li>
@@ -310,15 +313,46 @@ export function Footer() {
                 </ul>
               </div>
             ))}
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                {tx('city', 'ქალაქი')}
+              </p>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {LANDING_CITIES.map((city) => (
+                  <li key={city.slug}>
+                    <Link href={localizeHref(cityHubPath(city))} className={pillClass}>
+                      {city.name[lang]}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                {lang === 'en' ? 'Popular' : lang === 'ru' ? 'Популярное' : 'პოპულარული'}
+              </p>
+              <ul className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                {FEATURED_LANDING_PATHS.map((item) => (
+                  <li key={item.path}>
+                    <Link
+                      href={localizeHref(item.path)}
+                      className="text-sm text-slate-300 no-underline transition hover:text-white"
+                    >
+                      {item.label[lang]}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </nav>
 
         <nav aria-label={tx('footer_col_site', 'საიტი')} className="lg:col-span-3">
           <ColumnTitle>{tx('footer_col_site', 'საიტი')}</ColumnTitle>
-          <ul className="mt-5 space-y-1">
+          <ul className="mt-3 space-y-0.5">
             {SITE_LINKS.map((item) => (
               <li key={item.href}>
-                <Link href={item.href} className={siteLinkClass}>
+                <Link href={localizeHref(item.href)} className={siteLinkClass}>
                   <span>{tx(item.key, item.fallback)}</span>
                   <span className="text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-white" aria-hidden>
                     →
@@ -330,10 +364,19 @@ export function Footer() {
         </nav>
       </div>
 
+      <HomeSeoIntro lang={lang} />
+
       <div ref={endRef} className="relative border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-sm text-slate-500 sm:px-6">
           <span>© {new Date().getFullYear()} Vhome</span>
-          <span className="text-slate-600">www.vhome.ge</span>
+          <nav className="flex flex-wrap gap-x-4 gap-y-1" aria-label={tx('footer_legal', 'სამართლებრივი')}>
+            {LEGAL_LINKS.map((item) => (
+              <Link key={item.href} href={localizeHref(item.href)} className="text-slate-500 no-underline hover:text-slate-300">
+                {tx(item.key, item.fallback)}
+              </Link>
+            ))}
+          </nav>
+          <span className="text-slate-600">vhome.ge</span>
         </div>
       </div>
       <button

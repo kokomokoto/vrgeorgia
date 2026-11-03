@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import dynamic from 'next/dynamic';
-import { usePathname } from 'next/navigation';
+import { useSitePathname } from '@/lib/useSitePathname';
 import { DesignBranchBanner } from '@/components/DesignBranchBanner';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
@@ -14,8 +14,8 @@ import { ThemePaletteApplier } from '@/components/ThemePaletteApplier';
 import type { HomeDesignLayout } from '@/lib/homeDesignLayout';
 
 /**
- * Design Mode ედიტორი (~5.5k ხაზი) მხოლოდ ადმინს სჭირდება და მხოლოდ მაშინ, როცა
- * რეჟიმი ჩართულია — ცალკე chunk-ად იტვირთება, რომ ჩვეულებრივ ვიზიტორს არ გაეგზავნოს.
+ * Design Mode áƒ”áƒ“áƒ˜áƒ¢áƒáƒ áƒ˜ (~5.5k áƒ®áƒáƒ–áƒ˜) áƒ›áƒ®áƒáƒšáƒáƒ“ áƒáƒ“áƒ›áƒ˜áƒœáƒ¡ áƒ¡áƒ­áƒ˜áƒ áƒ“áƒ”áƒ‘áƒ áƒ“áƒ áƒ›áƒ®áƒáƒšáƒáƒ“ áƒ›áƒáƒ¨áƒ˜áƒœ, áƒ áƒáƒªáƒ
+ * áƒ áƒ”áƒŸáƒ˜áƒ›áƒ˜ áƒ©áƒáƒ áƒ—áƒ£áƒšáƒ˜áƒ â€” áƒªáƒáƒšáƒ™áƒ” chunk-áƒáƒ“ áƒ˜áƒ¢áƒ•áƒ˜áƒ áƒ—áƒ”áƒ‘áƒ, áƒ áƒáƒ› áƒ©áƒ•áƒ”áƒ£áƒšáƒ”áƒ‘áƒ áƒ˜áƒ• áƒ•áƒ˜áƒ–áƒ˜áƒ¢áƒáƒ áƒ¡ áƒáƒ  áƒ’áƒáƒ”áƒ’áƒ–áƒáƒ•áƒœáƒáƒ¡.
  */
 const DesignInspector = dynamic(
   () =>
@@ -28,7 +28,7 @@ const DesignSnapGuides = dynamic(
   { ssr: false }
 );
 
-/** ედიტორი მხოლოდ მაშინ რენდერდება/იტვირთება, როცა ადმინმა Design Mode ჩართო */
+/** áƒ”áƒ“áƒ˜áƒ¢áƒáƒ áƒ˜ áƒ›áƒ®áƒáƒšáƒáƒ“ áƒ›áƒáƒ¨áƒ˜áƒœ áƒ áƒ”áƒœáƒ“áƒ”áƒ áƒ“áƒ”áƒ‘áƒ/áƒ˜áƒ¢áƒ•áƒ˜áƒ áƒ—áƒ”áƒ‘áƒ, áƒ áƒáƒªáƒ áƒáƒ“áƒ›áƒ˜áƒœáƒ›áƒ Design Mode áƒ©áƒáƒ áƒ—áƒ */
 function DesignModeTools() {
   const design = useHomeDesignOptional();
   if (!design?.designMode || !design.canDesignMode) return null;
@@ -40,7 +40,7 @@ function DesignModeTools() {
   );
 }
 
-/** სრული ეკრანის რეჟიმი — რუკაზე ძებნა (ჰედერი/ფუტერი არ ჩანს) */
+/** áƒ¡áƒ áƒ£áƒšáƒ˜ áƒ”áƒ™áƒ áƒáƒœáƒ˜áƒ¡ áƒ áƒ”áƒŸáƒ˜áƒ›áƒ˜ â€” áƒ áƒ£áƒ™áƒáƒ–áƒ” áƒ«áƒ”áƒ‘áƒœáƒ (áƒ°áƒ”áƒ“áƒ”áƒ áƒ˜/áƒ¤áƒ£áƒ¢áƒ”áƒ áƒ˜ áƒáƒ  áƒ©áƒáƒœáƒ¡) */
 export function isFullscreenMapRoute(pathname: string): boolean {
   return pathname === '/map' || pathname.startsWith('/map/');
 }
@@ -49,12 +49,12 @@ function isAdminRoute(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
-/** ობიექტის გვერდი — იგივე კონტენტის სიგანე რაც მთავარ გვერდის ჩამონათვალს */
+/** áƒáƒ‘áƒ˜áƒ”áƒ¥áƒ¢áƒ˜áƒ¡ áƒ’áƒ•áƒ”áƒ áƒ“áƒ˜ â€” áƒ˜áƒ’áƒ˜áƒ•áƒ” áƒ™áƒáƒœáƒ¢áƒ”áƒœáƒ¢áƒ˜áƒ¡ áƒ¡áƒ˜áƒ’áƒáƒœáƒ” áƒ áƒáƒª áƒ›áƒ—áƒáƒ•áƒáƒ  áƒ’áƒ•áƒ”áƒ áƒ“áƒ˜áƒ¡ áƒ©áƒáƒ›áƒáƒœáƒáƒ—áƒ•áƒáƒšáƒ¡ */
 function isPropertyRoute(pathname: string): boolean {
   return pathname === '/property' || pathname.startsWith('/property/');
 }
 
-/** მთავარი გვერდის ცენტრის სიგანე (map / typePanel / listings) — გასწორების ჩარჩო */
+/** áƒ›áƒ—áƒáƒ•áƒáƒ áƒ˜ áƒ’áƒ•áƒ”áƒ áƒ“áƒ˜áƒ¡ áƒªáƒ”áƒœáƒ¢áƒ áƒ˜áƒ¡ áƒ¡áƒ˜áƒ’áƒáƒœáƒ” (map / typePanel / listings) â€” áƒ’áƒáƒ¡áƒ¬áƒáƒ áƒ”áƒ‘áƒ˜áƒ¡ áƒ©áƒáƒ áƒ©áƒ */
 function useHomeCenterWidthPx(): number {
   const homeDesign = useHomeDesignOptional();
   const mapW = homeDesign?.layout.map.w ?? 1280;
@@ -63,7 +63,7 @@ function useHomeCenterWidthPx(): number {
   return Math.max(640, Math.round(Math.max(mapW, typePanelW, listingsW, 1280)));
 }
 
-/** ჩამონათვალის სიგანე — ობიექტის მასალები ამ სიგანეზე, ცენტრის მარცხენა კიდიდან */
+/** áƒ©áƒáƒ›áƒáƒœáƒáƒ—áƒ•áƒáƒšáƒ˜áƒ¡ áƒ¡áƒ˜áƒ’áƒáƒœáƒ” â€” áƒáƒ‘áƒ˜áƒ”áƒ¥áƒ¢áƒ˜áƒ¡ áƒ›áƒáƒ¡áƒáƒšáƒ”áƒ‘áƒ˜ áƒáƒ› áƒ¡áƒ˜áƒ’áƒáƒœáƒ”áƒ–áƒ”, áƒªáƒ”áƒœáƒ¢áƒ áƒ˜áƒ¡ áƒ›áƒáƒ áƒªáƒ®áƒ”áƒœáƒ áƒ™áƒ˜áƒ“áƒ˜áƒ“áƒáƒœ */
 function useHomeListingsWidthPx(): number {
   const homeDesign = useHomeDesignOptional();
   const listingsW = homeDesign?.layout.listings?.w ?? 1280;
@@ -99,9 +99,9 @@ function SiteMain({
   }
 
   if (propertyPage) {
-    // იგივე ჩარჩო რაც მთავარის data-design-center + listings:
-    // ცენტრი (მაგ. 1296) mx-auto, შიგნით ჩამონათვალის სიგანე (1280) მარცხნიდან —
-    // მარჯვენა კიდე ემთხვევა ჰოუმის ქარდებს / KA-ს.
+    // áƒ˜áƒ’áƒ˜áƒ•áƒ” áƒ©áƒáƒ áƒ©áƒ áƒ áƒáƒª áƒ›áƒ—áƒáƒ•áƒáƒ áƒ˜áƒ¡ data-design-center + listings:
+    // áƒªáƒ”áƒœáƒ¢áƒ áƒ˜ (áƒ›áƒáƒ’. 1296) mx-auto, áƒ¨áƒ˜áƒ’áƒœáƒ˜áƒ— áƒ©áƒáƒ›áƒáƒœáƒáƒ—áƒ•áƒáƒšáƒ˜áƒ¡ áƒ¡áƒ˜áƒ’áƒáƒœáƒ” (1280) áƒ›áƒáƒ áƒªáƒ®áƒœáƒ˜áƒ“áƒáƒœ â€”
+    // áƒ›áƒáƒ áƒ¯áƒ•áƒ”áƒœáƒ áƒ™áƒ˜áƒ“áƒ” áƒ”áƒ›áƒ—áƒ®áƒ•áƒ”áƒ•áƒ áƒ°áƒáƒ£áƒ›áƒ˜áƒ¡ áƒ¥áƒáƒ áƒ“áƒ”áƒ‘áƒ¡ / KA-áƒ¡.
     return (
       <main className="relative z-0 w-full min-h-[50vh] flex-1 px-3 py-4 sm:px-0 sm:py-6">
         <div
@@ -132,7 +132,7 @@ export function SiteChrome({
   children: React.ReactNode;
   initialHomeDesign?: HomeDesignLayout | null;
 }) {
-  const pathname = usePathname();
+  const pathname = useSitePathname();
   const mapFullscreen = isFullscreenMapRoute(pathname);
   const adminPanel = isAdminRoute(pathname);
   const homePage = pathname === '/';

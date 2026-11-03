@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/components/AuthProvider';
+import { LinkifiedText } from '@/components/LinkifiedText';
 import {
   addAgentRequestComment,
   createAgentRequests,
@@ -474,7 +475,7 @@ export default function AgentRequestsPage() {
                         ) : null}
                       </div>
                       <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">
-                        {c.body}
+                        <LinkifiedText text={c.body} />
                       </p>
                     </div>
                   ))

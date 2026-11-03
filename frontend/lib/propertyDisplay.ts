@@ -136,20 +136,50 @@ export function formatSqmCompact(sqm: number): string {
     const fixed = k.toFixed(2);
     return `${fixed.replace(/\.?0+$/, '')}k`;
   }
-  return sqm.toLocaleString();
+  return sqm.toLocaleString('en-US');
 }
 
-/** მაგ. 22 მაი 20:45 */
-export function formatListedDate(createdAt?: string, lang = 'ka'): string {
+/**
+ * Listing timestamp for cards. Fixed timezone + 24h + numeric parts so SSR
+ * HTML matches the client (Node ICU vs browser locale used to hydrate-mismatch).
+ */
+export function formatListedDate(createdAt?: string, _lang = 'ka'): string {
   if (!createdAt) return '';
   const d = new Date(createdAt);
   if (Number.isNaN(d.getTime())) return '';
-  const locale =
-    lang === 'ru' ? 'ru-RU' : lang === 'en' ? 'en-GB' : 'ka-GE';
-  return new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(d);
+    hourCycle: 'h23',
+    timeZone: 'Asia/Tbilisi',
+  }).formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value || '';
+  const day = get('day');
+  const month = get('month');
+  const hour = get('hour');
+  const minute = get('minute');
+  if (!day || !month) return '';
+  return `${day} ${month} ${hour}:${minute}`;
+}
+
+/** Date-only label. Digits are joined by hand so Node and the browser
+ *  cannot disagree on the separator (03.11.2026 vs 03/11/2026). */
+export function formatListedDay(createdAt?: string): string {
+  if (!createdAt) return '';
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Tbilisi',
+  }).formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value || '';
+  const day = get('day');
+  const month = get('month');
+  const year = get('year');
+  if (!day || !month || !year) return '';
+  return `${day}.${month}.${year}`;
 }

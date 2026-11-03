@@ -45,8 +45,17 @@ import {
   mergePatchIntoDraft,
   propertyForEdit,
 } from '../services/propertyEditDraft.js';
+import { toPublicProperty } from '../utils/publicProperty.js';
 
 const router = express.Router();
+
+/**
+ * Default page size for the public list when the client sends neither `page`
+ * nor `limit` (audit: unbounded /api/properties returned every listing, ~4 MB).
+ * Explicit `limit` is still honoured up to PUBLIC_LIST_MAX_LIMIT (map / sitemap).
+ */
+const PUBLIC_LIST_DEFAULT_LIMIT = 40;
+const PUBLIC_LIST_MAX_LIMIT = 5000;
 
 function normalizePhotoUrl(url) {
   if (!url || typeof url !== 'string') return '';
@@ -519,6 +528,174 @@ function applyBrokerListingModeFilter(filter, mode) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Public market stats for SEO landing pages                           */
+/* ------------------------------------------------------------------ */
+
+const STATS_CACHE_TTL_MS = 10 * 60 * 1000;
+const STATS_CACHE_MAX = 500;
+/** key → { at, payload } */
+const statsCache = new Map();
+
+function statsCacheGet(key) {
+  const hit = statsCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > STATS_CACHE_TTL_MS) {
+    statsCache.delete(key);
+    return null;
+  }
+  return hit.payload;
+}
+
+function statsCacheSet(key, payload) {
+  if (statsCache.size >= STATS_CACHE_MAX) {
+    const oldest = statsCache.keys().next().value;
+    if (oldest !== undefined) statsCache.delete(oldest);
+  }
+  statsCache.set(key, { at: Date.now(), payload });
+}
+
+function median(sorted) {
+  if (!sorted.length) return null;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function round(n, digits = 0) {
+  if (n == null || !Number.isFinite(n)) return null;
+  const f = 10 ** digits;
+  return Math.round(n * f) / f;
+}
+
+/**
+ * GET /api/properties/stats — aggregate numbers for a public segment
+ * (same filters as the list: type, dealType, city, region, tbilisiDistrict,
+ * tbilisiSubdistricts, has3d, …). Used by crawlable landing pages to show live
+ * counts, median price and median price per m² (USD).
+ */
+router.get(
+  '/stats',
+  [
+    query('type').optional({ values: 'falsy' }).isString(),
+    query('dealType').optional({ values: 'falsy' }).isString(),
+    query('city').optional({ values: 'falsy' }).isString().trim().isLength({ max: 80 }),
+    query('region').optional({ values: 'falsy' }).isString().trim().isLength({ max: 80 }),
+    query('tbilisiDistrict').optional({ values: 'falsy' }).isString().trim(),
+    query('tbilisiSubdistricts').optional({ values: 'falsy' }).isString(),
+    query('has3d').optional({ values: 'falsy' }).isIn(['true', 'false']),
+    query('rooms').optional({ values: 'falsy' }).isString(),
+    query('minPrice').optional({ values: 'falsy' }).isNumeric(),
+    query('maxPrice').optional({ values: 'falsy' }).isNumeric(),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const cacheKey = JSON.stringify(
+      Object.keys(req.query)
+        .sort()
+        .map((k) => [k, String(req.query[k])])
+    );
+    const cached = statsCacheGet(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+      return res.json(cached);
+    }
+
+    const filter = {
+      $and: [{ ...PUBLIC_STATUS_OR }, { ...PUBLIC_LISTING_OR }, PROPERTY_NOT_DELETED],
+    };
+    await applyPropertyQueryFilters(filter, req.query);
+
+    const [rows, usdToGel] = await Promise.all([
+      Property.find(filter)
+        .select(
+          'price priceCurrency priceType sqm houseSqm rooms type dealType tourLink exteriorLink interiorLink threeDLink panoramaPhotos createdAt'
+        )
+        .sort({ createdAt: -1 })
+        .limit(PUBLIC_LIST_MAX_LIMIT)
+        .lean(),
+      getUsdToGelRate(),
+    ]);
+
+    const rate = Number(usdToGel) > 0 ? Number(usdToGel) : 2.7;
+    const totals = [];
+    const perSqm = [];
+    const areas = [];
+    const roomsCount = {};
+    const typeCounts = {};
+    const dealCounts = {};
+    let with3d = 0;
+    let newest = null;
+
+    for (const p of rows) {
+      const price = Number(p.price) || 0;
+      if (price <= 0) continue;
+      const usd = p.priceCurrency === 'GEL' ? price / rate : price;
+      const area = Number(p.sqm) > 0 ? Number(p.sqm) : Number(p.houseSqm) > 0 ? Number(p.houseSqm) : 0;
+      const isPerSqm = p.priceType === 'per_sqm';
+      const totalUsd = isPerSqm ? (area > 0 ? usd * area : null) : usd;
+      const perSqmUsd = isPerSqm ? usd : area > 0 ? usd / area : null;
+      if (totalUsd != null && Number.isFinite(totalUsd) && totalUsd > 0) totals.push(totalUsd);
+      if (perSqmUsd != null && Number.isFinite(perSqmUsd) && perSqmUsd > 0 && p.type !== 'land') {
+        perSqm.push(perSqmUsd);
+      }
+      if (area > 0) areas.push(area);
+      if (Number(p.rooms) > 0) roomsCount[p.rooms] = (roomsCount[p.rooms] || 0) + 1;
+      if (p.type) typeCounts[p.type] = (typeCounts[p.type] || 0) + 1;
+      if (p.dealType) dealCounts[p.dealType] = (dealCounts[p.dealType] || 0) + 1;
+      if (
+        (p.tourLink && p.tourLink !== '') ||
+        (p.exteriorLink && p.exteriorLink !== '') ||
+        (p.interiorLink && p.interiorLink !== '') ||
+        (p.threeDLink && p.threeDLink !== '') ||
+        (Array.isArray(p.panoramaPhotos) && p.panoramaPhotos.length > 0)
+      ) {
+        with3d += 1;
+      }
+      if (p.createdAt && (!newest || p.createdAt > newest)) newest = p.createdAt;
+    }
+
+    totals.sort((a, b) => a - b);
+    perSqm.sort((a, b) => a - b);
+    areas.sort((a, b) => a - b);
+
+    const avg = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
+
+    const payload = {
+      count: rows.length,
+      with3d,
+      currency: 'USD',
+      usdToGel: round(rate, 4),
+      price: {
+        median: round(median(totals)),
+        avg: round(avg(totals)),
+        min: totals.length ? round(totals[0]) : null,
+        max: totals.length ? round(totals[totals.length - 1]) : null,
+      },
+      pricePerSqm: {
+        median: round(median(perSqm)),
+        avg: round(avg(perSqm)),
+        min: perSqm.length ? round(perSqm[0]) : null,
+        max: perSqm.length ? round(perSqm[perSqm.length - 1]) : null,
+      },
+      area: {
+        median: round(median(areas), 1),
+        avg: round(avg(areas), 1),
+      },
+      rooms: roomsCount,
+      typeCounts,
+      dealCounts,
+      newestAt: newest,
+      generatedAt: new Date().toISOString(),
+    };
+
+    statsCacheSet(cacheKey, payload);
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+    res.json(payload);
+  }
+);
+
 // GET user's own properties (for profile page)
 router.get(
   '/user/my',
@@ -599,11 +776,10 @@ router.get(
     const hasLimit =
       req.query.limit !== undefined && req.query.limit !== null && String(req.query.limit).trim() !== '';
     const pageNum = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
-    // If client omits page/limit (legacy frontend), return a large batch so listings are not capped at 40.
-    // Paginated clients always send page and/or limit explicitly (default page size 40).
-    const fallbackLimit = hasPage || hasLimit ? 40 : 5000;
+    // Sane default page size; large batches (map, sitemap) must ask for them explicitly.
+    const fallbackLimit = PUBLIC_LIST_DEFAULT_LIMIT;
     const limitNum = Math.min(
-      5000,
+      PUBLIC_LIST_MAX_LIMIT,
       Math.max(1, parseInt(String(hasLimit ? req.query.limit : fallbackLimit), 10) || fallbackLimit)
     );
     const skip = (pageNum - 1) * limitNum;
@@ -840,8 +1016,7 @@ router.get(
 
     const translated = properties.map((p) => {
       const urlKey = buildPropertyUrlKey(p);
-      const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
-      return stripHiddenCadastral({ ...safe, urlKey });
+      return toPublicProperty({ ...applyTranslation(p, lang), urlKey }, { view: 'list' });
     });
 
     const payload = {
@@ -885,8 +1060,7 @@ router.get(
 
     const translated = properties.map((p) => {
       const urlKey = buildPropertyUrlKey(p);
-      const { privateNotes, shareToken, ...safe } = applyTranslation(p, lang);
-      return stripHiddenCadastral({ ...safe, urlKey });
+      return toPublicProperty({ ...applyTranslation(p, lang), urlKey }, { view: 'list' });
     });
     res.json({ properties: translated });
   }
@@ -965,10 +1139,14 @@ router.get(
       const found = await Property.findOne({ numericId }).select('_id').lean();
       propertyId = found?._id ? String(found._id) : null;
     }
+    // `meta=1` = server-side render / metadata / crawler fetch — must not inflate the views counter.
+    const isMetaFetch = req.query.meta === '1' || req.query.meta === 'true';
     const property = propertyId
-      ? await Property.findByIdAndUpdate(propertyId, { $inc: { views: 1 } }, { new: true })
-          .populate('userId', 'email name phone avatar role')
-          .lean()
+      ? isMetaFetch
+        ? await Property.findById(propertyId).populate('userId', 'email name phone avatar role').lean()
+        : await Property.findByIdAndUpdate(propertyId, { $inc: { views: 1 } }, { new: true })
+            .populate('userId', 'email name phone avatar role')
+            .lean()
       : null;
     if (!property) return res.status(404).json({ message: 'Not found' });
     if (property.deletedAt) return res.status(404).json({ message: 'Not found' });
@@ -1048,8 +1226,10 @@ router.get(
     }
 
     const urlKey = buildPropertyUrlKey(property);
-    const translated = applyTranslation(property, lang);
-    translated.urlKey = urlKey;
+    const translated = toPublicProperty(
+      { ...applyTranslation(property, lang), urlKey },
+      { view: 'detail', isOwner }
+    );
     res.json({ property: translated });
   }
 );

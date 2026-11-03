@@ -23,6 +23,8 @@ import {
   scheduleListTranslations,
   stripHiddenCadastral,
 } from '../utils/propertyTranslations.js';
+import { buildPropertyUrlKey } from '../utils/propertyUrlKey.js';
+import { toPublicProperty } from '../utils/publicProperty.js';
 
 const router = express.Router();
 
@@ -179,7 +181,11 @@ router.get('/:id/properties', async (req, res) => {
     await fillMissingTranslationsForResponse(properties, lang);
     scheduleListTranslations(properties, lang);
 
-    const translated = properties.map((p) => stripHiddenCadastral(applyTranslation(p, lang)));
+    const translated = properties.map((p) => {
+      const row = { ...applyTranslation(p, lang), urlKey: buildPropertyUrlKey(p) };
+      // Admin portfolio view keeps the moderation fields it renders; public view is sanitised.
+      return adminView ? stripHiddenCadastral(row) : toPublicProperty(row, { view: 'list' });
+    });
 
     const payload = {
       properties: translated,

@@ -15,7 +15,7 @@ export const ABOUT_BY_LANG: Record<AboutLang, AboutContent> = {
   ka: {
     title: 'რა არის Vhome?',
     intro:
-      'Vhome არის ონლაინ პლატფორმა უძრავი ქონების მოსაძებნად საქართველოში. აქ იკრიბება განცხადებები ბინებზე, სახლებზე, მიწაზე, კომერციულ ფართებსა და სხვა ტიპებზე — რუკით, ფილტრებით და ხშირად ვირტუალური / 3D ტურებით.',
+      'Vhome (vhome.ge) არის უძრავი ქონების მარკეტპლეისი საქართველოში, დაარსებული 2024 წელს თბილისში. მყიდველები და დამქირავებლები თბილისის, ბათუმის და სხვა ქალაქების ბინებსა და სახლებს იკვლევენ რუკით, სანდო აგენტებით და იმერსიული 3D ტურებით — მათ შორის Gaussian Splatting-ის გასავლელებით.',
     sectionWhat: 'რას ნახავთ საიტზე',
     items: [
       { href: '/', label: 'მთავარი ძიება', desc: 'ტიპი, ფასი, ფართობი, ქალაქი/უბანი' },
@@ -23,15 +23,17 @@ export const ABOUT_BY_LANG: Record<AboutLang, AboutContent> = {
       { href: '/agents', label: 'აგენტები', desc: 'პროფილები და მათი განცხადებები' },
       { href: '/services', label: 'მომსახურება', desc: 'არქიტექტურა და დიზაინი' },
       { href: '/faq', label: 'FAQ', desc: 'ხშირად დასმული კითხვები' },
+      { href: '/3d-tours', label: '3D ტურები', desc: 'Gaussian Splatting და 360°' },
+      { href: '/contact', label: 'კონტაქტი', desc: 'ელ-ფოსტა და ტელეფონი' },
     ],
-    sectionWho: 'ვისთვისაა',
+    sectionWho: 'ვისთვისაა და როგორ მოწმდება განცხადება',
     whoBody:
-      'მყიდველებისა და დამქირავებლებისთვის — სწრაფი ძიება და ვიზუალური მიმოხილვა. აგენტებისა და მფლობელებისთვის — განცხადებების განთავსება და კონტაქტი დაინტერესებულ პირებთან.',
+      'მყიდველებისა და დამქირავებლებისთვის — სწრაფი ძიება და ვიზუალური მიმოხილვა. აგენტებისა და მფლობელებისთვის — განცხადებების განთავსება და კონტაქტი დაინტერესებულ პირებთან. თითოეული საჯარო განცხადება გადის მოდერაციას: საკონტაქტო მონაცემები, ფოტოები და მისამართი სავალდებულოა, დუბლიკატები იფილტრება, გაყიდული ობიექტები საჯარო ძიებიდან იხსნება. კომპანია: Vhome (Virtual Home Georgia), თბილისი, 2024.',
   },
   en: {
     title: 'What is Vhome?',
     intro:
-      'Vhome is an online platform for finding real estate in Georgia. Listings cover apartments, houses, land, commercial spaces and more — with maps, filters and often VR/3D tours.',
+      'Vhome (vhome.ge) is a real-estate marketplace in Georgia, founded in Tbilisi in 2024. Buyers and renters explore apartments and houses in Tbilisi, Batumi and other cities through map search, trusted local agents and immersive 3D tours, including Gaussian-splat walkthroughs.',
     sectionWhat: 'What you will find on the site',
     items: [
       { href: '/', label: 'Main search', desc: 'type, price, area, city/district' },
@@ -39,15 +41,17 @@ export const ABOUT_BY_LANG: Record<AboutLang, AboutContent> = {
       { href: '/agents', label: 'Agents', desc: 'profiles and their listings' },
       { href: '/services', label: 'Services', desc: 'architecture and design' },
       { href: '/faq', label: 'FAQ', desc: 'frequently asked questions' },
+      { href: '/3d-tours', label: '3D tours', desc: 'Gaussian Splatting and 360°' },
+      { href: '/contact', label: 'Contact', desc: 'email and phone' },
     ],
-    sectionWho: 'Who it is for',
+    sectionWho: 'Who it is for, and how listings are verified',
     whoBody:
-      'For buyers and renters — fast search and visual browsing. For agents and owners — publishing listings and reaching interested people.',
+      'For buyers and renters — fast search and visual browsing. For agents and owners — publishing listings and reaching interested people. Every public listing is moderated: contact details, photos and an address are required, duplicates are filtered, and sold properties leave public search. Company: Vhome (Virtual Home Georgia), Tbilisi, since 2024.',
   },
   ru: {
     title: 'Что такое Vhome?',
     intro:
-      'Vhome — онлайн-платформа поиска недвижимости в Грузии. Здесь объявления о квартирах, домах, земле, коммерции и другом — с картой, фильтрами и часто VR/3D-турами.',
+      'Vhome (vhome.ge) — рынок недвижимости в Грузии, основан в Тбилиси в 2024 году. Покупатели и арендаторы изучают квартиры и дома в Тбилиси, Батуми и других городах: карта, проверенные агенты и иммерсивные 3D-туры, включая Gaussian Splatting.',
     sectionWhat: 'Что есть на сайте',
     items: [
       { href: '/', label: 'Главный поиск', desc: 'тип, цена, площадь, город/район' },
@@ -55,10 +59,12 @@ export const ABOUT_BY_LANG: Record<AboutLang, AboutContent> = {
       { href: '/agents', label: 'Агенты', desc: 'профили и их объявления' },
       { href: '/services', label: 'Услуги', desc: 'архитектура и дизайн' },
       { href: '/faq', label: 'FAQ', desc: 'часто задаваемые вопросы' },
+      { href: '/3d-tours', label: '3D-туры', desc: 'Gaussian Splatting и 360°' },
+      { href: '/contact', label: 'Контакты', desc: 'email и телефон' },
     ],
-    sectionWho: 'Для кого',
+    sectionWho: 'Для кого и как проверяются объявления',
     whoBody:
-      'Для покупателей и арендаторов — быстрый поиск и визуальный обзор. Для агентов и владельцев — размещение объявлений и контакт с заинтересованными.',
+      'Для покупателей и арендаторов — быстрый поиск и визуальный обзор. Для агентов и владельцев — размещение объявлений и контакт с заинтересованными. Каждое публичное объявление проходит модерацию: контакты, фото и адрес обязательны, дубликаты отсеиваются, проданные объекты исчезают из поиска. Компания: Vhome (Virtual Home Georgia), Тбилиси, с 2024 года.',
   },
 };
 

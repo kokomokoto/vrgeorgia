@@ -1,0 +1,1799 @@
+'use client';
+
+import React, { useState, useEffect, Suspense } from 'react';
+import { createPortal } from 'react-dom';
+import Link from 'next/link';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
+
+import { deleteProperty, getProperty, listProperties, resolveImageUrl } from '@/lib/api';
+import { getUsdToGelRate } from '@/lib/currency';
+import { mergePropertyPools, pickSimilarProperties } from '@/lib/similarProperties';
+import { getApiBase } from '@/lib/config';
+import { formatListedDay, getPropertyAddressLine, getTypeDealPhrase } from '@/lib/propertyDisplay';
+import { apiLang } from '@/lib/apiLang';
+import { MapView } from '@/components/MapView';
+import { ShareButtons } from '@/components/ShareButtons';
+import FavoriteButton from '@/components/FavoriteButton';
+import CompareButton from '@/components/CompareButton';
+import { PropertyCard } from '@/components/PropertyCard';
+import { PropertyPriceRow } from '@/components/PropertyPriceRow';
+import { PropertySpecChips } from '@/components/PropertySpecChips';
+import { BrokerContactChannels } from '@/components/BrokerContactChannels';
+import { PanoramaViewer } from '@/components/PanoramaViewer';
+import { PhotoThumbnailScrollStrip } from '@/components/PhotoThumbnailScrollStrip';
+import { isPanoramaPhoto } from '@/lib/panorama';
+import {
+  resolveGalleryPhotoUrl,
+  startPropertyGalleryPreload,
+} from '@/lib/preloadPropertyPhotos';
+import { LightboxZoomImage } from '@/components/LightboxZoomImage';
+import { cloudinaryWatermarkedDownloadUrl } from '@/lib/imageUrl';
+import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
+import { toYouTubeEmbedUrl } from '@/lib/youtubeEmbed';
+import { resolveTourPublicUrl } from '@/lib/tourBuilder';
+import { getSiteUrl } from '@/lib/siteUrl';
+import { Shimmer } from '@/components/Skeleton';
+import { useAuth } from '@/components/AuthProvider';
+import { isAdminRole, isAgentRole } from '@/lib/userRoles';
+import type { Property } from '@/lib/types';
+
+/** Short landscape (phone rotated) — chrome must not steal the photo’s height. */
+function useShortLandscape() {
+  const [short, setShort] = React.useState(false);
+
+  React.useEffect(() => {
+    const update = () => {
+      const w = window.visualViewport?.width ?? window.innerWidth;
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      setShort(h < 560 && w > h);
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    window.visualViewport?.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+      window.visualViewport?.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return short;
+}
+
+// Lightbox — ჩვეულებრივი ფოტო ან 360° პანორამა
+function photoDownloadLabel(lang: string): string {
+  if (lang.startsWith('en')) return 'Download';
+  if (lang.startsWith('ru')) return 'Скачать';
+  return 'გადმოწერა';
+}
+
+function LightboxModal({ photos, panoramaPhotos, index, onClose, onChangeIndex, t }: {
+  photos: string[];
+  panoramaPhotos?: string[];
+  index: number;
+  onClose: () => void;
+  onChangeIndex: (i: number) => void;
+  t: (key: string) => string;
+}) {
+  const { i18n } = useTranslation();
+  const photoUrl = photos[index];
+  const is360 = isPanoramaPhoto(photoUrl, panoramaPhotos);
+  const displayUrl = is360
+    ? resolveImageUrl(photoUrl)
+    : resolveImageUrl(photoUrl, 'large', { isPanorama: false, watermark: true });
+  const viewerUrl = resolveImageUrl(photoUrl);
+  const viewerWrapRef = React.useRef<HTMLDivElement>(null);
+  const [show360Ui, setShow360Ui] = React.useState(true);
+  const hide360Overlay = React.useCallback(() => {
+    setShow360Ui((prev) => (prev ? false : prev));
+  }, []);
+  const [portalReady, setPortalReady] = React.useState(false);
+  const shortLandscape = useShortLandscape();
+
+  React.useEffect(() => {
+    setShow360Ui(true);
+  }, [index]);
+
+  React.useEffect(() => {
+    setPortalReady(true);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  const toggleViewerFullscreen = React.useCallback(() => {
+    const el = viewerWrapRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void el.requestFullscreen();
+    }
+  }, []);
+
+  const photoCount = photos.length;
+  const goPrev = React.useCallback(() => {
+    if (photoCount <= 1) return;
+    onChangeIndex((index - 1 + photoCount) % photoCount);
+  }, [index, photoCount, onChangeIndex]);
+  const goNext = React.useCallback(() => {
+    if (photoCount <= 1) return;
+    onChangeIndex((index + 1) % photoCount);
+  }, [index, photoCount, onChangeIndex]);
+
+  const lightboxGoNext = photoCount > 1 ? goNext : undefined;
+  const lightboxGoPrev = photoCount > 1 ? goPrev : undefined;
+
+  React.useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') goNext();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose, goPrev, goNext]);
+
+  if (!portalReady) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 !z-[9999] flex items-center justify-center bg-black/90"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      {photoCount > 1 && (
+        <button
+          type="button"
+          aria-label={t('previous_photo') || 'Previous photo'}
+          className={`absolute left-0 z-[10000] flex w-10 cursor-pointer items-center justify-center bg-gradient-to-r from-black/35 to-transparent transition-colors hover:from-black/50 md:w-20 ${
+            shortLandscape ? 'top-0 h-full' : 'top-16 h-[calc(100%-9rem)] md:top-28'
+          }`}
+          onClick={(e) => { e.stopPropagation(); goPrev(); }}
+        >
+          <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
+            ‹
+          </span>
+        </button>
+      )}
+      
+      {is360 ? (
+        <div
+          className="mx-auto flex w-[min(96vw,1600px)] flex-col items-center touch-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            ref={viewerWrapRef}
+            className={
+              shortLandscape
+                ? 'relative h-[100dvh] w-full min-h-0'
+                : 'relative h-[min(94vh,1040px)] w-full min-h-[560px]'
+            }
+          >
+          <PanoramaViewer
+            key={viewerUrl}
+            src={viewerUrl}
+            showNavbar={false}
+            onInteract={hide360Overlay}
+            className="h-full w-full rounded-lg"
+          />
+
+          <button
+            type="button"
+            aria-label="სრული ეკრანი"
+            className="absolute bottom-4 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-all hover:bg-black/75"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleViewerFullscreen();
+            }}
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+            </svg>
+          </button>
+
+          {show360Ui && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <span className="select-none rounded-2xl bg-black/50 px-8 py-4 text-5xl font-bold tracking-wide text-white shadow-2xl backdrop-blur-sm md:text-6xl">
+                360°
+              </span>
+            </div>
+          )}
+
+          </div>
+        </div>
+      ) : (
+        <div
+          className={
+            shortLandscape
+              ? 'absolute inset-0 flex items-center justify-center'
+              : 'flex h-[min(86vh,calc(100dvh-10rem))] w-[min(96vw,calc(100vw-3rem))] max-w-[1600px] items-center justify-center'
+          }
+          onClick={(e) => e.stopPropagation()}
+        >
+          <LightboxZoomImage
+            key={displayUrl}
+            src={displayUrl}
+            alt={`Photo ${index + 1}`}
+            onSwipeLeft={lightboxGoNext}
+            onSwipeRight={lightboxGoPrev}
+          />
+        </div>
+      )}
+      
+      {photoCount > 1 && (
+        <button
+          type="button"
+          aria-label={t('next_photo') || 'Next photo'}
+          className={`absolute right-0 z-[10000] flex w-10 cursor-pointer items-center justify-center bg-gradient-to-l from-black/35 to-transparent transition-colors hover:from-black/50 md:w-20 ${
+            shortLandscape ? 'top-0 h-full' : 'top-16 h-[calc(100%-9rem)] md:top-28'
+          }`}
+          onClick={(e) => { e.stopPropagation(); goNext(); }}
+        >
+          <span className="text-white/80 text-5xl leading-none drop-shadow-lg hover:text-white transition-colors">
+            ›
+          </span>
+        </button>
+      )}
+      
+      <div
+        className={`absolute left-1/2 z-[10000] -translate-x-1/2 rounded-full bg-black/50 px-4 py-2 text-sm text-white ${
+          shortLandscape ? 'bottom-2' : 'bottom-4'
+        }`}
+      >
+        {index + 1} / {photos.length}
+      </div>
+      <div
+        className={`absolute left-1/2 z-[10000] flex -translate-x-1/2 gap-1.5 overflow-x-auto p-2 ${
+          shortLandscape
+            ? 'bottom-10 max-w-[min(92vw,calc(100vw-5rem))]'
+            : 'bottom-16 max-w-[80vw]'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {photos.map((p, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onChangeIndex(i)}
+            className={`flex-shrink-0 overflow-hidden rounded-md border-2 transition-all ${
+              shortLandscape ? 'h-9 w-9' : 'h-12 w-12'
+            } ${
+              i === index ? 'scale-110 border-white' : 'border-transparent opacity-60 hover:opacity-100'
+            }`}
+          >
+            <img
+              src={resolveImageUrl(p, 'thumb', {
+                isPanorama: isPanoramaPhoto(p, panoramaPhotos),
+                watermark: !isPanoramaPhoto(p, panoramaPhotos),
+              })}
+              alt={`Photo ${i + 1}`}
+              className="h-full w-full object-cover"
+            />
+          </button>
+        ))}
+      </div>
+
+      {!is360 && photoUrl && (
+        <a
+          href={cloudinaryWatermarkedDownloadUrl(photoUrl)}
+          className="absolute left-4 top-4 z-[10001] flex h-11 items-center gap-1.5 rounded-full bg-black/60 px-3.5 text-sm font-medium text-white shadow-lg transition-colors hover:bg-black/80"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14" />
+          </svg>
+          {photoDownloadLabel(i18n.language || 'ka')}
+        </a>
+      )}
+
+      <button
+        type="button"
+        aria-label={t('close') || 'Close'}
+        className="absolute top-4 right-4 z-[10001] flex h-11 w-11 items-center justify-center rounded-full bg-black/60 p-0 text-white shadow-lg transition-colors hover:bg-black/80"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <svg
+          className="block h-6 w-6 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>,
+    document.body
+  );
+}
+
+type MediaMode = 'exterior' | 'interior' | 'tour' | 'photos';
+
+/** Deterministic first media tab (server + first client render must agree). */
+function pickInitialMediaMode(p: Property | null): MediaMode {
+  if (!p) return 'exterior';
+  const hasExterior = !!(p.exteriorLink || p.threeDLink || '').trim();
+  const hasInterior = !!(p.interiorLink || '').trim();
+  const hasTour = !!resolveTourPublicUrl(p.tourLink);
+  const hasPhotos = (p.photos || []).length > 0;
+  const available: Record<MediaMode, boolean> = {
+    exterior: hasExterior,
+    interior: hasInterior,
+    tour: hasTour,
+    photos: hasPhotos,
+  };
+  if (p.defaultMediaView && available[p.defaultMediaView]) return p.defaultMediaView;
+  if (hasExterior) return 'exterior';
+  if (hasInterior) return 'interior';
+  if (hasTour) return 'tour';
+  return 'photos';
+}
+
+function mainPhotoIndex(p: Property | null): number {
+  const ph = p?.photos || [];
+  if (!ph.length) return 0;
+  return Math.min(Math.max(0, p?.mainPhoto ?? 0), ph.length - 1);
+}
+
+export type PropertyDetailClientProps = {
+  /** Listing fetched on the server (same language as the request) — enables full SSR of the page. */
+  initialProperty?: Property | null;
+  /** Language the server fetched `initialProperty` in. */
+  initialLang?: string;
+};
+
+export function PropertyDetailInner({ initialProperty = null, initialLang }: PropertyDetailClientProps) {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const shareTokenFromUrl = searchParams.get('t')?.trim() || undefined;
+  const { i18n, t } = useTranslation();
+  const { user: currentUser, profileLoaded } = useAuth();
+
+  const [property, setProperty] = useState<Property | null>(initialProperty);
+  const [listingResolved, setListingResolved] = useState(Boolean(initialProperty));
+  const [deleting, setDeleting] = useState(false);
+  const [similarProperties, setSimilarProperties] = useState<Property[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [heroPhotoIndex, setHeroPhotoIndex] = useState(() => mainPhotoIndex(initialProperty));
+  const [hoverPhotoIndex, setHoverPhotoIndex] = useState<number | null>(null);
+  const loadedGalleryPhotosRef = React.useRef(new Set<string>());
+  const [loadedGalleryPhotos, setLoadedGalleryPhotos] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [view3dMode, setView3dMode] = useState<MediaMode>(() => pickInitialMediaMode(initialProperty));
+  const [idCopied, setIdCopied] = useState(false);
+  const [pinning, setPinning] = useState(false);
+  const propertyMapSectionRef = React.useRef<HTMLDivElement>(null);
+
+  // ენის დეტექცია - hooks ყოველთვის ერთნაირად უნდა გამოიძახონ
+  const currentLang = i18n.language || 'ka';
+
+  // ტექსტი უკვე ნათარგმნია სერვერზე (getProperty ?lang=) და ქეშირებულია ბაზაში —
+  // client-ზე თითო იუზერისთვის თავიდან თარგმნა აღარ ხდება.
+
+  const tour3dWrapRef = React.useRef<HTMLDivElement>(null);
+  const propertyMapWrapRef = React.useRef<HTMLDivElement>(null);
+  /**
+   * Aspect ratio ONLY via padding-bottom % (of definite parent width).
+   * Do NOT use CSS aspect-ratio here: with width:100% it can resolve cyclically
+   * (~1084px on a 522px phone) and cut the 3D viewer in half.
+   */
+  const mediaHeroFrameClass =
+    'relative box-border w-full min-w-0 max-w-full overflow-hidden rounded-md border border-slate-200 ' +
+    '[:fullscreen]:!h-screen [:fullscreen]:!w-screen [:fullscreen]:!max-h-none [:fullscreen]:!max-w-none ' +
+    '[:fullscreen]:!p-0 [:fullscreen]:rounded-none';
+  const mediaHeroFrameStyle: React.CSSProperties = {
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    height: 0,
+    paddingBottom: '56.25%', // 16:9
+    overflow: 'hidden',
+    contain: 'inline-size',
+  };
+  const getEmbedFrameStyle = (_embedUrl: string): React.CSSProperties => {
+    // Same 16:9 frame for SuperSplat exterior and interactive 3D tour
+    return mediaHeroFrameStyle;
+  };
+  const toggleTour3dFullscreen = React.useCallback(() => {
+    const el = tour3dWrapRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void el.requestFullscreen();
+    }
+  }, []);
+  const togglePropertyMapFullscreen = React.useCallback(() => {
+    const el = propertyMapWrapRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void el.requestFullscreen();
+    }
+  }, []);
+
+  const scrollToPropertyMap = React.useCallback(() => {
+    const el =
+      propertyMapSectionRef.current ??
+      document.getElementById('property-map-section');
+    if (!el) return;
+
+    // lightbox / მოდალები ხშირად ტოვებს overflow:hidden-ს
+    if (document.body.style.overflow === 'hidden') {
+      document.body.style.overflow = '';
+    }
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const behavior: ScrollBehavior = prefersReducedMotion ? 'auto' : 'smooth';
+
+    // scroll-margin-top (scroll-mt-24) + block:start — ჰედერის ქვეშ არ ჩაიფაროს
+    el.scrollIntoView({ behavior, block: 'start', inline: 'nearest' });
+
+    // ზოგ ბრაუზერში scrollIntoView არ მოძრაობს — window.scrollTo სათადარო
+    requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      const headerOffset = 96;
+      const targetTop = window.scrollY + rect.top - headerOffset;
+      if (Math.abs(window.scrollY - targetTop) > 8) {
+        window.scrollTo({ top: Math.max(0, targetTop), behavior });
+      }
+    });
+  }, []);
+
+  const initialServedRef = React.useRef(
+    initialProperty ? `${params.id}|${apiLang(initialLang || 'ka')}` : ''
+  );
+
+  useEffect(() => {
+    let alive = true;
+    const lang = apiLang(i18n.language);
+    setError(null);
+    setSimilarProperties([]);
+
+    // Server already rendered this listing in this language: the page is visible
+    // immediately; the client fetch below only refreshes it (views counter, fresh data).
+    const key = `${params.id}|${lang}`;
+    const serverRendered = initialServedRef.current === key;
+    if (serverRendered) initialServedRef.current = '';
+
+    getProperty(params.id, lang, { shareToken: shareTokenFromUrl })
+      .then((r) => {
+        if (!alive) return;
+        setProperty(r.property);
+
+        const similarBase: Parameters<typeof listProperties>[0] = {
+          dealType: [r.property.dealType],
+          lang,
+          page: 1,
+          limit: 40,
+        };
+        const sameTypeQuery = {
+          ...similarBase,
+          type: [r.property.type],
+        };
+
+        const street = r.property.street?.trim();
+        return Promise.all([
+          listProperties(
+            r.property.region
+              ? { ...sameTypeQuery, region: r.property.region }
+              : sameTypeQuery
+          ),
+          street
+            ? listProperties({ ...sameTypeQuery, q: street, limit: 40 })
+            : Promise.resolve({ properties: [] as typeof r.property[] }),
+          getUsdToGelRate(),
+        ]).then(async ([localRes, streetRes, usdToGel]) => {
+          if (!alive) return;
+          let pool = mergePropertyPools(streetRes.properties, localRes.properties);
+          let similar = pickSimilarProperties(r.property, pool, { usdToGel });
+
+          if (similar.length < 6 && r.property.region) {
+            const widerSameType = await listProperties(sameTypeQuery);
+            if (!alive) return;
+            pool = mergePropertyPools(pool, widerSameType.properties);
+            similar = pickSimilarProperties(r.property, pool, { usdToGel });
+          }
+
+          if (similar.length < 6) {
+            const sameDeal = await listProperties(similarBase);
+            if (!alive) return;
+            pool = mergePropertyPools(pool, sameDeal.properties);
+            similar = pickSimilarProperties(r.property, pool, { usdToGel });
+          }
+
+          setSimilarProperties(similar);
+        });
+      })
+      .catch((e) => {
+        if (!alive) return;
+        // Background refresh of a server-rendered listing failed — keep showing the SSR data.
+        if (serverRendered) return;
+        setError(e.message || 'Failed');
+      })
+      .finally(() => {
+        if (alive) setListingResolved(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [params.id, i18n.language, shareTokenFromUrl]);
+
+  useEffect(() => {
+    if (!property) return;
+    const ph = property.photos || [];
+    if (ph.length === 0) {
+      setHeroPhotoIndex(0);
+      return;
+    }
+    setHeroPhotoIndex(
+      Math.min(Math.max(0, property.mainPhoto ?? 0), ph.length - 1)
+    );
+  }, [property?._id, property?.photos?.length, property?.mainPhoto]);
+
+  useEffect(() => {
+    if (!property?.photos?.length) return;
+
+    const ph = property.photos;
+    const mainIdx = Math.min(
+      Math.max(0, property.mainPhoto ?? 0),
+      ph.length - 1
+    );
+
+    loadedGalleryPhotosRef.current = new Set();
+    setLoadedGalleryPhotos(new Set());
+
+    const cancel = startPropertyGalleryPreload(
+      ph,
+      property.panoramaPhotos,
+      mainIdx,
+      (photo) => {
+        loadedGalleryPhotosRef.current.add(photo);
+        setLoadedGalleryPhotos(new Set(loadedGalleryPhotosRef.current));
+      }
+    );
+
+    return cancel;
+  }, [property?._id, property?.photos, property?.panoramaPhotos, property?.mainPhoto]);
+
+  const galleryPhotoCount = property?.photos?.length ?? 0;
+  const swipePhotoIndex =
+    hoverPhotoIndex !== null ? hoverPhotoIndex : heroPhotoIndex;
+
+  const goHeroPrev = React.useCallback(() => {
+    setHoverPhotoIndex(null);
+    setHeroPhotoIndex((i) => Math.max(0, i - 1));
+  }, []);
+
+  const goHeroNext = React.useCallback(() => {
+    setHoverPhotoIndex(null);
+    setHeroPhotoIndex((i) => Math.min(galleryPhotoCount - 1, i + 1));
+  }, [galleryPhotoCount]);
+
+  const heroSwipe = useHorizontalSwipe({
+    onSwipeLeft:
+      galleryPhotoCount > 1 && swipePhotoIndex < galleryPhotoCount - 1
+        ? goHeroNext
+        : undefined,
+    onSwipeRight:
+      galleryPhotoCount > 1 && swipePhotoIndex > 0 ? goHeroPrev : undefined,
+  });
+
+  const appliedDefaultForId = React.useRef<string | null>(null);
+
+  // აქტიური მედია ტაბი: აგენტის defaultMediaView ან პირველი ხელმისაწვდომი (Hooks — early return-მდე)
+  useEffect(() => {
+    if (!property) return;
+    const hasExterior = !!(property.exteriorLink || property.threeDLink || '').trim();
+    const hasInterior = !!(property.interiorLink || '').trim();
+    const hasTour = !!resolveTourPublicUrl(property.tourLink);
+    const hasPhotos = (property.photos || []).length > 0;
+    const available = {
+      exterior: hasExterior,
+      interior: hasInterior,
+      tour: hasTour,
+      photos: hasPhotos,
+    } as const;
+    const pickFallback = (): 'exterior' | 'interior' | 'tour' | 'photos' => {
+      if (hasExterior) return 'exterior';
+      if (hasInterior) return 'interior';
+      if (hasTour) return 'tour';
+      return 'photos';
+    };
+
+    if (appliedDefaultForId.current !== property._id) {
+      appliedDefaultForId.current = property._id;
+      const preferred = property.defaultMediaView;
+      // Respect the agent's "პირველი გამოჩენა" when that tab exists (incl. photos).
+      if (preferred && available[preferred]) {
+        setView3dMode(preferred);
+      } else {
+        setView3dMode(pickFallback());
+      }
+      return;
+    }
+
+    const modeOk = available[view3dMode];
+    if (modeOk) return;
+    setView3dMode(pickFallback());
+  }, [
+    property?._id,
+    property?.exteriorLink,
+    property?.interiorLink,
+    property?.threeDLink,
+    property?.tourLink,
+    property?.photos,
+    property?.defaultMediaView,
+    view3dMode,
+  ]);
+
+  if (error) return <div className="text-sm text-red-700">{error}</div>;
+  if (!property) {
+    if (!listingResolved) {
+      return <PropertySsrFallback property={null} />;
+    }
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-slate-700 dark:text-zinc-300">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-zinc-50">
+          {t('search_no_results_title')}
+        </h1>
+        {error ? <p className="mt-2 text-sm">{error}</p> : null}
+      </div>
+    );
+  }
+
+  const photos = property.photos || [];
+
+  const API_BASE = getApiBase();
+
+  const sqm = property.sqm || 0;
+  const rooms = property.rooms || 0;
+
+  // მომხმარებლის ინფორმაცია
+  const owner = typeof property.userId === 'object' ? property.userId : null;
+  const ownerId =
+    owner?._id ??
+    (typeof property.userId === 'string' ? property.userId : null);
+  const isOwner =
+    !!currentUser &&
+    !!ownerId &&
+    (currentUser.id === ownerId || currentUser._id === ownerId);
+  const isAdmin = profileLoaded && isAdminRole(currentUser?.role);
+  const showEditButton =
+    isAdmin || (profileLoaded && isOwner && isAgentRole(currentUser?.role));
+
+  const handleDelete = async () => {
+    if (!property || deleting) return;
+    if (!confirm('ნამდვილად გსურთ განცხადების წაშლა?')) return;
+
+    setDeleting(true);
+    try {
+      await deleteProperty(property._id);
+      router.push('/admin/properties');
+    } catch {
+      alert(t('error_delete_failed'));
+      setDeleting(false);
+    }
+  };
+
+  // ავტომატური აღწერის გენერაცია თარგმანებით
+  const generateAutoDescription = () => {
+    const parts: string[] = [];
+    
+    // ტიპი და გარიგება თარგმანით (გაყიდულზე — წარსული: გაიყიდა / გაქირავდა)
+    parts.push(getTypeDealPhrase(property, t));
+    
+    // მდებარეობა - თბილისის დუბლირების გარეშე
+    if (property.city || property.region) {
+      const regionKey = property.region ? String(property.region).trim().toLowerCase() : '';
+      const regionLabel = regionKey ? t(`region_${regionKey}`) : '';
+      const displayCity = property.city || '';
+      // რეგიონის კოდი tbilisi — მიუხედავად ქალაქის თარგმანისა (თბილისი/Tbilisi/Тбилиси)
+      const isTbilisi =
+        regionKey === 'tbilisi' ||
+        /^(თბილისი|tbilisi|тбилиси)$/i.test(displayCity.trim());
+      const location = isTbilisi
+        ? displayCity || regionLabel
+        : [displayCity, regionLabel !== `region_${regionKey}` ? regionLabel : '']
+            .filter(Boolean)
+            .join(', ');
+      if (location) parts.push(`${t('location')}: ${location}`);
+    }
+    
+    return parts;
+  };
+
+  const autoDescription = generateAutoDescription();
+
+  // საბოლოო ტექსტები (სერვერიდან უკვე მიმდინარე ენაზე)
+  const displayTitle = property.title;
+  const displayDesc = property.desc;
+  const addressLine = getPropertyAddressLine(property);
+
+  const link3dExterior = (property.exteriorLink || property.threeDLink || '').trim();
+  const link3dInterior = (property.interiorLink || '').trim();
+  const link3dPanoramaTour = resolveTourPublicUrl(property.tourLink);
+  const has3dExterior = !!link3dExterior;
+  const has3dInterior = !!link3dInterior;
+  const has3dPanoramaTour = !!link3dPanoramaTour;
+  const has3dTour = has3dExterior || has3dInterior || has3dPanoramaTour;
+  const hasPhotos = photos.length > 0;
+
+  const showMediaHero = has3dTour || hasPhotos;
+  const displayPhotoIndex =
+    hoverPhotoIndex !== null ? hoverPhotoIndex : heroPhotoIndex;
+  const displayPhotoUrl = photos[displayPhotoIndex];
+  const displayIs360 = displayPhotoUrl
+    ? isPanoramaPhoto(displayPhotoUrl, property.panoramaPhotos)
+    : false;
+  const usePhotoHero = showMediaHero && !has3dTour && hasPhotos;
+  const showing3dTour = view3dMode === 'tour' && has3dPanoramaTour;
+  const showing3dInterior = view3dMode === 'interior' && has3dInterior;
+  const showing3dExterior = view3dMode === 'exterior' && has3dExterior;
+  const showingPhotos = view3dMode === 'photos' && hasPhotos;
+  const photoHeroActive = usePhotoHero || showingPhotos;
+
+  const renderHeroPhotoStage = () => (
+    <div
+      className={`${mediaHeroFrameClass} ${displayIs360 ? 'bg-black' : 'touch-pan-y bg-slate-100'}`}
+      style={mediaHeroFrameStyle}
+      onTouchStart={displayIs360 ? undefined : heroSwipe.onTouchStart}
+      onTouchMove={displayIs360 ? undefined : heroSwipe.onTouchMove}
+      onTouchEnd={displayIs360 ? undefined : heroSwipe.onTouchEnd}
+    >
+      {photos.length > 1 && displayPhotoIndex > 0 && (
+        <button
+          type="button"
+          aria-label={t('previous_photo') || 'Previous photo'}
+          className="absolute left-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-r from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
+          onClick={() => {
+            setHoverPhotoIndex(null);
+            setHeroPhotoIndex((i) => Math.max(0, i - 1));
+          }}
+        >
+          <span className="text-3xl leading-none drop-shadow-lg">‹</span>
+        </button>
+      )}
+      {photos.length > 1 && displayPhotoIndex < photos.length - 1 && (
+        <button
+          type="button"
+          aria-label={t('next_photo') || 'Next photo'}
+          className="absolute right-0 top-0 z-20 flex h-full w-12 items-center justify-center bg-gradient-to-l from-black/45 to-transparent text-white/90 transition-colors hover:from-black/60 sm:w-14"
+          onClick={() => {
+            setHoverPhotoIndex(null);
+            setHeroPhotoIndex((i) => Math.min(photos.length - 1, i + 1));
+          }}
+        >
+          <span className="text-3xl leading-none drop-shadow-lg">›</span>
+        </button>
+      )}
+      {displayIs360 && displayPhotoUrl ? (
+        <div className="absolute inset-0">
+          <PanoramaViewer
+            key={displayPhotoUrl}
+            src={resolveImageUrl(displayPhotoUrl)}
+            className="h-full w-full"
+            showNavbar={false}
+          />
+          <span className="pointer-events-none absolute left-2 top-2 z-[2] rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow">
+            {t('photo_360')}
+          </span>
+          <button
+            type="button"
+            className="absolute bottom-3 left-3 z-10 rounded-lg bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm hover:bg-black/75"
+            onClick={() => setLightboxIndex(displayPhotoIndex)}
+          >
+            {t('photos')}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="group absolute inset-0 block cursor-pointer text-left"
+          onClick={() => {
+            if (heroSwipe.consumeSwipe()) return;
+            setLightboxIndex(displayPhotoIndex);
+          }}
+          aria-label={t('photos')}
+        >
+          {photos.map((photo, idx) => {
+            const active = idx === displayPhotoIndex;
+            // The active photo is always in the markup (SSR / LCP / crawlers);
+            // the rest mount once the background preloader has them cached.
+            if (!active && !loadedGalleryPhotos.has(photo)) return null;
+            return (
+              <img
+                key={photo}
+                src={resolveGalleryPhotoUrl(photo, property.panoramaPhotos)}
+                alt={`${displayTitle || 'Property'}${addressLine ? `, ${addressLine}` : ''} — ${t('photo') || 'photo'} ${idx + 1}`}
+                width={1600}
+                height={900}
+                fetchPriority={active ? 'high' : 'auto'}
+                decoding={active ? 'sync' : 'async'}
+                loading={active ? 'eager' : 'lazy'}
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${
+                  active ? 'z-[1] opacity-100 group-hover:opacity-95' : 'z-0 opacity-0'
+                }`}
+              />
+            );
+          })}
+          {displayPhotoUrl && !loadedGalleryPhotos.has(displayPhotoUrl) && (
+            <Shimmer className="pointer-events-none absolute inset-0 z-0 rounded-none" />
+          )}
+        </button>
+      )}
+      {photos.length > 1 && (
+        <span className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+          {displayPhotoIndex + 1} / {photos.length}
+        </span>
+      )}
+    </div>
+  );
+
+  const ownerRoleLabel =
+    owner && typeof owner === 'object' && isAgentRole(owner.role) ? t('agent_role') : t('broker');
+
+  const agentProfileHref = property.ownerAgentProfileId
+    ? `/agents/${property.ownerAgentProfileId}`
+    : isAgentRole(owner?.role) && ownerId
+      ? `/agents/${ownerId}`
+      : null;
+
+  const listedDateLabel = formatListedDay(property.createdAt) || null;
+  const displayId = property.numericId ?? property._id;
+  const displayIdText = String(displayId);
+
+  const copyPropertyId = async () => {
+    const writeId = async () => {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(displayIdText);
+        return;
+      }
+      throw new Error('clipboard');
+    };
+    try {
+      await writeId();
+    } catch {
+      const field = document.createElement('textarea');
+      field.value = displayIdText;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.left = '-9999px';
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand('copy');
+      field.remove();
+    }
+    setIdCopied(true);
+    window.setTimeout(() => setIdCopied(false), 2000);
+  };
+
+  const togglePropertyPin = async () => {
+    if (!property || !isAdmin || pinning) return;
+    const nextPinned = !property.pinned;
+    const token =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('token')?.trim()
+        : null;
+    if (!token) return;
+
+    setPinning(true);
+    try {
+      const res = await fetch(
+        `${getApiBase()}/api/admin/properties/${property._id}/pin`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ pinned: nextPinned }),
+        }
+      );
+      if (!res.ok) {
+        alert(t('pinFailed'));
+        return;
+      }
+      const updated = (await res.json()) as Property;
+      setProperty((prev) =>
+        prev
+          ? {
+              ...prev,
+              pinned: updated.pinned ?? nextPinned,
+              pinnedAt: updated.pinnedAt ?? (nextPinned ? new Date().toISOString() : null),
+            }
+          : prev
+      );
+    } catch {
+      alert(t('pinFailed'));
+    } finally {
+      setPinning(false);
+    }
+  };
+
+  // Deterministic on server and client (no window.location → no hydration mismatch).
+  const sharePageUrl = `${getSiteUrl()}/property/${property.urlKey || property._id}${
+    shareTokenFromUrl ? `?t=${encodeURIComponent(shareTokenFromUrl)}` : ''
+  }`;
+
+  const idMetaPanel = (
+    <div className="flex h-full flex-col justify-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+      <div className="flex items-center gap-2">
+        <div className="font-mono text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">
+          ID: {displayId}
+        </div>
+        <button
+          type="button"
+          onClick={copyPropertyId}
+          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${
+            idCopied
+              ? 'bg-green-500 text-white'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+          }`}
+          title={idCopied ? t('copied') : t('copyId')}
+          aria-label={idCopied ? t('copied') : t('copyId')}
+        >
+          {idCopied ? (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+          )}
+        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={togglePropertyPin}
+            disabled={pinning}
+            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors disabled:opacity-50 ${
+              property.pinned
+                ? 'bg-amber-500 text-white hover:bg-amber-600'
+                : 'bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700'
+            }`}
+            title={property.pinned ? t('unpinListing') : t('pinListing')}
+            aria-label={property.pinned ? t('unpinListing') : t('pinListing')}
+            aria-pressed={!!property.pinned}
+          >
+            {property.pinned ? (
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M16 3a1 1 0 011 1v2.586l1.707 1.707A1 1 0 0118 10h-3v7l-2 3-2-3v-7H8a1 1 0 01-.707-1.707L9 6.586V4a1 1 0 011-1h6z" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 4v4.5l2 2V12h-3.5V19L12 21l-1.5-2v-7H7v-1.5l2-2V4h6z"
+                />
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
+      {(listedDateLabel || typeof property.views === 'number') && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
+          {listedDateLabel && <span>📅 {listedDateLabel}</span>}
+          {typeof property.views === 'number' && (
+            <span>
+              👁️ {property.views} {t('views_count')}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const sidebarPanels = (
+    <>
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+        <PropertyPriceRow p={property} />
+        <PropertySpecChips p={property} gapClass="gap-1.5" />
+      </div>
+
+      {/* მობილური: ID ფასის ქვემოთ */}
+      <div className="lg:hidden">{idMetaPanel}</div>
+
+      <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+        {agentProfileHref ? (
+          <Link
+            href={agentProfileHref}
+            className="flex items-center gap-3 rounded-md transition-colors hover:bg-slate-50"
+          >
+            {owner?.avatar ? (
+              <img
+                src={resolveImageUrl(owner.avatar)}
+                alt={owner?.name || owner?.email || 'Agent'}
+                className="h-14 w-14 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xl text-slate-400">
+                {owner?.email?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-slate-900">
+                {owner?.name || owner?.email || t('unknown')}
+              </div>
+              <div className="text-sm text-slate-500">{ownerRoleLabel}</div>
+            </div>
+          </Link>
+        ) : (
+          <div className="flex items-center gap-3">
+            {owner?.avatar ? (
+              <img
+                src={resolveImageUrl(owner.avatar)}
+                alt={owner?.name || owner?.email || 'Agent'}
+                className="h-14 w-14 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xl text-slate-400">
+                {owner?.email?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-slate-900">
+                {owner?.name || owner?.email || t('unknown')}
+              </div>
+              <div className="text-sm text-slate-500">{ownerRoleLabel}</div>
+            </div>
+          </div>
+        )}
+
+        <BrokerContactChannels
+          phone={property.contact?.phone || owner?.phone}
+          email={property.contact?.email || owner?.email}
+        />
+
+        {agentProfileHref && (
+          <Link
+            href={agentProfileHref}
+            className="block w-full rounded-md bg-blue-600 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            {t('otherListings')}
+          </Link>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+        <ShareButtons
+          variant="sidebar"
+          url={sharePageUrl}
+          title={displayTitle}
+          description={displayDesc}
+        />
+      </div>
+    </>
+  );
+
+  const photoCollagePanel =
+    photos.length > 0 ? (
+      <div className="min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+        {!usePhotoHero && (
+          <div className="mb-2 text-sm font-semibold">
+            {t('photos')} ({photos.length})
+          </div>
+        )}
+        <PhotoThumbnailScrollStrip className="flex gap-1.5 sm:gap-2 overflow-x-auto py-0.5 scrollbar-thin">
+          {photos.map((p, idx) => {
+            const is360Thumb = isPanoramaPhoto(p, property.panoramaPhotos);
+            const isThumbActive = photoHeroActive
+              ? hoverPhotoIndex === idx ||
+                (hoverPhotoIndex === null && idx === heroPhotoIndex)
+              : false;
+            return (
+              <div
+                key={p}
+                role="button"
+                tabIndex={0}
+                className={`relative flex-shrink-0 cursor-pointer rounded-lg border-2 transition-all hover:opacity-90 ${
+                  isThumbActive ? 'border-blue-600' : 'border-transparent'
+                }`}
+                onMouseEnter={() => {
+                  if (photoHeroActive) setHoverPhotoIndex(idx);
+                }}
+                onMouseLeave={() => {
+                  if (photoHeroActive) setHoverPhotoIndex(null);
+                }}
+                onClick={() => {
+                  setHoverPhotoIndex(null);
+                  setHeroPhotoIndex(idx);
+                  if (has3dTour) setView3dMode('photos');
+                  setLightboxIndex(idx);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setHoverPhotoIndex(null);
+                    setHeroPhotoIndex(idx);
+                    if (has3dTour) setView3dMode('photos');
+                    setLightboxIndex(idx);
+                  }
+                }}
+              >
+                <img
+                  src={resolveImageUrl(p, is360Thumb ? undefined : 'thumb', {
+                    isPanorama: is360Thumb,
+                    watermark: !is360Thumb,
+                  })}
+                  alt={`Photo ${idx + 1}`}
+                  className={`h-[140px] sm:h-[180px] w-auto rounded-lg ${is360Thumb ? 'object-contain bg-slate-900 min-w-[200px]' : 'object-cover'}`}
+                />
+                {is360Thumb && (
+                  <span className="absolute left-1.5 top-1.5 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
+                    {t('photo_360')}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </PhotoThumbnailScrollStrip>
+      </div>
+    ) : null;
+
+  return (
+    <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] lg:items-start">
+      {/* სათაური + მისამართი — მარცხე სვეტი (3D-ის სიგანე); ID გრაფასთან ერთი სიმაღლე */}
+      <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2.5 sm:flex-row sm:items-center sm:gap-2.5 sm:p-3 lg:col-start-1 lg:row-start-1 lg:h-full lg:self-stretch">
+        <div className="min-w-0 flex-1">
+          <h1 className="break-words text-base font-semibold text-slate-900 sm:text-xl">
+            {displayTitle}
+          </h1>
+          {addressLine ? (
+            <a
+              href="#property-map-section"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToPropertyMap();
+              }}
+              className="mt-1.5 flex w-full min-w-0 cursor-pointer items-start gap-1.5 rounded-md text-left text-sm text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-700"
+            >
+              <svg className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="min-w-0 flex-1 break-words underline decoration-slate-300 decoration-dotted underline-offset-2">
+                {addressLine}
+              </span>
+            </a>
+          ) : null}
+        </div>
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-1.5 sm:w-auto">
+          {showEditButton && (
+            <Link
+              href={`/property/${property._id}/edit`}
+              className="inline-flex items-center gap-1 rounded-lg border-2 border-red-600 bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-red-700 hover:bg-red-700"
+            >
+              ✏️ {t('edit')}
+            </Link>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="inline-flex items-center gap-1 rounded-lg border-2 border-slate-700 bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:border-slate-800 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              🗑️ {deleting ? t('loading') : t('delete')}
+            </button>
+          )}
+          <CompareButton propertyId={property._id} size="md" />
+          <FavoriteButton propertyId={property._id} size="md" />
+        </div>
+      </div>
+
+      {/* ID, თარიღი, ნახვები — მხოლოდ desktop (მობილურზე ფასის ქვემოთაა) */}
+      <div className="hidden h-full lg:block lg:col-start-2 lg:row-start-1 lg:self-stretch">{idMetaPanel}</div>
+
+      {/* 3D ან მთავარი ფოტო + მარჯვე პანელები (desktop) */}
+      {showMediaHero && (
+        <>
+        <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 lg:col-start-1 lg:row-start-2">
+          {has3dTour ? (
+          <>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold">{t('view3d')}</div>
+            <div className="flex flex-wrap gap-1">
+              {has3dExterior && (
+              <button
+                type="button"
+                onClick={() => setView3dMode('exterior')}
+                className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  showing3dExterior
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {t('exterior')}
+              </button>
+              )}
+              {has3dInterior && (
+              <button
+                type="button"
+                onClick={() => setView3dMode('interior')}
+                className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  showing3dInterior
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {t('interior')}
+              </button>
+              )}
+              {has3dPanoramaTour && (
+              <button
+                type="button"
+                onClick={() => setView3dMode('tour')}
+                className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  showing3dTour
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {t('view3d_tour')}
+              </button>
+              )}
+              {hasPhotos && (
+              <button
+                type="button"
+                onClick={() => setView3dMode('photos')}
+                className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  showingPhotos
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {t('photos')}
+              </button>
+              )}
+            </div>
+          </div>
+          {showingPhotos ? (
+              renderHeroPhotoStage()
+          ) : (() => {
+            const convertToEmbedUrl = (input: string) => {
+              if (!input) return '';
+              let url = input.trim();
+              if (url.includes('<iframe') && url.includes('src=')) {
+                const srcMatch = url.match(/src=["']([^"']+)["']/);
+                if (srcMatch && srcMatch[1]) url = srcMatch[1];
+              }
+              if (url.includes('superspl.at/view?id=')) {
+                url = url.replace('superspl.at/view?id=', 'superspl.at/s?id=');
+              }
+              const youtubeEmbed = toYouTubeEmbedUrl(url);
+              if (youtubeEmbed) return youtubeEmbed;
+              return url;
+            };
+            
+            const rawUrl = showing3dTour
+              ? link3dPanoramaTour
+              : showing3dInterior
+                ? link3dInterior
+                : link3dExterior || link3dInterior || link3dPanoramaTour;
+
+            const embedUrl = showing3dTour ? rawUrl : convertToEmbedUrl(rawUrl || '');
+            
+            if (!embedUrl || !embedUrl.startsWith('http')) {
+              return (
+                <div
+                  className={`${mediaHeroFrameClass} bg-slate-100`}
+                  style={mediaHeroFrameStyle}
+                >
+                  <p className="absolute inset-0 flex items-center justify-center text-slate-500">
+                    {t('invalid_3d_link')}
+                  </p>
+                </div>
+              );
+            }
+            
+            return (
+              <div
+                ref={tour3dWrapRef}
+                className={`${mediaHeroFrameClass} bg-black`}
+                style={getEmbedFrameStyle(embedUrl)}
+              >
+                <iframe
+                  className="absolute inset-0 block h-full w-full border-0"
+                  src={embedUrl}
+                  title="3D Tour"
+                  width="100%"
+                  height="100%"
+                  scrolling="no"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; xr-spatial-tracking; web-share"
+                  allowFullScreen
+                  referrerPolicy="no-referrer-when-downgrade"
+                  loading="eager"
+                  style={{ overflow: 'hidden' }}
+                />
+                <button
+                  type="button"
+                  aria-label="სრული ეკრანი"
+                  className="absolute bottom-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-all hover:bg-black/80"
+                  onClick={toggleTour3dFullscreen}
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
+                    />
+                  </svg>
+                </button>
+              </div>
+            );
+          })()}
+          </>
+          ) : usePhotoHero ? (
+            <>
+              <div className="mb-2 text-sm font-semibold">
+                {t('photos')} ({photos.length})
+              </div>
+              {renderHeroPhotoStage()}
+            </>
+          ) : null}
+        </div>
+
+        {/* მობილური: ფოტოების კოლაჟი პირდაპირ 3D/ფოტო ჰეროს ქვემოთ */}
+        {photoCollagePanel && (
+          <div className="min-w-0 lg:hidden lg:col-start-1">{photoCollagePanel}</div>
+        )}
+
+        <div className="flex flex-col gap-2 sm:gap-2.5 lg:col-start-2 lg:row-start-2 lg:h-full lg:self-stretch lg:justify-between">
+          {sidebarPanels}
+        </div>
+        </>
+      )}
+
+      {/* ფოტოები, აღწერა, დეტალები — სრული სიგანე */}
+      <div
+        className={`grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-2 sm:gap-2.5 [&>*]:min-w-0 ${
+          showMediaHero ? 'lg:col-span-2 lg:row-start-3' : 'lg:col-start-1 lg:row-start-2'
+        }`}
+      >
+      {/* ფოტოების კოლაჟი — desktop / ჰეროს გარეშე (მობილურზე ჰეროს ქვემოთაა) */}
+      {photos.length > 0 && (
+        <div className={showMediaHero ? 'hidden min-w-0 lg:block' : 'min-w-0'}>
+          {photoCollagePanel}
+        </div>
+      )}
+
+      {property.desc && (
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+          <h2 className="mb-2 text-sm font-semibold">
+            {t('description')}
+          </h2>
+          <div className="text-sm text-slate-700 whitespace-pre-wrap break-words overflow-hidden">{displayDesc}</div>
+        </div>
+      )}
+
+      {/* პირადი ჩანაწერი — მფლობელი და ადმინი */}
+      {(isOwner || isAdmin) && !!property.privateNotes?.trim() && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-2.5 sm:p-3">
+          <div className="text-sm font-semibold mb-2 flex items-center gap-2 text-amber-800">
+            🔒 {t('private_notes')}
+            <span className="text-xs font-normal text-amber-600">
+              (
+              {isAdmin && !isOwner
+                ? t('private_notes_admin_visible')
+                : t('only_you_see')}
+              )
+            </span>
+          </div>
+          <div className="text-sm text-slate-700 whitespace-pre-wrap">{property.privateNotes}</div>
+        </div>
+      )}
+
+      {/* დეტალური ინფორმაცია - ზემოთ */}
+      <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+        <div className="text-sm font-semibold mb-2">{t('detailed_info')}</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5">
+          {(property.sqm ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">📐</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">
+                  {(property.houseSqm ?? 0) > 0 || property.type === 'house' || property.type === 'cottage' || property.type === 'land'
+                    ? t('land_area_detail')
+                    : t('area_detail')}
+                </div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {property.sqm!.toLocaleString('en-US')} {t('sqm_unit_short')}
+                </div>
+              </div>
+            </div>
+          )}
+          {property.type === 'land' && property.landStatus ? (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🌾</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('land_status_label')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {t(`land_status_${property.landStatus}`)}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {(property.houseSqm ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏠</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('house_area_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {property.houseSqm!.toLocaleString('en-US')} {t('sqm_unit_short')}
+                </div>
+              </div>
+            </div>
+          )}
+          {((property.rooms || property.roomCount || 0) > 0) && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🚪</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('rooms_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.rooms || property.roomCount}</div>
+              </div>
+            </div>
+          )}
+          {(property.bedrooms ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🛏️</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('bedrooms_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.bedrooms}</div>
+              </div>
+            </div>
+          )}
+          {(property.floor ?? 0) > 0 ? (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏢</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('floor_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {property.floor}{property.totalFloors ? ` / ${property.totalFloors}` : ''}
+                </div>
+              </div>
+            </div>
+          ) : (property.totalFloors ?? 0) > 0 ? (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏢</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('storeys_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {property.totalFloors}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {property.buildingProject && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏠</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('project_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {t(`project_${property.buildingProject}`) || property.buildingProject}
+                </div>
+              </div>
+            </div>
+          )}
+          {property.buildingStatus && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏗️</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('building_status_label')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">
+                  {t(`building_status_${property.buildingStatus}`) || property.buildingStatus}
+                </div>
+              </div>
+            </div>
+          )}
+          {(property.balcony ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🌅</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('balcony_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.balcony}</div>
+              </div>
+            </div>
+          )}
+          {(property.loggia ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🪟</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('loggia_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.loggia}</div>
+              </div>
+            </div>
+          )}
+          {(property.bathroom ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🚿</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('bathroom_detail')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.bathroom}</div>
+              </div>
+            </div>
+          )}
+          {(property.constructionYear ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🏗️</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('construction_year')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.constructionYear}</div>
+              </div>
+            </div>
+          )}
+          {(property.renovationYear ?? 0) > 0 && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+              <span className="text-xl sm:text-2xl">🛠️</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('renovation_year')}</div>
+                <div className="text-sm sm:text-base font-medium text-slate-800">{property.renovationYear}</div>
+              </div>
+            </div>
+          )}
+          {property.cadastralCode && (
+            <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 rounded-lg col-span-2">
+              <span className="text-xl sm:text-2xl">📋</span>
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500">{t('cadastral_code')}</div>
+                <div className="text-sm font-medium text-slate-800 font-mono truncate">{property.cadastralCode}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ავტომატური აღწერა - ხაზის ქვემოთ */}
+        {autoDescription.length > 0 && (
+          <>
+            <hr className="border-slate-200 my-3 sm:my-4" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+              {autoDescription.map((item, idx) => (
+                <div key={idx} className="text-sm text-slate-700 bg-slate-50 px-3 py-2 rounded-md">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* კომფორტი და კომუნიკაციები */}
+      {property.amenities && Object.values(property.amenities).some(v => v) && (
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3">
+          <div className="text-sm font-semibold mb-2">{t('comfort_communications')}</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            {property.amenities.elevator && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🛗</span>
+                <span className="text-sm font-medium">{t('amenity_elevator')}</span>
+              </div>
+            )}
+            {property.amenities.furniture && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🛋️</span>
+                <span className="text-sm font-medium">{t('amenity_furniture')}</span>
+              </div>
+            )}
+            {property.amenities.garage && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🚗</span>
+                <span className="text-sm font-medium">{t('amenity_garage')}</span>
+              </div>
+            )}
+            {property.amenities.basement && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🏚️</span>
+                <span className="text-sm font-medium">{t('amenity_basement')}</span>
+              </div>
+            )}
+            {property.amenities.attic && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🏠</span>
+                <span className="text-sm font-medium">{t('amenity_attic')}</span>
+              </div>
+            )}
+            {property.amenities.centralHeating && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🔥</span>
+                <span className="text-sm font-medium">{t('amenity_centralHeating')}</span>
+              </div>
+            )}
+            {property.amenities.naturalGas && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🔵</span>
+                <span className="text-sm font-medium">{t('amenity_naturalGas')}</span>
+              </div>
+            )}
+            {property.amenities.storage && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">📦</span>
+                <span className="text-sm font-medium">{t('amenity_storage')}</span>
+              </div>
+            )}
+            {property.amenities.internet && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">📶</span>
+                <span className="text-sm font-medium">{t('amenity_internet')}</span>
+              </div>
+            )}
+            {property.amenities.electricity && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">⚡</span>
+                <span className="text-sm font-medium">{t('amenity_electricity')}</span>
+              </div>
+            )}
+            {property.amenities.water && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">💧</span>
+                <span className="text-sm font-medium">{t('amenity_water')}</span>
+              </div>
+            )}
+            {property.amenities.security && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🔒</span>
+                <span className="text-sm font-medium">{t('amenity_security')}</span>
+              </div>
+            )}
+            {property.amenities.airConditioner && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">❄️</span>
+                <span className="text-sm font-medium">{t('amenity_airConditioner')}</span>
+              </div>
+            )}
+            {property.amenities.fireplace && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🪵</span>
+                <span className="text-sm font-medium">{t('amenity_fireplace')}</span>
+              </div>
+            )}
+            {property.amenities.pool && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🏊</span>
+                <span className="text-sm font-medium">{t('amenity_pool')}</span>
+              </div>
+            )}
+            {property.amenities.garden && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🌳</span>
+                <span className="text-sm font-medium">{t('amenity_garden')}</span>
+              </div>
+            )}
+            {property.amenities.balcony && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🌅</span>
+                <span className="text-sm font-medium">{t('balcony')}</span>
+              </div>
+            )}
+            {property.amenities.terrace && (
+              <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 rounded-lg">
+                <span className="text-xl">🏞️</span>
+                <span className="text-sm font-medium">{t('terrace')}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* რუკა - ადგილმდებარეობა */}
+      <div
+        ref={propertyMapSectionRef}
+        id="property-map-section"
+        className="scroll-mt-24 rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3"
+      >
+        <h2 className="mb-2 text-sm font-semibold">{t('mapLocation')}</h2>
+        <div
+          ref={propertyMapWrapRef}
+          className="relative h-[200px] overflow-hidden rounded-lg sm:h-[300px]"
+        >
+          <MapView
+            properties={[property]}
+            selectedLocation={property.location}
+            center={property.location}
+            zoom={15}
+            heightClassName="h-full"
+            className="h-full rounded-none border-0"
+          />
+          <button
+            type="button"
+            aria-label="სრული ეკრანი"
+            className="absolute bottom-3 right-3 z-[1000] flex h-11 w-11 items-center justify-center rounded-lg bg-black/55 text-white shadow-lg backdrop-blur-sm transition-all hover:bg-black/80"
+            onClick={togglePropertyMapFullscreen}
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
+              />
+            </svg>
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-slate-500">
+          {t('coordinates')}: {property.location.lat.toFixed(5)}, {property.location.lng.toFixed(5)}
+        </div>
+      </div>
+      </div>
+
+      {/* ფასი, ბროკერი — ფოტო/3D ჰეროს გარეშე */}
+      {!showMediaHero && (
+        <div className="flex flex-col gap-2 sm:gap-2.5 lg:col-start-2 lg:row-start-2 lg:sticky lg:top-4 lg:self-start">
+          {sidebarPanels}
+        </div>
+      )}
+
+      {/* მსგავსი ობიექტები — სრული სიგანე */}
+      {similarProperties.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 sm:p-3 lg:col-span-2">
+          <h2 className="mb-2 text-sm font-semibold">{t('similar_properties')}</h2>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {similarProperties.map((p) => (
+              <PropertyCard key={p._id} p={p} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox მოდალი */}
+      {lightboxIndex !== null && (
+        <LightboxModal
+          photos={photos}
+          panoramaPhotos={property.panoramaPhotos}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onChangeIndex={setLightboxIndex}
+          t={t}
+        />
+      )}
+    </div>
+  );
+}
+
+function PropertySsrFallback({ property }: { property?: Property | null }) {
+  if (!property) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10">
+        <h1 className="text-xl font-semibold text-slate-900">Vhome</h1>
+      </div>
+    );
+  }
+  const title = property.title?.trim() || 'Vhome';
+  const desc = (property.desc || '').trim().slice(0, 400);
+  return (
+    <article className="mx-auto max-w-3xl px-4 py-10 text-slate-800">
+      <h1 className="text-2xl font-bold">{title}</h1>
+      {property.city ? <p className="mt-2 text-sm">{property.city}</p> : null}
+      {desc ? <p className="mt-4 text-[15px] leading-relaxed">{desc}</p> : null}
+    </article>
+  );
+}
+
+export default function PropertyDetailClient(props: PropertyDetailClientProps) {
+  return (
+    <Suspense fallback={<PropertySsrFallback property={props.initialProperty} />}>
+      <PropertyDetailInner {...props} />
+    </Suspense>
+  );
+}

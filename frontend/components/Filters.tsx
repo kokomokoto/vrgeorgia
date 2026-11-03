@@ -192,6 +192,8 @@ function HeroSearchField({
               }
         }
         placeholder={placeholder}
+        aria-label={placeholder}
+        type="search"
         value={value}
         onChange={(e) => onChange(parseSearchInputValue(e.target.value))}
         onKeyDown={(e) => {
@@ -882,7 +884,7 @@ export function Filters({
         >
           <div className="flex items-center gap-2">
             <span>🔍</span>
-            <span>ფილტრები</span>
+            <span>{t('filters')}</span>
           </div>
           <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -924,18 +926,20 @@ export function Filters({
     + (value.landStatus?.length || 0)
     + value.balconies.length;
 
+  const tx = (key: string, fallback: string) => {
+    const value = t(key);
+    return !value || value === key ? fallback : value;
+  };
   const labels = {
-    filters: mounted ? t('filters') : 'ფილტრები',
-    search: mounted ? t('search') : 'ძიება',
-    search_placeholder: mounted
-      ? t('search_placeholder')
-      : 'სათაური, ID, ტელეფონი, აგენტის სახელი...',
-    city: mounted ? t('city') : 'ქალაქი',
-    region: mounted ? t('region') : 'რეგიონი',
-    any: mounted ? t('any') : 'ყველა',
-    extended_search: mounted ? t('extended_search') : 'გაფართოებული ძიება',
-    close: mounted ? t('close') : 'დახურვა',
-    clear_filters: mounted ? t('clear_filters') : 'ფილტრების გასუფთავება',
+    filters: tx('filters', 'ფილტრები'),
+    search: tx('search', 'ძიება'),
+    search_placeholder: tx('search_placeholder', 'სათაური, ID, ტელეფონი, აგენტის სახელი...'),
+    city: tx('city', 'ქალაქი'),
+    region: tx('region', 'რეგიონი'),
+    any: tx('any', 'ყველა'),
+    extended_search: tx('extended_search', 'გაფართოებული ძიება'),
+    close: tx('close', 'დახურვა'),
+    clear_filters: tx('clear_filters', 'ფილტრების გასუფთავება'),
   };
 
   const set = (k: keyof FiltersState, v: string) => onChange({ ...value, [k]: v });
@@ -959,10 +963,10 @@ export function Filters({
     const sym = activePriceCurrency === 'GEL' ? '₾' : '$';
     const suffix = activePriceType === 'per_sqm' ? `/${t('filter_per_sqm')}` : '';
     if (value.minPrice && value.maxPrice) {
-      return `${sym}${Number(value.minPrice).toLocaleString()} – ${sym}${Number(value.maxPrice).toLocaleString()}${suffix}`;
+      return `${sym}${Number(value.minPrice).toLocaleString('en-US')} – ${sym}${Number(value.maxPrice).toLocaleString('en-US')}${suffix}`;
     }
-    if (value.minPrice) return `${sym}${Number(value.minPrice).toLocaleString()}+${suffix}`;
-    if (value.maxPrice) return `${sym}${Number(value.maxPrice).toLocaleString()} ${t('filter_up_to')}${suffix}`;
+    if (value.minPrice) return `${sym}${Number(value.minPrice).toLocaleString('en-US')}+${suffix}`;
+    if (value.maxPrice) return `${sym}${Number(value.maxPrice).toLocaleString('en-US')} ${t('filter_up_to')}${suffix}`;
     return labels.any;
   };
 
@@ -1150,7 +1154,7 @@ export function Filters({
   };
   const renderPropertyTypeDropdown = () => (
     <FilterDropdown
-      label={mounted ? t('property_type_select') : 'ქონების ტიპი'}
+      label={tx('property_type_select', 'ქონების ტიპი')}
       summary={typeSummary()}
       isActive={typeActive}
       onClear={() => applyTypes([])}
@@ -1239,8 +1243,8 @@ export function Filters({
   const activePriceType = resolvePriceFilterType(value.priceType);
   const priceCurrencySymbol = value.priceCurrency === 'GEL' ? '₾' : '$';
   const activePriceCurrency = (value.priceCurrency === 'GEL' ? 'GEL' : 'USD') as 'USD' | 'GEL';
-  const formatPrice = (n: number) => `${priceCurrencySymbol}${Math.round(n).toLocaleString()}`;
-  const formatArea = (n: number) => `${Math.round(n).toLocaleString()} ${t('sqm_unit_short')}`;
+  const formatPrice = (n: number) => `${priceCurrencySymbol}${Math.round(n).toLocaleString('en-US')}`;
+  const formatArea = (n: number) => `${Math.round(n).toLocaleString('en-US')} ${t('sqm_unit_short')}`;
 
   const switchPriceCurrency = (next: 'USD' | 'GEL') => {
     if (activePriceCurrency === next) return;
@@ -1832,7 +1836,7 @@ export function Filters({
       {mapSidebar ? (
         <div className="mb-3">
           <div className="mb-2 text-xs font-semibold text-slate-600 dark:text-zinc-300">
-            {mounted ? t('choose_property_type') : 'აირჩიეთ ქონების ტიპი'}
+            {tx('choose_property_type', 'აირჩიეთ ქონების ტიპი')}
           </div>
           <HomeTypePanel
             variant="sidebar"
@@ -1842,11 +1846,7 @@ export function Filters({
               applyTypes(next.type);
             }}
             categoryCounts={{}}
-            tr={(key, fallback) => {
-              if (!mounted) return fallback;
-              const translated = t(key);
-              return !translated || translated === key ? fallback : translated;
-            }}
+            tr={(key, fallback) => tx(key, fallback)}
           />
           {value.type.includes('land') ? (
             <div className="mt-2">
@@ -2079,11 +2079,7 @@ export function Filters({
                   publish(cloneFiltersState(next));
                 }}
                 categoryCounts={categoryCounts || {}}
-                tr={(key, fallback) => {
-                  if (!mounted) return fallback;
-                  const translated = t(key);
-                  return !translated || translated === key ? fallback : translated;
-                }}
+                tr={(key, fallback) => tx(key, fallback)}
                 designMode={designMode}
               />
             </div>
@@ -2420,9 +2416,7 @@ export function Filters({
           <div className="mx-auto w-full max-w-4xl space-y-3">
               {heroCompact && (
                 <p className="text-sm text-slate-600 dark:text-zinc-400">
-                  {mounted
-                    ? `${t('filter_price')} · ${t('filter_area')} · ${labels.city} · ${t('filter_rooms')} · ${t('categories')}`
-                    : 'ფასი · ფართობი · ქალაქი · ოთახები · კატეგორიები'}
+                  {`${tx('filter_price', 'ფასი')} · ${tx('filter_area', 'ფართობი')} · ${labels.city} · ${tx('filter_rooms', 'ოთახები')} · ${tx('categories', 'კატეგორიები')}`}
                 </p>
               )}
               {heroCompact && (

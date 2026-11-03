@@ -36,7 +36,6 @@ export function AboutPageClient() {
   const { user, profileLoaded } = useAuth();
   const isAdmin = profileLoaded && isAdminRole(user?.role);
 
-  const [mounted, setMounted] = React.useState(false);
   const [byLang, setByLang] = React.useState<Record<AboutLang, AboutContent>>(ABOUT_BY_LANG);
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState<Record<AboutLang, AboutContent> | null>(null);
@@ -44,10 +43,6 @@ export function AboutPageClient() {
   const [saving, setSaving] = React.useState(false);
   const [status, setStatus] = React.useState('');
   const [error, setError] = React.useState('');
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   React.useEffect(() => {
     let alive = true;
@@ -72,9 +67,12 @@ export function AboutPageClient() {
     };
   }, []);
 
-  const lang = mounted ? pickAboutLang(i18n.language) : 'ka';
+  const lang = pickAboutLang(i18n.language);
   const c = byLang[lang] || byLang.ka;
-  const tx = (key: string, fallback: string) => (mounted ? t(key) : fallback);
+  const tx = (key: string, fallback: string) => {
+    const value = t(key);
+    return !value || value === key ? fallback : value;
+  };
   const d = draft?.[editLang];
 
   const startEdit = () => {

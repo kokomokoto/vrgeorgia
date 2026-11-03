@@ -31,7 +31,7 @@ export default function MortgageCalculatorPage() {
   const currencySymbol = currency === 'GEL' ? '₾' : '$';
   
   const formatNumber = (num: number) => {
-    return num.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
   };
 
   return (

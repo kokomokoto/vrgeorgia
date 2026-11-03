@@ -13,6 +13,7 @@ import { DEFAULT_MAP_FILTERS, filtersAreActive, filtersToPropertyQuery } from '@
 import { trackSearchFilters } from '@/lib/searchAnalytics';
 import { apiLang } from '@/lib/apiLang';
 import { isAdminRole } from '@/lib/userRoles';
+import { formatListedDay } from '@/lib/propertyDisplay';
 function AgentPhotoLightbox({
   src,
   alt,
@@ -663,7 +664,7 @@ export default function AgentProfilePage() {
                       <span className="font-medium text-slate-900">{review.user.username || 'User'}</span>
                     </div>
                     <span className="text-sm text-slate-500">
-                      {new Date(review.createdAt).toLocaleDateString()}
+                      {formatListedDay(review.createdAt)}
                     </span>
                   </div>
                   <StarRating rating={review.score} />

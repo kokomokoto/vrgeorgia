@@ -1,8 +1,23 @@
 import type { MetadataRoute } from 'next';
 import { absoluteListingImageUrl, getPropertyShareImageUrl } from '@/lib/propertyShareMetadata';
 import { seoDuplicateIdsToDrop, type SeoListing } from '@/lib/seoDuplicateCanonical';
+import { allLandingSegments, cityHubPath, LANDING_CITIES, landingPath } from '@/lib/landingPages';
 import { getSiteUrl } from '@/lib/siteUrl';
+import { localizePath, SITE_LANGS } from '@/lib/siteLang';
 import type { Property } from '@/lib/types';
+
+function languageAlternates(path: string): NonNullable<MetadataRoute.Sitemap[number]['alternates']> {
+  const site = getSiteUrl();
+  const languages: Record<string, string> = {};
+  for (const lang of SITE_LANGS) {
+    languages[lang] = `${site}${localizePath(path, lang)}`;
+  }
+  return { languages };
+}
+
+function localizedUrl(path: string): string {
+  return `${getSiteUrl()}${localizePath(path, 'ka')}`;
+}
 
 function apiBase(): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_BASE?.trim();
@@ -94,24 +109,57 @@ function propertySitemapImages(p: ListedProperty): NonNullable<MetadataRoute.Sit
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const SITE_URL = getSiteUrl();
   const now = new Date();
-  const staticRoutes: MetadataRoute.Sitemap = [
-    { url: SITE_URL, lastModified: now, changeFrequency: 'hourly', priority: 1 },
-    { url: `${SITE_URL}/map`, lastModified: now, changeFrequency: 'hourly', priority: 0.9 },
-    { url: `${SITE_URL}/agents`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${SITE_URL}/services`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${SITE_URL}/services/arch`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
-    { url: `${SITE_URL}/services/docs`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
-    { url: `${SITE_URL}/services/planning`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
-    { url: `${SITE_URL}/services/interior`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
-    { url: `${SITE_URL}/services/landscape`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
-    { url: `${SITE_URL}/services/vis`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
-    { url: `${SITE_URL}/services/heritage`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
-    { url: `${SITE_URL}/services/consult`, lastModified: now, changeFrequency: 'monthly', priority: 0.55 },
-    { url: `${SITE_URL}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
-    { url: `${SITE_URL}/faq`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
-    { url: `${SITE_URL}/mortgage-calculator`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+  const staticPaths: Array<{ path: string; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency']; priority: number }> = [
+    { path: '/', changeFrequency: 'hourly', priority: 1 },
+    { path: '/map', changeFrequency: 'hourly', priority: 0.9 },
+    { path: '/3d-tours', changeFrequency: 'daily', priority: 0.85 },
+    { path: '/agents', changeFrequency: 'daily', priority: 0.8 },
+    { path: '/services', changeFrequency: 'weekly', priority: 0.6 },
+    { path: '/services/arch', changeFrequency: 'monthly', priority: 0.55 },
+    { path: '/services/docs', changeFrequency: 'monthly', priority: 0.55 },
+    { path: '/services/planning', changeFrequency: 'monthly', priority: 0.55 },
+    { path: '/services/interior', changeFrequency: 'monthly', priority: 0.55 },
+    { path: '/services/landscape', changeFrequency: 'monthly', priority: 0.55 },
+    { path: '/services/vis', changeFrequency: 'monthly', priority: 0.55 },
+    { path: '/services/heritage', changeFrequency: 'monthly', priority: 0.55 },
+    { path: '/services/consult', changeFrequency: 'monthly', priority: 0.55 },
+    { path: '/about', changeFrequency: 'monthly', priority: 0.7 },
+    { path: '/faq', changeFrequency: 'monthly', priority: 0.7 },
+    { path: '/contact', changeFrequency: 'monthly', priority: 0.6 },
+    { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
+    { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },
+    { path: '/mortgage-calculator', changeFrequency: 'monthly', priority: 0.5 },
+  ];
+  const staticRoutes: MetadataRoute.Sitemap = staticPaths.map((r) => ({
+    url: localizedUrl(r.path),
+    lastModified: now,
+    changeFrequency: r.changeFrequency,
+    priority: r.priority,
+    alternates: languageAlternates(r.path),
+  }));
+
+  const landingRoutes: MetadataRoute.Sitemap = [
+    ...LANDING_CITIES.map((city) => {
+      const path = cityHubPath(city);
+      return {
+        url: localizedUrl(path),
+        lastModified: now,
+        changeFrequency: 'daily' as const,
+        priority: 0.85,
+        alternates: languageAlternates(path),
+      };
+    }),
+    ...allLandingSegments().map((seg) => {
+      const path = landingPath(seg.city, seg.type, seg.deal, seg.district);
+      return {
+        url: localizedUrl(path),
+        lastModified: now,
+        changeFrequency: 'daily' as const,
+        priority: seg.district ? 0.7 : 0.8,
+        alternates: languageAlternates(path),
+      };
+    }),
   ];
 
   const [listedProperties, agents] = await Promise.all([
@@ -123,21 +171,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const propertyRoutes: MetadataRoute.Sitemap = properties.map((p) => {
     const images = propertySitemapImages(p);
+    const path = `/property/${p.urlKey || p._id}`;
     return {
-      url: `${SITE_URL}/property/${p.urlKey || p._id}`,
+      url: localizedUrl(path),
       lastModified: parseDate(p.updatedAt) || parseDate(p.createdAt) || now,
       changeFrequency: 'daily' as const,
       priority: 0.8,
+      alternates: languageAlternates(path),
       ...(images.length ? { images } : {}),
     };
   });
 
-  const agentRoutes: MetadataRoute.Sitemap = agents.map((a) => ({
-    url: `${SITE_URL}/agents/${a._id}`,
-    lastModified: parseDate(a.updatedAt) || now,
-    changeFrequency: 'weekly' as const,
-    priority: 0.7,
-  }));
+  const agentRoutes: MetadataRoute.Sitemap = agents.map((a) => {
+    const path = `/agents/${a._id}`;
+    return {
+      url: localizedUrl(path),
+      lastModified: parseDate(a.updatedAt) || now,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+      alternates: languageAlternates(path),
+    };
+  });
 
-  return [...staticRoutes, ...propertyRoutes, ...agentRoutes];
+  return [...staticRoutes, ...landingRoutes, ...propertyRoutes, ...agentRoutes];
 }

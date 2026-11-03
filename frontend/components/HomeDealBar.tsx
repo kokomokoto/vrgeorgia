@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEAL_TYPES, type FiltersState } from '@/components/Filters';
@@ -26,16 +25,13 @@ const DEAL_VALUE_TO_CHIP: Record<string, DealChipId> = {
 
 /** Independent deal-type chips (იყიდება / ქირავდება / გირავდება) — outside search box */
 export function HomeDealBar({ filters, onChange, designMode = false }: HomeDealBarProps) {
-  const { t, ready } = useTranslation();
+  const { t } = useTranslation();
   const design = useHomeDesignOptional();
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
 
   const dealLayout = normalizeDealBar(design?.layout.dealBar || DEFAULT_DEAL_BAR);
   const gap = dealLayout.gap ?? 8;
 
   const label = (key: string, fallback: string) => {
-    if (!mounted || !ready) return fallback;
     const v = t(key);
     return !v || v === key ? fallback : v;
   };

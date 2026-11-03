@@ -14,6 +14,27 @@ const langs = [
 ];
 
 export function LanguageSwitcher() {
+  return (
+    <React.Suspense fallback={<LanguageSwitcherFallback />}>
+      <LanguageSwitcherInner />
+    </React.Suspense>
+  );
+}
+
+function LanguageSwitcherFallback() {
+  return (
+    <select
+      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+      defaultValue="ka"
+      aria-label="Language / ენა / Язык"
+      tabIndex={-1}
+    >
+      <option value="ka">KA</option>
+    </select>
+  );
+}
+
+function LanguageSwitcherInner() {
   const { i18n } = useTranslation();
   const router = useRouter();
   const pathname = usePathname() || '/';

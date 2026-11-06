@@ -19,7 +19,9 @@ function emit() {
 
 export function subscribeInstallState(fn: () => void) {
   subs.add(fn);
-  return () => subs.delete(fn);
+  return () => {
+    subs.delete(fn);
+  };
 }
 
 export function getInstallPrompt() {

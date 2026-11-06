@@ -38,6 +38,77 @@
   100% { transform: scale(1); }
 }
 
+@keyframes install-app-ripple {
+  0% {
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    margin-top: -8px;
+    opacity: 0;
+  }
+  6% { opacity: 0.95; }
+  62% { opacity: 0.62; }
+  100% {
+    width: 760px;
+    height: 760px;
+    margin-left: -380px;
+    margin-top: -380px;
+    opacity: 0;
+  }
+}
+
+.install-app-cta {
+  --install-green: #16a34a;
+  background: color-mix(in srgb, var(--install-green) 14%, #ffffff);
+  box-shadow: 0 8px 22px -14px color-mix(in srgb, var(--install-green) 85%, transparent);
+}
+
+.dark .install-app-cta {
+  --install-green: #22c55e;
+  background: color-mix(in srgb, var(--install-green) 22%, #18181b);
+}
+
+.install-app-ripples {
+  position: absolute;
+  left: calc(0.75rem + 22px);
+  top: 50%;
+  z-index: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.install-app-ripples span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 9999px;
+  border: 2px solid #166534;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.72),
+    0 0 10px rgba(22, 163, 74, 0.45);
+  opacity: 0;
+  animation: install-app-ripple 7s linear infinite;
+}
+
+.dark .install-app-ripples span {
+  border-color: #bbf7d0;
+  box-shadow:
+    0 0 0 1px rgba(22, 163, 74, 0.35),
+    0 0 10px rgba(134, 239, 172, 0.4);
+}
+
+.install-app-ripples span:nth-child(1) { animation-delay: -5.25s; }
+.install-app-ripples span:nth-child(2) { animation-delay: -3.5s; }
+.install-app-ripples span:nth-child(3) { animation-delay: -1.75s; }
+.install-app-ripples span:nth-child(4) { animation-delay: 0s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .install-app-ripples span {
+    animation: none;
+  }
+}
+
 /* ჰედერი: მსუბუქი შუშა ეფექტი — ფერი Design Mode-დან */
 [data-site-header] {
   background-color: var(--theme-header-bg) !important;

@@ -1,7 +1,9 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { PageView } from '../models/PageView.js';
 import { SearchEvent } from '../models/SearchEvent.js';
+import { AppInstall } from '../models/AppInstall.js';
 import { Analyst } from '../models/Analyst.js';
 import { getJWTSecret } from '../config/jwt.js';
 
@@ -221,6 +223,43 @@ router.post('/search', async (req, res) => {
   }
 });
 
+// PUBLIC: PWA install confirmed in the browser (Android). iOS cannot report this.
+router.post('/install', async (req, res) => {
+  try {
+    const sessionId = String(req.body?.sessionId || '').slice(0, 128);
+    const userRaw = String(req.body?.userId || '');
+    const userId = mongoose.Types.ObjectId.isValid(userRaw) ? userRaw : null;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    if (sessionId) {
+      const existing = await AppInstall.findOne({ sessionId, createdAt: { $gte: since } }).lean();
+      if (existing) return res.json({ ok: true, duplicate: true });
+    }
+
+    const ua = req.headers['user-agent'] || '';
+    const { device, browser, os } = parseUserAgent(ua);
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req.socket?.remoteAddress?.replace('::ffff:', '') || '';
+    const geo = await getGeoFromIP(ip);
+
+    await AppInstall.create({
+      sessionId,
+      userId,
+      ip,
+      device,
+      browser,
+      os,
+      country: geo.country || '',
+      countryCode: geo.countryCode || '',
+      city: geo.city || '',
+      region: geo.region || '',
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Install analytics error:', err.message);
+    res.json({ ok: true });
+  }
+});
+
 // PUBLIC: Update duration (when user leaves page)
 router.post('/duration', async (req, res) => {
   try {
@@ -411,6 +450,21 @@ router.get('/visits', requireAnalyst, async (req, res) => {
     ]);
     
     res.json({ visits, total, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/installs', requireAnalyst, async (req, res) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+    const skip = (page - 1) * limit;
+    const [installs, total] = await Promise.all([
+      AppInstall.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      AppInstall.countDocuments(),
+    ]);
+    res.json({ installs, total, page, pages: Math.ceil(total / limit) || 1 });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

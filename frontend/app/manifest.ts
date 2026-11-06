@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { getSiteUrl } from '@/lib/siteUrl';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -10,6 +11,10 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/',
     scope: '/',
     display: 'standalone',
+    prefer_related_applications: false,
+    related_applications: [
+      { platform: 'webapp', url: `${getSiteUrl()}/manifest.webmanifest` },
+    ],
     background_color: '#0b0f19',
     theme_color: '#0b0f19',
     categories: ['business', 'lifestyle', 'shopping'],

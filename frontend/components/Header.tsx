@@ -5,6 +5,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandLogo } from './BrandLogo';
+import { InstallAppMenuItem } from './InstallAppMenuItem';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from './AuthProvider';
@@ -1467,6 +1468,7 @@ export function Header() {
                 )}
               </>
             )}
+            <InstallAppMenuItem onClose={() => setOpen(false)} />
           </div>
         </div>
       )}

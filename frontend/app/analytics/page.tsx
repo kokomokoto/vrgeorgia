@@ -56,6 +56,20 @@ type Realtime = {
   recentVisits: Visit[];
 };
 
+type AppInstallRow = {
+  _id: string;
+  sessionId: string;
+  userId?: string | null;
+  ip: string;
+  country: string;
+  countryCode: string;
+  city: string;
+  device: string;
+  browser: string;
+  os: string;
+  createdAt: string;
+};
+
 // ──── Helper: ბარი პროცენტულად ────
 function Bar({ value, max, color = 'bg-blue-500' }: { value: number; max: number; color?: string }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
@@ -87,7 +101,10 @@ export default function AnalyticsDashboard() {
   const [visitsTotal, setVisitsTotal] = useState(0);
   const [visitsPage, setVisitsPage] = useState(1);
   const [period, setPeriod] = useState('7d');
-  const [tab, setTab] = useState<'overview' | 'visits' | 'realtime'>('overview');
+  const [tab, setTab] = useState<'overview' | 'visits' | 'realtime' | 'installs'>('overview');
+  const [installs, setInstalls] = useState<AppInstallRow[]>([]);
+  const [installsTotal, setInstallsTotal] = useState(0);
+  const [installsPage, setInstallsPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [analystName, setAnalystName] = useState('');
@@ -135,6 +152,15 @@ export default function AnalyticsDashboard() {
       .finally(() => setLoading(false));
   }, [tab, visitsPage, authFetch]);
 
+  useEffect(() => {
+    if (tab !== 'installs') return;
+    setLoading(true);
+    authFetch(`${API_BASE}/api/analytics/installs?page=${installsPage}&limit=30`)
+      .then(d => { setInstalls(d.installs || []); setInstallsTotal(d.total || 0); setError(''); })
+      .catch(e => { if (e.message !== 'Unauthorized') setError(e.message); })
+      .finally(() => setLoading(false));
+  }, [tab, installsPage, authFetch]);
+
   // Realtime
   useEffect(() => {
     if (tab !== 'realtime') return;
@@ -175,15 +201,20 @@ export default function AnalyticsDashboard() {
       {/* Tabs */}
       <div className="max-w-7xl mx-auto px-4 pt-4">
         <div className="flex gap-1 bg-slate-800 rounded-lg p-1 w-fit">
-          {(['overview', 'visits', 'realtime'] as const).map(t => (
+          {([
+            ['overview', '📈 მიმოხილვა'],
+            ['visits', '👁️ ვიზიტები'],
+            ['installs', '📲 დაყენებები'],
+            ['realtime', '⚡ რეალ-ტაიმ'],
+          ] as const).map(([id, label]) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={id}
+              onClick={() => setTab(id)}
               className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                tab === t ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                tab === id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
               }`}
             >
-              {t === 'overview' ? '📈 მიმოხილვა' : t === 'visits' ? '👁️ ვიზიტები' : '⚡ რეალ-ტაიმ'}
+              {label}
             </button>
           ))}
         </div>
@@ -415,6 +446,65 @@ export default function AnalyticsDashboard() {
                   <button
                     onClick={() => setVisitsPage(p => p + 1)}
                     disabled={visitsPage >= Math.ceil(visitsTotal / 30)}
+                    className="px-4 py-2 bg-slate-800 rounded-lg text-sm disabled:opacity-40"
+                  >
+                    შემდეგი →
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {tab === 'installs' && (
+          <>
+            <p className="text-sm text-slate-400 mb-4">
+              სულ დაყენება: {installsTotal}. iPhone ამ სიაში ვერ ხვდება — Safari დაყენებას არ აგზავნის.
+            </p>
+            {loading ? (
+              <div className="text-center py-20 text-slate-400">⏳ იტვირთება...</div>
+            ) : installs.length === 0 ? (
+              <div className="text-center py-20 text-slate-400">ჯერ არც ერთი დაყენება არ ჩაწერილა.</div>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded-xl border border-slate-700">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-800 text-xs text-slate-400">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">დრო</th>
+                        <th className="px-3 py-2 font-medium">IP</th>
+                        <th className="px-3 py-2 font-medium">ქალაქი</th>
+                        <th className="px-3 py-2 font-medium">მოწყობილობა</th>
+                        <th className="px-3 py-2 font-medium">ბრაუზერი</th>
+                        <th className="px-3 py-2 font-medium">ანგარიში</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {installs.map((row) => (
+                        <tr key={row._id} className="border-t border-slate-700">
+                          <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{new Date(row.createdAt).toLocaleString('ka-GE')}</td>
+                          <td className="px-3 py-2 text-slate-200">{row.ip || '—'}</td>
+                          <td className="px-3 py-2 text-slate-300">{countryFlag(row.countryCode)} {row.city || row.country || '—'}</td>
+                          <td className="px-3 py-2 text-slate-300">{row.os || row.device || '—'}</td>
+                          <td className="px-3 py-2 text-slate-300">{row.browser || '—'}</td>
+                          <td className="px-3 py-2 text-slate-400">{row.userId ? String(row.userId) : 'სტუმარი'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-center gap-3 mt-6">
+                  <button
+                    onClick={() => setInstallsPage((p) => Math.max(1, p - 1))}
+                    disabled={installsPage <= 1}
+                    className="px-4 py-2 bg-slate-800 rounded-lg text-sm disabled:opacity-40"
+                  >
+                    ← წინა
+                  </button>
+                  <span className="text-sm text-slate-400">გვერდი {installsPage} / {Math.ceil(installsTotal / 30) || 1}</span>
+                  <button
+                    onClick={() => setInstallsPage((p) => p + 1)}
+                    disabled={installsPage >= Math.ceil(installsTotal / 30)}
                     className="px-4 py-2 bg-slate-800 rounded-lg text-sm disabled:opacity-40"
                   >
                     შემდეგი →

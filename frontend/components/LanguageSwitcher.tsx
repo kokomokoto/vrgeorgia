@@ -24,7 +24,7 @@ export function LanguageSwitcher() {
 function LanguageSwitcherFallback() {
   return (
     <select
-      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+      className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 py-0 text-sm leading-none text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
       defaultValue="ka"
       aria-label="Language / ენა / Язык"
       tabIndex={-1}
@@ -58,7 +58,7 @@ function LanguageSwitcherInner() {
   return (
     <select
       suppressHydrationWarning
-      className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+      className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 py-0 text-sm leading-none text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
       value={current}
       onChange={(e) => void onChange(e.target.value)}
       aria-label="Language / ენა / Язык"

@@ -1398,7 +1398,7 @@ export function Header() {
             <LanguageSwitcher />
           </span>
           <button
-            className="rounded-md border border-slate-200 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
+            className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 leading-none text-slate-800 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
             style={{ fontSize: navFontSize }}
             onClick={() => setOpen((v) => !v)}
             aria-label="Menu"
@@ -1469,18 +1469,24 @@ export function Header() {
               </>
             )}
             <InstallAppMenuItem onClose={() => setOpen(false)} />
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label={t('menu_collapse')}
-              className="mt-1 flex w-full items-center justify-center gap-2 border-t border-slate-200 pb-1 pt-3 text-slate-600 dark:border-zinc-700 dark:text-zinc-300"
-              style={navStyle}
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 14l6-6 6 6" />
-              </svg>
-              {t('menu_collapse')}
-            </button>
+            <div className="mt-2 flex justify-center border-t border-slate-200 pt-3 dark:border-zinc-700">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label={t('menu_collapse')}
+                className="inline-flex items-center justify-center gap-1.5 rounded-full px-5 py-2 text-sm font-medium"
+                style={{
+                  backgroundColor: 'var(--theme-body-bg)',
+                  color: 'var(--theme-header-text)',
+                  boxShadow: 'inset 0 0 0 1px var(--theme-surface-border)',
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 14l6-6 6 6" />
+                </svg>
+                {t('menu_collapse')}
+              </button>
+            </div>
           </div>
         </div>
       )}

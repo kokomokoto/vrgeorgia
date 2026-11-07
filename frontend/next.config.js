@@ -2,6 +2,7 @@
 const HTML_LIMITED_BOTS =
   /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Facebot|Messenger|meta-external|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|TelegramBot|SkypeUriPreview|Viber|Pinterestbot|Yeti|googleweblight|GPTBot|ChatGPT-User|ClaudeBot|PerplexityBot|Bytespider|CCBot|Amazonbot|Google-Extended/i;
 
+const path = require('path');
 const webpack = require('webpack');
 
 /** @type {import('next').NextConfig} */
@@ -24,8 +25,11 @@ const nextConfig = {
     '*.loca.lt',
   ],
   transpilePackages: ['@photo-sphere-viewer/core'],
-  // Production-ზე standalone output Render.com-ისთვის
+  // Production-ზე standalone output Render.com-ისთვის.
+  // Root package-lock.json must not become the tracing root: that nests
+  // server.js under .next/standalone/frontend and Render cannot start it.
   output: 'standalone',
+  outputFileTracingRoot: path.join(__dirname),
   // სურათების დომენი
   images: {
     remotePatterns: [

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_BASE } from '@/lib/config';
 
@@ -70,21 +70,21 @@ type AppInstallRow = {
   createdAt: string;
 };
 
-// ──── Helper: ბარი პროცენტულად ────
-function Bar({ value, max, color = 'bg-blue-500' }: { value: number; max: number; color?: string }) {
-  const pct = max > 0 ? (value / max) * 100 : 0;
+function Meter({ value, max, color = 'bg-sky-500' }: { value: number; max: number; color?: string }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   return (
-    <div className="w-full bg-slate-700 rounded-full h-2.5">
-      <div className={`${color} h-2.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+      <div className={`${color} h-full rounded-full`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
 
 // ──── Helper: Device icon ────
-function deviceIcon(d: string) {
-  if (d === 'mobile') return '📱';
-  if (d === 'tablet') return '📟';
-  return '🖥️';
+function deviceLabel(d: string) {
+  if (d === 'mobile') return 'მობილური';
+  if (d === 'tablet') return 'ტაბლეტი';
+  if (d === 'desktop') return 'კომპიუტერი';
+  return d || '—';
 }
 
 function countryFlag(code: string) {
@@ -182,57 +182,51 @@ export default function AnalyticsDashboard() {
 
   const maxStat = (arr: { count: number }[]) => Math.max(...arr.map(a => a.count), 1);
 
-  return (
-    <div className="min-h-screen bg-slate-900 text-white">
-      {/* Header */}
-      <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">📊</span>
-            <h1 className="text-lg font-bold">VR Georgia Analytics</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-400">👤 {analystName}</span>
-            <button onClick={logout} className="text-sm text-red-400 hover:text-red-300">გასვლა</button>
-          </div>
-        </div>
-      </header>
+  const tabs = [
+    ['overview', 'მიმოხილვა'],
+    ['visits', 'ვიზიტები'],
+    ['installs', 'დაყენებები'],
+    ['realtime', 'ახლა'],
+  ] as const;
 
-      {/* Tabs */}
-      <div className="max-w-7xl mx-auto px-4 pt-4">
-        <div className="flex gap-1 bg-slate-800 rounded-lg p-1 w-fit">
-          {([
-            ['overview', '📈 მიმოხილვა'],
-            ['visits', '👁️ ვიზიტები'],
-            ['installs', '📲 დაყენებები'],
-            ['realtime', '⚡ რეალ-ტაიმ'],
-          ] as const).map(([id, label]) => (
+  return (
+    <div className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3">
+          <h1 className="min-w-0 truncate text-base font-semibold">ანალიტიკა</h1>
+          {analystName ? (
+            <span className="ml-auto hidden min-w-0 max-w-[40%] truncate text-sm text-slate-400 sm:block">{analystName}</span>
+          ) : <span className="ml-auto" />}
+          <button type="button" onClick={logout} className="shrink-0 text-sm text-rose-300 hover:text-rose-200">გასვლა</button>
+        </div>
+        <nav className="mx-auto flex w-full max-w-6xl gap-1 overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="ანალიტიკის განყოფილებები">
+          {tabs.map(([id, label]) => (
             <button
               key={id}
+              type="button"
               onClick={() => setTab(id)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition ${
-                tab === id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+              className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium ${
+                tab === id ? 'bg-sky-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-100'
               }`}
             >
               {label}
             </button>
           ))}
-        </div>
-      </div>
+        </nav>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="mx-auto w-full max-w-6xl px-4 py-5">
         {error && <div className="mb-4 p-3 bg-red-500/20 rounded-lg text-red-300 text-sm">{error}</div>}
 
-        {/* ═══ OVERVIEW TAB ═══ */}
         {tab === 'overview' && (
           <>
-            {/* Period selector */}
-            <div className="flex gap-2 mb-6">
+            <div className="mb-5 flex flex-wrap gap-2">
               {[{ k: '1d', l: 'დღეს' }, { k: '7d', l: '7 დღე' }, { k: '30d', l: '30 დღე' }, { k: '90d', l: '90 დღე' }].map(p => (
                 <button
                   key={p.k}
+                  type="button"
                   onClick={() => setPeriod(p.k)}
-                  className={`px-3 py-1.5 rounded-md text-sm ${period === p.k ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-sm ${period === p.k ? 'bg-sky-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}
                 >
                   {p.l}
                 </button>
@@ -240,217 +234,117 @@ export default function AnalyticsDashboard() {
             </div>
 
             {loading ? (
-              <div className="text-center py-20 text-slate-400">⏳ იტვირთება...</div>
+              <p className="py-20 text-center text-sm text-slate-400">იტვირთება...</p>
             ) : data ? (
               <>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                  <Card title="ნახვები" value={data.totalViews} icon="👁️" />
-                  <Card title="უნიკალური" value={data.uniqueSessions} icon="👤" />
-                  <Card title="გვერდები" value={data.pageStats.length} icon="📄" />
-                  <Card title="ქვეყნები" value={data.countryStats.length} icon="🌍" />
+                <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <Kpi title="ნახვები" value={data.totalViews} />
+                  <Kpi title="უნიკალური" value={data.uniqueSessions} />
+                  <Kpi title="გვერდები" value={data.pageStats.length} />
+                  <Kpi title="ქვეყნები" value={data.countryStats.length} />
                 </div>
 
-                {/* Daily chart */}
-                {data.dailyStats.length > 0 && (
-                  <div className="bg-slate-800 rounded-xl p-5 mb-6">
-                    <h3 className="text-sm font-semibold text-slate-300 mb-4">📅 დღეების მიხედვით</h3>
-                    <div className="flex items-end gap-1 h-32">
-                      {data.dailyStats.map(d => {
-                        const maxV = maxStat(data.dailyStats);
-                        const h = (d.count / maxV) * 100;
-                        return (
-                          <div key={d._id} className="flex-1 flex flex-col items-center gap-1">
-                            <span className="text-[10px] text-slate-400">{d.count}</span>
-                            <div className="w-full bg-blue-500 rounded-t" style={{ height: `${h}%`, minHeight: '2px' }} />
-                            <span className="text-[9px] text-slate-500 truncate w-full text-center">{d._id.slice(5)}</span>
-                          </div>
-                        );
-                      })}
+                <Panel title="დღეების მიხედვით">
+                  {data.dailyStats.length === 0 ? <Empty /> : (
+                    <div className="max-w-full overflow-x-auto">
+                      <div className="flex h-44 min-w-full items-end gap-1.5" style={{ minWidth: data.dailyStats.length * 40 }}>
+                        {data.dailyStats.map(d => {
+                          const maxV = maxStat(data.dailyStats);
+                          const h = maxV > 0 ? (d.count / maxV) * 100 : 0;
+                          return (
+                            <div key={d._id} className="flex h-full min-w-9 flex-1 flex-col items-center" title={`${d._id}: ${d.count} ნახვა`}>
+                              <span className="text-[11px] tabular-nums text-slate-400">{d.count}</span>
+                              <div className="flex w-full flex-1 items-end">
+                                <div className="w-full rounded-t bg-sky-500" style={{ height: `${Math.max(h, d.count > 0 ? 6 : 0)}%` }} />
+                              </div>
+                              <span className="mt-1 whitespace-nowrap text-[11px] text-slate-500">{d._id.slice(5)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </Panel>
 
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Devices */}
-                  <StatCard title="🖥️ მოწყობილობები" items={data.deviceStats.map(d => ({
-                    label: `${deviceIcon(d._id)} ${d._id}`, count: d.count
-                  }))} max={maxStat(data.deviceStats)} />
-
-                  {/* Browsers */}
-                  <StatCard title="🌐 ბრაუზერები" items={data.browserStats.map(d => ({
-                    label: d._id, count: d.count
-                  }))} max={maxStat(data.browserStats)} />
-
-                  {/* OS */}
-                  <StatCard title="💻 ოპერაციული სისტემა" items={data.osStats.map(d => ({
-                    label: d._id, count: d.count
-                  }))} max={maxStat(data.osStats)} />
-
-                  {/* Countries */}
-                  <StatCard title="🌍 ქვეყნები" items={data.countryStats.map(d => ({
-                    label: `${countryFlag(d.code)} ${d._id}`, count: d.count
-                  }))} max={maxStat(data.countryStats)} />
-
-                  {/* Cities */}
-                  <StatCard title="🏙️ ქალაქები" items={data.cityStats.map(d => ({
-                    label: `${d._id} (${d.country})`, count: d.count
-                  }))} max={maxStat(data.cityStats)} />
-
-                  {/* Screens */}
-                  <StatCard title="📐 ეკრანის გაფართოება" items={data.screenStats.map(d => ({
-                    label: `${d._id.w}×${d._id.h}`, count: d.count
-                  }))} max={maxStat(data.screenStats)} />
-
-                  {/* Connection */}
-                  <StatCard title="📶 კავშირის ტიპი" items={data.connectionStats.map(d => ({
-                    label: d._id, count: d.count
-                  }))} max={maxStat(data.connectionStats)} />
-
-                  {/* Languages */}
-                  <StatCard title="🗣️ ენები" items={data.languageStats.map(d => ({
-                    label: d._id, count: d.count
-                  }))} max={maxStat(data.languageStats)} />
-
-                  {/* Hourly */}
-                  <div className="bg-slate-800 rounded-xl p-5">
-                    <h3 className="text-sm font-semibold text-slate-300 mb-3">🕐 საათების მიხედვით</h3>
-                    <div className="flex items-end gap-[2px] h-24">
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <MetricList title="მოწყობილობები" items={data.deviceStats.map(d => ({ label: deviceLabel(d._id), count: d.count }))} />
+                  <MetricList title="ბრაუზერები" items={data.browserStats.map(d => ({ label: d._id || '—', count: d.count }))} />
+                  <MetricList title="ოპერაციული სისტემა" items={data.osStats.map(d => ({ label: d._id || '—', count: d.count }))} />
+                  <MetricList title="ქვეყნები" items={data.countryStats.map(d => ({ label: `${countryFlag(d.code)} ${d._id || '—'}`, count: d.count }))} />
+                  <MetricList title="ქალაქები" items={data.cityStats.map(d => ({ label: d.country ? `${d._id} (${d.country})` : (d._id || '—'), count: d.count }))} />
+                  <MetricList title="ეკრანის გაფართოება" items={data.screenStats.map(d => ({ label: `${d._id?.w || 0}×${d._id?.h || 0}`, count: d.count }))} />
+                  <MetricList title="კავშირის ტიპი" items={data.connectionStats.map(d => ({ label: d._id || '—', count: d.count }))} />
+                  <MetricList title="ენები" items={data.languageStats.map(d => ({ label: d._id || '—', count: d.count }))} />
+                  <Panel title="საათების მიხედვით">
+                    <div className="flex h-28 items-end gap-px">
                       {Array.from({ length: 24 }, (_, i) => {
                         const found = data.hourlyStats.find(h => h._id === i);
                         const c = found?.count || 0;
                         const max = maxStat(data.hourlyStats);
                         const h = max > 0 ? (c / max) * 100 : 0;
                         return (
-                          <div key={i} className="flex-1 flex flex-col items-center justify-end" title={`${i}:00 — ${c} ნახვა`}>
-                            <div className="w-full bg-emerald-500 rounded-t" style={{ height: `${h}%`, minHeight: c > 0 ? '2px' : '0' }} />
+                          <div key={i} className="flex h-full min-w-0 flex-1 items-end" title={`${i}:00 — ${c} ნახვა`}>
+                            <div className="w-full rounded-t bg-emerald-500" style={{ height: `${Math.max(h, c > 0 ? 8 : 0)}%` }} />
                           </div>
                         );
                       })}
                     </div>
-                    <div className="flex justify-between mt-1">
-                      <span className="text-[9px] text-slate-500">0:00</span>
-                      <span className="text-[9px] text-slate-500">12:00</span>
-                      <span className="text-[9px] text-slate-500">23:00</span>
+                    <div className="mt-2 flex justify-between text-[11px] text-slate-500">
+                      <span>0:00</span>
+                      <span>12:00</span>
+                      <span>23:00</span>
                     </div>
-                  </div>
+                  </Panel>
                 </div>
 
-                {/* Pages */}
-                <div className="bg-slate-800 rounded-xl p-5 mt-6">
-                  <h3 className="text-sm font-semibold text-slate-300 mb-3">📄 პოპულარული გვერდები</h3>
-                  <div className="space-y-2">
-                    {data.pageStats.slice(0, 20).map(p => (
-                      <div key={p._id} className="flex items-center gap-3 text-sm">
-                        <span className="text-slate-400 w-12 text-right flex-shrink-0">{p.count}</span>
-                        <Bar value={p.count} max={maxStat(data.pageStats)} color="bg-purple-500" />
-                        <span className="text-slate-300 truncate flex-1">{p._id}</span>
-                        {p.avgDuration > 0 && (
-                          <span className="text-slate-500 text-xs flex-shrink-0">{Math.round(p.avgDuration)}წმ</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                <div className="mt-4">
+                  <MetricList
+                    title="პოპულარული გვერდები"
+                    items={data.pageStats.slice(0, 20).map(p => ({
+                      label: p.avgDuration > 0 ? `${p._id} · ${Math.round(p.avgDuration)} წმ` : (p._id || '—'),
+                      count: p.count,
+                    }))}
+                    color="bg-violet-500"
+                  />
                 </div>
 
-                {/* Referrers */}
-                {data.referrerStats.length > 0 && (
-                  <div className="bg-slate-800 rounded-xl p-5 mt-6">
-                    <h3 className="text-sm font-semibold text-slate-300 mb-3">🔗 რეფერერები</h3>
-                    <div className="space-y-2">
-                      {data.referrerStats.map(r => (
-                        <div key={r._id} className="flex items-center gap-3 text-sm">
-                          <span className="text-slate-400 w-12 text-right flex-shrink-0">{r.count}</span>
-                          <Bar value={r.count} max={maxStat(data.referrerStats)} color="bg-amber-500" />
-                          <span className="text-slate-300 truncate flex-1">{r._id}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div className="mt-4">
+                  <MetricList
+                    title="რეფერერები"
+                    items={data.referrerStats.map(r => ({ label: r._id || 'პირდაპირი', count: r.count }))}
+                    color="bg-amber-500"
+                  />
+                </div>
               </>
             ) : null}
           </>
         )}
 
-        {/* ═══ VISITS TAB ═══ */}
         {tab === 'visits' && (
           <>
-            <p className="text-sm text-slate-400 mb-4">სულ: {visitsTotal} ჩანაწერი</p>
+            <p className="mb-4 text-sm text-slate-400">სულ {visitsTotal} ჩანაწერი</p>
             {loading ? (
-              <div className="text-center py-20 text-slate-400">⏳ იტვირთება...</div>
+              <p className="py-20 text-center text-sm text-slate-400">იტვირთება...</p>
+            ) : visits.length === 0 ? (
+              <Empty note="ჯერ არც ერთი ვიზიტი არ ჩაწერილა." />
             ) : (
               <>
                 <div className="space-y-2">
                   {visits.map(v => (
-                    <div key={v._id} className="bg-slate-800 rounded-xl overflow-hidden">
-                      <button
-                        onClick={() => setExpandedVisit(expandedVisit === v._id ? null : v._id)}
-                        className="w-full p-4 text-left hover:bg-slate-750 transition flex items-center gap-3"
-                      >
-                        <span className="text-xl">{deviceIcon(v.device)}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium text-slate-200 truncate">{v.path}</span>
-                            {v.countryCode && <span className="text-xs">{countryFlag(v.countryCode)}</span>}
-                            <span className="text-xs text-slate-500">{v.city}</span>
-                          </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                            <span>{v.browser}{v.browserVersion ? ` ${v.browserVersion.split('.')[0]}` : ''}</span>
-                            <span>{v.os}</span>
-                            <span>{v.ip}</span>
-                            <span>{new Date(v.createdAt).toLocaleString('ka-GE')}</span>
-                          </div>
-                        </div>
-                        <span className="text-slate-500">{expandedVisit === v._id ? '▲' : '▼'}</span>
-                      </button>
-                      
-                      {expandedVisit === v._id && (
-                        <div className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs border-t border-slate-700 pt-3">
-                          <Detail label="IP" value={v.ip} />
-                          <Detail label="ქვეყანა" value={`${countryFlag(v.countryCode)} ${v.country}`} />
-                          <Detail label="ქალაქი" value={v.city} />
-                          <Detail label="რეგიონი" value={v.region} />
-                          <Detail label="მოწყობილობა" value={`${deviceIcon(v.device)} ${v.device}`} />
-                          <Detail label="ბრაუზერი" value={`${v.browser} ${v.browserVersion || ''}`} />
-                          <Detail label="OS" value={v.os} />
-                          <Detail label="პლატფორმა" value={v.platform} />
-                          <Detail label="ეკრანი" value={v.screenWidth ? `${v.screenWidth}×${v.screenHeight}` : '—'} />
-                          <Detail label="Viewport" value={v.viewportWidth ? `${v.viewportWidth}×${v.viewportHeight}` : '—'} />
-                          <Detail label="ბატარეა" value={v.batteryLevel !== null ? `${v.batteryLevel}%${v.batteryCharging ? ' ⚡' : ''}` : '—'} />
-                          <Detail label="კავშირი" value={v.connectionType || '—'} />
-                          <Detail label="ენა" value={v.language || '—'} />
-                          <Detail label="დროის ზონა" value={v.timezone || '—'} />
-                          <Detail label="მეხსიერება" value={v.deviceMemory ? `${v.deviceMemory} GB` : '—'} />
-                          <Detail label="CPU Cores" value={v.hardwareConcurrency ? `${v.hardwareConcurrency}` : '—'} />
-                          <Detail label="დაყოვნება" value={v.duration > 0 ? `${v.duration} წმ` : '—'} />
-                          <Detail label="რეფერერი" value={v.referrer || 'პირდაპირი'} />
-                          <Detail label="Session" value={v.sessionId?.slice(0, 15) || '—'} />
-                          <Detail label="დრო" value={new Date(v.createdAt).toLocaleString('ka-GE')} />
-                        </div>
-                      )}
-                    </div>
+                    <VisitCard
+                      key={v._id}
+                      visit={v}
+                      open={expandedVisit === v._id}
+                      onToggle={() => setExpandedVisit(expandedVisit === v._id ? null : v._id)}
+                    />
                   ))}
                 </div>
-
-                {/* Pagination */}
-                <div className="flex items-center justify-center gap-3 mt-6">
-                  <button
-                    onClick={() => setVisitsPage(p => Math.max(1, p - 1))}
-                    disabled={visitsPage <= 1}
-                    className="px-4 py-2 bg-slate-800 rounded-lg text-sm disabled:opacity-40"
-                  >
-                    ← წინა
-                  </button>
-                  <span className="text-sm text-slate-400">გვერდი {visitsPage} / {Math.ceil(visitsTotal / 30) || 1}</span>
-                  <button
-                    onClick={() => setVisitsPage(p => p + 1)}
-                    disabled={visitsPage >= Math.ceil(visitsTotal / 30)}
-                    className="px-4 py-2 bg-slate-800 rounded-lg text-sm disabled:opacity-40"
-                  >
-                    შემდეგი →
-                  </button>
-                </div>
+                <Pager
+                  page={visitsPage}
+                  pages={Math.ceil(visitsTotal / 30) || 1}
+                  onPrev={() => setVisitsPage(p => Math.max(1, p - 1))}
+                  onNext={() => setVisitsPage(p => p + 1)}
+                />
               </>
             )}
           </>
@@ -458,18 +352,37 @@ export default function AnalyticsDashboard() {
 
         {tab === 'installs' && (
           <>
-            <p className="text-sm text-slate-400 mb-4">
-              სულ დაყენება: {installsTotal}. iPhone ამ სიაში ვერ ხვდება — Safari დაყენებას არ აგზავნის.
+            <p className="mb-4 text-sm leading-5 text-slate-400">
+              სულ {installsTotal} დაყენება. iPhone ამ სიაში არ ჩანს, რადგან Safari დაყენებას არ აგზავნის.
             </p>
             {loading ? (
-              <div className="text-center py-20 text-slate-400">⏳ იტვირთება...</div>
+              <p className="py-20 text-center text-sm text-slate-400">იტვირთება...</p>
             ) : installs.length === 0 ? (
-              <div className="text-center py-20 text-slate-400">ჯერ არც ერთი დაყენება არ ჩაწერილა.</div>
+              <Empty note="ჯერ არც ერთი დაყენება არ ჩაწერილა." />
             ) : (
               <>
-                <div className="overflow-x-auto rounded-xl border border-slate-700">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-800 text-xs text-slate-400">
+                <ul className="space-y-2 md:hidden">
+                  {installs.map((row) => (
+                    <li key={row._id} className="min-w-0 rounded-xl border border-slate-800 bg-slate-900 p-3">
+                      <p className="text-sm font-medium text-slate-100">{new Date(row.createdAt).toLocaleString('ka-GE')}</p>
+                      <dl className="mt-2 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-y-1 text-sm">
+                        <dt className="text-slate-500">IP</dt>
+                        <dd className="break-all text-slate-200">{row.ip || '—'}</dd>
+                        <dt className="text-slate-500">ქალაქი</dt>
+                        <dd className="min-w-0 break-words text-slate-200">{countryFlag(row.countryCode)} {row.city || row.country || '—'}</dd>
+                        <dt className="text-slate-500">მოწყობილობა</dt>
+                        <dd className="break-words text-slate-200">{row.os || deviceLabel(row.device)}</dd>
+                        <dt className="text-slate-500">ბრაუზერი</dt>
+                        <dd className="break-words text-slate-200">{row.browser || '—'}</dd>
+                        <dt className="text-slate-500">ანგარიში</dt>
+                        <dd className="break-all text-slate-300">{row.userId ? String(row.userId) : 'სტუმარი'}</dd>
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
+                <div className="hidden max-w-full overflow-x-auto rounded-xl border border-slate-800 md:block">
+                  <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                    <thead className="sticky top-0 bg-slate-900 text-xs text-slate-400">
                       <tr>
                         <th className="px-3 py-2 font-medium">დრო</th>
                         <th className="px-3 py-2 font-medium">IP</th>
@@ -481,61 +394,48 @@ export default function AnalyticsDashboard() {
                     </thead>
                     <tbody>
                       {installs.map((row) => (
-                        <tr key={row._id} className="border-t border-slate-700">
-                          <td className="px-3 py-2 text-slate-300 whitespace-nowrap">{new Date(row.createdAt).toLocaleString('ka-GE')}</td>
+                        <tr key={row._id} className="border-t border-slate-800">
+                          <td className="whitespace-nowrap px-3 py-2 text-slate-300">{new Date(row.createdAt).toLocaleString('ka-GE')}</td>
                           <td className="px-3 py-2 text-slate-200">{row.ip || '—'}</td>
                           <td className="px-3 py-2 text-slate-300">{countryFlag(row.countryCode)} {row.city || row.country || '—'}</td>
-                          <td className="px-3 py-2 text-slate-300">{row.os || row.device || '—'}</td>
+                          <td className="px-3 py-2 text-slate-300">{row.os || deviceLabel(row.device)}</td>
                           <td className="px-3 py-2 text-slate-300">{row.browser || '—'}</td>
-                          <td className="px-3 py-2 text-slate-400">{row.userId ? String(row.userId) : 'სტუმარი'}</td>
+                          <td className="max-w-[12rem] truncate px-3 py-2 text-slate-400" title={row.userId ? String(row.userId) : 'სტუმარი'}>{row.userId ? String(row.userId) : 'სტუმარი'}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <div className="flex items-center justify-center gap-3 mt-6">
-                  <button
-                    onClick={() => setInstallsPage((p) => Math.max(1, p - 1))}
-                    disabled={installsPage <= 1}
-                    className="px-4 py-2 bg-slate-800 rounded-lg text-sm disabled:opacity-40"
-                  >
-                    ← წინა
-                  </button>
-                  <span className="text-sm text-slate-400">გვერდი {installsPage} / {Math.ceil(installsTotal / 30) || 1}</span>
-                  <button
-                    onClick={() => setInstallsPage((p) => p + 1)}
-                    disabled={installsPage >= Math.ceil(installsTotal / 30)}
-                    className="px-4 py-2 bg-slate-800 rounded-lg text-sm disabled:opacity-40"
-                  >
-                    შემდეგი →
-                  </button>
-                </div>
+                <Pager
+                  page={installsPage}
+                  pages={Math.ceil(installsTotal / 30) || 1}
+                  onPrev={() => setInstallsPage((p) => Math.max(1, p - 1))}
+                  onNext={() => setInstallsPage((p) => p + 1)}
+                />
               </>
             )}
           </>
         )}
 
-        {/* ═══ REALTIME TAB ═══ */}
         {tab === 'realtime' && (
           <>
-            <div className="bg-emerald-600/20 border border-emerald-500/30 rounded-xl p-6 mb-6 text-center">
-              <div className="text-4xl font-bold text-emerald-400">{realtime?.activeUsers || 0}</div>
-              <div className="text-sm text-emerald-300 mt-1">აქტიური მომხმარებელი (ბოლო 5 წუთი)</div>
-              <div className="text-xs text-slate-500 mt-2">ავტო-განახლება ყოველ 10 წამში</div>
-            </div>
-
-            <div className="space-y-2">
-              {realtime?.recentVisits.map(v => (
-                <div key={v._id} className="bg-slate-800 rounded-lg p-3 flex items-center gap-3 text-sm">
-                  <span className="text-lg">{deviceIcon(v.device)}</span>
-                  <span className="text-slate-300 truncate flex-1">{v.path}</span>
-                  {v.countryCode && <span>{countryFlag(v.countryCode)}</span>}
-                  <span className="text-slate-500 text-xs">{v.city}</span>
-                  <span className="text-slate-500 text-xs">{v.browser}</span>
-                  <span className="text-slate-600 text-xs">{new Date(v.createdAt).toLocaleTimeString('ka-GE')}</span>
-                </div>
-              ))}
-            </div>
+            <section className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-6 text-center">
+              <p className="text-4xl font-semibold tabular-nums text-emerald-300">{realtime?.activeUsers || 0}</p>
+              <p className="mt-1 text-sm text-emerald-200">აქტიური მომხმარებელი ბოლო 5 წუთში</p>
+              <p className="mt-2 text-xs text-slate-500">ახლდება ყოველ 10 წამში</p>
+            </section>
+            {(realtime?.recentVisits.length || 0) === 0 ? <Empty note="ბოლო წუთებში ვიზიტი არ ყოფილა." /> : (
+              <div className="space-y-2">
+                {realtime?.recentVisits.map(v => (
+                  <VisitCard
+                    key={v._id}
+                    visit={v}
+                    open={expandedVisit === v._id}
+                    onToggle={() => setExpandedVisit(expandedVisit === v._id ? null : v._id)}
+                  />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -543,43 +443,116 @@ export default function AnalyticsDashboard() {
   );
 }
 
-// ──── Sub-components ────
-
-function Card({ title, value, icon }: { title: string; value: number; icon: string }) {
+function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="bg-slate-800 rounded-xl p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-2xl">{icon}</span>
-        <span className="text-2xl font-bold text-white">{value.toLocaleString()}</span>
-      </div>
-      <p className="text-xs text-slate-400 mt-2">{title}</p>
-    </div>
+    <section className="min-w-0 rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <h2 className="mb-3 text-sm font-semibold text-slate-200">{title}</h2>
+      {children}
+    </section>
   );
 }
 
-function StatCard({ title, items, max }: { title: string; items: { label: string; count: number }[]; max: number }) {
-  if (!items.length) return null;
+function Kpi({ title, value }: { title: string; value: number }) {
   return (
-    <div className="bg-slate-800 rounded-xl p-5">
-      <h3 className="text-sm font-semibold text-slate-300 mb-3">{title}</h3>
-      <div className="space-y-2">
-        {items.map(item => (
-          <div key={item.label} className="flex items-center gap-2 text-sm">
-            <span className="text-slate-400 w-8 text-right flex-shrink-0 text-xs">{item.count}</span>
-            <Bar value={item.count} max={max} />
-            <span className="text-slate-300 truncate text-xs">{item.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <section className="min-w-0 rounded-xl border border-slate-800 bg-slate-900 p-4">
+      <p className="text-xs text-slate-400">{title}</p>
+      <p className="mt-1 truncate text-2xl font-semibold tabular-nums text-white">{value.toLocaleString('ka-GE')}</p>
+    </section>
+  );
+}
+
+function MetricList({ title, items, color = 'bg-sky-500' }: { title: string; items: { label: string; count: number }[]; color?: string }) {
+  const max = Math.max(...items.map(item => item.count), 1);
+  return (
+    <Panel title={title}>
+      {items.length === 0 ? <Empty /> : (
+        <ul className="space-y-3">
+          {items.map(item => (
+            <li key={item.label} className="min-w-0">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 break-words text-sm text-slate-200" title={item.label}>{item.label}</span>
+                <span className="shrink-0 text-sm tabular-nums text-slate-400">{item.count.toLocaleString('ka-GE')}</span>
+              </div>
+              <div className="mt-1.5">
+                <Meter value={item.count} max={max} color={color} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function Empty({ note = 'მონაცემი არ არის' }: { note?: string }) {
+  return <p className="text-sm text-slate-500">{note}</p>;
+}
+
+function VisitCard({ visit: v, open, onToggle }: { visit: Visit; open: boolean; onToggle: () => void }) {
+  return (
+    <article className="min-w-0 rounded-xl border border-slate-800 bg-slate-900">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-start gap-3 p-4 text-left"
+        aria-expanded={open}
+      >
+        <span className="shrink-0 rounded-md bg-slate-800 px-2 py-1 text-xs text-slate-300">{deviceLabel(v.device)}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block break-all text-sm font-medium text-slate-100">{v.path || '—'}</span>
+          <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
+            <span>{countryFlag(v.countryCode)} {v.city || v.country || '—'}</span>
+            <span>{v.browser || '—'}{v.browserVersion ? ` ${v.browserVersion.split('.')[0]}` : ''}</span>
+            <span>{v.os || '—'}</span>
+            <span className="break-all">{v.ip || '—'}</span>
+            <span>{new Date(v.createdAt).toLocaleString('ka-GE')}</span>
+          </span>
+        </span>
+        <span className="shrink-0 text-xs text-slate-500">{open ? 'დახურვა' : 'მეტი'}</span>
+      </button>
+      {open ? (
+        <div className="grid gap-3 border-t border-slate-800 px-4 py-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Detail label="IP" value={v.ip} />
+          <Detail label="ქვეყანა" value={`${countryFlag(v.countryCode)} ${v.country || '—'}`} />
+          <Detail label="ქალაქი" value={v.city} />
+          <Detail label="რეგიონი" value={v.region} />
+          <Detail label="მოწყობილობა" value={deviceLabel(v.device)} />
+          <Detail label="ბრაუზერი" value={`${v.browser || ''} ${v.browserVersion || ''}`.trim()} />
+          <Detail label="სისტემა" value={v.os} />
+          <Detail label="პლატფორმა" value={v.platform} />
+          <Detail label="ეკრანი" value={v.screenWidth ? `${v.screenWidth}×${v.screenHeight}` : ''} />
+          <Detail label="ხედი" value={v.viewportWidth ? `${v.viewportWidth}×${v.viewportHeight}` : ''} />
+          <Detail label="ბატარეა" value={v.batteryLevel !== null ? `${v.batteryLevel}%${v.batteryCharging ? ' იტენება' : ''}` : ''} />
+          <Detail label="კავშირი" value={v.connectionType} />
+          <Detail label="ენა" value={v.language} />
+          <Detail label="დროის ზონა" value={v.timezone} />
+          <Detail label="მეხსიერება" value={v.deviceMemory ? `${v.deviceMemory} GB` : ''} />
+          <Detail label="ბირთვები" value={v.hardwareConcurrency ? `${v.hardwareConcurrency}` : ''} />
+          <Detail label="დაყოვნება" value={v.duration > 0 ? `${v.duration} წმ` : ''} />
+          <Detail label="რეფერერი" value={v.referrer || 'პირდაპირი'} />
+          <Detail label="სესია" value={v.sessionId} />
+          <Detail label="დრო" value={new Date(v.createdAt).toLocaleString('ka-GE')} />
+        </div>
+      ) : null}
+    </article>
   );
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <span className="text-slate-500">{label}:</span>
-      <span className="text-slate-300 ml-1 break-all">{value}</span>
+    <div className="min-w-0">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="break-words text-sm text-slate-200">{value || '—'}</p>
+    </div>
+  );
+}
+
+function Pager({ page, pages, onPrev, onNext }: { page: number; pages: number; onPrev: () => void; onNext: () => void }) {
+  return (
+    <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+      <button type="button" onClick={onPrev} disabled={page <= 1} className="rounded-lg bg-slate-900 px-4 py-2 text-sm disabled:opacity-40">წინა</button>
+      <span className="text-sm text-slate-400">გვერდი {page} / {pages}</span>
+      <button type="button" onClick={onNext} disabled={page >= pages} className="rounded-lg bg-slate-900 px-4 py-2 text-sm disabled:opacity-40">შემდეგი</button>
     </div>
   );
 }

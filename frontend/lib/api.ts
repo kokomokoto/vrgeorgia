@@ -626,11 +626,12 @@ export async function uploadServicesMediaFile(file: File) {
   form.append('file', file);
   return request<{
     url: string;
+    kind?: 'image' | 'video';
     publicId?: string | null;
   }>('/api/admin/content/services/media', {
     method: 'POST',
     body: form,
-    timeoutMs: 180_000,
+    timeoutMs: 1_800_000,
   });
 }
 

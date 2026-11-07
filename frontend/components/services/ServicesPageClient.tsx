@@ -287,25 +287,12 @@ export function ServicesPageClient() {
   };
 
   return (
-    <div className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-gradient-to-b from-slate-50 via-white to-amber-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.35] dark:opacity-[0.12]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2394a3b8' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }}
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute -left-32 top-20 h-72 w-72 rounded-full bg-amber-300/25 blur-3xl dark:bg-amber-500/10"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute -right-24 top-40 h-64 w-64 rounded-full bg-sky-300/20 blur-3xl dark:bg-sky-500/10"
-        aria-hidden
-      />
-
-      <div className="relative mx-auto max-w-4xl px-4 py-10 md:py-14">
-        <header className="relative mb-8 overflow-hidden rounded-3xl border border-slate-200/80 bg-white/80 p-8 shadow-xl shadow-slate-200/40 backdrop-blur-md dark:border-zinc-700/80 dark:bg-zinc-900/70 dark:shadow-black/40 md:p-10">
+    <div className="w-full py-6 md:py-8">
+      <div className="w-full">
+        <header
+          data-theme-surface
+          className="relative mb-8 overflow-hidden rounded-3xl border p-6 shadow-sm md:p-10"
+        >
           <div className="pointer-events-none absolute -right-16 top-0 h-40 w-40 rounded-full bg-gradient-to-br from-amber-200/60 to-orange-300/40 blur-2xl dark:from-amber-600/20 dark:to-orange-600/10" />
           <div className="relative">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">

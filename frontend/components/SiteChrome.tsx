@@ -49,9 +49,17 @@ function isAdminRoute(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
+function isAnalyticsRoute(pathname: string): boolean {
+  return pathname === '/analytics' || pathname.startsWith('/analytics/');
+}
+
 /** áƒáƒ‘áƒ˜áƒ”áƒ¥áƒ¢áƒ˜áƒ¡ áƒ’áƒ•áƒ”áƒ áƒ“áƒ˜ â€” áƒ˜áƒ’áƒ˜áƒ•áƒ” áƒ™áƒáƒœáƒ¢áƒ”áƒœáƒ¢áƒ˜áƒ¡ áƒ¡áƒ˜áƒ’áƒáƒœáƒ” áƒ áƒáƒª áƒ›áƒ—áƒáƒ•áƒáƒ  áƒ’áƒ•áƒ”áƒ áƒ“áƒ˜áƒ¡ áƒ©áƒáƒ›áƒáƒœáƒáƒ—áƒ•áƒáƒšáƒ¡ */
 function isPropertyRoute(pathname: string): boolean {
   return pathname === '/property' || pathname.startsWith('/property/');
+}
+
+function isServiceRoute(pathname: string): boolean {
+  return pathname === '/services' || pathname.startsWith('/services/');
 }
 
 /** áƒ›áƒ—áƒáƒ•áƒáƒ áƒ˜ áƒ’áƒ•áƒ”áƒ áƒ“áƒ˜áƒ¡ áƒªáƒ”áƒœáƒ¢áƒ áƒ˜áƒ¡ áƒ¡áƒ˜áƒ’áƒáƒœáƒ” (map / typePanel / listings) â€” áƒ’áƒáƒ¡áƒ¬áƒáƒ áƒ”áƒ‘áƒ˜áƒ¡ áƒ©áƒáƒ áƒ©áƒ */
@@ -75,35 +83,37 @@ function SiteMain({
   adminPanel,
   homePage,
   propertyPage,
+  servicePage,
 }: {
   children: React.ReactNode;
   adminPanel: boolean;
   homePage: boolean;
   propertyPage: boolean;
+  servicePage: boolean;
 }) {
   const centerMaxPx = useHomeCenterWidthPx();
   const listingsMaxPx = useHomeListingsWidthPx();
 
   if (adminPanel) {
     return (
-      <main className="relative z-0 w-full min-h-[50vh] flex-1 p-0">{children}</main>
+      <main className="relative z-0 w-full min-h-[50vh] flex-1 overflow-x-clip p-0">{children}</main>
     );
   }
 
   if (homePage) {
     return (
-      <main className="relative z-0 w-full min-h-[50vh] flex-1 overflow-x-hidden p-0">
+      <main className="relative z-0 w-full min-h-[50vh] flex-1 overflow-x-clip p-0">
         {children}
       </main>
     );
   }
 
-  if (propertyPage) {
+  if (propertyPage || servicePage) {
     // áƒ˜áƒ’áƒ˜áƒ•áƒ” áƒ©áƒáƒ áƒ©áƒ áƒ áƒáƒª áƒ›áƒ—áƒáƒ•áƒáƒ áƒ˜áƒ¡ data-design-center + listings:
     // áƒªáƒ”áƒœáƒ¢áƒ áƒ˜ (áƒ›áƒáƒ’. 1296) mx-auto, áƒ¨áƒ˜áƒ’áƒœáƒ˜áƒ— áƒ©áƒáƒ›áƒáƒœáƒáƒ—áƒ•áƒáƒšáƒ˜áƒ¡ áƒ¡áƒ˜áƒ’áƒáƒœáƒ” (1280) áƒ›áƒáƒ áƒªáƒ®áƒœáƒ˜áƒ“áƒáƒœ â€”
     // áƒ›áƒáƒ áƒ¯áƒ•áƒ”áƒœáƒ áƒ™áƒ˜áƒ“áƒ” áƒ”áƒ›áƒ—áƒ®áƒ•áƒ”áƒ•áƒ áƒ°áƒáƒ£áƒ›áƒ˜áƒ¡ áƒ¥áƒáƒ áƒ“áƒ”áƒ‘áƒ¡ / KA-áƒ¡.
     return (
-      <main className="relative z-0 w-full min-h-[50vh] flex-1 px-3 py-4 sm:px-0 sm:py-6">
+      <main className="relative z-0 w-full min-h-[50vh] flex-1 overflow-x-clip px-3 py-4 sm:px-0 sm:py-6">
         <div
           className="relative mx-auto w-full max-w-[var(--site-center-w)]"
           style={{ '--site-center-w': `${centerMaxPx}px` } as React.CSSProperties}
@@ -119,7 +129,7 @@ function SiteMain({
     );
   }
   return (
-    <main className="relative z-0 mx-auto w-full min-h-[50vh] max-w-7xl flex-1 px-2 py-4 sm:px-4 sm:py-6">
+    <main className="relative z-0 mx-auto w-full min-h-[50vh] max-w-7xl flex-1 overflow-x-clip px-2 py-4 sm:px-4 sm:py-6">
       {children}
     </main>
   );
@@ -135,8 +145,10 @@ export function SiteChrome({
   const pathname = useSitePathname();
   const mapFullscreen = isFullscreenMapRoute(pathname);
   const adminPanel = isAdminRoute(pathname);
+  const barePanel = adminPanel || isAnalyticsRoute(pathname);
   const homePage = pathname === '/';
   const propertyPage = isPropertyRoute(pathname);
+  const servicePage = isServiceRoute(pathname);
 
   if (mapFullscreen) {
     return (
@@ -150,11 +162,16 @@ export function SiteChrome({
     <HomeDesignProvider initialLayout={initialHomeDesign}>
       <ThemePaletteApplier />
       <DesignBranchBanner />
-      {!adminPanel && <Header />}
-      <SiteMain adminPanel={adminPanel} homePage={homePage} propertyPage={propertyPage}>
+      {!barePanel && <Header />}
+      <SiteMain
+        adminPanel={barePanel}
+        homePage={homePage}
+        propertyPage={propertyPage}
+        servicePage={servicePage}
+      >
         {children}
       </SiteMain>
-      {!adminPanel && <Footer />}
+      {!barePanel && <Footer />}
       {homePage ? <DesignModeTools /> : null}
     </HomeDesignProvider>
   );

@@ -368,6 +368,7 @@ const en = {
     'Vhome is a real-estate listings platform; delivery of these services is agreed directly with qualified professionals.',
   services_back: 'All services',
   services_open_page: 'Open page',
+  services_projects: 'Projects',
   // Mortgage Calculator
   mortgageCalculator: 'Mortgage Calculator',
   propertyPrice: 'Property Price',
@@ -546,6 +547,7 @@ const en = {
   footer_col_contact: 'Contact',
   footer_back_to_top: 'Back to top',
   install_app: 'Install app',
+  menu_collapse: 'Close menu',
   install_app_ios: 'In Safari, tap Share, then Add to Home Screen.',
   install_app_ios_other: 'Open this page in Safari, tap Share, then Add to Home Screen.',
   footer_city_batumi: 'Batumi',

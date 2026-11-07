@@ -93,6 +93,8 @@ export type Property = {
   contact?: { phone?: string; email?: string };
   privateNotes?: string;
   userId?: string | { _id: string; email: string; name?: string; phone?: string; avatar?: string; role?: 'user' | 'agent' | 'admin' | 'agent_admin' };
+  /** მხოლოდ ადმინის სიის პასუხში — გაუხსნელი ბარათის hover. */
+  uploaderName?: string;
   /** Agent პროფილის ID (owner agent-ისთვის) */
   ownerAgentProfileId?: string;
   views?: number;

@@ -36,6 +36,25 @@ const aboutLangSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const serviceProjectMediaSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    kind: { type: String, enum: ['image', 'video'], default: 'image' },
+    url: { type: String, default: '', trim: true },
+  },
+  { _id: false }
+);
+
+const serviceProjectSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    title: localizedStringSchema,
+    body: localizedStringSchema,
+    media: { type: [serviceProjectMediaSchema], default: [] },
+  },
+  { _id: false }
+);
+
 const servicesSectionSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, trim: true },
@@ -47,6 +66,8 @@ const servicesSectionSchema = new mongoose.Schema(
     imageUrl: { type: String, default: '', trim: true },
     title: localizedStringSchema,
     body: localizedStringSchema,
+    /** შესრულებული პროექტები — ფოტო, ვიდეო და აღწერა */
+    projects: { type: [serviceProjectSchema], default: [] },
   },
   { _id: false }
 );

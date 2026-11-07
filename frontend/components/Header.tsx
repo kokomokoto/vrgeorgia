@@ -1469,6 +1469,18 @@ export function Header() {
               </>
             )}
             <InstallAppMenuItem onClose={() => setOpen(false)} />
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label={t('menu_collapse')}
+              className="mt-1 flex w-full items-center justify-center gap-2 border-t border-slate-200 pb-1 pt-3 text-slate-600 dark:border-zinc-700 dark:text-zinc-300"
+              style={navStyle}
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 14l6-6 6 6" />
+              </svg>
+              {t('menu_collapse')}
+            </button>
           </div>
         </div>
       )}

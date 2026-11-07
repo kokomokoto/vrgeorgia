@@ -353,6 +353,7 @@ const ru = {
     'Vhome — платформа объявлений о недвижимости; оказание перечисленных услуг согласуется напрямую с квалифицированными специалистами.',
   services_back: 'Все услуги',
   services_open_page: 'Открыть страницу',
+  services_projects: 'Проекты',
   // Mortgage Calculator
   mortgageCalculator: 'Ипотечный калькулятор',
   propertyPrice: 'Цена недвижимости',
@@ -531,6 +532,7 @@ const ru = {
   footer_col_contact: 'Контакт',
   footer_back_to_top: 'Наверх',
   install_app: 'Установить приложение',
+  menu_collapse: 'Свернуть',
   install_app_ios: 'В Safari нажмите «Поделиться», затем «На экран Домой».',
   install_app_ios_other: 'Откройте страницу в Safari, нажмите «Поделиться», затем «На экран Домой».',
   footer_city_batumi: 'Батуми',

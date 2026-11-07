@@ -110,9 +110,9 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/properties', async (req, res) => {
   try {
     const id = req.params.id;
-    let agent = await Agent.findById(id).select('user').lean().catch(() => null);
+    let agent = await Agent.findById(id).select('user name').lean().catch(() => null);
     if (!agent?.user) {
-      agent = await Agent.findOne({ user: id }).select('user').lean();
+      agent = await Agent.findOne({ user: id }).select('user name').lean();
     }
     if (!agent?.user) {
       return res.status(404).json({ error: 'Agent not found' });
@@ -123,9 +123,9 @@ router.get('/:id/properties', async (req, res) => {
     const limitNum = Math.min(5000, Math.max(1, parseInt(limit, 10) || 200));
     const skip = (pageNum - 1) * limitNum;
 
+    const requestIsAdmin = await isRequestAdmin(req);
     const adminView =
-      (req.query.adminView === '1' || req.query.adminView === 'true') &&
-      (await isRequestAdmin(req));
+      (req.query.adminView === '1' || req.query.adminView === 'true') && requestIsAdmin;
 
     let agentFilter;
     if (adminView) {
@@ -186,6 +186,16 @@ router.get('/:id/properties', async (req, res) => {
       // Admin portfolio view keeps the moderation fields it renders; public view is sanitised.
       return adminView ? stripHiddenCadastral(row) : toPublicProperty(row, { view: 'list' });
     });
+    if (requestIsAdmin) {
+      let name = String(agent.name || '').trim();
+      if (!name) {
+        const owner = await User.findById(agent.user).select('name').lean();
+        name = String(owner?.name || '').trim();
+      }
+      if (name) {
+        for (const row of translated) row.uploaderName = name;
+      }
+    }
 
     const payload = {
       properties: translated,

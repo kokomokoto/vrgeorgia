@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { User } from '../models/User.js';
@@ -1676,6 +1679,7 @@ router.put('/content/services', requireAuth, adminMiddleware, async (req, res) =
     const doc = await ensureServicesContent();
     doc.servicesPage = normalized.page;
     doc.servicesSections = normalized.sections;
+    doc.markModified('servicesSections');
     doc.updatedBy = req.user.id;
     await doc.save();
     await writeAudit(req.user.id, 'update_site_content', 'site_content', 'services', {
@@ -1689,13 +1693,23 @@ router.put('/content/services', requireAuth, adminMiddleware, async (req, res) =
   }
 });
 
+const SERVICE_VIDEO_MIME = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/ogg']);
+const SERVICE_VIDEO_MAX = 300 * 1024 * 1024;
+const SERVICE_IMAGE_MAX = 10 * 1024 * 1024;
+
 const uploadServicesMedia = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  storage: multer.diskStorage({
+    destination: os.tmpdir(),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').replace(/[^.a-z0-9]/gi, '').slice(0, 8);
+      cb(null, `svc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+    },
+  }),
+  limits: { fileSize: SERVICE_VIDEO_MAX, files: 1 },
   fileFilter: (_req, file, cb) => {
-    const mime = String(file.mimetype || '');
-    if (mime.startsWith('image/')) cb(null, true);
-    else cb(new Error('მხოლოდ სურათის ატვირთვაა დაშვებული'));
+    const mime = String(file.mimetype || '').toLowerCase();
+    if (mime.startsWith('image/') || SERVICE_VIDEO_MIME.has(mime)) cb(null, true);
+    else cb(new Error('დასაშვებია სურათი ან ვიდეო (MP4, WebM, MOV)'));
   },
 });
 
@@ -1704,27 +1718,35 @@ router.post('/content/services/media', requireAuth, adminMiddleware, (req, res) 
   uploadServicesMedia.single('file')(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(413).json({ message: 'ფაილი ძალიან დიდია (მაქს. 10 MB)' });
+        return res.status(413).json({ message: 'ფაილი ძალიან დიდია (სურათი 10 MB, ვიდეო 300 MB)' });
       }
       console.error('POST /api/admin/content/services/media multer:', err);
       return res.status(400).json({ message: err.message || 'ფაილის ატვირთვა ვერ მოხერხდა' });
     }
     try {
-      if (!req.file?.buffer) {
+      if (!req.file?.path) {
         return res.status(400).json({ message: 'ფაილი არ არის მიღებული' });
       }
+      const mime = String(req.file.mimetype || '').toLowerCase();
+      const isVideo = SERVICE_VIDEO_MIME.has(mime);
+      const maxBytes = isVideo ? SERVICE_VIDEO_MAX : SERVICE_IMAGE_MAX;
+      if (req.file.size > maxBytes) {
+        return res.status(413).json({
+          message: isVideo ? 'ვიდეო ძალიან დიდია (მაქს. 300 MB)' : 'სურათი ძალიან დიდია (მაქს. 10 MB)',
+        });
+      }
       const result = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
+        cloudinary.uploader.upload(
+          req.file.path,
           {
             folder: 'vrgeorgia/services',
-            resource_type: 'image',
+            resource_type: isVideo ? 'video' : 'image',
           },
           (uploadErr, uploaded) => {
             if (uploadErr) reject(uploadErr);
             else resolve(uploaded);
           }
         );
-        stream.end(req.file.buffer);
       });
 
       const url = result?.secure_url || result?.url;
@@ -1734,6 +1756,7 @@ router.post('/content/services/media', requireAuth, adminMiddleware, (req, res) 
 
       res.json({
         url,
+        kind: isVideo ? 'video' : 'image',
         publicId: result.public_id || null,
       });
     } catch (error) {
@@ -1741,6 +1764,8 @@ router.post('/content/services/media', requireAuth, adminMiddleware, (req, res) 
       res.status(500).json({
         message: error?.message || 'მომსახურების ფოტოს ატვირთვა ვერ მოხერხდა',
       });
+    } finally {
+      if (req.file?.path) fs.promises.unlink(req.file.path).catch(() => {});
     }
   });
 });

@@ -13,6 +13,8 @@ import { PropertyPriceRow } from '@/components/PropertyPriceRow';
 import { PropertySpecChips } from '@/components/PropertySpecChips';
 import { propertyHref } from '@/lib/propertyPublicPath';
 import { useLocalizeHref } from '@/lib/useSitePathname';
+import { useAuth } from '@/components/AuthProvider';
+import { isAdminRole } from '@/lib/userRoles';
 import CompareButton from './CompareButton';
 import FavoriteButton from './FavoriteButton';
 import PinnedListingMark from './PinnedListingMark';
@@ -35,6 +37,7 @@ export function PropertyCard({
 }) {
   const { t, i18n } = useTranslation();
   const localizeHref = useLocalizeHref();
+  const { user } = useAuth();
   const mainPhotoIndex = Math.min(p.mainPhoto ?? 0, Math.max(0, (p.photos?.length ?? 1) - 1));
   const photos = p.photos?.length ? p.photos : [];
   const [activeIndex, setActiveIndex] = React.useState(mainPhotoIndex);
@@ -87,6 +90,7 @@ export function PropertyCard({
   const displayTitle = cleanListingTitle(p.title) || p.title;
   const displayStreet = getPropertyStreetLine(p);
   const displayCity = p.city || '';
+  const uploaderTip = isAdminRole(user?.role) && p.uploaderName ? p.uploaderName : '';
   const listedAt = formatListedDate(p.createdAt, currentLang);
 
   const stopNav = (e: React.MouseEvent) => {
@@ -135,6 +139,7 @@ export function PropertyCard({
   return (
     <div
       data-property-card
+      title={uploaderTip || undefined}
       className="group overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-black/20"
     >
       <Link href={localizeHref(propertyHref(p))} className="block">
@@ -173,6 +178,7 @@ export function PropertyCard({
                     width={400}
                     height={300}
                     alt={i === shownIndex ? [displayTitle, displayStreet, displayCity].filter(Boolean).join(', ') : ''}
+                    title={uploaderTip || undefined}
                     loading={isMain ? (priority ? 'eager' : 'lazy') : undefined}
                     fetchPriority={isMain && priority ? 'high' : 'auto'}
                     decoding="async"
@@ -241,7 +247,7 @@ export function PropertyCard({
             className={`line-clamp-1 break-words font-bold ${
               compactPhoto ? 'text-[15px] leading-[1.3]' : 'text-[15px] leading-snug'
             }`}
-            title={displayTitle}
+            title={uploaderTip || displayTitle}
           >
             {displayTitle}
           </h3>
@@ -252,7 +258,7 @@ export function PropertyCard({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="line-clamp-1 min-w-0 break-words" title={displayStreet || displayCity}>
+              <span className="line-clamp-1 min-w-0 break-words" title={uploaderTip || displayStreet || displayCity}>
                 {displayStreet || displayCity}
               </span>
             </div>

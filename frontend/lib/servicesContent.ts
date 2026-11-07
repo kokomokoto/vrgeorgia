@@ -25,6 +25,22 @@ export const SERVICE_STYLE_KEYS: ServiceStyleKey[] = [
   'consult',
 ];
 
+export type ServiceMediaKind = 'image' | 'video';
+
+export type ServiceProjectMedia = {
+  id: string;
+  kind: ServiceMediaKind;
+  url: string;
+};
+
+/** ერთი შესრულებული სამუშაო ამ მომსახურებაში */
+export type ServiceProject = {
+  id: string;
+  title: LocalizedText;
+  body: LocalizedText;
+  media: ServiceProjectMedia[];
+};
+
 export type ServiceSection = {
   id: string;
   styleKey: ServiceStyleKey;
@@ -35,6 +51,7 @@ export type ServiceSection = {
   imageUrl: string;
   title: LocalizedText;
   body: LocalizedText;
+  projects: ServiceProject[];
   /** რედაქტორის სტაბილური key (slug-ის შეცვლისას ფოკუსი რომ არ დაიკარგოს) */
   editKey?: string;
 };
@@ -92,6 +109,7 @@ export const DEFAULT_SERVICES_CONTENT: ServicesPageContent = {
       featured: true,
       hidden: false,
       imageUrl: '',
+      projects: [],
       title: {
         ka: 'არქიტექტურული პროექტირება',
         en: 'Architectural design',
@@ -109,6 +127,7 @@ export const DEFAULT_SERVICES_CONTENT: ServicesPageContent = {
       featured: false,
       hidden: false,
       imageUrl: '',
+      projects: [],
       title: {
         ka: 'სამშენებლო დოკუმენტაცია და ტექნიკური პროექტი',
         en: 'Construction documentation & technical design',
@@ -126,6 +145,7 @@ export const DEFAULT_SERVICES_CONTENT: ServicesPageContent = {
       featured: false,
       hidden: false,
       imageUrl: '',
+      projects: [],
       title: {
         ka: 'გეგმარება და ტერიტორიის ანალიზი',
         en: 'Planning & site analysis',
@@ -143,6 +163,7 @@ export const DEFAULT_SERVICES_CONTENT: ServicesPageContent = {
       featured: true,
       hidden: false,
       imageUrl: '',
+      projects: [],
       title: {
         ka: 'ინტერიერის დიზაინი',
         en: 'Interior design',
@@ -160,6 +181,7 @@ export const DEFAULT_SERVICES_CONTENT: ServicesPageContent = {
       featured: false,
       hidden: false,
       imageUrl: '',
+      projects: [],
       title: {
         ka: 'ლანდშაფტის არქიტექტურა',
         en: 'Landscape architecture',
@@ -177,6 +199,7 @@ export const DEFAULT_SERVICES_CONTENT: ServicesPageContent = {
       featured: true,
       hidden: false,
       imageUrl: '',
+      projects: [],
       title: {
         ka: 'ვიზუალიზაცია, 3D და ვირტუალური ტური',
         en: 'Visualization, 3D & virtual tours',
@@ -194,6 +217,7 @@ export const DEFAULT_SERVICES_CONTENT: ServicesPageContent = {
       featured: false,
       hidden: false,
       imageUrl: '',
+      projects: [],
       title: {
         ka: 'რეკონსტრუქცია, გაძლიერება და მემკვიდრეობა',
         en: 'Renovation, strengthening & heritage',
@@ -211,6 +235,7 @@ export const DEFAULT_SERVICES_CONTENT: ServicesPageContent = {
       featured: false,
       hidden: false,
       imageUrl: '',
+      projects: [],
       title: {
         ka: 'კონსულტაცია',
         en: 'Consulting',
@@ -249,10 +274,43 @@ export function emptyServiceSection(): ServiceSection {
     featured: false,
     hidden: true,
     imageUrl: '',
+    projects: [],
     title: { ka: '', en: '', ru: '' },
     body: { ka: '', en: '', ru: '' },
     editKey: nextServiceEditKey(),
   };
+}
+
+function normalizeProjects(raw: unknown): ServiceProject[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 40).map((item, index) => {
+    const project = item && typeof item === 'object' ? (item as Partial<ServiceProject>) : {};
+    const mediaIn = Array.isArray(project.media) ? project.media : [];
+    const media = mediaIn.slice(0, 30).flatMap((item, mediaIndex) => {
+      const row = item && typeof item === 'object' ? (item as Partial<ServiceProjectMedia>) : {};
+      const url = String(row.url || '').trim();
+      if (!url) return [];
+      return [{
+        id: String(row.id || `media-${index + 1}-${mediaIndex + 1}`),
+        kind: row.kind === 'video' ? 'video' as const : 'image' as const,
+        url,
+      }];
+    });
+    return {
+      id: String(project.id || `project-${index + 1}`),
+      title: {
+        ka: String(project.title?.ka ?? ''),
+        en: String(project.title?.en ?? ''),
+        ru: String(project.title?.ru ?? ''),
+      },
+      body: {
+        ka: String(project.body?.ka ?? ''),
+        en: String(project.body?.en ?? ''),
+        ru: String(project.body?.ru ?? ''),
+      },
+      media,
+    };
+  });
 }
 
 export function normalizeServiceSection(raw: Partial<ServiceSection> & { id?: string }): ServiceSection {
@@ -272,6 +330,7 @@ export function normalizeServiceSection(raw: Partial<ServiceSection> & { id?: st
       en: String(raw.body?.en ?? ''),
       ru: String(raw.body?.ru ?? ''),
     },
+    projects: normalizeProjects(raw.projects),
   };
   if (raw.editKey) out.editKey = raw.editKey;
   return out;

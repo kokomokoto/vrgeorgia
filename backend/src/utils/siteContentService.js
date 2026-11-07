@@ -35,6 +35,46 @@ function normalizeLocalized(obj = {}) {
   };
 }
 
+function safeHttpsUrl(raw) {
+  const url = String(raw || '').trim().slice(0, 2000);
+  return /^https:\/\//i.test(url) ? url : '';
+}
+
+function normalizeServiceProjects(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const projects = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    let id = slugifyId(item.id, `project-${projects.length + 1}`);
+    if (seen.has(id)) id = `${id}-${projects.length + 1}`;
+    seen.add(id);
+    const mediaSeen = new Set();
+    const media = [];
+    const mediaIn = Array.isArray(item.media) ? item.media : [];
+    for (const row of mediaIn) {
+      const url = safeHttpsUrl(row?.url);
+      if (!url) continue;
+      let mediaId = slugifyId(row?.id, `media-${media.length + 1}`);
+      if (mediaSeen.has(mediaId)) mediaId = `${mediaId}-${media.length + 1}`;
+      mediaSeen.add(mediaId);
+      media.push({
+        id: mediaId,
+        kind: row?.kind === 'video' ? 'video' : 'image',
+        url,
+      });
+      if (media.length >= 30) break;
+    }
+    const title = normalizeLocalized(item.title);
+    const body = normalizeLocalized(item.body);
+    const hasText = [title.ka, title.en, title.ru, body.ka, body.en, body.ru].some((v) => v.trim());
+    if (!hasText && media.length === 0) continue;
+    projects.push({ id, title, body, media });
+    if (projects.length >= 40) break;
+  }
+  return projects;
+}
+
 export function normalizeFaqItems(items) {
   if (!Array.isArray(items)) return [];
   const seen = new Set();
@@ -141,6 +181,7 @@ export function normalizeServicesContent(raw = {}) {
       imageUrl,
       title: normalizeLocalized(item?.title),
       body: normalizeLocalized(item?.body),
+      projects: normalizeServiceProjects(item?.projects),
     };
   });
 

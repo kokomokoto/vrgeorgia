@@ -1,6 +1,6 @@
 import './globals.css';
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { PageTracker } from '@/components/PageTracker';
 import { SiteChrome } from '@/components/SiteChrome';
 import { SiteAnalytics } from '@/components/SiteAnalytics';
@@ -12,6 +12,13 @@ import { getRequestLang, getRequestNonce, loadLocaleBundleServer } from '@/lib/s
 import { SITE_META } from '@/lib/seoI18n';
 import { localizePath, ogLocale, SITE_LANGS } from '@/lib/siteLang';
 import { Providers } from './providers';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  minimumScale: 1,
+  userScalable: true,
+};
 
 const siteUrl = getSiteUrl();
 const noIndex = isNoIndexHost();

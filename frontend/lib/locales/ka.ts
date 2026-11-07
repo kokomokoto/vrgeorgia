@@ -370,6 +370,7 @@ const ka = {
     'Vhome უძრავი ქონების განცხადებების პლატფორმაა; აღნიშნული მომსახურებების მიწოდება ხდება პროფესიონალებთან პირდაპირი შეთანხმებით.',
   services_back: 'ყველა მომსახურება',
   services_open_page: 'გვერდის გახსნა',
+  services_projects: 'პროექტები',
   // Mortgage Calculator
   mortgageCalculator: 'იპოთეკის კალკულატორი',
   propertyPrice: 'უძრავი ქონების ფასი',
@@ -549,6 +550,7 @@ const ka = {
   footer_col_contact: 'კონტაქტი',
   footer_back_to_top: 'ზემოთ',
   install_app: 'აპის დაყენება',
+  menu_collapse: 'აკეცვა',
   install_app_ios: 'Safari-ში დააჭირე გაზიარების ღილაკს, შემდეგ „მთავარ ეკრანზე დამატება“.',
   install_app_ios_other: 'გახსენი ეს გვერდი Safari-ში, დააჭირე გაზიარებას და შემდეგ „მთავარ ეკრანზე დამატება“.',
   footer_city_batumi: 'ბათუმი',

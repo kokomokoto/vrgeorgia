@@ -93,6 +93,30 @@ async function getRequestUserContext(req) {
   }
 }
 
+function ownerUserId(property) {
+  const raw = property?.userId;
+  if (!raw) return '';
+  if (typeof raw === 'object' && raw._id) return String(raw._id);
+  return String(raw);
+}
+
+/** ადმინის სიის hover-ისთვის. საჯარო პასუხში ეს ველი არ შედის. */
+async function attachUploaderNames(rawProperties, publicRows) {
+  const ids = [...new Set(rawProperties.map(ownerUserId).filter(Boolean))];
+  if (!ids.length) return;
+  const [users, agents] = await Promise.all([
+    User.find({ _id: { $in: ids } }).select('name').lean(),
+    Agent.find({ user: { $in: ids } }).select('user name').lean(),
+  ]);
+  const byAgent = new Map(agents.map((a) => [String(a.user), String(a.name || '').trim()]));
+  const byUser = new Map(users.map((u) => [String(u._id), String(u.name || '').trim()]));
+  publicRows.forEach((row, i) => {
+    const id = ownerUserId(rawProperties[i]);
+    const name = (id && (byAgent.get(id) || byUser.get(id))) || '';
+    if (name) row.uploaderName = name;
+  });
+}
+
 /** მფლობელი ან ადმინი — რედაქტირება/ფოტოები/სრული ნახვა */
 async function userCanManageProperty(requestUserId, property) {
   if (!requestUserId) return false;
@@ -1005,10 +1029,11 @@ router.get(
         ])
       : Promise.resolve(null);
 
-    const [properties, total, typeCountRows] = await Promise.all([
+    const [properties, total, typeCountRows, viewer] = await Promise.all([
       findQuery,
       countQuery,
       typeCountsQuery,
+      getRequestUserContext(req),
     ]);
 
     await fillMissingTranslationsForResponse(properties, lang);
@@ -1018,6 +1043,7 @@ router.get(
       const urlKey = buildPropertyUrlKey(p);
       return toPublicProperty({ ...applyTranslation(p, lang), urlKey }, { view: 'list' });
     });
+    if (viewer.isAdmin) await attachUploaderNames(properties, translated);
 
     const payload = {
       properties: translated,
@@ -1062,6 +1088,8 @@ router.get(
       const urlKey = buildPropertyUrlKey(p);
       return toPublicProperty({ ...applyTranslation(p, lang), urlKey }, { view: 'list' });
     });
+    const viewer = await getRequestUserContext(req);
+    if (viewer.isAdmin) await attachUploaderNames(properties, translated);
     res.json({ properties: translated });
   }
 );

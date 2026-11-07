@@ -29,6 +29,11 @@ import {
   ServiceSectionIcon,
   ServiceSectionVisualAccent,
 } from '@/components/services/ServiceSectionVisuals';
+import {
+  ServiceProjectsEditor,
+  ServiceProjectsView,
+  hasVisibleProjects,
+} from '@/components/services/ServiceProjects';
 
 const EDIT_LANGS: { id: ServicesLang; label: string }[] = [
   { id: 'ka', label: 'KA' },
@@ -283,16 +288,8 @@ export function ServiceDetailPageClient() {
   const imageUrl = (editingSection.imageUrl || '').trim();
 
   return (
-    <div className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-gradient-to-b from-slate-50 via-white to-amber-50/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.35] dark:opacity-[0.12]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2394a3b8' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }}
-        aria-hidden
-      />
-
-      <div className="relative mx-auto max-w-3xl px-4 py-10 md:py-14">
+    <div className="w-full py-6 md:py-8">
+      <div className="w-full">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/services"
@@ -362,10 +359,9 @@ export function ServiceDetailPageClient() {
         )}
 
         <article
-          className={`overflow-hidden rounded-3xl border bg-white/90 shadow-xl shadow-slate-200/30 backdrop-blur-sm dark:bg-zinc-900/70 dark:shadow-black/30 ${
-            editingSection.hidden
-              ? 'border-amber-300/80 dark:border-amber-700/60'
-              : 'border-slate-200/90 dark:border-zinc-700/90'
+          data-theme-surface
+          className={`overflow-hidden rounded-3xl border shadow-sm ${
+            editingSection.hidden ? 'ring-2 ring-amber-400' : ''
           }`}
         >
           <div className={`h-2 w-full bg-gradient-to-r ${st.stripe}`} aria-hidden />
@@ -509,6 +505,11 @@ export function ServiceDetailPageClient() {
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
                   />
                 </div>
+                <ServiceProjectsEditor
+                  projects={editingSection.projects || []}
+                  lang={editLang}
+                  onChange={(projects) => updateCurrent({ projects })}
+                />
               </div>
             ) : (
               <>
@@ -537,7 +538,7 @@ export function ServiceDetailPageClient() {
                       )}
                       {section.hidden && isAdmin ? ' · დამალული' : ''}
                     </p>
-                    <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900 dark:text-zinc-50 md:text-4xl">
+                    <h1 className="mt-1 max-w-4xl text-3xl font-bold tracking-tight text-slate-900 dark:text-zinc-50 md:text-4xl">
                       {servicesText(lang, section.title)}
                     </h1>
                     <div
@@ -547,15 +548,17 @@ export function ServiceDetailPageClient() {
                   </div>
                 </div>
 
-                <p className="mt-8 text-base leading-relaxed text-slate-600 dark:text-zinc-300 md:text-lg md:leading-8">
+                <p className="mt-8 max-w-3xl text-base leading-relaxed text-slate-600 dark:text-zinc-300 md:text-lg md:leading-8">
                   {servicesText(lang, section.body)}
                 </p>
 
-                {!imageUrl ? (
+                <ServiceProjectsView projects={section.projects || []} lang={lang} />
+
+                {!imageUrl && !hasVisibleProjects(section.projects || [], lang) ? (
                   <ServiceSectionVisualAccent id={section.styleKey} stripe={st.stripe} />
                 ) : null}
 
-                <p className="mt-8 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm leading-relaxed text-slate-600 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-400">
+                <p className="mt-8 max-w-3xl rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm leading-relaxed text-slate-600 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-400">
                   {servicesText(lang, content.page.footerNote)}
                 </p>
               </>

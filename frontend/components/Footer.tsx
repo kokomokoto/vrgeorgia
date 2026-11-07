@@ -210,7 +210,7 @@ export function Footer() {
     'flex items-center gap-3 rounded-2xl px-2 py-1.5 text-sm font-medium text-slate-100 no-underline transition hover:bg-white/[0.06]';
 
   return (
-    <footer className="relative bg-[#0c1222] text-slate-300">
+    <footer className="relative overflow-x-clip bg-[#0c1222] text-slate-300">
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         <div
           className="absolute -left-24 top-0 h-64 w-64 rounded-full opacity-30 blur-3xl"

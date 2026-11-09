@@ -116,6 +116,9 @@ async function detectRelatedInstall() {
 }
 
 if (typeof window !== 'undefined') {
+  if ('serviceWorker' in navigator) {
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  }
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
     promptEvent = event as BeforeInstallPromptEvent;

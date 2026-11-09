@@ -119,6 +119,7 @@ export async function middleware(request: NextRequest) {
     !prefixLang &&
     cookieLang &&
     cookieLang !== DEFAULT_SITE_LANG &&
+    request.nextUrl.searchParams.get('source') !== 'app' &&
     !isNextRouterRequest(request) &&
     !SOCIAL_CRAWLER_USER_AGENT.test(userAgent) &&
     request.method === 'GET'

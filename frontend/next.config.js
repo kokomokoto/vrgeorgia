@@ -125,7 +125,7 @@ const nextConfig = {
       { source: '/(.*)', headers: common },
       {
         // Long-lived immutable cache for static icons / manifest
-        source: '/(favicon.ico|favicon-16x16.png|favicon-32x32.png|apple-touch-icon.png|android-chrome-192x192.png|android-chrome-512x512.png)',
+        source: '/(favicon.ico|favicon-16x16.png|favicon-32x32.png|apple-touch-icon.png|android-chrome-192x192.png|android-chrome-512x512.png|android-chrome-maskable-512x512.png)',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=86400' }],
       },
       {

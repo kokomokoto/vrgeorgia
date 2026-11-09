@@ -310,8 +310,30 @@ export function districtsOfCity(citySlug: string): LandingDistrict[] {
   return LANDING_DISTRICTS.filter((d) => d.citySlug === citySlug);
 }
 
+type LandingListing = Pick<Property, 'city' | 'type' | 'dealType' | 'tbilisiDistrict' | 'tbilisiSubdistricts'>;
+
+/**
+ * Paths that have at least one public listing: city hub, city × type × deal,
+ * and the district page when the listing maps to one. Empty segments stay out
+ * of the sitemap because those pages are noindex.
+ */
+export function indexableLandingPaths(properties: LandingListing[]): Set<string> {
+  const paths = new Set<string>();
+  for (const property of properties) {
+    const city = LANDING_CITIES.find((c) => c.cityKa === (property.city || '').trim());
+    const type = LANDING_TYPES.find((t) => t.type === property.type);
+    const deal = LANDING_DEALS.find((d) => d.deal === property.dealType);
+    if (!city || !type || !deal) continue;
+    paths.add(cityHubPath(city));
+    paths.add(landingPath(city, type, deal));
+    const href = landingHrefForProperty(property);
+    if (href) paths.add(href);
+  }
+  return paths;
+}
+
 /** Best matching hub for a listing (used by breadcrumbs / "more like this"). */
-export function landingHrefForProperty(p: Pick<Property, 'city' | 'type' | 'dealType' | 'tbilisiDistrict' | 'tbilisiSubdistricts'>): string | null {
+export function landingHrefForProperty(p: LandingListing): string | null {
   const city = LANDING_CITIES.find((c) => c.cityKa === (p.city || '').trim());
   const type = LANDING_TYPES.find((t) => t.type === p.type);
   const deal = LANDING_DEALS.find((d) => d.deal === p.dealType);

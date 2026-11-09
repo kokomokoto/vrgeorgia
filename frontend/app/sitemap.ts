@@ -1,22 +1,28 @@
 import type { MetadataRoute } from 'next';
 import { absoluteListingImageUrl, getPropertyShareImageUrl } from '@/lib/propertyShareMetadata';
 import { seoDuplicateIdsToDrop, type SeoListing } from '@/lib/seoDuplicateCanonical';
-import { allLandingSegments, cityHubPath, LANDING_CITIES, landingPath } from '@/lib/landingPages';
+import { allLandingSegments, cityHubPath, indexableLandingPaths, LANDING_CITIES, landingPath } from '@/lib/landingPages';
 import { getSiteUrl } from '@/lib/siteUrl';
-import { localizePath, SITE_LANGS } from '@/lib/siteLang';
+import { localizePath, SITE_LANGS, type SiteLang } from '@/lib/siteLang';
 import type { Property } from '@/lib/types';
 
+/** Homepage canonical is https://vhome.ge with no trailing slash. */
+function absoluteLocalized(path: string, lang: SiteLang): string {
+  const localized = localizePath(path, lang);
+  if (localized === '/') return getSiteUrl();
+  return `${getSiteUrl()}${localized}`;
+}
+
 function languageAlternates(path: string): NonNullable<MetadataRoute.Sitemap[number]['alternates']> {
-  const site = getSiteUrl();
   const languages: Record<string, string> = {};
   for (const lang of SITE_LANGS) {
-    languages[lang] = `${site}${localizePath(path, lang)}`;
+    languages[lang] = absoluteLocalized(path, lang);
   }
   return { languages };
 }
 
 function localizedUrl(path: string): string {
-  return `${getSiteUrl()}${localizePath(path, 'ka')}`;
+  return absoluteLocalized(path, 'ka');
 }
 
 function apiBase(): string {
@@ -139,33 +145,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     alternates: languageAlternates(r.path),
   }));
 
+  const [listedProperties, agents] = await Promise.all([
+    fetchPublicProperties(),
+    fetchPublicAgents(),
+  ]);
+  const indexablePaths = listedProperties.length ? indexableLandingPaths(listedProperties) : null;
   const landingRoutes: MetadataRoute.Sitemap = [
-    ...LANDING_CITIES.map((city) => {
+    ...LANDING_CITIES.flatMap((city) => {
       const path = cityHubPath(city);
-      return {
+      if (indexablePaths && !indexablePaths.has(path)) return [];
+      return [{
         url: localizedUrl(path),
         lastModified: now,
         changeFrequency: 'daily' as const,
         priority: 0.85,
         alternates: languageAlternates(path),
-      };
+      }];
     }),
-    ...allLandingSegments().map((seg) => {
+    ...allLandingSegments().flatMap((seg) => {
       const path = landingPath(seg.city, seg.type, seg.deal, seg.district);
-      return {
+      if (indexablePaths && !indexablePaths.has(path)) return [];
+      return [{
         url: localizedUrl(path),
         lastModified: now,
         changeFrequency: 'daily' as const,
         priority: seg.district ? 0.7 : 0.8,
         alternates: languageAlternates(path),
-      };
+      }];
     }),
   ];
-
-  const [listedProperties, agents] = await Promise.all([
-    fetchPublicProperties(),
-    fetchPublicAgents(),
-  ]);
   const duplicateIds = seoDuplicateIdsToDrop(listedProperties);
   const properties = listedProperties.filter((p) => !duplicateIds.has(String(p._id)));
 

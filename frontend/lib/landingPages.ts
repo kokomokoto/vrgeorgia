@@ -9,7 +9,7 @@
  * latest listings (real links), unique intro copy and an FAQ — in ka / en / ru.
  */
 
-import type { Property, PropertyType, DealType } from '@/lib/types';
+import type { PropertyType, DealType } from '@/lib/types';
 import { TBILISI_ZONE_KEY_MAP, type TbilisiDistrictGroupKey } from '@/lib/tbilisiOfficialDistricts';
 import type { SiteLang } from '@/lib/siteLang';
 
@@ -310,7 +310,14 @@ export function districtsOfCity(citySlug: string): LandingDistrict[] {
   return LANDING_DISTRICTS.filter((d) => d.citySlug === citySlug);
 }
 
-type LandingListing = Pick<Property, 'city' | 'type' | 'dealType' | 'tbilisiDistrict' | 'tbilisiSubdistricts'>;
+/** Public list rows omit fields and type deal/type as plain strings. */
+type LandingListing = {
+  city?: string;
+  type?: string;
+  dealType?: string;
+  tbilisiDistrict?: string;
+  tbilisiSubdistricts?: string[];
+};
 
 /**
  * Paths that have at least one public listing: city hub, city × type × deal,

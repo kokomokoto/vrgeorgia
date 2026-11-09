@@ -100,19 +100,34 @@ function ownerUserId(property) {
   return String(raw);
 }
 
-/** ადმინის სიის hover-ისთვის. საჯარო პასუხში ეს ველი არ შედის. */
+/** ადმინის სიის hover-ისთვის. საჯარო პასუხში ეს ველი არ შედის. აგენტის სახელი, არა ადმინის ანგარიშის. */
 async function attachUploaderNames(rawProperties, publicRows) {
-  const ids = [...new Set(rawProperties.map(ownerUserId).filter(Boolean))];
-  if (!ids.length) return;
+  const userIds = [...new Set(rawProperties.map(ownerUserId).filter(Boolean))];
+  const agentIds = [...new Set(rawProperties.map((p) => (p?.agentId ? String(p.agentId) : '')).filter(Boolean))];
+  if (!userIds.length && !agentIds.length) return;
+  const agentOr = [];
+  if (agentIds.length) agentOr.push({ _id: { $in: agentIds } });
+  if (userIds.length) agentOr.push({ user: { $in: userIds } });
   const [users, agents] = await Promise.all([
-    User.find({ _id: { $in: ids } }).select('name').lean(),
-    Agent.find({ user: { $in: ids } }).select('user name').lean(),
+    userIds.length ? User.find({ _id: { $in: userIds } }).select('name role').lean() : [],
+    Agent.find({ $or: agentOr }).select('_id user name').lean(),
   ]);
-  const byAgent = new Map(agents.map((a) => [String(a.user), String(a.name || '').trim()]));
-  const byUser = new Map(users.map((u) => [String(u._id), String(u.name || '').trim()]));
+  const byAgentId = new Map();
+  const byAgentUser = new Map();
+  for (const agent of agents) {
+    const name = String(agent.name || '').trim();
+    if (agent._id) byAgentId.set(String(agent._id), name);
+    if (agent.user) byAgentUser.set(String(agent.user), name);
+  }
+  const byUser = new Map(users.map((u) => [String(u._id), u]));
   publicRows.forEach((row, i) => {
-    const id = ownerUserId(rawProperties[i]);
-    const name = (id && (byAgent.get(id) || byUser.get(id))) || '';
+    const property = rawProperties[i];
+    const fromListingAgent = property?.agentId ? byAgentId.get(String(property.agentId)) : '';
+    const id = ownerUserId(property);
+    const fromOwnerAgent = id ? byAgentUser.get(id) : '';
+    const user = id ? byUser.get(id) : null;
+    const userName = user && isAgentRole(user.role) ? String(user.name || '').trim() : '';
+    const name = fromListingAgent || fromOwnerAgent || userName;
     if (name) row.uploaderName = name;
   });
 }

@@ -139,11 +139,11 @@ export function PropertyCard({
   return (
     <div
       data-property-card
-      title={uploaderTip || undefined}
       className="group overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-black/20"
     >
       <Link href={localizeHref(propertyHref(p))} className="block">
         <div
+          title={uploaderTip || undefined}
           className={`relative bg-slate-100 dark:bg-zinc-800 ${
             compactPhoto ? 'aspect-[3/2]' : 'aspect-[4/3]'
           } touch-pan-y`}
@@ -178,7 +178,6 @@ export function PropertyCard({
                     width={400}
                     height={300}
                     alt={i === shownIndex ? [displayTitle, displayStreet, displayCity].filter(Boolean).join(', ') : ''}
-                    title={uploaderTip || undefined}
                     loading={isMain ? (priority ? 'eager' : 'lazy') : undefined}
                     fetchPriority={isMain && priority ? 'high' : 'auto'}
                     decoding="async"
@@ -247,7 +246,7 @@ export function PropertyCard({
             className={`line-clamp-1 break-words font-bold ${
               compactPhoto ? 'text-[15px] leading-[1.3]' : 'text-[15px] leading-snug'
             }`}
-            title={uploaderTip || displayTitle}
+            title={displayTitle}
           >
             {displayTitle}
           </h3>
@@ -258,7 +257,7 @@ export function PropertyCard({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span className="line-clamp-1 min-w-0 break-words" title={uploaderTip || displayStreet || displayCity}>
+              <span className="line-clamp-1 min-w-0 break-words" title={displayStreet || displayCity || undefined}>
                 {displayStreet || displayCity}
               </span>
             </div>

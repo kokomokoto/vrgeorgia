@@ -17,6 +17,8 @@ interface MapInnerProps {
   selectedPropertyId?: string | null;
   /** სიიდან hover — მხოლოდ ანიმაცია, ინფო ფანჯარა არა */
   hoveredPropertyId?: string | null;
+  listFocusId?: string | null;
+  listFocusNonce?: number;
   onPropertyMarkerClick?: (id: string | null) => void;
   richHoverTooltips?: boolean;
   onPropertyNavigate?: (id: string) => void;
@@ -55,6 +57,8 @@ export function MapView({
   markerStyle = 'default',
   selectedPropertyId,
   hoveredPropertyId,
+  listFocusId,
+  listFocusNonce,
   onPropertyMarkerClick,
   richHoverTooltips,
   onPropertyNavigate,
@@ -158,6 +162,8 @@ export function MapView({
         markerStyle={markerStyle}
         selectedPropertyId={selectedPropertyId}
         hoveredPropertyId={hoveredPropertyId}
+        listFocusId={listFocusId}
+        listFocusNonce={listFocusNonce}
         onPropertyMarkerClick={onPropertyMarkerClick}
         richHoverTooltips={richHoverTooltips}
         onPropertyNavigate={onPropertyNavigate}

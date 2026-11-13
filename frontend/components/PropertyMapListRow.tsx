@@ -22,6 +22,7 @@ type Props = {
   highlighted?: boolean;
   onHover?: () => void;
   onHoverEnd?: () => void;
+  onRowClick?: (event: React.MouseEvent<HTMLAnchorElement>) => void;
   rowRef?: React.Ref<HTMLDivElement>;
 };
 
@@ -31,6 +32,7 @@ export function PropertyMapListRow({
   highlighted,
   onHover,
   onHoverEnd,
+  onRowClick,
   rowRef
 }: Props) {
   const { t } = useTranslation();
@@ -60,6 +62,10 @@ export function PropertyMapListRow({
     >
       <Link
         href={propertyHref(p)}
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+          onRowClick?.(event);
+        }}
         className={`flex ${MAP_LIST_ROW_H} items-stretch gap-2 p-1.5 text-left transition-shadow hover:shadow-sm`}
       >
         <div className="relative h-full w-28 shrink-0 overflow-hidden rounded-md bg-slate-100 dark:bg-zinc-800 sm:w-32">

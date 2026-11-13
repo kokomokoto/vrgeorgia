@@ -11,15 +11,13 @@ import { HomeSeoIntro } from '@/components/HomeSeoIntro';
 import { FEATURED_LANDING_PATHS, LANDING_CITIES, cityHubPath } from '@/lib/landingPages';
 import { normalizeSiteLang } from '@/lib/siteLang';
 import { useLocalizeHref } from '@/lib/useSitePathname';
+import { SITE_CONTACT } from '@/lib/siteContact';
 import {
   EMPTY_SITE_SOCIAL_LINKS,
   configuredSiteSocials,
   type SiteSocialNetwork,
 } from '@/lib/siteSocialLinks';
 
-const SITE_PHONE_DISPLAY = '+995 597 046 604';
-const SITE_PHONE_TEL = '+995597046604';
-const SITE_EMAIL = 'virtualhome.ge@gmail.com';
 const SITE_WEB_DISPLAY = 'vhome.ge';
 const SITE_WEB_HREF = 'https://vhome.ge';
 
@@ -148,6 +146,12 @@ function SocialGlyph({ network }: { network: SiteSocialNetwork }) {
   );
 }
 
+/** A click still calls or writes. A drag selects the text instead of dragging the link. */
+function keepClickUnlessSelecting(event: React.MouseEvent<HTMLAnchorElement>) {
+  const selected = window.getSelection()?.toString() ?? '';
+  if (selected.trim()) event.preventDefault();
+}
+
 function ContactIcon({ children }: { children: React.ReactNode }) {
   return (
     <span
@@ -253,23 +257,35 @@ export function Footer() {
               </a>
             </li>
             <li>
-              <a href={`tel:${SITE_PHONE_TEL}`} className={contactLink}>
+              <a
+                href={`tel:${SITE_CONTACT.phoneE164}`}
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
+                onClick={keepClickUnlessSelecting}
+                className={`${contactLink} cursor-text select-text`}
+              >
                 <ContactIcon>
                   <svg className={iconSvg} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
                 </ContactIcon>
-                {SITE_PHONE_DISPLAY}
+                {SITE_CONTACT.phoneDisplay}
               </a>
             </li>
             <li>
-              <a href={`mailto:${SITE_EMAIL}`} className={contactLink}>
+              <a
+                href={`mailto:${SITE_CONTACT.email}`}
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
+                onClick={keepClickUnlessSelecting}
+                className={`${contactLink} cursor-text select-text`}
+              >
                 <ContactIcon>
                   <svg className={iconSvg} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 </ContactIcon>
-                {SITE_EMAIL}
+                {SITE_CONTACT.email}
               </a>
             </li>
           </ul>

@@ -146,6 +146,9 @@ export default function MapSearchClient() {
   const [error, setError] = React.useState<string | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [hoveredId, setHoveredId] = React.useState<string | null>(null);
+  const [listFocus, setListFocus] = React.useState<{ id: string; nonce: number } | null>(null);
+  const selectedIdRef = React.useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
   const [mapBounds, setMapBounds] = React.useState<MapBounds | null>(null);
   const [rangeProperties, setRangeProperties] = React.useState<Property[]>([]);
   const rowRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -166,6 +169,15 @@ export default function MapSearchClient() {
   const handleMarkerClick = React.useCallback((id: string | null) => {
     setSelectedId(id);
     setHoveredId(null);
+  }, []);
+
+  const handleListRowClick = React.useCallback((event: React.MouseEvent<HTMLAnchorElement>, propertyId: string) => {
+    if (selectedIdRef.current === propertyId) return;
+    event.preventDefault();
+    selectedIdRef.current = propertyId;
+    setHoveredId(null);
+    setSelectedId(propertyId);
+    setListFocus((prev) => ({ id: propertyId, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 
   const handlePropertyNavigate = React.useCallback(
@@ -496,6 +508,7 @@ export default function MapSearchClient() {
                       onHoverEnd={() => {
                         setHoveredId((prev) => (prev === p._id ? null : prev));
                       }}
+                      onRowClick={(event) => handleListRowClick(event, p._id)}
                       rowRef={(el) => {
                         rowRefs.current[p._id] = el;
                       }}
@@ -534,6 +547,8 @@ export default function MapSearchClient() {
             properties={properties}
             selectedPropertyId={selectedId}
             hoveredPropertyId={hoveredId}
+            listFocusId={listFocus?.id ?? null}
+            listFocusNonce={listFocus?.nonce ?? 0}
             onPropertyMarkerClick={handleMarkerClick}
             richHoverTooltips
             onPropertyNavigate={handlePropertyNavigate}

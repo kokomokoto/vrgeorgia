@@ -7,7 +7,7 @@ import { configuredSiteSocials, type SiteSocialLinks } from '@/lib/siteSocialLin
 export const SITE_CONTACT = {
   legalName: 'Vhome (Virtual Home Georgia)',
   foundingDate: '2024',
-  email: 'virtualhome.ge@gmail.com',
+  email: 'info@vhome.ge',
   phoneDisplay: '+995 597 046 604',
   phoneE164: '+995597046604',
   city: 'Tbilisi',

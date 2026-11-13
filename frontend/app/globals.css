@@ -775,9 +775,98 @@ svg:not([width]) {
   animation-name: map-marker-list-glow-dark;
 }
 
+.leaflet-container .map-list-beacon-wrap {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+  overflow: visible !important;
+}
+.map-list-beacon {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  overflow: visible;
+  pointer-events: none;
+}
+.map-list-beacon__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  border: 3px solid rgba(245, 158, 11, 0.95);
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.28);
+  animation: map-list-beacon-pulse 1.15s ease-out infinite;
+  box-sizing: border-box;
+}
+.map-list-beacon__ring--2 {
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  border-width: 2px;
+  animation-delay: 0.4s;
+}
+.map-list-beacon__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.45);
+  box-sizing: border-box;
+}
+.dark .map-list-beacon__dot {
+  border-color: #18181b;
+}
+@keyframes map-list-beacon-pulse {
+  0% {
+    transform: scale(0.78);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 0.2;
+  }
+}
+.leaflet-marker-icon.map-cluster-icon--list-target {
+  z-index: 640 !important;
+}
+.leaflet-marker-icon.map-cluster-icon--list-target .map-cluster {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.95), 0 0 0 16px rgba(245, 158, 11, 0.35);
+  transform: scale(1.16);
+}
+
 .map-property-tooltip--pinned,
 .leaflet-popup.map-property-popup {
   z-index: 902 !important;
+}
+
+.leaflet-popup.map-property-popup .leaflet-popup-close-button {
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 22px;
+  text-align: center;
+}
+
+.dark .leaflet-popup.map-property-popup .leaflet-popup-close-button {
+  background: rgba(24, 24, 27, 0.94);
+  color: #f4f4f5;
 }
 
 .leaflet-popup.map-property-popup .leaflet-popup-content-wrapper {

@@ -19,6 +19,7 @@ import {
 import { propertyHref } from '@/lib/propertyPublicPath';
 
 const MAP_BASEMAP_CLASSES = ['map-basemap--dark', 'map-basemap--positron'] as const;
+const PROPERTY_MARKER_ZOOM = 16;
 
 function applyMapBasemapClass(el: HTMLElement | null, paneClass: 'dark' | 'positron' | null) {
   if (!el) return;
@@ -103,20 +104,10 @@ const PINNED_POPUP_OPTIONS = {
   minWidth: 200,
   autoClose: false,
   closeOnClick: false,
+  autoPan: false,
+  keepInView: false,
   className: 'map-property-popup map-property-tooltip'
 };
-
-function openPinnedPropertyPopup(marker: any, prop: Property) {
-  const html = buildHoverTooltipHtml(prop);
-  const popup = marker.getPopup?.();
-  if (popup) {
-    popup.setContent(html);
-  } else {
-    marker.bindPopup(html, PINNED_POPUP_OPTIONS);
-  }
-  marker.closeTooltip();
-  marker.openPopup();
-}
 
 function closePinnedPropertyPopup(marker: any) {
   marker.closePopup?.();
@@ -162,7 +153,7 @@ function createPropertyClusterGroup(L: LeafletNS) {
     showCoverageOnHover: false,
     spiderfyOnMaxZoom: true,
     zoomToBoundsOnClick: true,
-    disableClusteringAtZoom: 16,
+    disableClusteringAtZoom: PROPERTY_MARKER_ZOOM,
     maxClusterRadius: (zoom: number) => {
       if (zoom <= 7) return 92;
       if (zoom <= 10) return 72;
@@ -196,6 +187,9 @@ interface MapInnerProps {
   selectedPropertyId?: string | null;
   /** სიიდან hover — ანიმაცია, არა tooltip */
   hoveredPropertyId?: string | null;
+  /** სიიდან პირველი დაჭერა — ამ nonce-ზე რუკა ობიექტთან მიახლოვდება */
+  listFocusId?: string | null;
+  listFocusNonce?: number;
   onPropertyMarkerClick?: (id: string | null) => void;
   /** მაუსის მიტანისას: სათაური, ფასი, ფოტო (სრული რუკის ხედი) */
   richHoverTooltips?: boolean;
@@ -222,6 +216,8 @@ export default function MapInner({
   markerStyle = 'default',
   selectedPropertyId = null,
   hoveredPropertyId = null,
+  listFocusId = null,
+  listFocusNonce = 0,
   onPropertyMarkerClick,
   richHoverTooltips = false,
   onPropertyNavigate,
@@ -244,10 +240,64 @@ export default function MapInner({
   const propertyMarkersRef = useRef<Map<string, any>>(new Map());
   const clusterGroupRef = useRef<any>(null);
   const listHoverPulseRef = useRef<any>(null);
+  const listHoverClusterRef = useRef<HTMLElement | null>(null);
+  const listHoverLockRef = useRef(false);
+  const hoverGenRef = useRef(0);
   const propertiesRef = useRef(properties);
   const selectedPropertyIdRef = useRef(selectedPropertyId);
   const prevSelectedPropertyIdRef = useRef<string | null>(null);
+  const pinnedPopupRef = useRef<any>(null);
+  const ignorePopupCloseRef = useRef(false);
+  const markerStyleRef = useRef(markerStyle);
   const boundsReportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  markerStyleRef.current = markerStyle;
+
+  const openPinnedCardRef = useRef<(prop: Property) => void>(() => {});
+  openPinnedCardRef.current = (prop: Property) => {
+    const map = mapInstanceRef.current;
+    const lat = prop.location?.lat;
+    const lng = prop.location?.lng;
+    if (!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    void loadLeaflet().then((L) => {
+      if (mapInstanceRef.current !== map) return;
+      const html = buildHoverTooltipHtml(prop);
+      const latlng = L.latLng(lat, lng);
+      const offset: [number, number] = markerStyleRef.current === 'price' ? [0, -16] : [0, -36];
+      let popup = pinnedPopupRef.current;
+      if (!popup) {
+        popup = L.popup({ ...PINNED_POPUP_OPTIONS, offset });
+        pinnedPopupRef.current = popup;
+      } else if (popup.options) {
+        popup.options.offset = L.point(offset[0], offset[1]);
+      }
+      popup.setLatLng(latlng);
+      popup.setContent(html);
+      if (!map.hasLayer(popup)) popup.openOn(map);
+      propertyMarkersRef.current.get(prop._id)?.closeTooltip?.();
+      const root = popup.getElement?.() as HTMLElement | undefined;
+      const link = root?.querySelector('.map-property-card__link') as HTMLAnchorElement | null;
+      if (link && link.dataset.mapPinnedBound !== '1') {
+        link.dataset.mapPinnedBound = '1';
+        link.addEventListener('click', (ev) => {
+          if (prop._id === selectedPropertyIdRef.current) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          selectedPropertyIdRef.current = prop._id;
+          onPropertyMarkerClickRef.current?.(prop._id);
+        });
+      }
+    });
+  };
+
+  const closePinnedCard = () => {
+    const map = mapInstanceRef.current;
+    const popup = pinnedPopupRef.current;
+    if (!map || !popup) return;
+    ignorePopupCloseRef.current = true;
+    map.closePopup(popup);
+    ignorePopupCloseRef.current = false;
+    pinnedPopupRef.current = null;
+  };
   const [ready, setReady] = useState(false);
 
   useKutaisiZonesMapLayer(
@@ -266,8 +316,8 @@ export default function MapInner({
 
   const propertyPath = (p: { _id: string; urlKey?: string }) => propertyHref(p);
 
-  const defaultCenter = center || { lat: 42.1, lng: 43.5 };
-  const defaultZoom = zoom || 7;
+  const defaultCenter = center || { lat: 42.4, lng: 43.5 };
+  const defaultZoom = zoom || 8;
 
   useEffect(() => {
     onPickRef.current = onPick;
@@ -294,6 +344,7 @@ export default function MapInner({
   }, [onVisibleBoundsChange]);
 
   const reportVisibleBounds = () => {
+    if (listHoverLockRef.current) return;
     if (!onVisibleBoundsChangeRef.current) return;
     if (boundsReportTimerRef.current) clearTimeout(boundsReportTimerRef.current);
     boundsReportTimerRef.current = setTimeout(() => {
@@ -355,9 +406,16 @@ export default function MapInner({
         if (active instanceof SVGElement && 'blur' in active) (active as SVGElement & { blur: () => void }).blur();
         if (onPickRef.current) {
           onPickRef.current(e.latlng.lat, e.latlng.lng);
-        } else if (onPropertyMarkerClickRef.current) {
-          onPropertyMarkerClickRef.current(null);
         }
+      });
+
+      map.on('popupclose', (e: any) => {
+        if (e.popup !== pinnedPopupRef.current) return;
+        pinnedPopupRef.current = null;
+        if (ignorePopupCloseRef.current) return;
+        if (!selectedPropertyIdRef.current) return;
+        selectedPropertyIdRef.current = null;
+        onPropertyMarkerClickRef.current?.(null);
       });
 
       if (onVisibleBoundsChangeRef.current) {
@@ -438,6 +496,8 @@ export default function MapInner({
         map.removeLayer(listHoverPulseRef.current);
         listHoverPulseRef.current = null;
       }
+      listHoverClusterRef.current?.classList.remove('map-cluster-icon--list-target');
+      listHoverClusterRef.current = null;
 
       let clusterGroup = clusterGroupRef.current;
       if (!clusterGroup || !map.hasLayer(clusterGroup)) {
@@ -493,23 +553,12 @@ export default function MapInner({
 
           const isPinnedSelection = () => p._id === selectedPropertyIdRef.current;
 
-          const restorePinnedPopup = () => {
-            const selId = selectedPropertyIdRef.current;
-            if (!selId) return;
-            const prop = propertiesRef.current.find((x) => x._id === selId);
-            const selMarker = propertyMarkersRef.current.get(selId);
-            if (prop && selMarker) openPinnedPropertyPopup(selMarker, prop);
-          };
-
           const scheduleHoverClear = () => {
             if (isPinnedSelection()) return;
             if (hoverClearTimer) clearTimeout(hoverClearTimer);
             hoverClearTimer = setTimeout(() => {
               hoverClearTimer = null;
-              if (!isPinnedSelection()) {
-                marker.closeTooltip();
-              }
-              restorePinnedPopup();
+              if (!isPinnedSelection()) marker.closeTooltip();
             }, 140);
           };
           const cancelHoverClear = () => {
@@ -522,7 +571,8 @@ export default function MapInner({
           const pinSelection = () => {
             cancelHoverClear();
             selectedPropertyIdRef.current = p._id;
-            openPinnedPropertyPopup(marker, p);
+            marker.closeTooltip();
+            openPinnedCardRef.current(p);
           };
 
           const bindPropertyCardLink = (root: HTMLElement, propertyId: string) => {
@@ -539,9 +589,8 @@ export default function MapInner({
               if (propertyId === p._id) {
                 pinSelection();
               } else {
-                const other = propertyMarkersRef.current.get(propertyId);
                 const otherProp = propertiesRef.current.find((x) => x._id === propertyId);
-                if (other && otherProp) openPinnedPropertyPopup(other, otherProp);
+                if (otherProp) openPinnedCardRef.current(otherProp);
               }
               selectedPropertyIdRef.current = propertyId;
             });
@@ -550,11 +599,10 @@ export default function MapInner({
           marker.on('mouseover', () => {
             cancelHoverClear();
             if (isPinnedSelection()) {
-              restorePinnedPopup();
+              marker.closeTooltip();
               return;
             }
             marker.openTooltip();
-            restorePinnedPopup();
           });
           marker.on('mouseout', () => {
             if (isPinnedSelection()) return;
@@ -588,6 +636,14 @@ export default function MapInner({
               return;
             }
             L.DomEvent.stopPropagation(e);
+            if (p._id === selectedPropertyIdRef.current) {
+              if (onPropertyNavigateRef.current) {
+                onPropertyNavigateRef.current(p.urlKey || p._id);
+              } else {
+                window.location.assign(propertyPath(p));
+              }
+              return;
+            }
             onPropertyMarkerClickRef.current?.(p._id);
             pinSelection();
           });
@@ -628,6 +684,7 @@ export default function MapInner({
           });
         }
       });
+
       reportVisibleBounds();
     });
     return () => {
@@ -637,21 +694,33 @@ export default function MapInner({
 
   useEffect(() => {
     if (!mapInstanceRef.current || !ready || !richHoverTooltips) return;
+    const gen = ++hoverGenRef.current;
+    const hoveredNow = hoveredPropertyId;
+    if (hoveredNow) {
+      listHoverLockRef.current = true;
+    } else if (listHoverLockRef.current) {
+      listHoverLockRef.current = false;
+      reportVisibleBounds();
+    }
 
     loadLeaflet().then((L) => {
+      if (gen !== hoverGenRef.current) return;
       const map = mapInstanceRef.current;
+      if (!map) return;
       const selected = selectedPropertyId;
-      const hovered = hoveredPropertyId;
+      const hovered = hoveredNow;
 
       const prevSelected = prevSelectedPropertyIdRef.current;
       if (prevSelected && prevSelected !== selected) {
-        const prevMarker = propertyMarkersRef.current.get(prevSelected);
-        if (prevMarker) {
-          closePinnedPropertyPopup(prevMarker);
-          prevMarker.closeTooltip();
-        }
+        propertyMarkersRef.current.get(prevSelected)?.closeTooltip?.();
       }
       prevSelectedPropertyIdRef.current = selected;
+      if (!selected && prevSelected) {
+        closePinnedCard();
+      } else if (selected && selected !== prevSelected) {
+        const picked = propertiesRef.current.find((x) => x._id === selected);
+        if (picked) openPinnedCardRef.current(picked);
+      }
 
       propertyMarkersRef.current.forEach((marker, id) => {
         const isSelected = id === selected;
@@ -672,10 +741,7 @@ export default function MapInner({
           isListHover ? 650 : isSelected ? 800 : 0
         );
 
-        if (isSelected) {
-          const prop = propertiesRef.current.find((x) => x._id === id);
-          if (prop) openPinnedPropertyPopup(marker, prop);
-        } else {
+        if (!isSelected) {
           closePinnedPropertyPopup(marker);
           if (hovered && id === hovered) {
             marker.closeTooltip();
@@ -689,50 +755,73 @@ export default function MapInner({
         map.removeLayer(listHoverPulseRef.current);
         listHoverPulseRef.current = null;
       }
+      listHoverClusterRef.current?.classList.remove('map-cluster-icon--list-target');
+      listHoverClusterRef.current = null;
 
       if (hovered) {
         const p = propertiesRef.current.find((x) => x._id === hovered);
-        if (p?.location) {
-          const ll = L.latLng(p.location.lat, p.location.lng);
-          const pulseSize = 72;
-          const pulseAnchor = pulseSize / 2;
-          const pulseIcon = L.divIcon({
-            className: 'map-location-pulse-wrap',
-            html: `<div class="map-location-pulse" aria-hidden="true">
-              <span class="map-location-pulse__ring"></span>
-              <span class="map-location-pulse__ring map-location-pulse__ring--2"></span>
+        const lat = p?.location?.lat;
+        const lng = p?.location?.lng;
+        if (p && Number.isFinite(lat) && Number.isFinite(lng)) {
+          const ll = L.latLng(lat as number, lng as number);
+          const marker = propertyMarkersRef.current.get(hovered);
+          let parent = marker?.__parent;
+          let clusterIcon: HTMLElement | null = null;
+          while (parent) {
+            if (parent._icon) clusterIcon = parent._icon as HTMLElement;
+            parent = parent.__parent;
+          }
+          if (clusterIcon) {
+            clusterIcon.classList.add('map-cluster-icon--list-target');
+            listHoverClusterRef.current = clusterIcon;
+          }
+
+          if (!map.getPane('listHoverPane')) {
+            const pane = map.createPane('listHoverPane');
+            pane.style.zIndex = '650';
+            pane.style.pointerEvents = 'none';
+          }
+          const beaconIcon = L.divIcon({
+            className: 'map-list-beacon-wrap',
+            html: `<div class="map-list-beacon" aria-hidden="true">
+              <span class="map-list-beacon__ring"></span>
+              <span class="map-list-beacon__ring map-list-beacon__ring--2"></span>
+              <span class="map-list-beacon__dot"></span>
             </div>`,
-            iconSize: [pulseSize, pulseSize],
-            iconAnchor: [pulseAnchor, pulseAnchor]
+            iconSize: [88, 88],
+            iconAnchor: [44, 44]
           });
           listHoverPulseRef.current = L.marker(ll, {
-            icon: pulseIcon,
+            pane: 'listHoverPane',
+            icon: beaconIcon,
             interactive: false,
             keyboard: false,
-            zIndexOffset: 200
+            zIndexOffset: 900
           }).addTo(map);
-
-          if (!map.getBounds().pad(0.06).contains(ll)) {
-            map.panTo(ll, { animate: true, duration: 0.35 });
-          }
-        }
-      } else if (selected && selected !== prevSelected) {
-        const p = propertiesRef.current.find((x) => x._id === selected);
-        const marker = propertyMarkersRef.current.get(selected);
-        const group = clusterGroupRef.current;
-        if (marker && group && typeof group.zoomToShowLayer === 'function') {
-          group.zoomToShowLayer(marker, () => {
-            if (p) openPinnedPropertyPopup(marker, p);
-          });
-        } else if (p?.location) {
-          const ll = L.latLng(p.location.lat, p.location.lng);
-          if (!map.getBounds().pad(0.06).contains(ll)) {
-            map.panTo(ll, { animate: true, duration: 0.35 });
-          }
         }
       }
     });
   }, [hoveredPropertyId, selectedPropertyId, ready, richHoverTooltips, markerStyle]);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || !ready || !listFocusNonce || !listFocusId) return;
+    const id = listFocusId;
+    let cancelled = false;
+    void loadLeaflet().then((L) => {
+      if (cancelled) return;
+      const map = mapInstanceRef.current;
+      if (!map) return;
+      const picked = propertiesRef.current.find((item) => item._id === id);
+      const lat = picked?.location?.lat;
+      const lng = picked?.location?.lng;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const zoom = Math.max(map.getZoom(), PROPERTY_MARKER_ZOOM);
+      map.flyTo(L.latLng(lat as number, lng as number), zoom, { animate: true, duration: 0.7 });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [listFocusId, listFocusNonce, ready]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || !ready) return;

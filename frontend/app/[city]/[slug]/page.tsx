@@ -1,7 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { findLandingCity, parseLandingSegment, type LandingSegment } from '@/lib/landingPages';
-import { landingSegmentMetadata, loadLandingSegment } from '@/lib/landingRoute';
+import {
+  landingSegmentMetadata,
+  loadLandingSegment,
+  redirectIfLandingEmpty,
+} from '@/lib/landingRoute';
 import { getRequestLang, getRequestNonce } from '@/lib/serverLang';
 import { LandingSegmentPage } from '@/components/landing/LandingSegmentPage';
 
@@ -29,5 +33,6 @@ export default async function CitySegmentPage({ params }: { params: Params }) {
   if (!seg) notFound();
   const [lang, nonce] = await Promise.all([getRequestLang(), getRequestNonce()]);
   const { stats, listings } = await loadLandingSegment(seg, lang);
+  redirectIfLandingEmpty(seg, stats, lang);
   return <LandingSegmentPage seg={seg} lang={lang} stats={stats} listings={listings} nonce={nonce} />;
 }

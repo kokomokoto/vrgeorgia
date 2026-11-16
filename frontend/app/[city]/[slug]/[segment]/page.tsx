@@ -1,13 +1,19 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import {
   findLandingCity,
   findLandingDistrict,
   parseLandingSegment,
+  segmentSlug,
   type LandingSegment,
 } from '@/lib/landingPages';
-import { landingSegmentMetadata, loadLandingSegment } from '@/lib/landingRoute';
+import {
+  landingSegmentMetadata,
+  loadLandingSegment,
+  redirectIfLandingEmpty,
+} from '@/lib/landingRoute';
 import { getRequestLang, getRequestNonce } from '@/lib/serverLang';
+import { localizePath } from '@/lib/siteLang';
 import { LandingSegmentPage } from '@/components/landing/LandingSegmentPage';
 
 type Params = Promise<{ city: string; slug: string; segment: string }>;
@@ -34,6 +40,13 @@ export default async function DistrictSegmentPage({ params }: { params: Params }
   const seg = resolve(city, slug, segment);
   if (!seg) notFound();
   const [lang, nonce] = await Promise.all([getRequestLang(), getRequestNonce()]);
+  // Misspelled district slug in the URL → canonical district path.
+  if (seg.district && seg.district.slug !== slug.toLowerCase()) {
+    permanentRedirect(
+      localizePath(`/${city}/${seg.district.slug}/${segmentSlug(seg.type, seg.deal)}`, lang)
+    );
+  }
   const { stats, listings } = await loadLandingSegment(seg, lang);
+  redirectIfLandingEmpty(seg, stats, lang);
   return <LandingSegmentPage seg={seg} lang={lang} stats={stats} listings={listings} nonce={nonce} />;
 }

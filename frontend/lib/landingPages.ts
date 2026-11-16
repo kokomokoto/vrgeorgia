@@ -273,11 +273,17 @@ export function findLandingCity(slug: string): LandingCity | null {
   return LANDING_CITIES.find((c) => c.slug === slug.toLowerCase()) ?? null;
 }
 
+/** Common misspellings Google / users hit → canonical district slug. */
+const DISTRICT_SLUG_ALIASES: Record<string, string> = {
+  'didube-chugureti': 'didube-chughureti',
+  'krzanisi': 'krtsanisi',
+};
+
 export function findLandingDistrict(citySlug: string, slug: string): LandingDistrict | null {
-  return (
-    LANDING_DISTRICTS.find((d) => d.citySlug === citySlug.toLowerCase() && d.slug === slug.toLowerCase()) ??
-    null
-  );
+  const city = citySlug.toLowerCase();
+  const raw = slug.toLowerCase();
+  const canonical = DISTRICT_SLUG_ALIASES[raw] ?? raw;
+  return LANDING_DISTRICTS.find((d) => d.citySlug === city && d.slug === canonical) ?? null;
 }
 
 /** "apartments-for-sale" → { type, deal } */
@@ -322,7 +328,7 @@ type LandingListing = {
 /**
  * Paths that have at least one public listing: city hub, city × type × deal,
  * and the district page when the listing maps to one. Empty segments stay out
- * of the sitemap because those pages are noindex.
+ * of the sitemap and permanently redirect to the nearest parent with content.
  */
 export function indexableLandingPaths(properties: LandingListing[]): Set<string> {
   const paths = new Set<string>();

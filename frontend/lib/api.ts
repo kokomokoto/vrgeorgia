@@ -13,7 +13,7 @@ export { resolvePropertyImageUrl, applyCloudinaryTransform } from './imageUrl';
 /**
  * სურათის URL:
  * - ავატარი/აგენტი: variant-ის გარეშე
- * - ობიექტის ფოტო: variant 'thumb' | 'large' (Cloudinary f_auto → AVIF)
+ * - ობიექტის ფოტო: variant 'thumb' | 'large' (Cloudinary f_webp)
  * - 360°: isPanorama: true → master URL უცვლელად
  * - watermark: true მხოლოდ განცხადების გვერდზე (მთავარი/სია სუფთა)
  */

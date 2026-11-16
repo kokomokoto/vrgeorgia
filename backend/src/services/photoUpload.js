@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { cloudinary } from './cloudinary.js';
+import { uploadImageBuffer } from './mediaStorage.js';
 
 /** Cloudinary უფასო/საწყისი გეგმის ლიმიტი (~10 MB) — 360° პანორამა */
 export const CLOUDINARY_MAX_BYTES = 10 * 1024 * 1024 - 256 * 1024;
@@ -126,34 +126,22 @@ export async function compressRegularPhotoForCloudinary(inputBuffer) {
   return output;
 }
 
-function uploadBufferToCloudinary(buffer) {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: 'vrgeorgia/properties',
-        resource_type: 'image',
-      },
-      (err, result) => {
-        if (err) reject(err);
-        else resolve(result.secure_url);
-      }
-    );
-    stream.end(buffer);
-  });
-}
-
-const CLOUDINARY_UPLOAD_ATTEMPTS = 3;
+const MEDIA_UPLOAD_ATTEMPTS = 3;
 
 async function uploadWithRetry(buffer) {
   let lastErr = null;
-  for (let attempt = 1; attempt <= CLOUDINARY_UPLOAD_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= MEDIA_UPLOAD_ATTEMPTS; attempt++) {
     try {
-      return await uploadBufferToCloudinary(buffer);
+      return await uploadImageBuffer(buffer, {
+        folder: 'vrgeorgia/properties',
+        contentType: 'image/jpeg',
+        ext: 'jpg',
+      });
     } catch (err) {
       lastErr = err;
       // ზომის შეცდომა გამეორებით არ გამოსწორდება
       if (String(err?.message || '').includes('File size too large')) break;
-      if (attempt < CLOUDINARY_UPLOAD_ATTEMPTS) {
+      if (attempt < MEDIA_UPLOAD_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 400 * attempt));
       }
     }
@@ -162,7 +150,7 @@ async function uploadWithRetry(buffer) {
 }
 
 /**
- * Multer memory ფაილებიდან → შეკუმშვა → Cloudinary URL-ები.
+ * Multer memory ფაილებიდან → შეკუმშვა → media URL-ები (Cloudinary ან R2).
  *
  * ერთი გაუმართავი ფოტო მთელ პაკეტს არ აგდებს: წარმატებულები ინახება და
  * ჩავარდნილები `failures`-ში ბრუნდება, რომ აგენტმა მხოლოდ ისინი ჩაანაცვლოს.

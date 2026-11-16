@@ -14,6 +14,7 @@
     "seed": "node --import ./src/env-bootstrap.js src/seed.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1169.0",
     "@google-cloud/translate": "^8.5.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.3",

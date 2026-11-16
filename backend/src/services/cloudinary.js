@@ -69,7 +69,14 @@ export function uploadPropertyPhotosMiddleware(maxFiles = 30) {
 }
 
 export async function deleteCloudinaryImage(imageUrl) {
-  if (!imageUrl || !imageUrl.includes('cloudinary')) return true;
+  if (!imageUrl) return true;
+  // R2 / Cloudflare public URLs — route through media helper without circular import cost.
+  const r2Base = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, '');
+  if (r2Base && String(imageUrl).startsWith(r2Base)) {
+    const { deleteR2ObjectByUrl } = await import('./r2Media.js');
+    return deleteR2ObjectByUrl(imageUrl);
+  }
+  if (!String(imageUrl).includes('cloudinary')) return true;
   try {
     const parts = imageUrl.split('/upload/');
     if (parts.length < 2) return false;

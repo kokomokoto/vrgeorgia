@@ -107,11 +107,17 @@ export function applyCloudinaryTransform(url: string, transform: string): string
  */
 const WATERMARK_DOWNLOAD_TRANSFORM = `${CLOUDINARY_SIZE.large.replace(',f_webp', ',f_jpg')}/${WATERMARK_LAYER.large}/fl_attachment:vhome`;
 
+function r2WatermarkedUrl(absoluteUrl: string, download = false): string {
+  const q = new URLSearchParams({ url: absoluteUrl });
+  if (download) q.set('download', '1');
+  return `${getApiBase()}/api/media/watermarked?${q.toString()}`;
+}
+
 export function cloudinaryWatermarkedDownloadUrl(path: string | null | undefined): string {
   const base = resolveBaseUrl(path);
   if (!base) return '';
   if (isR2MediaUrl(base)) {
-    return `${getApiBase()}/api/media/watermarked?url=${encodeURIComponent(base)}`;
+    return r2WatermarkedUrl(base, true);
   }
   return applyCloudinaryTransform(base, WATERMARK_DOWNLOAD_TRANSFORM);
 }
@@ -155,7 +161,7 @@ export const PROPERTY_CARD_SIZES = '(max-width: 640px) 100vw, (max-width: 1024px
 /**
  * ობიექტის ფოტოს URL — Cloudinary ან Cloudflare R2 (+ optional Image Resizing).
  * R2: ნაგულისხმევად პირდაპირ media.vhome.ge (resize მხოლოდ NEXT_PUBLIC_CF_IMAGE_RESIZE=1).
- * ვოთერმარკი მხოლოდ Cloudinary options.watermark === true-ზე (განცხადების გვერდი).
+ * watermark: true → backend sharp overlay (იგივე ქცევა რაც Cloudinary text layer).
  * 360° / original — სუფთა master.
  */
 export function resolvePropertyImageUrl(
@@ -169,6 +175,9 @@ export function resolvePropertyImageUrl(
   }
 
   if (isR2MediaUrl(base)) {
+    if (options?.watermark === true) {
+      return r2WatermarkedUrl(base, false);
+    }
     if (cfImageResizeEnabled() && cfImageOrigin()) {
       return applyCloudflareImageResize(base, variant === 'thumb' ? CF_THUMB : CF_LARGE);
     }

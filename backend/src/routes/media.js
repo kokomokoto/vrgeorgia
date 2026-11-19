@@ -22,13 +22,17 @@ function isAllowedMediaUrl(raw) {
 
 /**
  * GET /api/media/watermarked?url=<absolute media url>
- * Returns JPEG with vhome.ge overlay (for R2 / non-Cloudinary downloads).
+ * Optional: &download=1 → Content-Disposition attachment (save-as).
+ * Default: inline (safe for <img src> on property pages).
  */
 router.get('/media/watermarked', async (req, res) => {
   const url = String(req.query.url || '').trim();
   if (!url || !isAllowedMediaUrl(url)) {
     return res.status(400).json({ message: 'არასწორი ან აკრძალული URL' });
   }
+  const asDownload = ['1', 'true', 'yes'].includes(
+    String(req.query.download || '').trim().toLowerCase()
+  );
   try {
     const upstream = await fetch(url);
     if (!upstream.ok) {
@@ -37,10 +41,10 @@ router.get('/media/watermarked', async (req, res) => {
     const buf = Buffer.from(await upstream.arrayBuffer());
     const out = await applyTextWatermark(buf);
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
     res.setHeader(
       'Content-Disposition',
-      'attachment; filename="vhome-photo.jpg"'
+      asDownload ? 'attachment; filename="vhome-photo.jpg"' : 'inline'
     );
     res.send(out);
   } catch (err) {

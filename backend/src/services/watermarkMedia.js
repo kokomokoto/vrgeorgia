@@ -1,5 +1,5 @@
 /**
- * Overlay "vhome.ge" text watermark (south-west) via sharp — used for R2 downloads.
+ * Overlay "vhome.ge" text watermark (south-west) via sharp — used for R2 display/download.
  */
 import sharp from 'sharp';
 
@@ -16,6 +16,9 @@ export async function applyTextWatermark(input, opts = {}) {
   const fontSize = Math.max(22, Math.round(Math.min(width, height) * 0.035));
   const padX = Math.round(fontSize * 0.55);
   const padY = Math.round(fontSize * 0.45);
+  const safe = String(label).replace(/[<>&"]/g, '');
+  // Stroke keeps the mark readable on pale floors / bright skies.
+  const strokeW = Math.max(2, Math.round(fontSize * 0.08));
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <text
@@ -24,8 +27,11 @@ export async function applyTextWatermark(input, opts = {}) {
         font-family="Arial, Helvetica, sans-serif"
         font-size="${fontSize}"
         font-weight="700"
-        fill="rgba(255,255,255,0.55)"
-      >${label.replace(/[<>&]/g, '')}</text>
+        fill="rgba(255,255,255,0.62)"
+        stroke="rgba(0,0,0,0.38)"
+        stroke-width="${strokeW}"
+        paint-order="stroke"
+      >${safe}</text>
     </svg>
   `;
   return sharp(input, { failOn: 'none' })

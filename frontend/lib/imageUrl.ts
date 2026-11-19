@@ -46,13 +46,24 @@ function cfImageOrigin(): string {
   return (process.env.NEXT_PUBLIC_CF_IMAGE_ORIGIN || '').replace(/\/$/, '');
 }
 
+/** Opt-in: CF Image Transformations free/quota plans return 429 and break galleries. */
+function cfImageResizeEnabled(): boolean {
+  const raw = (process.env.NEXT_PUBLIC_CF_IMAGE_RESIZE || '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
 export function isR2MediaUrl(url: string): boolean {
   const base = r2PublicBase();
   return Boolean(base && url.startsWith(base));
 }
 
-/** Cloudflare Image Resizing URL (zone must have resizing enabled). */
+/**
+ * Cloudflare Image Resizing URL.
+ * Disabled unless NEXT_PUBLIC_CF_IMAGE_RESIZE=1 — otherwise return the original
+ * media.vhome.ge URL (R2 public) so listings keep working when transform quota is exhausted.
+ */
 export function applyCloudflareImageResize(absoluteUrl: string, options: string): string {
+  if (!cfImageResizeEnabled()) return absoluteUrl;
   const origin = cfImageOrigin();
   if (!origin || !absoluteUrl.startsWith('http')) return absoluteUrl;
   return `${origin}/cdn-cgi/image/${options}/${absoluteUrl}`;
@@ -99,7 +110,9 @@ const WATERMARK_DOWNLOAD_TRANSFORM = `${CLOUDINARY_SIZE.large.replace(',f_webp',
 export function cloudinaryWatermarkedDownloadUrl(path: string | null | undefined): string {
   const base = resolveBaseUrl(path);
   if (!base) return '';
-  if (isR2MediaUrl(base)) return base;
+  if (isR2MediaUrl(base)) {
+    return `${getApiBase()}/api/media/watermarked?url=${encodeURIComponent(base)}`;
+  }
   return applyCloudinaryTransform(base, WATERMARK_DOWNLOAD_TRANSFORM);
 }
 
@@ -114,7 +127,7 @@ export function propertyThumbSrcSet(
   const base = resolveBaseUrl(path);
   if (!base || options?.isPanorama) return undefined;
 
-  if (isR2MediaUrl(base) && cfImageOrigin()) {
+  if (isR2MediaUrl(base) && cfImageResizeEnabled() && cfImageOrigin()) {
     return [400, 800]
       .map((w) => {
         const h = Math.round((w * 3) / 4);
@@ -140,7 +153,8 @@ export function propertyThumbSrcSet(
 export const PROPERTY_CARD_SIZES = '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 320px';
 
 /**
- * ობიექტის ფოტოს URL — Cloudinary ან Cloudflare R2 + Image Resizing.
+ * ობიექტის ფოტოს URL — Cloudinary ან Cloudflare R2 (+ optional Image Resizing).
+ * R2: ნაგულისხმევად პირდაპირ media.vhome.ge (resize მხოლოდ NEXT_PUBLIC_CF_IMAGE_RESIZE=1).
  * ვოთერმარკი მხოლოდ Cloudinary options.watermark === true-ზე (განცხადების გვერდი).
  * 360° / original — სუფთა master.
  */
@@ -154,8 +168,11 @@ export function resolvePropertyImageUrl(
     return base;
   }
 
-  if (isR2MediaUrl(base) && cfImageOrigin()) {
-    return applyCloudflareImageResize(base, variant === 'thumb' ? CF_THUMB : CF_LARGE);
+  if (isR2MediaUrl(base)) {
+    if (cfImageResizeEnabled() && cfImageOrigin()) {
+      return applyCloudflareImageResize(base, variant === 'thumb' ? CF_THUMB : CF_LARGE);
+    }
+    return base;
   }
 
   const size = CLOUDINARY_SIZE[variant];

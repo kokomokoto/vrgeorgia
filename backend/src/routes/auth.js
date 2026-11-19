@@ -4,7 +4,9 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
+import sharp from 'sharp';
 import { uploadAvatar } from '../services/cloudinary.js';
+import { uploadImageBuffer } from '../services/mediaStorage.js';
 import { getJWTExpiresIn, getJWTSecret } from '../config/jwt.js';
 import { syncAgentProfileForUser } from '../services/agentProfile.js';
 import { isAgentRole, isAdminRole } from '../utils/userRoles.js';
@@ -251,17 +253,31 @@ router.put(
 
 // Upload avatar
 router.post('/avatar', requireAuth, upload.single('avatar'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+  if (!req.file?.buffer) return res.status(400).json({ message: 'No file uploaded' });
 
-  const avatarPath = req.file.path;
-  const user = await User.findByIdAndUpdate(req.user.id, { avatar: avatarPath }, { new: true });
-  if (!user) return res.status(404).json({ message: 'User not found' });
+  try {
+    const buffer = await sharp(req.file.buffer, { failOn: 'none' })
+      .rotate()
+      .resize(300, 300, { fit: 'cover' })
+      .jpeg({ quality: 85, mozjpeg: true })
+      .toBuffer();
+    const avatarPath = await uploadImageBuffer(buffer, {
+      folder: 'vrgeorgia/avatars',
+      contentType: 'image/jpeg',
+      ext: 'jpg',
+    });
+    const user = await User.findByIdAndUpdate(req.user.id, { avatar: avatarPath }, { new: true });
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-  if (isAgentRole(user.role)) {
-    await syncAgentProfileForUser(user);
+    if (isAgentRole(user.role)) {
+      await syncAgentProfileForUser(user);
+    }
+
+    res.json({ user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name } });
+  } catch (err) {
+    console.error('POST /api/auth/avatar:', err);
+    res.status(500).json({ message: err?.message || 'ავატარის ატვირთვა ვერ მოხერხდა' });
   }
-
-  res.json({ user: { id: user._id, email: user.email, phone: user.phone, avatar: user.avatar, name: user.name } });
 });
 
 // ========== FAVORITES ==========

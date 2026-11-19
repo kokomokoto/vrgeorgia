@@ -1,5 +1,4 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
 
 cloudinary.config({
@@ -8,42 +7,34 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-/** მიღება სერვერზე (MB) — შემდეგ sharp-ით იკუმშება Cloudinary-ის ~10 MB-მდე */
+/** მიღება სერვერზე (MB) — შემდეგ sharp-ით იკუმშება ~10 MB-მდე */
 const PROPERTY_PHOTO_MAX_MB = Number(process.env.PROPERTY_PHOTO_MAX_MB || 50);
 export const PROPERTY_PHOTO_MAX_BYTES = PROPERTY_PHOTO_MAX_MB * 1024 * 1024;
 
-const agentStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'vrgeorgia/agents',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-    transformation: [{ width: 500, height: 500, crop: 'limit', quality: 'auto' }],
-  },
-});
+const imageFileFilter = (_req, file, cb) => {
+  const mime = String(file.mimetype || '').toLowerCase();
+  if (mime.startsWith('image/')) return cb(null, true);
+  cb(new Error('მხოლოდ სურათის ფაილებია დაშვებული'));
+};
 
-const avatarStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'vrgeorgia/avatars',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-    transformation: [{ width: 300, height: 300, crop: 'fill', quality: 'auto' }],
-  },
-});
-
-/** ობიექტის ფოტოები — memory (პირდაპირ Cloudinary-ზე არა, photoUpload.js ამუშავებს) */
+/** ობიექტის ფოტოები — memory (photoUpload.js → mediaStorage) */
 export const uploadPropertyPhotos = multer({
   storage: multer.memoryStorage(),
   limits: { files: 30, fileSize: PROPERTY_PHOTO_MAX_BYTES },
 });
 
+/** აგენტის ფოტო — memory → mediaStorage (R2 ან Cloudinary) */
 export const uploadAgentPhoto = multer({
-  storage: agentStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFileFilter,
 });
 
+/** ავატარი — memory → mediaStorage */
 export const uploadAvatar = multer({
-  storage: avatarStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: imageFileFilter,
 });
 
 export function uploadPropertyPhotosMiddleware(maxFiles = 30) {

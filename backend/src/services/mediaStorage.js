@@ -17,22 +17,34 @@ export function assertMediaProviderReady() {
   }
 }
 
-function uploadBufferToCloudinary(buffer, folder = 'vrgeorgia/properties') {
+/**
+ * @param {Buffer} buffer
+ * @param {{ folder?: string, contentType?: string, ext?: string, key?: string, resourceType?: string }} [opts]
+ */
+function uploadBufferToCloudinary(buffer, opts = {}) {
+  const folder = opts.folder || 'vrgeorgia/properties';
+  const resourceType = opts.resourceType || 'image';
+  /** @type {Record<string, unknown>} */
+  const params = { folder, resource_type: resourceType };
+  if (opts.key) {
+    const base = opts.key.replace(/\.[^.]+$/, '');
+    const parts = base.split('/');
+    params.public_id = parts[parts.length - 1];
+    params.folder = parts.slice(0, -1).join('/') || folder;
+    params.overwrite = true;
+  }
   return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'image' },
-      (err, result) => {
-        if (err) reject(err);
-        else resolve(result.secure_url);
-      }
-    );
+    const stream = cloudinary.uploader.upload_stream(params, (err, result) => {
+      if (err) reject(err);
+      else resolve(result.secure_url);
+    });
     stream.end(buffer);
   });
 }
 
 /**
  * @param {Buffer} buffer
- * @param {{ folder?: string, contentType?: string, ext?: string }} [opts]
+ * @param {{ folder?: string, contentType?: string, ext?: string, key?: string, resourceType?: string }} [opts]
  */
 export async function uploadImageBuffer(buffer, opts = {}) {
   assertMediaProviderReady();
@@ -41,9 +53,10 @@ export async function uploadImageBuffer(buffer, opts = {}) {
       folder: opts.folder || 'vrgeorgia/properties',
       contentType: opts.contentType || 'image/jpeg',
       ext: opts.ext || 'jpg',
+      key: opts.key,
     });
   }
-  return uploadBufferToCloudinary(buffer, opts.folder || 'vrgeorgia/properties');
+  return uploadBufferToCloudinary(buffer, opts);
 }
 
 /** Deletes from whichever host the URL points at. */

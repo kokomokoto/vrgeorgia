@@ -56,13 +56,27 @@ import {
   PRESET_NAME_MAX,
 } from '../utils/siteContentService.js';
 import multer from 'multer';
-import { cloudinary } from '../services/cloudinary.js';
+import { uploadImageBuffer } from '../services/mediaStorage.js';
 import {
   DEFAULT_DUPLICATE_WINDOW_MINUTES,
   findDuplicatePropertyGroups,
   findPhotolessProperties,
   mergeDuplicateProperties,
 } from '../services/duplicateProperties.js';
+
+function extFromUpload(file) {
+  const mime = String(file?.mimetype || '').toLowerCase();
+  const name = String(file?.originalname || '');
+  if (mime.includes('png') || /\.png$/i.test(name)) return 'png';
+  if (mime.includes('webp') || /\.webp$/i.test(name)) return 'webp';
+  if (mime.includes('gif') || /\.gif$/i.test(name)) return 'gif';
+  if (mime.includes('svg') || /\.svg$/i.test(name)) return 'svg';
+  if (mime.includes('mp4') || /\.mp4$/i.test(name)) return 'mp4';
+  if (mime.includes('webm') || /\.webm$/i.test(name)) return 'webm';
+  if (mime.includes('jpeg') || mime.includes('jpg') || /\.jpe?g$/i.test(name)) return 'jpg';
+  const m = name.match(/\.([a-z0-9]+)$/i);
+  return m ? m[1].toLowerCase() : 'bin';
+}
 
 const router = express.Router();
 
@@ -1735,29 +1749,22 @@ router.post('/content/services/media', requireAuth, adminMiddleware, (req, res) 
           message: isVideo ? 'ვიდეო ძალიან დიდია (მაქს. 300 MB)' : 'სურათი ძალიან დიდია (მაქს. 10 MB)',
         });
       }
-      const result = await new Promise((resolve, reject) => {
-        cloudinary.uploader.upload(
-          req.file.path,
-          {
-            folder: 'vrgeorgia/services',
-            resource_type: isVideo ? 'video' : 'image',
-          },
-          (uploadErr, uploaded) => {
-            if (uploadErr) reject(uploadErr);
-            else resolve(uploaded);
-          }
-        );
+      const buffer = await fs.promises.readFile(req.file.path);
+      const ext = extFromUpload(req.file);
+      const url = await uploadImageBuffer(buffer, {
+        folder: 'vrgeorgia/services',
+        contentType: mime || (isVideo ? 'video/mp4' : 'image/jpeg'),
+        ext,
+        resourceType: isVideo ? 'video' : 'image',
       });
-
-      const url = result?.secure_url || result?.url;
       if (!url) {
-        return res.status(500).json({ message: 'Cloudinary-მ URL არ დააბრუნა' });
+        return res.status(500).json({ message: 'მედიის URL არ დააბრუნა' });
       }
 
       res.json({
         url,
         kind: isVideo ? 'video' : 'image',
-        publicId: result.public_id || null,
+        publicId: null,
       });
     } catch (error) {
       console.error('POST /api/admin/content/services/media:', error);
@@ -1843,29 +1850,21 @@ router.post('/content/branding/media', requireAuth, adminMiddleware, (req, res) 
       if (!req.file?.buffer) {
         return res.status(400).json({ message: 'ფაილი არ არის მიღებული' });
       }
-      const result = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          {
-            folder: 'vrgeorgia/branding',
-            resource_type: 'auto',
-          },
-          (uploadErr, uploaded) => {
-            if (uploadErr) reject(uploadErr);
-            else resolve(uploaded);
-          }
-        );
-        stream.end(req.file.buffer);
+      const ext = extFromUpload(req.file);
+      const url = await uploadImageBuffer(req.file.buffer, {
+        folder: 'vrgeorgia/branding',
+        contentType: req.file.mimetype || 'application/octet-stream',
+        ext,
+        resourceType: 'auto',
       });
-
-      const url = result?.secure_url || result?.url;
       if (!url) {
-        return res.status(500).json({ message: 'Cloudinary-მ URL არ დააბრუნა' });
+        return res.status(500).json({ message: 'მედიის URL არ დააბრუნა' });
       }
 
       res.json({
         url,
-        publicId: result.public_id || null,
-        format: result.format || null,
+        publicId: null,
+        format: ext,
       });
     } catch (error) {
       console.error('POST /api/admin/content/branding/media:', error);
@@ -2070,34 +2069,26 @@ router.post(
         }
         const mime = String(req.file.mimetype || '');
         const resourceType = mime.startsWith('video/') ? 'video' : 'auto';
-        const result = await new Promise((resolve, reject) => {
-          const stream = cloudinary.uploader.upload_stream(
-            {
-              folder: 'vrgeorgia/home-design',
-              resource_type: resourceType,
-            },
-            (uploadErr, uploaded) => {
-              if (uploadErr) reject(uploadErr);
-              else resolve(uploaded);
-            }
-          );
-          stream.end(req.file.buffer);
+        const ext = extFromUpload(req.file);
+        const url = await uploadImageBuffer(req.file.buffer, {
+          folder: 'vrgeorgia/home-design',
+          contentType: mime || 'application/octet-stream',
+          ext,
+          resourceType,
         });
-
-        const url = result?.secure_url || result?.url;
         if (!url) {
-          return res.status(500).json({ message: 'Cloudinary-მ URL არ დააბრუნა' });
+          return res.status(500).json({ message: 'მედიის URL არ დააბრუნა' });
         }
 
         let kind = 'image';
         if (mime === 'image/gif' || /\.gif$/i.test(req.file.originalname || '')) kind = 'gif';
-        else if (mime.startsWith('video/') || result.resource_type === 'video') kind = 'video';
+        else if (mime.startsWith('video/')) kind = 'video';
 
         res.json({
           url,
           kind,
-          resourceType: result.resource_type || resourceType,
-          publicId: result.public_id || null,
+          resourceType,
+          publicId: null,
         });
       } catch (error) {
         console.error('POST /api/admin/content/home-design/media:', error);

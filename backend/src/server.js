@@ -19,6 +19,7 @@ import agentRequestRoutes from './routes/agentRequests.js';
 import searcherRoutes from './routes/searcher.js';
 import tourApiRoutes from './routes/tourApi.js';
 import tourEmbedRoutes from './routes/tourEmbed.js';
+import mediaRoutes from './routes/media.js';
 import { attachTourUi } from './tourUiServer.js';
 import {
   attachProductionTourProxy,
@@ -227,6 +228,7 @@ if (shouldUseProductionTourProxy()) {
   attachProductionTourProxy(app);
 }
 
+app.use('/api', mediaRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/agents', agentRoutes);

@@ -1,5 +1,7 @@
 import sharp from 'sharp';
-import { cloudinary, deleteCloudinaryImage } from '../cloudinary.js';
+import { deleteCloudinaryImage } from '../cloudinary.js';
+import { getMediaProvider, uploadImageBuffer } from '../mediaStorage.js';
+import { isR2Configured } from '../r2Media.js';
 
 const CLOUDINARY_MAX_BYTES = 10 * 1024 * 1024 - 256 * 1024;
 
@@ -9,6 +11,12 @@ export function isCloudinaryConfigured() {
       process.env.CLOUDINARY_API_KEY &&
       process.env.CLOUDINARY_API_SECRET
   );
+}
+
+/** True when remote panorama storage (R2 or Cloudinary) is ready. */
+export function isRemotePanoramaStorageReady() {
+  if (getMediaProvider() === 'r2') return isR2Configured();
+  return isCloudinaryConfigured();
 }
 
 /** Keep high resolution for 360° viewer (max ~8192×4096, never below ~2048×1024). */
@@ -50,7 +58,7 @@ export async function compressPanoramaForCloudinary(input) {
       .toBuffer();
   }
 
-  if (output.length > CLOUDINARY_MAX_BYTES) {
+  if (getMediaProvider() !== 'r2' && output.length > CLOUDINARY_MAX_BYTES) {
     throw new Error(
       'ფოტო ძალიან დიდია (Cloudinary ~10 MB ლიმიტი). სცადეთ უფრო პატარა ფაილი.'
     );
@@ -59,25 +67,23 @@ export async function compressPanoramaForCloudinary(input) {
   return output;
 }
 
-export function uploadPanoramaToCloudinary(buffer, tourId, sceneId) {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: `vrgeorgia/tours/${tourId}`,
-        public_id: sceneId,
-        overwrite: true,
-        resource_type: 'image',
-      },
-      (err, result) => {
-        if (err || !result) {
-          reject(err || new Error('Cloudinary upload failed'));
-        } else {
-          resolve(result.secure_url);
-        }
-      }
-    );
-    stream.end(buffer);
+/**
+ * Upload panorama to active media provider (R2 or Cloudinary).
+ * Stable key so re-upload overwrites the same object.
+ */
+export async function uploadPanoramaImage(buffer, tourId, sceneId) {
+  const key = `vrgeorgia/tours/${tourId}/${sceneId}.jpg`;
+  return uploadImageBuffer(buffer, {
+    folder: `vrgeorgia/tours/${tourId}`,
+    contentType: 'image/jpeg',
+    ext: 'jpg',
+    key,
   });
+}
+
+/** @deprecated — გამოიყენე uploadPanoramaImage */
+export function uploadPanoramaToCloudinary(buffer, tourId, sceneId) {
+  return uploadPanoramaImage(buffer, tourId, sceneId);
 }
 
 export { deleteCloudinaryImage };

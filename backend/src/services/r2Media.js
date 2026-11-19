@@ -50,20 +50,22 @@ function keyFromPublicUrl(url) {
 
 /**
  * @param {Buffer} buffer
- * @param {{ folder?: string, contentType?: string, ext?: string }} [opts]
+ * @param {{ folder?: string, contentType?: string, ext?: string, key?: string }} [opts]
  * @returns {Promise<string>} public HTTPS URL
  */
 export async function uploadBufferToR2(buffer, opts = {}) {
   const folder = (opts.folder || 'vrgeorgia/properties').replace(/^\/+|\/+$/g, '');
   const ext = (opts.ext || 'jpg').replace(/^\./, '');
-  const key = `${folder}/${randomUUID()}.${ext}`;
+  const key = (opts.key || `${folder}/${randomUUID()}.${ext}`).replace(/^\/+/, '');
   await getClient().send(
     new PutObjectCommand({
       Bucket: required('R2_BUCKET'),
       Key: key,
       Body: buffer,
       ContentType: opts.contentType || 'image/jpeg',
-      CacheControl: 'public, max-age=31536000, immutable',
+      CacheControl: opts.key
+        ? 'public, max-age=86400'
+        : 'public, max-age=31536000, immutable',
     })
   );
   return `${publicBase()}/${key}`;

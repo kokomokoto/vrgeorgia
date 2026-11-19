@@ -25,8 +25,8 @@ import { publishTour, getPublishedSnapshot } from '../services/tour/tourPublish.
 import { validateEquirectangular } from '../services/tour/tourImageValidate.js';
 import {
   compressPanoramaForCloudinary,
-  isCloudinaryConfigured,
-  uploadPanoramaToCloudinary,
+  isRemotePanoramaStorageReady,
+  uploadPanoramaImage,
 } from '../services/tour/panoramaImage.js';
 import { deleteSceneImageFile } from '../services/tour/sceneFiles.js';
 import { tourUploadPath, tourUploadUrl, TOUR_UPLOADS_DIR } from '../services/tour/tourPaths.js';
@@ -484,10 +484,10 @@ router.post('/upload', uploadPanorama.single('file'), async (req, res, next) => 
       return res.status(400).json({ error: e.message || 'Invalid image' });
     }
 
-    if (isCloudinaryConfigured()) {
+    if (isRemotePanoramaStorageReady()) {
       try {
         const compressed = await compressPanoramaForCloudinary(file.buffer);
-        const imageUrl = await uploadPanoramaToCloudinary(
+        const imageUrl = await uploadPanoramaImage(
           compressed,
           scene.tour_id,
           sceneId

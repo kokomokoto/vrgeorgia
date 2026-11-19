@@ -133,6 +133,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="theme-color" content="#0b0f19" />
         <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
+        <link rel="preconnect" href="https://media.vhome.ge" />
+        <link rel="dns-prefetch" href="https://media.vhome.ge" />
         <link rel="preconnect" href="https://res.cloudinary.com" />
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         <script

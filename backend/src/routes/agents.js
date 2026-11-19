@@ -5,7 +5,9 @@ import { Property } from '../models/Property.js';
 import { User } from '../models/User.js';
 import { requireAuth } from '../middleware/auth.js';
 import { getJWTSecret } from '../config/jwt.js';
+import sharp from 'sharp';
 import { uploadAgentPhoto } from '../services/cloudinary.js';
+import { uploadImageBuffer } from '../services/mediaStorage.js';
 import { backfillMissingAgentProfiles } from '../services/agentProfile.js';
 import {
   applyPropertyQueryFilters,
@@ -270,8 +272,17 @@ router.post('/profile', requireAuth, upload.single('photo'), async (req, res) =>
       }
     };
     
-    if (req.file) {
-      updateData.photo = req.file.path;
+    if (req.file?.buffer) {
+      const buffer = await sharp(req.file.buffer, { failOn: 'none' })
+        .rotate()
+        .resize(500, 500, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer();
+      updateData.photo = await uploadImageBuffer(buffer, {
+        folder: 'vrgeorgia/agents',
+        contentType: 'image/jpeg',
+        ext: 'jpg',
+      });
     }
     
     if (agent) {

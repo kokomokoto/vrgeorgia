@@ -53,6 +53,19 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      # Cloudflare R2 media (default cloudinary until these are set + MEDIA_PROVIDER=r2)
+      - key: MEDIA_PROVIDER
+        value: r2
+      - key: CF_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: vhome
+      - key: R2_PUBLIC_BASE_URL
+        value: https://media.vhome.ge
     disk:
       name: vrgeorgia-uploads
       mountPath: /opt/render/project/src/uploads
@@ -77,3 +90,12 @@ services:
         value: https://vrgeorgia-api.onrender.com/api
       - key: NEXT_PUBLIC_TOUR_BUILDER_URL
         value: https://vrgeorgia-api.onrender.com
+      - key: NEXT_PUBLIC_SITE_URL
+        value: https://vhome.ge
+      - key: NEXT_PUBLIC_R2_PUBLIC_BASE_URL
+        value: https://media.vhome.ge
+      # Image Transformations opt-in only (quota 429 breaks galleries if forced on)
+      # - key: NEXT_PUBLIC_CF_IMAGE_ORIGIN
+      #   value: https://vhome.ge
+      # - key: NEXT_PUBLIC_CF_IMAGE_RESIZE
+      #   value: "1"

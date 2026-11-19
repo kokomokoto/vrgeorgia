@@ -36,9 +36,12 @@ export function getPanoramaViewerUrls(src: string): string[] {
   if (src.includes('res.cloudinary.com') && src.includes('/upload/')) {
     out.push(src.replace('/upload/', '/upload/w_2048,h_1024,c_limit,f_jpg,q_auto:good/'));
   } else {
+    const resizeOn = ['1', 'true', 'yes'].includes(
+      (process.env.NEXT_PUBLIC_CF_IMAGE_RESIZE || '').trim().toLowerCase()
+    );
     const origin = (process.env.NEXT_PUBLIC_CF_IMAGE_ORIGIN || '').replace(/\/$/, '');
     const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    if (origin && r2Base && src.startsWith(r2Base)) {
+    if (resizeOn && origin && r2Base && src.startsWith(r2Base)) {
       out.push(`${origin}/cdn-cgi/image/width=2048,height=1024,fit=scale-down,format=jpg,quality=80/${src}`);
     }
   }

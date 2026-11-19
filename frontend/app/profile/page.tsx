@@ -17,9 +17,11 @@ import {
   updateProperty,
   changePassword,
   listSearcherAgents,
+  setPropertyPinned,
   type SearcherAgentRow,
 } from '@/lib/api';
 import { PropertyCardGridSkeleton } from '@/components/Skeleton';
+import PinnedListingMark from '@/components/PinnedListingMark';
 import { isPanoramaPhoto } from '@/lib/panorama';
 import {
   DEFAULT_MAP_FILTERS,
@@ -32,11 +34,117 @@ import { isAdminRole, isAgentRole, isSearcherRole } from '@/lib/userRoles';
 import { getPropertyOwnerLocationLine } from '@/lib/propertyDisplay';
 import { propertyHref } from '@/lib/propertyPublicPath';
 
-type BrokerListingMode = 'public' | 'unlisted' | 'private' | 'sold';
+type BrokerListingMode =
+  | 'public'
+  | 'unlisted'
+  | 'private'
+  | 'sold'
+  | 'sold_listed'
+  | 'sold_unlisted';
+
+type ProfileVisibilityFilter = '' | BrokerListingMode | 'pinned';
 
 function brokerListingModeFromProperty(p: Property): BrokerListingMode {
-  if (p.status === 'sold') return 'sold';
-  return p.listingVisibility || 'public';
+  if (p.status === 'sold') {
+    return p.listingVisibility === 'public' ? 'sold_listed' : 'sold_unlisted';
+  }
+  const vis = p.listingVisibility || 'public';
+  return vis === 'unlisted' || vis === 'private' || vis === 'public' ? vis : 'public';
+}
+
+function isSoldListingMode(mode: BrokerListingMode): boolean {
+  return mode === 'sold' || mode === 'sold_listed' || mode === 'sold_unlisted';
+}
+
+function needsPrivateShareLink(mode: BrokerListingMode): boolean {
+  return mode === 'unlisted' || mode === 'sold_unlisted';
+}
+
+function IconEyeOpen({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+      />
+    </svg>
+  );
+}
+
+function IconEyeClosed({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"
+      />
+    </svg>
+  );
+}
+
+function IconCopyLink({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+      />
+    </svg>
+  );
+}
+
+function IconPin({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M16 3a1 1 0 011 1v2.586l1.707 1.707A1 1 0 0118 10h-3v7l-2 3-2-3v-7H8a1 1 0 01-.707-1.707L9 6.586V4a1 1 0 011-1h6z" />
+    </svg>
+  );
+}
+
+function ProfilePinToggleButton({
+  pinned,
+  busy,
+  onClick,
+  label,
+}: {
+  pinned?: boolean;
+  busy?: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      title={label}
+      aria-label={label}
+      aria-pressed={Boolean(pinned)}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 ${
+        pinned
+          ? 'bg-amber-500 text-white shadow-md hover:bg-amber-600'
+          : 'border border-slate-300 bg-white text-slate-400 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-500'
+      }`}
+    >
+      {busy ? (
+        <span className="text-[10px] font-semibold leading-none">…</span>
+      ) : (
+        <IconPin className="h-4 w-4" />
+      )}
+    </button>
+  );
 }
 
 export default function ProfilePage() {
@@ -55,10 +163,24 @@ export default function ProfilePage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [visibilitySavingId, setVisibilitySavingId] = useState<string | null>(null);
   const [linkCopiedId, setLinkCopiedId] = useState<string | null>(null);
+  /** გაყიდულის ▾ ჩამოსაშლელი გახსნილია ამ ობიექტზე */
+  const [soldMenuPropertyId, setSoldMenuPropertyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!soldMenuPropertyId) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.('[data-sold-menu]')) return;
+      setSoldMenuPropertyId(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [soldMenuPropertyId]);
 
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_MAP_FILTERS);
   const [sortBy, setSortBy] = useState('date_desc');
-  const [filterVisibility, setFilterVisibility] = useState<'' | BrokerListingMode>('');
+  const [filterVisibility, setFilterVisibility] = useState<ProfileVisibilityFilter>('');
+  const [pinningId, setPinningId] = useState<string | null>(null);
 
   const [editMode, setEditMode] = useState(false);
   const [editPhone, setEditPhone] = useState('');
@@ -75,10 +197,17 @@ export default function ProfilePage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const isSearcher = Boolean(user && isSearcherRole(user.role));
+  const isAdmin = Boolean(user && isAdminRole(user.role));
   const canSetListingVisibility = user ? isAgentRole(user.role) || isAdminRole(user.role) : false;
   const canChangePassword = user
     ? isAgentRole(user.role) || isAdminRole(user.role) || isSearcher
     : false;
+
+  const myPropertiesQueryExtras = useCallback(() => {
+    if (filterVisibility === 'pinned') return { pinned: '1' as const };
+    if (filterVisibility) return { brokerListingMode: filterVisibility };
+    return {};
+  }, [filterVisibility]);
 
   const [searcherAgents, setSearcherAgents] = useState<SearcherAgentRow[]>([]);
   const [searcherLoading, setSearcherLoading] = useState(false);
@@ -139,7 +268,7 @@ export default function ProfilePage() {
       try {
         const res = await getMyProperties({
           ...filtersToPropertyQuery(filters, sortBy, i18n.language),
-          ...(filterVisibility ? { brokerListingMode: filterVisibility } : {}),
+          ...myPropertiesQueryExtras(),
           limit: 200,
         });
         if (!alive) return;
@@ -164,12 +293,12 @@ export default function ProfilePage() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [hydrated, user, initLoading, filters, sortBy, filterVisibility, i18n.language, t]);
+  }, [hydrated, user, initLoading, filters, sortBy, filterVisibility, myPropertiesQueryExtras, i18n.language, t]);
 
   const refreshList = useCallback(async () => {
     const res = await getMyProperties({
       ...filtersToPropertyQuery(filters, sortBy, i18n.language),
-      ...(filterVisibility ? { brokerListingMode: filterVisibility } : {}),
+      ...myPropertiesQueryExtras(),
       limit: 200,
     });
     setProperties(res.properties);
@@ -177,7 +306,7 @@ export default function ProfilePage() {
     const allRes = await getMyProperties({ limit: 200, sort: 'date_desc' });
     setRangeProperties(allRes.properties);
     setAllPropertiesCount(allRes.totalAll ?? allRes.properties.length);
-  }, [filters, sortBy, filterVisibility, i18n.language]);
+  }, [filters, sortBy, myPropertiesQueryExtras, i18n.language]);
 
   if (!hydrated) {
     return <div className="text-sm text-slate-500">Loading…</div>;
@@ -195,11 +324,14 @@ export default function ProfilePage() {
   }
 
   const setBrokerListingMode = async (property: Property, mode: BrokerListingMode) => {
+    // „გაყიდული“ მთავარი კლიკი → დეფოლტი მხოლოდ ლინკით
+    const resolved: BrokerListingMode = mode === 'sold' ? 'sold_unlisted' : mode;
     setVisibilitySavingId(property._id);
     try {
-      const res = await updateProperty(property._id, { brokerListingMode: mode });
+      const res = await updateProperty(property._id, { brokerListingMode: resolved });
       setProperties((prev) => prev.map((x) => (x._id === res.property._id ? res.property : x)));
       setRangeProperties((prev) => prev.map((x) => (x._id === res.property._id ? res.property : x)));
+      setSoldMenuPropertyId(null);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : t('error_save_failed'));
     } finally {
@@ -207,9 +339,18 @@ export default function ProfilePage() {
     }
   };
 
+  const propertyViewHref = (property: Property) => {
+    const base = propertyHref(property);
+    const mode = brokerListingModeFromProperty(property);
+    if (needsPrivateShareLink(mode) && property.shareToken) {
+      return `${base}?t=${encodeURIComponent(property.shareToken)}`;
+    }
+    return base;
+  };
+
   const copyUnlistedLink = (property: Property) => {
     if (!property.shareToken) return;
-    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}${propertyHref(property)}?t=${property.shareToken}`;
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}${propertyViewHref(property)}`;
     void navigator.clipboard.writeText(url).then(() => {
       setLinkCopiedId(property._id);
       window.setTimeout(() => setLinkCopiedId(null), 2000);
@@ -227,6 +368,34 @@ export default function ProfilePage() {
       alert(err instanceof Error ? err.message : t('error_delete_failed'));
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const handleTogglePin = async (property: Property) => {
+    if (!isAdmin || pinningId) return;
+    const nextPinned = !property.pinned;
+    setPinningId(property._id);
+    try {
+      const updated = await setPropertyPinned(property._id, nextPinned);
+      const apply = (p: Property): Property =>
+        p._id === property._id
+          ? {
+              ...p,
+              pinned: updated.pinned ?? nextPinned,
+              pinnedAt: updated.pinnedAt ?? (nextPinned ? new Date().toISOString() : null),
+            }
+          : p;
+      if (filterVisibility === 'pinned' && !nextPinned) {
+        setProperties((prev) => prev.filter((p) => p._id !== property._id));
+        setPropertiesTotal((n) => Math.max(0, n - 1));
+      } else {
+        setProperties((prev) => prev.map(apply));
+      }
+      setRangeProperties((prev) => prev.map(apply));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : t('pinFailed'));
+    } finally {
+      setPinningId(null);
     }
   };
 
@@ -675,7 +844,7 @@ export default function ProfilePage() {
                   id="profile-visibility-filter"
                   value={filterVisibility}
                   onChange={(e) =>
-                    setFilterVisibility((e.target.value || '') as '' | BrokerListingMode)
+                    setFilterVisibility((e.target.value || '') as ProfileVisibilityFilter)
                   }
                   className="min-w-[10rem] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                 >
@@ -684,6 +853,9 @@ export default function ProfilePage() {
                   <option value="unlisted">{t('listingMode_unlisted')}</option>
                   <option value="private">{t('listingMode_private')}</option>
                   <option value="sold">{t('listingMode_sold')}</option>
+                  {isAdmin && (
+                    <option value="pinned">{t('listingMode_pinned')}</option>
+                  )}
                 </select>
               </div>
             )}
@@ -730,8 +902,8 @@ export default function ProfilePage() {
                   >
                     <div className="flex items-start gap-3">
                       <Link
-                        href={propertyHref(property)}
-                        className="block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-md bg-slate-100 ring-offset-2 hover:ring-2 hover:ring-blue-500 sm:h-20 sm:w-28"
+                        href={propertyViewHref(property)}
+                        className="relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-md bg-slate-100 ring-offset-2 hover:ring-2 hover:ring-blue-500 sm:h-20 sm:w-28"
                         aria-label={property.title}
                       >
                         {mainImg ? (
@@ -747,11 +919,16 @@ export default function ProfilePage() {
                             {t('no_photo')}
                           </div>
                         )}
+                        {isAdmin && property.pinned ? (
+                          <div className="pointer-events-none absolute right-1 top-1 z-10">
+                            <PinnedListingMark pinned size="sm" />
+                          </div>
+                        ) : null}
                       </Link>
 
                       <div className="min-w-0 flex-1">
                         <Link
-                          href={propertyHref(property)}
+                          href={propertyViewHref(property)}
                           className="line-clamp-2 font-medium text-slate-800 hover:text-blue-600"
                         >
                           {property.title}
@@ -816,19 +993,22 @@ export default function ProfilePage() {
                       </div>
                     </div>
 
-                    {canSetListingVisibility && (
+                    {canSetListingVisibility && (() => {
+                      const currentMode = brokerListingModeFromProperty(property);
+                      const showCopyBtn =
+                        needsPrivateShareLink(currentMode) && Boolean(property.shareToken);
+                      return (
                       <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                         <p className="text-xs font-medium text-slate-600">{t('listingVisibilityLabel')}</p>
-                        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
+                        <div className="flex flex-wrap items-stretch gap-1.5">
                           {(
                             [
                               ['public', t('listingMode_public')],
                               ['unlisted', t('listingMode_unlisted')],
                               ['private', t('listingMode_private')],
-                              ['sold', t('listingMode_sold')],
                             ] as const
                           ).map(([mode, label]) => {
-                            const active = brokerListingModeFromProperty(property) === mode;
+                            const active = currentMode === mode;
                             return (
                               <button
                                 key={mode}
@@ -845,18 +1025,134 @@ export default function ProfilePage() {
                               </button>
                             );
                           })}
+                          {(() => {
+                            const soldActive = isSoldListingMode(currentMode);
+                            const menuOpen = soldMenuPropertyId === property._id;
+                            const saving = visibilitySavingId === property._id;
+                            return (
+                              <div className="relative" data-sold-menu>
+                                <div
+                                  className={`flex overflow-hidden rounded-md ${
+                                    soldActive
+                                      ? 'bg-blue-600 text-white'
+                                      : 'border border-slate-200 bg-white text-slate-700'
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => setBrokerListingMode(property, 'sold')}
+                                    className={`inline-flex items-center justify-center gap-1 px-2 py-1.5 text-center text-xs font-medium transition-colors disabled:opacity-50 ${
+                                      soldActive ? 'hover:bg-blue-700' : 'hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {soldActive &&
+                                      (currentMode === 'sold_listed' ? (
+                                        <IconEyeOpen className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                                      ) : (
+                                        <IconEyeClosed className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                                      ))}
+                                    {t('listingMode_sold')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    aria-label={t('listingMode_sold_choose')}
+                                    aria-expanded={menuOpen}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSoldMenuPropertyId((prev) =>
+                                        prev === property._id ? null : property._id
+                                      );
+                                    }}
+                                    className={`shrink-0 border-l px-1.5 py-1.5 text-xs disabled:opacity-50 ${
+                                      soldActive
+                                        ? 'border-blue-500 hover:bg-blue-700'
+                                        : 'border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <span aria-hidden className="inline-block leading-none">
+                                      {menuOpen ? '▴' : '▾'}
+                                    </span>
+                                  </button>
+                                </div>
+                                {menuOpen && (
+                                  <div className="absolute left-0 z-20 mt-1 min-w-[10.5rem] overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                                    {(
+                                      [
+                                        [
+                                          'sold_unlisted',
+                                          t('listingMode_sold_via_link'),
+                                          'closed',
+                                        ],
+                                        [
+                                          'sold_listed',
+                                          t('listingMode_sold_visible'),
+                                          'open',
+                                        ],
+                                      ] as const
+                                    ).map(([mode, label, eye]) => (
+                                      <button
+                                        key={mode}
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => setBrokerListingMode(property, mode)}
+                                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors disabled:opacity-50 ${
+                                          currentMode === mode
+                                            ? 'bg-blue-50 text-blue-700'
+                                            : 'text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                      >
+                                        {eye === 'open' ? (
+                                          <IconEyeOpen className="h-3.5 w-3.5 shrink-0" />
+                                        ) : (
+                                          <IconEyeClosed className="h-3.5 w-3.5 shrink-0" />
+                                        )}
+                                        <span>{label}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          {showCopyBtn && (
+                            <button
+                              type="button"
+                              title={
+                                linkCopiedId === property._id
+                                  ? t('linkCopied')
+                                  : t('copyPrivateLink')
+                              }
+                              aria-label={
+                                linkCopiedId === property._id
+                                  ? t('linkCopied')
+                                  : t('copyPrivateLink')
+                              }
+                              onClick={() => copyUnlistedLink(property)}
+                              className={`inline-flex items-center justify-center self-stretch rounded-md border px-2 transition-colors ${
+                                linkCopiedId === property._id
+                                  ? 'border-green-300 bg-green-50 text-green-700'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+                              }`}
+                            >
+                              <IconCopyLink />
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <div className="inline-flex items-center self-center">
+                              <ProfilePinToggleButton
+                                pinned={property.pinned}
+                                busy={pinningId === property._id}
+                                onClick={() => handleTogglePin(property)}
+                                label={property.pinned ? t('unpinListing') : t('pinListing')}
+                              />
+                            </div>
+                          )}
                         </div>
-                        {brokerListingModeFromProperty(property) === 'unlisted' && property.shareToken && (
-                          <button
-                            type="button"
-                            onClick={() => copyUnlistedLink(property)}
-                            className="text-xs font-medium text-blue-600 hover:underline"
-                          >
-                            {linkCopiedId === property._id ? t('linkCopied') : t('copyPrivateLink')}
-                          </button>
-                        )}
                       </div>
-                    )}
+                      );
+                    })()}
 
                     <div className="mt-3 grid grid-cols-2 gap-2 md:hidden">
                       <Link

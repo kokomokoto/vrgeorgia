@@ -1,13 +1,10 @@
-import { v2 as cloudinary } from 'cloudinary';
+/**
+ * Upload middleware helpers (multer memory).
+ * Filename kept for import compatibility — Cloudinary SDK removed; storage is R2 via mediaStorage.
+ */
 import multer from 'multer';
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-/** მიღება სერვერზე (MB) — შემდეგ sharp-ით იკუმშება ~10 MB-მდე */
+/** მიღება სერვერზე (MB) — შემდეგ sharp-ით იკუმშება */
 const PROPERTY_PHOTO_MAX_MB = Number(process.env.PROPERTY_PHOTO_MAX_MB || 50);
 export const PROPERTY_PHOTO_MAX_BYTES = PROPERTY_PHOTO_MAX_MB * 1024 * 1024;
 
@@ -23,7 +20,7 @@ export const uploadPropertyPhotos = multer({
   limits: { files: 30, fileSize: PROPERTY_PHOTO_MAX_BYTES },
 });
 
-/** აგენტის ფოტო — memory → mediaStorage (R2 ან Cloudinary) */
+/** აგენტის ფოტო — memory → mediaStorage */
 export const uploadAgentPhoto = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -59,29 +56,8 @@ export function uploadPropertyPhotosMiddleware(maxFiles = 30) {
   };
 }
 
+/** @deprecated name — deletes via mediaStorage (R2). */
 export async function deleteCloudinaryImage(imageUrl) {
-  if (!imageUrl) return true;
-  // R2 / Cloudflare public URLs — route through media helper without circular import cost.
-  const r2Base = process.env.R2_PUBLIC_BASE_URL?.replace(/\/$/, '');
-  if (r2Base && String(imageUrl).startsWith(r2Base)) {
-    const { deleteR2ObjectByUrl } = await import('./r2Media.js');
-    return deleteR2ObjectByUrl(imageUrl);
-  }
-  if (!String(imageUrl).includes('cloudinary')) return true;
-  try {
-    const parts = imageUrl.split('/upload/');
-    if (parts.length < 2) return false;
-    const pathWithVersion = parts[1].split('?')[0];
-    const pathWithoutVersion = pathWithVersion.replace(/^v\d+\//, '');
-    const publicId = pathWithoutVersion.replace(/\.[^.]+$/, '');
-    if (!publicId) return false;
-    const result = await cloudinary.uploader.destroy(publicId);
-    const status = result?.result;
-    return status === 'ok' || status === 'not found';
-  } catch (err) {
-    console.error('Cloudinary delete error:', err.message);
-    return false;
-  }
+  const { deleteMediaImage } = await import('./mediaStorage.js');
+  return deleteMediaImage(imageUrl);
 }
-
-export { cloudinary };

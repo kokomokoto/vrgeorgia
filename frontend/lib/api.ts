@@ -318,8 +318,18 @@ export type PropertyQuery = {
   limit?: number;
   includeTypeCounts?: boolean | string;
   brokerListingMode?: string;
+  /** ადმინის პროფილი / სია: მხოლოდ აპინული (`1`/`true`) ან არააპინული */
+  pinned?: string | boolean;
   userId?: string;
 };
+
+/** ადმინი — მთავარზე აპინვა / აპინვის მოხსნა */
+export async function setPropertyPinned(id: string, pinned: boolean) {
+  return request<Property>(`/api/admin/properties/${encodeURIComponent(id)}/pin`, {
+    method: 'PUT',
+    body: JSON.stringify({ pinned }),
+  });
+}
 
 export async function listProperties(query: PropertyQuery) {
   const params: Record<string, string> = {};
@@ -444,7 +454,13 @@ export async function getMyProperties(query?: PropertyQuery) {
 export async function updateProperty(
   id: string,
   data: Partial<Property> & {
-    brokerListingMode?: 'public' | 'unlisted' | 'private' | 'sold';
+    brokerListingMode?:
+      | 'public'
+      | 'unlisted'
+      | 'private'
+      | 'sold'
+      | 'sold_listed'
+      | 'sold_unlisted';
     draft?: boolean;
   },
   opts?: { draft?: boolean }

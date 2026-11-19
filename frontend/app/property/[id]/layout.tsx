@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { permanentRedirect } from 'next/navigation';
 import { canonicalPropertyPathId } from '@/lib/seoDuplicateCanonical';
 import {
-  buildMissingPropertyMetadata,
   buildPropertyShareMetadata,
   fetchPropertyForShareMetadata,
 } from '@/lib/propertyShareMetadata';
@@ -23,13 +22,13 @@ type LayoutProps = {
   params: Promise<{ id: string }>;
 };
 
+// Metadata with share-token support lives on page.tsx (needs searchParams).
+// Layout keeps a public-only fallback for nested routes like /edit.
 export async function generateMetadata({ params }: Pick<LayoutProps, 'params'>): Promise<Metadata> {
   const { id } = await params;
   const lang = await getRequestLang();
   const property = await fetchPropertyForShareMetadata(id, lang);
-  if (!property) {
-    return buildMissingPropertyMetadata(id, lang);
-  }
+  if (!property) return {};
   return buildPropertyShareMetadata(id, property, lang);
 }
 

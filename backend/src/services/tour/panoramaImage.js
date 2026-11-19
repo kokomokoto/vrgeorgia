@@ -1,22 +1,19 @@
 import sharp from 'sharp';
 import { deleteCloudinaryImage } from '../cloudinary.js';
-import { getMediaProvider, uploadImageBuffer } from '../mediaStorage.js';
+import { uploadImageBuffer } from '../mediaStorage.js';
 import { isR2Configured } from '../r2Media.js';
 
-const CLOUDINARY_MAX_BYTES = 10 * 1024 * 1024 - 256 * 1024;
+/** Soft size target for panoramas (~10 MB) — not a Cloudinary limit anymore. */
+const PANORAMA_TARGET_MAX_BYTES = 10 * 1024 * 1024 - 256 * 1024;
 
-export function isCloudinaryConfigured() {
-  return Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-  );
+/** True when R2 panorama storage is ready. */
+export function isRemotePanoramaStorageReady() {
+  return isR2Configured();
 }
 
-/** True when remote panorama storage (R2 or Cloudinary) is ready. */
-export function isRemotePanoramaStorageReady() {
-  if (getMediaProvider() === 'r2') return isR2Configured();
-  return isCloudinaryConfigured();
+/** @deprecated — use isRemotePanoramaStorageReady */
+export function isCloudinaryConfigured() {
+  return isRemotePanoramaStorageReady();
 }
 
 /** Keep high resolution for 360° viewer (max ~8192×4096, never below ~2048×1024). */
@@ -36,7 +33,7 @@ export async function compressPanoramaForCloudinary(input) {
   let output = await pipeline.jpeg({ quality, mozjpeg: true }).toBuffer();
 
   let attempts = 0;
-  while (output.length > CLOUDINARY_MAX_BYTES && attempts < 24) {
+  while (output.length > PANORAMA_TARGET_MAX_BYTES && attempts < 24) {
     attempts += 1;
     if (quality > 70) {
       quality -= 5;
@@ -58,17 +55,11 @@ export async function compressPanoramaForCloudinary(input) {
       .toBuffer();
   }
 
-  if (getMediaProvider() !== 'r2' && output.length > CLOUDINARY_MAX_BYTES) {
-    throw new Error(
-      'ფოტო ძალიან დიდია (Cloudinary ~10 MB ლიმიტი). სცადეთ უფრო პატარა ფაილი.'
-    );
-  }
-
   return output;
 }
 
 /**
- * Upload panorama to active media provider (R2 or Cloudinary).
+ * Upload panorama to R2.
  * Stable key so re-upload overwrites the same object.
  */
 export async function uploadPanoramaImage(buffer, tourId, sceneId) {

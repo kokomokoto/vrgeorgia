@@ -7,10 +7,12 @@ import {
 import { applySqmRangeFilter } from './areaFilter.js';
 import { getUsdToGelRate } from './currency.js';
 
+/** საჯარო სია: აქტიური + გაყიდული მხოლოდ თუ listingVisibility=public (sold_listed). */
 export const PUBLIC_STATUS_OR = {
   $or: [
     { status: 'active' },
     { status: 'pending' },
+    { status: 'sold' },
     { status: { $exists: false } },
   ],
 };
@@ -481,14 +483,22 @@ export async function applyPropertyQueryFilters(filter, query) {
 /**
  * Admin / broker listing visibility filter.
  * @param {Record<string, unknown>} filter
- * @param {string} mode public | unlisted | private | sold | ''
+ * @param {string} mode public | unlisted | private | sold | sold_listed | sold_unlisted | ''
  */
 export function applyListingVisibilityFilter(filter, mode) {
   const m = String(mode || '').trim();
   if (!m || m === 'all') return;
 
-  if (m === 'sold') {
+  if (m === 'sold' || m === 'sold_listed' || m === 'sold_unlisted') {
     filter.status = 'sold';
+    if (m === 'sold_listed') {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
+      });
+    } else if (m === 'sold_unlisted') {
+      filter.listingVisibility = 'unlisted';
+    }
     return;
   }
 

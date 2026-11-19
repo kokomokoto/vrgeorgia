@@ -11,24 +11,6 @@ export type ResolvePropertyImageOptions = {
   watermark?: boolean;
 };
 
-/**
- * Fixed `f_webp` (not `f_auto`) so AVIF/WebP/JPG არ იქმნება ცალ-ცალკე
- * transformation-ებად და Cloudinary კრედიტი ნაკლებად იწურება.
- */
-const CLOUDINARY_SIZE: Record<Exclude<PropertyImageVariant, 'original'>, string> = {
-  thumb: 'w_400,h_300,c_fill,f_webp,q_auto',
-  large: 'w_1600,c_limit,f_webp,q_auto',
-};
-
-/**
- * ქვედა-მარცხენა კუთხე (g_south_west) — x/y თითოეული გამოსახულების საკუთარ კიდეებთანაა,
- * ამიტომ სხვადასხვა ასპექტის ფოტოზეც კუთხეს მიჰყვება, არა ეკრანის სტატიკურ წერტილს.
- */
-const WATERMARK_LAYER: Record<Exclude<PropertyImageVariant, 'original'>, string> = {
-  thumb: 'l_text:Arial_22_bold:vhome.ge,co_rgb:FFFFFF,o_55,g_south_west,x_12,y_10',
-  large: 'l_text:Arial_44_bold:vhome.ge,co_rgb:FFFFFF,o_55,g_south_west,x_36,y_28',
-};
-
 const CF_THUMB = 'width=400,height=300,fit=cover,format=webp,quality=80';
 const CF_LARGE = 'width=1600,fit=scale-down,format=webp,quality=80';
 
@@ -60,7 +42,7 @@ export function isR2MediaUrl(url: string): boolean {
 /**
  * Cloudflare Image Resizing URL.
  * Disabled unless NEXT_PUBLIC_CF_IMAGE_RESIZE=1 — otherwise return the original
- * media.vhome.ge URL (R2 public) so listings keep working when transform quota is exhausted.
+ * media.vhome.ge URL (R2 public).
  */
 export function applyCloudflareImageResize(absoluteUrl: string, options: string): string {
   if (!cfImageResizeEnabled()) return absoluteUrl;
@@ -69,62 +51,27 @@ export function applyCloudflareImageResize(absoluteUrl: string, options: string)
   return `${origin}/cdn-cgi/image/${options}/${absoluteUrl}`;
 }
 
-/** არსებული Cloudinary transformation-ის ამოღება (master path) */
-function stripCloudinaryTransforms(url: string): string {
-  if (!url.includes('res.cloudinary.com') || !url.includes('/upload/')) {
-    return url;
-  }
-  const [prefix, suffix] = url.split('/upload/');
-  if (!suffix) return url;
-
-  const segments = suffix.split('/');
-  let startIdx = 0;
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
-    if (/^v\d+$/.test(seg)) break;
-    if (seg.startsWith('vrgeorgia')) break;
-    if (seg.includes(',') || (seg.includes('_') && !seg.includes('.'))) {
-      startIdx = i + 1;
-      continue;
-    }
-    break;
-  }
-  const cleanPath = segments.slice(startIdx).join('/');
-  return `${prefix}/upload/${cleanPath}`;
+/** @deprecated — Cloudinary removed; returns URL unchanged. */
+export function applyCloudinaryTransform(url: string, _transform?: string): string {
+  return url;
 }
 
-export function applyCloudinaryTransform(url: string, transform: string): string {
-  const base = stripCloudinaryTransforms(url);
-  if (!base.includes('res.cloudinary.com') || !base.includes('/upload/')) {
-    return base;
-  }
-  return base.replace('/upload/', `/upload/${transform}/`);
-}
-
-/**
- * გადმოწერის URL — large ვოთერმარკი + fl_attachment (Cloudinary).
- * R2-ზე ვოთერმარკი backend endpoint-ით მოგვიანებით.
- */
-const WATERMARK_DOWNLOAD_TRANSFORM = `${CLOUDINARY_SIZE.large.replace(',f_webp', ',f_jpg')}/${WATERMARK_LAYER.large}/fl_attachment:vhome`;
-
-function r2WatermarkedUrl(absoluteUrl: string, download = false): string {
+function watermarkedUrl(absoluteUrl: string, download = false): string {
   const q = new URLSearchParams({ url: absoluteUrl });
   if (download) q.set('download', '1');
   return `${getApiBase()}/api/media/watermarked?${q.toString()}`;
 }
 
+/** გადმოწერის URL — backend sharp watermark (R2). */
 export function cloudinaryWatermarkedDownloadUrl(path: string | null | undefined): string {
   const base = resolveBaseUrl(path);
   if (!base) return '';
-  if (isR2MediaUrl(base)) {
-    return r2WatermarkedUrl(base, true);
-  }
-  return applyCloudinaryTransform(base, WATERMARK_DOWNLOAD_TRANSFORM);
+  if (!base.startsWith('http')) return base;
+  return watermarkedUrl(base, true);
 }
 
 /**
- * Responsive `srcSet` for card thumbnails.
- * მხოლოდ 400 + 800 — 640 ამოვიღეთ, რომ ნაკლები unique transformation იყოს.
+ * Responsive `srcSet` for card thumbnails (optional CF resize).
  */
 export function propertyThumbSrcSet(
   path: string | null | undefined,
@@ -143,25 +90,15 @@ export function propertyThumbSrcSet(
       .join(', ');
   }
 
-  if (!base.includes('res.cloudinary.com')) return undefined;
-  const widths = [400, 800];
-  return widths
-    .map((w) => {
-      const h = Math.round((w * 3) / 4);
-      const size = `w_${w},h_${h},c_fill,f_webp,q_auto`;
-      const transform = options?.watermark === true ? `${size}/${WATERMARK_LAYER.thumb}` : size;
-      return `${applyCloudinaryTransform(base, transform)} ${w}w`;
-    })
-    .join(', ');
+  return undefined;
 }
 
 /** Matching `sizes` for the listing grids (1 col mobile → 4 col desktop). */
 export const PROPERTY_CARD_SIZES = '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 320px';
 
 /**
- * ობიექტის ფოტოს URL — Cloudinary ან Cloudflare R2 (+ optional Image Resizing).
- * R2: ნაგულისხმევად პირდაპირ media.vhome.ge (resize მხოლოდ NEXT_PUBLIC_CF_IMAGE_RESIZE=1).
- * watermark: true → backend sharp overlay (იგივე ქცევა რაც Cloudinary text layer).
+ * ობიექტის ფოტოს URL — Cloudflare R2 (+ optional Image Resizing).
+ * watermark: true → backend sharp overlay.
  * 360° / original — სუფთა master.
  */
 export function resolvePropertyImageUrl(
@@ -174,18 +111,13 @@ export function resolvePropertyImageUrl(
     return base;
   }
 
-  if (isR2MediaUrl(base)) {
-    if (options?.watermark === true) {
-      return r2WatermarkedUrl(base, false);
-    }
-    if (cfImageResizeEnabled() && cfImageOrigin()) {
-      return applyCloudflareImageResize(base, variant === 'thumb' ? CF_THUMB : CF_LARGE);
-    }
-    return base;
+  if (options?.watermark === true && base.startsWith('http')) {
+    return watermarkedUrl(base, false);
   }
 
-  const size = CLOUDINARY_SIZE[variant];
-  const transform =
-    options?.watermark === true ? `${size}/${WATERMARK_LAYER[variant]}` : size;
-  return applyCloudinaryTransform(base, transform);
+  if (isR2MediaUrl(base) && cfImageResizeEnabled() && cfImageOrigin()) {
+    return applyCloudflareImageResize(base, variant === 'thumb' ? CF_THUMB : CF_LARGE);
+  }
+
+  return base;
 }

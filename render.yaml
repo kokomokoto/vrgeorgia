@@ -47,13 +47,7 @@ services:
         value: https://vrgeorgia-api.onrender.com
       - key: API_PUBLIC_URL
         value: https://vrgeorgia-api.onrender.com
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
-        sync: false
-      # Cloudflare R2 media (default cloudinary until these are set + MEDIA_PROVIDER=r2)
+      # Media: Cloudflare R2 only (Cloudinary removed)
       - key: MEDIA_PROVIDER
         value: r2
       - key: CF_ACCOUNT_ID

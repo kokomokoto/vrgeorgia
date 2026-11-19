@@ -63,7 +63,13 @@ export type UploadDraft = {
   isolatedKitchen: boolean;
   heatingCooling: boolean;
   privateNotes: string;
-  brokerListingMode: 'public' | 'unlisted' | 'private' | 'sold';
+  brokerListingMode:
+    | 'public'
+    | 'unlisted'
+    | 'private'
+    | 'sold'
+    | 'sold_listed'
+    | 'sold_unlisted';
 };
 
 export function createEmptyUploadDraft(): UploadDraft {
@@ -157,9 +163,12 @@ function normalizeDraft(raw: Partial<UploadDraft>): UploadDraft {
     brokerListingMode:
       raw.brokerListingMode === 'unlisted' ||
       raw.brokerListingMode === 'private' ||
-      raw.brokerListingMode === 'sold'
+      raw.brokerListingMode === 'sold_listed' ||
+      raw.brokerListingMode === 'sold_unlisted'
         ? raw.brokerListingMode
-        : 'public',
+        : raw.brokerListingMode === 'sold'
+          ? 'sold_unlisted'
+          : 'public',
   };
 }
 

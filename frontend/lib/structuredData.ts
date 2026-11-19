@@ -8,7 +8,6 @@ import {
 import { SITE_NAME, getSiteUrl } from '@/lib/siteUrl';
 import { DEFAULT_SITE_LANG, localizePath, type SiteLang } from '@/lib/siteLang';
 import { SITE_META, dealLabel as dealLabelI18n, typeLabel as typeLabelI18n } from '@/lib/seoI18n';
-import { applyCloudinaryTransform } from '@/lib/imageUrl';
 import { SITE_CONTACT, buildSameAs } from '@/lib/siteContact';
 import type { SiteSocialLinks } from '@/lib/siteSocialLinks';
 
@@ -154,8 +153,7 @@ export function buildPropertyJsonLd(id: string, property: Property, lang: SiteLa
   const gallery = (property.photos || [])
     .slice(0, 12)
     .map((p) => absoluteListingImageUrl(p))
-    .filter((u): u is string => Boolean(u))
-    .map((u) => (u.includes('res.cloudinary.com') ? applyCloudinaryTransform(u, 'w_1600,c_limit,f_jpg,q_auto') : u));
+    .filter((u): u is string => Boolean(u));
   if (image || gallery.length) {
     jsonLd.image = [...new Set([image, ...gallery].filter((u): u is string => Boolean(u)))];
   }

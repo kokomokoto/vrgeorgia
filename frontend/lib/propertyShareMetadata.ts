@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import type { Property } from '@/lib/types';
-import { applyCloudinaryTransform } from '@/lib/imageUrl';
 import { getPropertyAddressLine, getPropertyPrices } from '@/lib/propertyDisplay';
 import { canonicalPropertyPathId } from '@/lib/seoDuplicateCanonical';
 import { SITE_NAME, getSiteHost, getSiteUrl } from '@/lib/siteUrl';
@@ -32,12 +31,18 @@ function serverApiBase(): string {
  */
 export async function fetchPropertyForShareMetadata(
   id: string,
-  lang: SiteLang = DEFAULT_SITE_LANG
+  lang: SiteLang = DEFAULT_SITE_LANG,
+  opts?: { shareToken?: string }
 ): Promise<Property | null> {
   try {
+    const params = new URLSearchParams({ lang, meta: '1' });
+    if (opts?.shareToken) params.set('t', opts.shareToken);
+    // Share-token fetches must not be cached — token is per-listing secret.
     const res = await fetch(
-      `${serverApiBase()}/api/properties/${encodeURIComponent(id)}?lang=${lang}&meta=1`,
-      { next: { revalidate: 300 } }
+      `${serverApiBase()}/api/properties/${encodeURIComponent(id)}?${params.toString()}`,
+      opts?.shareToken
+        ? { cache: 'no-store' }
+        : { next: { revalidate: 300 } }
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { property?: Property };
@@ -66,8 +71,9 @@ export function getPropertyShareImageUrl(property: Property): string | undefined
   if (!photo) return undefined;
 
   const absolute = resolveAbsoluteImageUrl(photo);
-  if (absolute.includes('res.cloudinary.com')) {
-    return applyCloudinaryTransform(absolute, 'w_1200,h_630,c_fill,f_jpg,q_auto');
+  // R2 / absolute URLs — use as-is for OG (optional CF resize later)
+  if (absolute.startsWith('http')) {
+    return absolute;
   }
   return absolute;
 }

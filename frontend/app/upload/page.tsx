@@ -278,7 +278,7 @@ export default function UploadPage() {
   const [privateNotes, setPrivateNotes] = React.useState('');
   /** აგენტის/ადმინის ხილვადობა — საჯარო / ლინკით / პირადი / გაყიდული */
   const [brokerListingMode, setBrokerListingMode] = React.useState<
-    'public' | 'unlisted' | 'private' | 'sold'
+    'public' | 'unlisted' | 'private' | 'sold' | 'sold_listed' | 'sold_unlisted'
   >('public');
 
   const [error, setError] = React.useState<string | null>(null);
@@ -390,8 +390,12 @@ export default function UploadPage() {
       draft.brokerListingMode === 'unlisted' ||
         draft.brokerListingMode === 'private' ||
         draft.brokerListingMode === 'sold' ||
+        draft.brokerListingMode === 'sold_listed' ||
+        draft.brokerListingMode === 'sold_unlisted' ||
         draft.brokerListingMode === 'public'
-        ? draft.brokerListingMode
+        ? draft.brokerListingMode === 'sold'
+          ? 'sold_unlisted'
+          : draft.brokerListingMode
         : 'public'
     );
   }, []);
@@ -2260,10 +2264,15 @@ export default function UploadPage() {
                 </label>
                 <select
                   id="upload-listing-visibility"
-                  value={brokerListingMode}
+                  value={brokerListingMode === 'sold' ? 'sold_unlisted' : brokerListingMode}
                   onChange={(e) =>
                     setBrokerListingMode(
-                      e.target.value as 'public' | 'unlisted' | 'private' | 'sold'
+                      e.target.value as
+                        | 'public'
+                        | 'unlisted'
+                        | 'private'
+                        | 'sold_listed'
+                        | 'sold_unlisted'
                     )
                   }
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
@@ -2271,7 +2280,8 @@ export default function UploadPage() {
                   <option value="public">{t('listingMode_public')}</option>
                   <option value="unlisted">{t('listingMode_unlisted')}</option>
                   <option value="private">{t('listingMode_private')}</option>
-                  <option value="sold">{t('listingMode_sold')}</option>
+                  <option value="sold_unlisted">{t('listingMode_sold_unlisted')}</option>
+                  <option value="sold_listed">{t('listingMode_sold_listed')}</option>
                 </select>
               </div>
             )}

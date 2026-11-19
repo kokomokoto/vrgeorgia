@@ -219,7 +219,7 @@ export default function EditPropertyPage() {
   // პირადი ჩანაწერი
   const [privateNotes, setPrivateNotes] = useState('');
   const [brokerListingMode, setBrokerListingMode] = useState<
-    'public' | 'unlisted' | 'private' | 'sold'
+    'public' | 'unlisted' | 'private' | 'sold' | 'sold_listed' | 'sold_unlisted'
   >('public');
 
   const [panoramaSaving, setPanoramaSaving] = useState(false);
@@ -340,7 +340,9 @@ export default function EditPropertyPage() {
         // პირადი ჩანაწერი
         setPrivateNotes((p as any).privateNotes || '');
         if (p.status === 'sold') {
-          setBrokerListingMode('sold');
+          setBrokerListingMode(
+            p.listingVisibility === 'public' ? 'sold_listed' : 'sold_unlisted'
+          );
         } else {
           const vis = p.listingVisibility || 'public';
           setBrokerListingMode(
@@ -1977,10 +1979,15 @@ export default function EditPropertyPage() {
                 </label>
                 <select
                   id="edit-listing-visibility"
-                  value={brokerListingMode}
+                  value={brokerListingMode === 'sold' ? 'sold_unlisted' : brokerListingMode}
                   onChange={(e) =>
                     setBrokerListingMode(
-                      e.target.value as 'public' | 'unlisted' | 'private' | 'sold'
+                      e.target.value as
+                        | 'public'
+                        | 'unlisted'
+                        | 'private'
+                        | 'sold_listed'
+                        | 'sold_unlisted'
                     )
                   }
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
@@ -1988,7 +1995,8 @@ export default function EditPropertyPage() {
                   <option value="public">{t('listingMode_public')}</option>
                   <option value="unlisted">{t('listingMode_unlisted')}</option>
                   <option value="private">{t('listingMode_private')}</option>
-                  <option value="sold">{t('listingMode_sold')}</option>
+                  <option value="sold_unlisted">{t('listingMode_sold_unlisted')}</option>
+                  <option value="sold_listed">{t('listingMode_sold_listed')}</option>
                 </select>
               </div>
             )}

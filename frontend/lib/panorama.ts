@@ -1,3 +1,5 @@
+import { getApiBase } from './config';
+
 /** equirectangular პანორამა ჩვეულებრივ 2:1 (არა 16:9 ≈ 1.78) */
 export function isEquirectangularAspect(width: number, height: number): boolean {
   if (!width || !height || height < 400) return false;
@@ -27,24 +29,36 @@ export function isPanoramaPhoto(url: string, panoramaPhotos?: string[] | null): 
 }
 
 /**
+ * R2 public host ხშირად CORS-ის გარეშეა — WebGL viewer-ს სჭირდება API proxy.
+ */
+export function panoramaProxyUrl(absoluteUrl: string): string {
+  if (!absoluteUrl) return '';
+  const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  const needsProxy =
+    (r2Base && absoluteUrl.startsWith(r2Base)) ||
+    /\.r2\.dev\//i.test(absoluteUrl);
+  if (!needsProxy) return absoluteUrl;
+  const q = new URLSearchParams({ url: absoluteUrl });
+  return `${getApiBase()}/api/media/raw?${q.toString()}`;
+}
+
+/**
  * 360° viewer-ისთვის URL-ები (პირველი = ოპტიმალური ზომა WebGL-ისთვის).
  * მხოლოდ ერთი ტრანსფორმი + original fallback — 3–4 ზომა კრედიტს ჭამდა.
  */
 export function getPanoramaViewerUrls(src: string): string[] {
   if (!src) return [];
   const out: string[] = [];
-  if (src.includes('res.cloudinary.com') && src.includes('/upload/')) {
-    out.push(src.replace('/upload/', '/upload/w_2048,h_1024,c_limit,f_jpg,q_auto:good/'));
-  } else {
-    const resizeOn = ['1', 'true', 'yes'].includes(
-      (process.env.NEXT_PUBLIC_CF_IMAGE_RESIZE || '').trim().toLowerCase()
-    );
-    const origin = (process.env.NEXT_PUBLIC_CF_IMAGE_ORIGIN || '').replace(/\/$/, '');
-    const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || '').replace(/\/$/, '');
-    if (resizeOn && origin && r2Base && src.startsWith(r2Base)) {
-      out.push(`${origin}/cdn-cgi/image/width=2048,height=1024,fit=scale-down,format=jpg,quality=80/${src}`);
-    }
+  const resizeOn = ['1', 'true', 'yes'].includes(
+    (process.env.NEXT_PUBLIC_CF_IMAGE_RESIZE || '').trim().toLowerCase()
+  );
+  const origin = (process.env.NEXT_PUBLIC_CF_IMAGE_ORIGIN || '').replace(/\/$/, '');
+  const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  if (resizeOn && origin && r2Base && src.startsWith(r2Base)) {
+    out.push(`${origin}/cdn-cgi/image/width=2048,height=1024,fit=scale-down,format=jpg,quality=80/${src}`);
   }
+  const proxied = panoramaProxyUrl(src);
+  if (proxied && !out.includes(proxied)) out.push(proxied);
   if (!out.includes(src)) out.push(src);
   return [...new Set(out)];
 }

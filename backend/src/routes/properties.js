@@ -210,17 +210,54 @@ function applyRoomLikeInFilter(filter, fieldName, rawJson) {
   }
 }
 
-/** საჯარო სიისთვის: აქტიური (ძველი მოლოდინიც) + საჯარო ხილვადობა */
+/** საჯარო სია: აქტიური/pending + sold_listed (sold + public visibility). sold_unlisted PUBLIC_LISTING_OR-ით იჭრება. */
 const PUBLIC_STATUS_OR = {
   $or: [
     { status: 'active' },
     { status: 'pending' },
+    { status: 'sold' },
     { status: { $exists: false } },
   ],
 };
 const PUBLIC_LISTING_OR = {
   $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
 };
+
+const BROKER_LISTING_MODES = [
+  'public',
+  'unlisted',
+  'private',
+  'sold',
+  'sold_listed',
+  'sold_unlisted',
+];
+
+/** @returns {{ unsetShareToken?: boolean }} */
+function applyBrokerListingModeToDoc(target, mode, { ensureShareToken = true } = {}) {
+  if (mode === 'sold' || mode === 'sold_unlisted') {
+    target.status = 'sold';
+    target.listingVisibility = 'unlisted';
+    if (ensureShareToken && !target.shareToken) {
+      target.shareToken = nanoid(16);
+    }
+    return { unsetShareToken: false };
+  }
+  if (mode === 'sold_listed') {
+    target.status = 'sold';
+    target.listingVisibility = 'public';
+    return { unsetShareToken: true };
+  }
+  if (mode === 'public' || mode === 'unlisted' || mode === 'private') {
+    if (target.status === 'sold') target.status = 'active';
+    target.listingVisibility = mode;
+    if (mode === 'unlisted') {
+      if (ensureShareToken && !target.shareToken) target.shareToken = nanoid(16);
+      return { unsetShareToken: false };
+    }
+    return { unsetShareToken: true };
+  }
+  return {};
+}
 
 /** ფანჯარა, რომელშიც იდენტური უფოტოო ჩანაწერი ჩავარდნილ ატვირთვად ითვლება */
 const FAILED_UPLOAD_REUSE_WINDOW_MS = 30 * 60 * 1000;
@@ -322,7 +359,7 @@ router.post(
     body('cadastralCode').optional().isString().trim(),
     body('clientRequestId').optional().isString().trim().isLength({ max: 100 }),
     body('privateNotes').optional().isString().trim().isLength({ max: 5000 }),
-    body('brokerListingMode').optional().isIn(['public', 'unlisted', 'private', 'sold']),
+    body('brokerListingMode').optional().isIn(BROKER_LISTING_MODES),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -466,15 +503,19 @@ router.post(
       };
       if (clientRequestId) payload.clientRequestId = clientRequestId;
 
-      // ატვირთვისას არჩეული ხილვადობა (საჯარო / ლინკით / პირადი / გაყიდული)
+      // ატვირთვისას არჩეული ხილვადობა (საჯარო / ლინკით / პირადი / გაყიდული…)
       const createMode = req.body.brokerListingMode;
-      if (createMode === 'sold') {
-        payload.status = 'sold';
-      } else if (createMode === 'public' || createMode === 'unlisted' || createMode === 'private') {
-        payload.listingVisibility = createMode;
-        if (createMode === 'unlisted') {
-          payload.shareToken = nanoid(16);
-        }
+      if (createMode && BROKER_LISTING_MODES.includes(createMode)) {
+        const tmp = {
+          status: payload.status,
+          listingVisibility: payload.listingVisibility,
+          shareToken: payload.shareToken,
+        };
+        const { unsetShareToken } = applyBrokerListingModeToDoc(tmp, createMode);
+        payload.status = tmp.status;
+        payload.listingVisibility = tmp.listingVisibility;
+        if (unsetShareToken) delete payload.shareToken;
+        else if (tmp.shareToken) payload.shareToken = tmp.shareToken;
       }
 
       // გამეორებული ატვირთვა: არსებული ჩანაწერი განვაახლოთ, ახალი არ შევქმნათ
@@ -488,16 +529,9 @@ router.post(
           existing.clientRequestId = clientRequestId;
         }
         // sold სტატუსი CREATE_REPLAY_SKIP_FIELDS-შია — ხელით ვაყენებთ
-        if (createMode === 'sold') {
-          existing.status = 'sold';
-        } else if (createMode && existing.status === 'sold') {
-          existing.status = 'active';
-        }
-        if (createMode === 'unlisted' && !existing.shareToken) {
-          existing.shareToken = nanoid(16);
-        }
-        if (createMode === 'public' || createMode === 'private') {
-          existing.shareToken = undefined;
+        if (createMode && BROKER_LISTING_MODES.includes(createMode)) {
+          const { unsetShareToken } = applyBrokerListingModeToDoc(existing, createMode);
+          if (unsetShareToken) existing.shareToken = undefined;
         }
         // თუ ამ ცდაზე ფოტოებიც მოვიდა, დავამატოთ — Cloudinary-ზე ატვირთული არ უნდა დაიკარგოს
         if (photos.length > 0) {
@@ -550,8 +584,16 @@ router.post(
 function applyBrokerListingModeFilter(filter, mode) {
   const m = String(mode || '').trim();
   if (!m) return;
-  if (m === 'sold') {
+  if (m === 'sold' || m === 'sold_listed' || m === 'sold_unlisted') {
     filter.status = 'sold';
+    if (m === 'sold_listed') {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [{ listingVisibility: { $exists: false } }, { listingVisibility: 'public' }],
+      });
+    } else if (m === 'sold_unlisted') {
+      filter.listingVisibility = 'unlisted';
+    }
     return;
   }
   filter.status = { $ne: 'sold' };
@@ -743,6 +785,12 @@ router.get(
     const baseFilter = withNotDeleted({ userId: req.user.id });
     const filter = withNotDeleted({ userId: req.user.id });
     applyBrokerListingModeFilter(filter, req.query.brokerListingMode || req.query.listingVisibility);
+    const pinnedRaw = String(req.query.pinned || '').trim().toLowerCase();
+    if (pinnedRaw === 'true' || pinnedRaw === '1') {
+      filter.pinned = true;
+    } else if (pinnedRaw === 'false' || pinnedRaw === '0') {
+      filter.pinned = { $ne: true };
+    }
     await applyPropertyQueryFilters(filter, req.query);
 
     const limitRaw = Number(req.query.limit);
@@ -1206,9 +1254,8 @@ router.get(
       if (property.status === 'rejected') {
         return res.status(404).json({ message: 'Not found' });
       }
-      if (property.status === 'sold') {
-        return res.status(404).json({ message: 'Not found' });
-      }
+      // sold რჩება დეტალურ გვერდზე ხილვადი (სიიდან უკვე ამოღებულია) — აგენტები/მყიდველები
+      // ლინკით უნდა ხედავდნენ. private = მხოლოდ მფლობელი; unlisted = მხოლოდ ?t= ტოკენით.
       if (listingVisibility === 'private') {
         return res.status(404).json({ message: 'Not found' });
       }
@@ -1224,6 +1271,7 @@ router.get(
       const isPubliclyVisible =
         property.status === 'active' ||
         property.status === 'pending' ||
+        property.status === 'sold' ||
         property.status === undefined;
       if (listingVisibility === 'public' && !isPubliclyVisible) {
         return res.status(404).json({ message: 'Not found' });
@@ -1403,7 +1451,7 @@ router.put(
     body('mainPhoto').optional().isInt({ min: 0 }),
     body('cadastralHidden').optional().isBoolean(),
     body('landStatus').optional().isIn(['', 'agricultural', 'non_agricultural']),
-    body('brokerListingMode').optional().isIn(['public', 'unlisted', 'private', 'sold'])
+    body('brokerListingMode').optional().isIn(BROKER_LISTING_MODES)
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -1488,23 +1536,19 @@ router.put(
     let unsetShareToken = false;
     if (req.body.brokerListingMode !== undefined) {
       const mode = req.body.brokerListingMode;
-      if (mode === 'sold') {
-        patch.status = 'sold';
-      } else {
-        if (existing.status === 'sold') {
-          patch.status = 'active';
-        }
-        if (mode === 'public') {
-          patch.listingVisibility = 'public';
+      if (BROKER_LISTING_MODES.includes(mode)) {
+        const tmp = {
+          status: existing.status,
+          listingVisibility: existing.listingVisibility || 'public',
+          shareToken: existing.shareToken,
+        };
+        const result = applyBrokerListingModeToDoc(tmp, mode);
+        patch.status = tmp.status;
+        patch.listingVisibility = tmp.listingVisibility;
+        if (result.unsetShareToken) {
           unsetShareToken = true;
-        } else if (mode === 'unlisted') {
-          patch.listingVisibility = 'unlisted';
-          if (!existing.shareToken) {
-            patch.shareToken = nanoid(16);
-          }
-        } else if (mode === 'private') {
-          patch.listingVisibility = 'private';
-          unsetShareToken = true;
+        } else if (tmp.shareToken && tmp.shareToken !== existing.shareToken) {
+          patch.shareToken = tmp.shareToken;
         }
       }
     }

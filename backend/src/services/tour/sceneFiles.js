@@ -1,12 +1,16 @@
 import fs from 'node:fs';
-import { deleteCloudinaryImage } from './panoramaImage.js';
+import { deleteMediaImage } from '../mediaStorage.js';
 import { tourUploadPath } from './tourPaths.js';
 
 export function deleteSceneImageFile(tourId, imagePath) {
   if (!imagePath) return;
 
-  if (imagePath.includes('cloudinary') || /^https?:\/\//i.test(imagePath)) {
-    void deleteCloudinaryImage(imagePath);
+  if (
+    imagePath.includes('cloudinary') ||
+    imagePath.includes('media.vhome.ge') ||
+    /^https?:\/\//i.test(imagePath)
+  ) {
+    void deleteMediaImage(imagePath);
     return;
   }
 

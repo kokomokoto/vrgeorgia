@@ -135,8 +135,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
         <link rel="preconnect" href="https://media.vhome.ge" />
         <link rel="dns-prefetch" href="https://media.vhome.ge" />
-        <link rel="preconnect" href="https://res.cloudinary.com" />
-        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         <script
           type="application/ld+json"
           nonce={nonce}

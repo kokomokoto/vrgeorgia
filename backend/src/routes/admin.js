@@ -2049,7 +2049,7 @@ router.delete('/content/home-design/presets/:id', requireAuth, adminMiddleware, 
   }
 });
 
-/** Design Mode მედია → Cloudinary (ყველა ბრაუზერში/მოწყობილობაზე ხელმისაწვდომი URL) */
+/** Design Mode მედია → mediaStorage (R2 როცა MEDIA_PROVIDER=r2) */
 router.post(
   '/content/home-design/media',
   requireAuth,

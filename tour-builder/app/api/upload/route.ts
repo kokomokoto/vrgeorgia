@@ -7,8 +7,8 @@ import { validateEquirectangular } from "@/lib/image";
 import { UPLOADS_DIR, uploadPath, uploadUrl } from "@/lib/paths";
 import {
   compressPanoramaForCloudinary,
-  isCloudinaryConfigured,
-  uploadPanoramaToCloudinary,
+  isRemotePanoramaStorageReady,
+  uploadPanoramaImage,
 } from "@/lib/cloudinary";
 
 export const runtime = "nodejs";
@@ -47,11 +47,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  // ── Production: ფოტო Cloudinary-ზე (იგივე ადგილი, სადაც ობიექტების ფოტოები) ──
-  if (isCloudinaryConfigured()) {
+  // ── Production / configured remote: R2 (MEDIA_PROVIDER=r2) ან Cloudinary fallback ──
+  if (isRemotePanoramaStorageReady()) {
     try {
       const compressed = await compressPanoramaForCloudinary(buffer);
-      const imageUrl = await uploadPanoramaToCloudinary(
+      const imageUrl = await uploadPanoramaImage(
         compressed,
         scene.tour_id,
         sceneId
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // ── Local dev fallback: დისკზე შენახვა (Cloudinary გასაღებების გარეშე) ──
+  // ── Local dev fallback: დისკზე შენახვა (R2/Cloudinary env-ის გარეშე) ──
   const ext =
     file.type === "image/png"
       ? "png"

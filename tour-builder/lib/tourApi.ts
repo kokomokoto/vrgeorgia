@@ -50,12 +50,40 @@ export function tourFetch(apiPath: string, init?: RequestInit): Promise<Response
   return fetch(tourApiUrl(apiPath), { ...init, headers });
 }
 
+/**
+ * R2 public host (media.vhome.ge) has no CORS — Photo Sphere / WebGL needs
+ * same-origin `/api/media/raw` (or API host) proxy.
+ */
+function needsPanoramaCorsProxy(absoluteUrl: string): boolean {
+  const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "").replace(
+    /\/$/,
+    ""
+  );
+  if (r2Base && absoluteUrl.startsWith(r2Base)) return true;
+  try {
+    const host = new URL(absoluteUrl).hostname.toLowerCase();
+    if (host === "media.vhome.ge") return true;
+    if (host.endsWith(".r2.dev")) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 /** ძველი relative `/api/uploads/...` ან სრული URL — viewer-ისთვის */
 export function resolvePanoramaUrl(imagePath: string | null | undefined): string {
   if (!imagePath) return "";
-  if (/^https?:\/\//i.test(imagePath)) return imagePath;
-  if (imagePath.startsWith("/api/")) {
-    return tourApiUrl(imagePath);
+  let absolute = imagePath;
+  if (/^https?:\/\//i.test(imagePath)) {
+    absolute = imagePath;
+  } else if (imagePath.startsWith("/api/")) {
+    absolute = tourApiUrl(imagePath);
+  } else {
+    return imagePath;
   }
-  return imagePath;
+  if (needsPanoramaCorsProxy(absolute)) {
+    const q = new URLSearchParams({ url: absolute });
+    return tourApiUrl(`/api/media/raw?${q.toString()}`);
+  }
+  return absolute;
 }

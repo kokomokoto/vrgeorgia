@@ -97,7 +97,13 @@ for (const o of LOCAL_DEV_FRONTENDS) {
  * Public read-only GET endpoints stay readable (they are the documented public API),
  * but no credentials / write methods are granted to foreign origins.
  */
-const PUBLIC_READ_ONLY_PREFIXES = ['/api/properties', '/api/agents', '/api/health', '/api/currency'];
+const PUBLIC_READ_ONLY_PREFIXES = [
+  '/api/properties',
+  '/api/agents',
+  '/api/health',
+  '/api/currency',
+  '/api/media',
+];
 
 function corsOriginCheck(origin, cb) {
   if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
@@ -228,6 +234,7 @@ if (shouldUseProductionTourProxy()) {
   attachProductionTourProxy(app);
 }
 
+// media/raw — WebGL 360 / tour panoramas (CORS proxy for R2)
 app.use('/api', mediaRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertyRoutes);

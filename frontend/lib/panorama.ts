@@ -34,10 +34,20 @@ export function isPanoramaPhoto(url: string, panoramaPhotos?: string[] | null): 
 export function panoramaProxyUrl(absoluteUrl: string): string {
   if (!absoluteUrl) return '';
   const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || '').replace(/\/$/, '');
-  const needsProxy =
+  let needsProxy =
     (r2Base && absoluteUrl.startsWith(r2Base)) ||
     /\.r2\.dev\//i.test(absoluteUrl);
+  if (!needsProxy) {
+    try {
+      const host = new URL(absoluteUrl).hostname.toLowerCase();
+      needsProxy = host === 'media.vhome.ge' || host.endsWith('.r2.dev');
+    } catch {
+      needsProxy = false;
+    }
+  }
   if (!needsProxy) return absoluteUrl;
+  // Already proxied — avoid nesting.
+  if (absoluteUrl.includes('/api/media/raw?')) return absoluteUrl;
   const q = new URLSearchParams({ url: absoluteUrl });
   return `${getApiBase()}/api/media/raw?${q.toString()}`;
 }
@@ -59,7 +69,8 @@ export function getPanoramaViewerUrls(src: string): string[] {
   }
   const proxied = panoramaProxyUrl(src);
   if (proxied && !out.includes(proxied)) out.push(proxied);
-  if (!out.includes(src)) out.push(src);
+  // Direct R2/media.vhome.ge has no CORS for WebGL — only fall back when not proxied.
+  if (proxied === src && !out.includes(src)) out.push(src);
   return [...new Set(out)];
 }
 

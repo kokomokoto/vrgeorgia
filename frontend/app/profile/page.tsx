@@ -348,8 +348,7 @@ export default function ProfilePage() {
     return base;
   };
 
-  const copyUnlistedLink = (property: Property) => {
-    if (!property.shareToken) return;
+  const copyListingLink = (property: Property) => {
     const url = `${typeof window !== 'undefined' ? window.location.origin : ''}${propertyViewHref(property)}`;
     void navigator.clipboard.writeText(url).then(() => {
       setLinkCopiedId(property._id);
@@ -995,8 +994,9 @@ export default function ProfilePage() {
 
                     {canSetListingVisibility && (() => {
                       const currentMode = brokerListingModeFromProperty(property);
-                      const showCopyBtn =
-                        needsPrivateShareLink(currentMode) && Boolean(property.shareToken);
+                      const copyLabel = needsPrivateShareLink(currentMode)
+                        ? t('copyPrivateLink')
+                        : t('copyLink');
                       return (
                       <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                         <p className="text-xs font-medium text-slate-600">{t('listingVisibilityLabel')}</p>
@@ -1046,12 +1046,15 @@ export default function ProfilePage() {
                                       soldActive ? 'hover:bg-blue-700' : 'hover:bg-slate-50'
                                     }`}
                                   >
-                                    {soldActive &&
-                                      (currentMode === 'sold_listed' ? (
-                                        <IconEyeOpen className="h-3.5 w-3.5 shrink-0 opacity-90" />
-                                      ) : (
-                                        <IconEyeClosed className="h-3.5 w-3.5 shrink-0 opacity-90" />
-                                      ))}
+                                    {currentMode === 'sold_listed' ? (
+                                      <IconEyeOpen
+                                        className={`h-3.5 w-3.5 shrink-0 ${soldActive ? 'opacity-90' : 'opacity-60'}`}
+                                      />
+                                    ) : (
+                                      <IconEyeClosed
+                                        className={`h-3.5 w-3.5 shrink-0 ${soldActive ? 'opacity-90' : 'opacity-60'}`}
+                                      />
+                                    )}
                                     {t('listingMode_sold')}
                                   </button>
                                   <button
@@ -1116,29 +1119,23 @@ export default function ProfilePage() {
                               </div>
                             );
                           })()}
-                          {showCopyBtn && (
-                            <button
-                              type="button"
-                              title={
-                                linkCopiedId === property._id
-                                  ? t('linkCopied')
-                                  : t('copyPrivateLink')
-                              }
-                              aria-label={
-                                linkCopiedId === property._id
-                                  ? t('linkCopied')
-                                  : t('copyPrivateLink')
-                              }
-                              onClick={() => copyUnlistedLink(property)}
-                              className={`inline-flex items-center justify-center self-stretch rounded-md border px-2 transition-colors ${
-                                linkCopiedId === property._id
-                                  ? 'border-green-300 bg-green-50 text-green-700'
-                                  : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
-                              }`}
-                            >
-                              <IconCopyLink />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            title={
+                              linkCopiedId === property._id ? t('linkCopied') : copyLabel
+                            }
+                            aria-label={
+                              linkCopiedId === property._id ? t('linkCopied') : copyLabel
+                            }
+                            onClick={() => copyListingLink(property)}
+                            className={`inline-flex items-center justify-center self-stretch rounded-md border px-2 transition-colors ${
+                              linkCopiedId === property._id
+                                ? 'border-green-300 bg-green-50 text-green-700'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+                            }`}
+                          >
+                            <IconCopyLink />
+                          </button>
                           {isAdmin && (
                             <div className="inline-flex items-center self-center">
                               <ProfilePinToggleButton

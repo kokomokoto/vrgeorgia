@@ -222,8 +222,6 @@ export default function EditPropertyPage() {
     'public' | 'unlisted' | 'private' | 'sold' | 'sold_listed' | 'sold_unlisted'
   >('public');
 
-  const [panoramaSaving, setPanoramaSaving] = useState(false);
-
   useEffect(() => setHydrated(true), []);
 
   // მონაცემების ჩატვირთვა
@@ -243,9 +241,14 @@ export default function EditPropertyPage() {
     setDataLoading(true);
     setError(null);
 
-    getPropertyForEdit(id)
+    // შენახვის გარეშე დარჩენილი draft არ უნდა დაბრუნდეს რედაქტირებაში (არც სხვა კომპიდან).
+    discardPropertyEditDraft(id)
+      .catch(() => {
+        /* draft არ იყო ან უკვე გასუფთავებულია */
+      })
+      .then(() => (cancelled ? null : getPropertyForEdit(id)))
       .then((res) => {
-        if (cancelled) return;
+        if (cancelled || !res) return;
         const p = res.property;
         const ownerRaw = p.userId as { _id?: string } | string | undefined;
         const ownerId =
@@ -420,14 +423,6 @@ export default function EditPropertyPage() {
     }
   }, [id, t]);
 
-  const schedulePersistPhotosDraft = useCallback(() => {
-    if (photoPersistTimerRef.current) clearTimeout(photoPersistTimerRef.current);
-    photoPersistTimerRef.current = setTimeout(() => {
-      photoPersistTimerRef.current = null;
-      void runPersistPhotosDraft();
-    }, 300);
-  }, [runPersistPhotosDraft]);
-
   const flushPersistPhotosDraft = useCallback(async () => {
     if (photoPersistTimerRef.current) {
       clearTimeout(photoPersistTimerRef.current);
@@ -474,10 +469,9 @@ export default function EditPropertyPage() {
     setExistingPhotos(newPhotos);
     setPanoramaPhotos(newPanorama);
     setMainPhotoIndex(newMain);
-    schedulePersistPhotosDraft();
   };
 
-  const handleDeleteAllPhotos = async () => {
+  const handleDeleteAllPhotos = () => {
     if (existingPhotosRef.current.length === 0) return;
     existingPhotosRef.current = [];
     panoramaPhotosRef.current = [];
@@ -485,56 +479,26 @@ export default function EditPropertyPage() {
     setExistingPhotos([]);
     setPanoramaPhotos([]);
     setMainPhotoIndex(0);
-    try {
-      await flushPersistPhotosDraft();
-    } catch {
-      /* error already set */
-    }
   };
 
-  const persistPanoramaPhotos = async (next: string[]) => {
-    const clean = cleanPanoramaList(next, existingPhotosRef.current);
-    panoramaPhotosRef.current = clean;
-    setPanoramaSaving(true);
-    try {
-      const res = await updateProperty(
-        id,
-        {
-          photos: existingPhotosRef.current,
-          panoramaPhotos: clean,
-        } as any,
-        { draft: true }
-      );
-      const savedPanorama = (res.property as Property).panoramaPhotos || clean;
-      setPanoramaPhotos(savedPanorama);
-      panoramaPhotosRef.current = savedPanorama;
-    } finally {
-      setPanoramaSaving(false);
+  const handlePhotoReorder = useCallback((from: number, to: number) => {
+    if (from === to) return;
+    if (photoGridRef.current) {
+      pendingFlipRef.current = captureFlipPositions(photoGridRef.current);
     }
-  };
-
-  const handlePhotoReorder = useCallback(
-    (from: number, to: number) => {
-      if (from === to) return;
-      if (photoGridRef.current) {
-        pendingFlipRef.current = captureFlipPositions(photoGridRef.current);
-      }
-      setExistingPhotos((prev) => {
-        const next = reorderArray(prev, from, to);
-        setMainPhotoIndex((mi) => {
-          const mainPhoto = prev[mi];
-          const nextIndex = mainPhoto ? next.indexOf(mainPhoto) : 0;
-          const newMain = nextIndex >= 0 ? nextIndex : 0;
-          mainPhotoIndexRef.current = newMain;
-          existingPhotosRef.current = next;
-          schedulePersistPhotosDraft();
-          return newMain;
-        });
-        return next;
+    setExistingPhotos((prev) => {
+      const next = reorderArray(prev, from, to);
+      setMainPhotoIndex((mi) => {
+        const mainPhoto = prev[mi];
+        const nextIndex = mainPhoto ? next.indexOf(mainPhoto) : 0;
+        const newMain = nextIndex >= 0 ? nextIndex : 0;
+        mainPhotoIndexRef.current = newMain;
+        existingPhotosRef.current = next;
+        return newMain;
       });
-    },
-    [schedulePersistPhotosDraft]
-  );
+      return next;
+    });
+  }, []);
 
   const { getThumbDragProps, isDragging, draggingIndex, wasPhotoDrag } = usePhotoDragReorder(handlePhotoReorder);
   const draggingFlipKey =
@@ -657,19 +621,14 @@ export default function EditPropertyPage() {
     { num: 7, title: t('private_notes_header'), icon: '🔒', complete: isStep7Complete },
   ];
 
-  const togglePanoramaPhoto = async (photoUrl: string) => {
-    const prev = panoramaPhotos;
-    const wasOn = isPanoramaPhoto(photoUrl, prev);
+  const togglePanoramaPhoto = (photoUrl: string) => {
+    const wasOn = isPanoramaPhoto(photoUrl, panoramaPhotos);
     const next = wasOn
-      ? prev.filter((u) => !isPanoramaPhoto(photoUrl, [u]))
-      : [...prev.filter((u) => !isPanoramaPhoto(photoUrl, [u])), photoUrl];
-    setPanoramaPhotos(next);
-    try {
-      await persistPanoramaPhotos(next);
-    } catch (err: unknown) {
-      setPanoramaPhotos(prev);
-      setError(err instanceof Error ? err.message : t('error_save_failed'));
-    }
+      ? panoramaPhotos.filter((u) => !isPanoramaPhoto(photoUrl, [u]))
+      : [...panoramaPhotos.filter((u) => !isPanoramaPhoto(photoUrl, [u])), photoUrl];
+    const clean = cleanPanoramaList(next, existingPhotosRef.current);
+    panoramaPhotosRef.current = clean;
+    setPanoramaPhotos(clean);
   };
 
   const handleAddMorePhotos = async (files: FileList | File[] | null) => {
@@ -1680,7 +1639,7 @@ export default function EditPropertyPage() {
                   <p className="text-xs text-slate-500">
                     💡{' '}
                     {existingPhotos.length > 0
-                      ? `${t('click_main_photo')} · ${t('photo_drag_reorder_hint')} · ${t('photos_drop_zone_hint')} · ${t('photo_360_toggle_hint')}${panoramaSaving ? ` (${t('saving')}…)` : ''}`
+                      ? `${t('click_main_photo')} · ${t('photo_drag_reorder_hint')} · ${t('photos_drop_zone_hint')} · ${t('photo_360_toggle_hint')}`
                       : t('photos_drop_zone_hint')}
                   </p>
                   {existingPhotos.length === 0 ? (
@@ -1888,7 +1847,7 @@ export default function EditPropertyPage() {
                   ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-lg hover:shadow-xl'
                   : 'bg-slate-200 text-slate-500 cursor-not-allowed'
               }`}
-              disabled={saving || addingPhotos || panoramaSaving || completedSteps < 4}
+              disabled={saving || addingPhotos || completedSteps < 4}
               onClick={handleSave}
             >
               {saving || addingPhotos ? (
